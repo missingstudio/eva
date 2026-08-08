@@ -487,9 +487,12 @@ func TestATurnCancelledByCtrlCLeavesATraceThatParses(t *testing.T) {
 	}
 }
 
-// A Run driven from here can be cancelled cleanly, and says so. The other half
-// of this — that the one-shot Run, where a signal only kills the process, does
-// not claim it — is asserted against the process in eva_test.go.
+// A Run driven from here can be cancelled cleanly, and says so.
+//
+// The claim is made by the frontend that does the listening rather than by the
+// Turn, so it is a claim and not a constant: a frontend that let the process
+// die under a Run would not make it. The console is the only frontend Eva has
+// today, which is why this is the only place the claim is asserted.
 func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"answered."}})
 

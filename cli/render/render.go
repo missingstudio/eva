@@ -4,8 +4,8 @@
 // reads nothing else. What it may import is the contract, and it is a short
 // list: the Event schema, and the terminal libraries. No provider, no Session,
 // and no path to the Trace — a renderer that could reach any of those could
-// show a turn the record does not hold, and the machine-readable path, which
-// builds no renderer at all, would stop describing the same turn.
+// show a person a turn the record does not hold, and the screen would stop
+// being an account of what was committed.
 //
 // That list is an allow list in the linter rather than a promise in this
 // comment, because a boundary this layer only documents is a boundary the next
@@ -28,12 +28,11 @@ import (
 // Screen is where a finished turn goes.
 //
 // A Renderer folds Events into a turn and hands the whole of it over; what
-// happens to it then belongs to whoever owns the destination. The one-shot
-// path owns a byte stream and reduces the turn's colour on the way out. The
-// interactive program owns the terminal and puts the turn above its own view,
-// which it does with the bytes exactly as it was handed them — so it reduces
-// the colour first, and it can only do that if the turn arrives whole rather
-// than in pieces.
+// happens to it then belongs to whoever owns the destination. The console owns
+// the terminal and puts the turn above its own view, which it does with the
+// bytes exactly as it was handed them — so it reduces the colour first, and it
+// can only do that if the turn arrives whole rather than in pieces. A Screen
+// writing to a plain byte stream reduces the colour on the way out instead.
 type Screen interface {
 	// Show displays one finished turn: the answer, the caveat if the Run
 	// carried one, and the cost line.
@@ -65,9 +64,9 @@ type Renderer struct {
 	session spend
 
 	// missing is what the Run did not understand, from the caveat that closes
-	// it. A person is shown it for the same reason the machine-readable stream
-	// carries it: a cost line over data known to be incomplete, printed with
-	// nothing to say so, is a figure that reads as a measurement.
+	// it. A person is shown it for the same reason the Trace carries it: a cost
+	// line over data known to be incomplete, printed with nothing to say so, is
+	// a figure that reads as a measurement.
 	missing []string
 }
 

@@ -302,16 +302,18 @@ func (b *blocks) commit(ctx context.Context, payloads ...events.Payload) error {
 // because a capability claimed and absent is worse than one that is missing:
 // a missing capability degrades a Run, and a false claim corrupts it.
 //
-// interrupt is the first one that differs between two Runs of one binary. The
-// console listens for a cancellation and lets the Run close; a signal to the
-// one-shot command kills the process where it stands, which is not a clean
-// cancel however it looks from outside.
+// interrupt is told rather than assumed for that reason. A frontend that
+// listens for a cancellation and lets the Run close claims it; one that would
+// let the process die under a Run does not, however alike the two look from
+// outside.
 func capabilities(interrupt bool) events.Capabilities {
 	return events.Capabilities{
 		// The interface that drives the turn says whether it is listening.
 		Interrupt: interrupt,
-		// The machine-readable stream is the contract this stage exists to
-		// establish.
+		// Every step of a turn reaches the Trace as a typed Event, which is
+		// the contract this stage exists to establish. It is what a later
+		// adapter normalizes into and what a projection folds, and it is true
+		// of the record whether or not anything is reading it right now.
 		StructuredEvents: true,
 		// Real provider figures reach the Trace, and are never estimated to
 		// fill a gap. A turn the provider reported nothing for emits no Usage

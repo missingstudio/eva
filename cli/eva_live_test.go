@@ -20,7 +20,8 @@ import (
 // tests cannot reach — whether what the Provider said reaches the Trace.
 //
 // The observation point is the same as everywhere else in this package: the
-// Events on stdout, the bytes in the Trace, and the exit code.
+// bytes in the Trace, what the process wrote to its streams, and the exit code.
+// A turn is driven through the console, because that is the only way in.
 
 // answered is the frames of a turn that succeeded. The figures are split the
 // way the API splits them: what the input cost when the message opens, what
@@ -87,17 +88,6 @@ func api(t *testing.T, stream string, refusals ...refused) (base string, request
 	}
 }
 
-// stored is what the Trace holds after a run.
-func stored(t *testing.T, w *world) []events.Event {
-	t.Helper()
-
-	body, err := os.ReadFile(w.trace)
-	if err != nil {
-		t.Fatalf("read the Trace: %v", err)
-	}
-	return decodeStream(t, string(body))
-}
-
 // only returns the one payload of a kind the run produced.
 func only[T events.Payload](t *testing.T, es []events.Event) T {
 	t.Helper()
@@ -121,7 +111,7 @@ func TestALiveTurnStreamsAnAnswerAndRecordsWhatItCost(t *testing.T) {
 	base, requests := api(t, answered)
 	w := newWorld(t, live(base))
 
-	printed := decodeStream(t, w.answer(t, "what is this project").stdout)
+	printed := w.answer(t, "what is this project")
 	if requests() != 1 {
 		t.Errorf("the API saw %d requests, want one", requests())
 	}
@@ -161,17 +151,6 @@ func TestALiveTurnStreamsAnAnswerAndRecordsWhatItCost(t *testing.T) {
 	if claim := only[events.Finished](t, printed).Claim; claim.Result != events.ResultDone {
 		t.Errorf("claim = %+v, want done", claim)
 	}
-
-	// The Trace holds the same turn stdout printed.
-	held := stored(t, w)
-	if len(held) != len(printed) {
-		t.Fatalf("the Trace holds %d records and stdout printed %d", len(held), len(printed))
-	}
-	for i := range held {
-		if held[i].ID != printed[i].ID || held[i].Seq != printed[i].Seq {
-			t.Errorf("record %d: the Trace has %+v and stdout printed %+v", i, held[i], printed[i])
-		}
-	}
 }
 
 // A retry spends money and wall clock and produces no tool call. If it did not
@@ -180,7 +159,7 @@ func TestARetryReachesTheTraceThoughItProducesNoToolCall(t *testing.T) {
 	base, requests := api(t, answered, refused{http.StatusTooManyRequests, "rate_limit_error"})
 	w := newWorld(t, live(base))
 
-	printed := decodeStream(t, w.answer(t, "what is this project").stdout)
+	printed := w.answer(t, "what is this project")
 	if requests() != 2 {
 		t.Errorf("the API saw %d requests, want the refusal and the retry", requests())
 	}
@@ -193,7 +172,7 @@ func TestARetryReachesTheTraceThoughItProducesNoToolCall(t *testing.T) {
 		events.KindFinished,
 	}
 	if fmt.Sprint(kinds(printed)) != fmt.Sprint(want) {
-		t.Fatalf("kinds = %v, want %v", kinds(printed), want)
+		t.Fatalf("the Trace holds %v, want %v", kinds(printed), want)
 	}
 
 	retry := only[events.Retry](t, printed)
@@ -208,13 +187,15 @@ func TestARetryReachesTheTraceThoughItProducesNoToolCall(t *testing.T) {
 		t.Errorf("error class = %q, want %q", retry.ErrorClass, events.ErrorRateLimit)
 	}
 
-	if held := stored(t, w); fmt.Sprint(kinds(held)) != fmt.Sprint(want) {
-		t.Errorf("the Trace holds %v, want %v", kinds(held), want)
-	}
 }
 
-// A provider failure is data. The turn ends, the exit code says so, and the
-// Trace holds every attempt that was spent getting there.
+// A provider failure is data. The turn ends, the Trace holds every attempt that
+// was spent getting there, and the console is still there to be typed into.
+//
+// The exit code says nothing here, and that is the change a console makes: a
+// turn that failed is not a process that failed, because the person who asked
+// is still sitting in front of it. What the failure has to reach is the record,
+// and — through the record — the screen, which console_test.go asserts.
 func TestAProviderFailureReachesTheCallerAsData(t *testing.T) {
 	base, requests := api(t, "",
 		refused{529, "overloaded_error"},
@@ -224,21 +205,14 @@ func TestAProviderFailureReachesTheCallerAsData(t *testing.T) {
 	)
 	w := newWorld(t, live(base))
 
-	got := w.run(t, "-p", "what is this project", "--json")
-	if got.code == 0 {
-		t.Fatalf("exit 0 against an API that only refused\nstdout: %s", got.stdout)
-	}
+	got, held := w.converse(t, "what is this project")
 	if requests() < 2 {
 		t.Errorf("the API saw %d requests, want the attempts the policy allows", requests())
 	}
 	if strings.Contains(got.stderr, "panic:") || strings.Contains(got.stderr, "goroutine ") {
 		t.Errorf("the failure arrived as a panic:\n%s", got.stderr)
 	}
-	if !strings.Contains(got.stderr, string(events.ErrorOverloaded)) {
-		t.Errorf("stderr does not name the class of the failure:\n%s", got.stderr)
-	}
 
-	held := stored(t, w)
 	if len(held) == 0 {
 		t.Fatal("the Trace holds nothing about a turn that ran and failed")
 	}
@@ -269,6 +243,11 @@ func TestAProviderFailureReachesTheCallerAsData(t *testing.T) {
 	if finished.Claim.Result != events.ResultFailed {
 		t.Errorf("claim = %+v, want failed", finished.Claim)
 	}
+	// The claim says what went wrong in the words a person and a reader of the
+	// Trace both get, rather than in a class only the retries carry.
+	if !strings.Contains(finished.Claim.Summary, string(events.ErrorOverloaded)) {
+		t.Errorf("the claim is %q, and it does not name the class of the failure", finished.Claim.Summary)
+	}
 }
 
 // The provider a configuration selects by default has to be one the command
@@ -281,7 +260,9 @@ func TestTheDefaultProviderIsOneTheCommandCanOpen(t *testing.T) {
 	// No provider name at all: whatever configuration defaults to is what runs.
 	w := newWorld(t, unnamed(base))
 
-	got := w.run(t, "-p", "what is this project", "--json")
+	// A provider the command cannot open is refused before the console opens,
+	// so a clean exit over an empty input is the whole assertion.
+	got := w.run(t)
 	if got.code != 0 {
 		t.Fatalf("exit %d, want 0 — the default provider is not one open builds\nstderr: %s", got.code, got.stderr)
 	}
@@ -296,7 +277,7 @@ func TestALiveTurnKeepsTheCredentialOutOfTheTraceAndTheStream(t *testing.T) {
 	w := newWorld(t, live(base))
 	w.env = append(w.env, "ANTHROPIC_API_KEY="+key)
 
-	got := w.answer(t, "what is this project")
+	got, _ := w.converse(t, "what is this project")
 	if strings.Contains(got.stdout, key) || strings.Contains(got.stderr, key) {
 		t.Error("the credential reached the output stream")
 	}
@@ -334,7 +315,7 @@ func TestATruncatedAnswerClosesTheRunWithACaveat(t *testing.T) {
 	base, _ := api(t, truncated)
 	w := newWorld(t, live(base))
 
-	printed := decodeStream(t, w.answer(t, "answer at length").stdout)
+	printed := w.answer(t, "answer at length")
 
 	want := []events.Kind{
 		events.KindStarted,
@@ -358,7 +339,7 @@ func TestATruncatedAnswerClosesTheRunWithACaveat(t *testing.T) {
 		t.Errorf("claim = %+v, want done", claim)
 	}
 
-	if held := stored(t, w); fmt.Sprint(kinds(held)) != fmt.Sprint(want) {
+	if held := w.stored(t); fmt.Sprint(kinds(held)) != fmt.Sprint(want) {
 		t.Errorf("the Trace holds %v, want %v", kinds(held), want)
 	}
 }
@@ -369,7 +350,7 @@ func TestAnUnreportedCostClosesTheRunWithACaveat(t *testing.T) {
 	base, _ := api(t, unpriced)
 	w := newWorld(t, live(base))
 
-	printed := decodeStream(t, w.answer(t, "what is this project").stdout)
+	printed := w.answer(t, "what is this project")
 
 	want := []events.Kind{
 		events.KindStarted,
@@ -398,7 +379,7 @@ func TestOneCaveatClosesTheRunHoweverManyThingsWereMissing(t *testing.T) {
 	))
 	w := newWorld(t, live(base))
 
-	printed := decodeStream(t, w.answer(t, "answer at length").stdout)
+	printed := w.answer(t, "answer at length")
 	degraded := only[events.Degraded](t, printed)
 	if len(degraded.Missing) != 2 {
 		t.Fatalf("the caveat names %v, want both what is missing", degraded.Missing)
@@ -417,7 +398,7 @@ func TestACleanLiveTurnClosesWithNoCaveat(t *testing.T) {
 	base, _ := api(t, answered)
 	w := newWorld(t, live(base))
 
-	for _, e := range decodeStream(t, w.answer(t, "what is this project").stdout) {
+	for _, e := range w.answer(t, "what is this project") {
 		if e.Kind == events.KindDegraded {
 			t.Errorf("a clean turn was degraded by %+v", e.Payload)
 		}

@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,10 +18,16 @@ import (
 )
 
 // These tests observe only what something outside the program can observe: the
-// Events on stdout, the bytes in the Trace file, and the exit code. They start
-// the real binary as a separate process, because two of the requirements this
-// stage is heading towards are about interruption, and a test can only
-// interrupt a process it started.
+// bytes in the Trace file, what the process wrote to its streams, and the exit
+// code. They start the real binary as a separate process, because two of the
+// requirements this stage is heading towards are about interruption, and a test
+// can only interrupt a process it started.
+//
+// eva is a console and nothing else, so a turn is driven the way a terminal
+// drives one: a line is typed and sent. The Trace is what the assertions read.
+// What a person saw was a screen redrawn in place and the record is not, and
+// the Trace is the same Events the console itself is a fold over — so reading
+// it is reading what the person was shown, without parsing a screen.
 //
 // Nothing here reaches into a struct, and nothing asserts on the order in
 // which functions were called. A test that would fail after a refactor that
@@ -112,16 +117,49 @@ func (p provider) plus(line string) provider {
 	return p
 }
 
-// checkedIn is the recording this package answers from when a test does not
-// generate one of its own.
-func checkedIn(t *testing.T) string {
+// oneTurn is the turn this package answers from when a test does not generate
+// one of its own.
+//
+// The fake Provider replays it, so no test and no demo needs network access or
+// an API key. What is here is a recording rather than a simulation: a test that
+// fails, fails because Eva changed.
+const oneTurn = `[[turn]]
+
+  # One content block, delivered in three chunks. The block is what the sink
+  # folds on, so this turn reaches the Trace as one Text record.
+  [[turn.block]]
+  chunks = [
+    "Eva is an autonomous, ",
+    "multi-tenant, ",
+    "AI-native software factory.",
+  ]
+
+  # A cached turn, so that cache writes and cache reads are separate non-zero
+  # figures rather than one number that cannot compute cost.
+  [turn.usage]
+  input_tokens = 1200
+  output_tokens = 340
+  cache_write_tokens = 96
+  cache_read_tokens = 1024
+  # reasoning_tokens, server_tool_tokens, and usd are left out on purpose.
+  # Anthropic reports no reasoning figure and bills thinking tokens inside
+  # output tokens, so a zero here would be a confident lie rather than a
+  # measurement.
+`
+
+// recording writes that turn where the process under test can reach it.
+//
+// It is written from the constant above rather than kept in a file beside the
+// test, so that the figures the assertions name — 1.2k in, 340 out, 96 write,
+// 1.0k read — are read in the same file that names them.
+func recording(t *testing.T) string {
 	t.Helper()
 
-	script, err := filepath.Abs(filepath.Join("testdata", "script.toml"))
-	if err != nil {
-		t.Fatalf("locate the recording: %v", err)
+	path := filepath.Join(t.TempDir(), "script.toml")
+	if err := os.WriteFile(path, []byte(oneTurn), 0o600); err != nil {
+		t.Fatalf("write the recording: %v", err)
 	}
-	return script
+	return path
 }
 
 // newWorld writes a configuration and puts the Trace somewhere this test owns.
@@ -160,6 +198,11 @@ func newWorld(t *testing.T, p provider) *world {
 	return w
 }
 
+// run starts eva and lets it end on its own, with nothing on its input.
+//
+// A console whose input is already at its end has nothing to read and leaves,
+// so this is how a test asserts on what happens before the first prompt: a
+// configuration Eva would not act on, a provider it cannot open, or the help.
 func (w *world) run(t *testing.T, args ...string) result {
 	t.Helper()
 
@@ -179,60 +222,117 @@ func (w *world) run(t *testing.T, args ...string) result {
 	return result{code: cmd.ProcessState.ExitCode(), stdout: stdout.String(), stderr: stderr.String()}
 }
 
-// answer runs the one-shot machine-readable turn.
-func (w *world) answer(t *testing.T, prompt string) result {
+// converse drives the console the way a terminal drives it: each prompt is
+// typed and sent, one turn is waited for, and then the next is typed.
+//
+// Waiting matters. A second line typed into a console still answering the
+// first would be a race rather than a conversation, and the Trace is what says
+// a turn is over — the console answers beside this test, not inside it.
+func (w *world) converse(t *testing.T, prompts ...string) (result, []events.Event) {
 	t.Helper()
-	got := w.run(t, "-p", prompt, "--json")
-	if got.code != 0 {
-		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
+
+	// A Trace this process appends to may already hold turns of an earlier one,
+	// so the turns of this run are counted from where it found the file.
+	base := w.closedRuns(t)
+
+	cmd := exec.Command(binary)
+	cmd.Env = w.env
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	keys, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("open eva's input: %v", err)
 	}
-	return got
-}
-
-// render runs the one-shot turn as a person sees it.
-func (w *world) render(t *testing.T, prompt string) result {
-	t.Helper()
-	got := w.run(t, "-p", prompt)
-	if got.code != 0 {
-		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start eva: %v", err)
 	}
-	return got
-}
 
-// escape matches an ANSI style sequence, so that a test can assert on the words
-// a person reads rather than on the bytes that colour them.
-var escape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-
-func plain(s string) string { return escape.ReplaceAllString(s, "") }
-
-// recorded is the answer the checked-in recording replays, folded.
-const recorded = "Eva is an autonomous, multi-tenant, AI-native software factory."
-
-// costLine picks the cost line out of rendered output. It is the line that
-// reports both figures, so that a line of the answer beginning with the same
-// word cannot be mistaken for it.
-func costLine(t *testing.T, out string) string {
-	t.Helper()
-
-	for _, line := range strings.Split(plain(out), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "turn ") && strings.Contains(line, "session ") {
-			return line
+	for i, prompt := range prompts {
+		if _, err := keys.Write([]byte(prompt + "\r")); err != nil {
+			t.Fatalf("type prompt %d: %v\nstderr: %s", i+1, err, stderr.String())
 		}
+		w.awaitRuns(t, base+i+1, &stderr)
 	}
-	t.Fatalf("the output holds no cost line:\n%s", out)
-	return ""
+
+	// No more keys. A console whose input has ended has nothing left to read.
+	if err := keys.Close(); err != nil {
+		t.Fatalf("close eva's input: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatalf("eva did not leave when its input ended\nstderr: %s", stderr.String())
+	}
+
+	return result{
+		code:   cmd.ProcessState.ExitCode(),
+		stdout: stdout.String(),
+		stderr: stderr.String(),
+	}, w.stored(t)
 }
 
-// figure is a token count as the cost line writes it. The rounding rule is
-// stated here rather than borrowed from the renderer, so that a test comparing
-// the two projections is comparing them rather than agreeing with one of them.
-func figure(n uint64) string {
-	if n < 1000 {
-		return strconv.FormatUint(n, 10)
+// answer drives one prompt through the console and returns what the Trace
+// holds, which is what almost every test in this file asserts on.
+func (w *world) answer(t *testing.T, prompt string) []events.Event {
+	t.Helper()
+
+	got, held := w.converse(t, prompt)
+	if got.code != 0 {
+		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
 	}
-	return strconv.FormatFloat(float64(n)/1000, 'f', 1, 64) + "k"
+	return held
 }
+
+// closedRuns is how many Runs the Trace holds a claim for.
+//
+// A Run closes whichever way the turn went, so this counts turns that are over
+// rather than turns that worked.
+func (w *world) closedRuns(t *testing.T) int {
+	t.Helper()
+
+	body, err := os.ReadFile(w.trace)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0
+	}
+	if err != nil {
+		t.Fatalf("read the Trace: %v", err)
+	}
+	return bytes.Count(body, []byte(`"kind":"finished"`))
+}
+
+// awaitRuns waits until the Trace holds n closed Runs.
+func (w *world) awaitRuns(t *testing.T, n int, stderr *bytes.Buffer) {
+	t.Helper()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if w.closedRuns(t) >= n {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("turn %d was not answered in 30s\nstderr: %s", n, stderr.String())
+}
+
+// stored is what the Trace holds.
+func (w *world) stored(t *testing.T) []events.Event {
+	t.Helper()
+
+	body, err := os.ReadFile(w.trace)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		t.Fatalf("read the Trace: %v", err)
+	}
+	return decodeStream(t, string(body))
+}
+
+// recorded is the answer [oneTurn] replays, folded.
+const recorded = "Eva is an autonomous, multi-tenant, AI-native software factory."
 
 func decodeStream(t *testing.T, s string) []events.Event {
 	t.Helper()
@@ -263,15 +363,22 @@ func kinds(es []events.Event) []events.Kind {
 }
 
 func TestHelpPrintsTheUsageBlock(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
+	w := newWorld(t, fake(recording(t)))
 
 	got := w.run(t, "help")
 	if got.code != 0 {
 		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
 	}
-	for _, want := range []string{"USAGE:", "eva -p <prompt> --json", "eva help", "--config"} {
+	for _, want := range []string{"USAGE:", "eva ", "eva help", "--config"} {
 		if !strings.Contains(got.stdout, want) {
 			t.Errorf("the usage block does not mention %q:\n%s", want, got.stdout)
+		}
+	}
+	// The command surface is the console. A usage block still advertising a
+	// prompt on the command line would be describing a program Eva is not.
+	for _, gone := range []string{"-p <prompt>", "--json", "--prompt"} {
+		if strings.Contains(got.stdout, gone) {
+			t.Errorf("the usage block still offers %q:\n%s", gone, got.stdout)
 		}
 	}
 }
@@ -279,10 +386,10 @@ func TestHelpPrintsTheUsageBlock(t *testing.T) {
 // The recording delivers the answer in three chunks of one content block, and
 // the sink folds them into one record at commit. A Trace record is a unit of
 // meaning, so three chunks are one Text.
-func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
+func TestAPlainTurnRecordsStartedTextUsageAndFinished(t *testing.T) {
+	w := newWorld(t, fake(recording(t)))
 
-	got := decodeStream(t, w.answer(t, "what is this project").stdout)
+	got := w.answer(t, "what is this project")
 
 	want := []events.Kind{
 		events.KindStarted,
@@ -298,8 +405,8 @@ func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload = %#v, want Text", got[1].Payload)
 	}
-	if want := "Eva is an autonomous, multi-tenant, AI-native software factory."; text.Chunk != want {
-		t.Errorf("the folded answer is %q, want %q", text.Chunk, want)
+	if text.Chunk != recorded {
+		t.Errorf("the folded answer is %q, want %q", text.Chunk, recorded)
 	}
 
 	usage, ok := got[2].Payload.(events.Usage)
@@ -329,37 +436,14 @@ func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
 	}
 }
 
-// A signal to the one-shot command kills the process where it stands, which is
-// not a clean cancel however it looks from outside. So this Run does not claim
-// that it can be interrupted — a capability that is missing degrades a Run, and
-// one that is claimed and absent corrupts it. The Run that does claim it is the
-// interactive one, asserted in console_test.go.
-func TestTheOneShotRunDoesNotClaimThatItCanBeInterrupted(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
-	got := decodeStream(t, w.answer(t, "what is this project").stdout)
-
-	started, ok := got[0].Payload.(events.Started)
-	if !ok {
-		t.Fatalf("payload = %#v, want Started", got[0].Payload)
-	}
-	if started.Capabilities.Interrupt {
-		t.Error("a Run nothing is listening for a cancellation on claims it can be interrupted")
-	}
-	// The capabilities that are real at this stage are still claimed, so this
-	// is one capability reported honestly rather than a Run claiming nothing.
-	if !started.Capabilities.StructuredEvents || !started.Capabilities.CostReport {
-		t.Errorf("capabilities = %+v, want the two this stage does have", started.Capabilities)
-	}
-}
-
 // The Trace is the single source of truth, so the prompt has to be in it.
 // Without this the transcript's first message exists only in the process that
 // answered it, and resume has nothing to resume from.
 func TestThePromptReachesTheTrace(t *testing.T) {
 	const prompt = "what is this project"
 
-	w := newWorld(t, fake(checkedIn(t)))
-	got := decodeStream(t, w.answer(t, prompt).stdout)
+	w := newWorld(t, fake(recording(t)))
+	got := w.answer(t, prompt)
 
 	started, ok := got[0].Payload.(events.Started)
 	if !ok {
@@ -378,11 +462,38 @@ func TestThePromptReachesTheTrace(t *testing.T) {
 	}
 }
 
-func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
-	out := w.answer(t, "what is this project").stdout
+// A second prompt is answered in the light of the first, and both turns are in
+// one Trace under one Session.
+func TestASecondPromptIsAnsweredInTheSameSession(t *testing.T) {
+	w := newWorld(t, fake(oneTurnEach(t, 2)))
 
-	scan := bufio.NewScanner(strings.NewReader(out))
+	got, held := w.converse(t, "one", "two")
+	if got.code != 0 {
+		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
+	}
+
+	var runs, sessions = map[events.RunID]bool{}, map[events.SessionID]bool{}
+	for _, e := range held {
+		runs[e.Run] = true
+		sessions[e.Session] = true
+	}
+	if len(runs) != 2 {
+		t.Errorf("the Trace holds %d Runs, want one per prompt: %v", len(runs), kinds(held))
+	}
+	if len(sessions) != 1 {
+		t.Errorf("the Trace holds %d Sessions, want one conversation", len(sessions))
+	}
+}
+
+func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
+	w := newWorld(t, fake(recording(t)))
+	held := w.answer(t, "what is this project")
+
+	body, err := os.ReadFile(w.trace)
+	if err != nil {
+		t.Fatalf("read the Trace: %v", err)
+	}
+	scan := bufio.NewScanner(strings.NewReader(string(body)))
 	for line := 1; scan.Scan(); line++ {
 		var raw map[string]json.RawMessage
 		if err := json.Unmarshal(scan.Bytes(), &raw); err != nil {
@@ -398,7 +509,7 @@ func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
 		}
 	}
 
-	for i, e := range decodeStream(t, out) {
+	for i, e := range held {
 		switch {
 		case e.ID == "":
 			t.Errorf("event %d has no id", i)
@@ -426,8 +537,8 @@ func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
 // reach the Trace, so the Trace sequence stays dense while the wire sequence
 // skips the chunks the fold absorbed.
 func TestTracePositionIsDenseAndIsNotTheWirePosition(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
-	got := decodeStream(t, w.answer(t, "what is this project").stdout)
+	w := newWorld(t, fake(recording(t)))
+	got := w.answer(t, "what is this project")
 
 	var skipped bool
 	for i, e := range got {
@@ -446,212 +557,61 @@ func TestTracePositionIsDenseAndIsNotTheWirePosition(t *testing.T) {
 	}
 }
 
-func TestTheOutputPathRendersNothing(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
-	got := w.answer(t, "what is this project")
-
-	if strings.ContainsRune(got.stdout, 0x1b) {
-		t.Errorf("stdout carries a terminal escape:\n%q", got.stdout)
-	}
-	if got.stderr != "" {
-		t.Errorf("stderr = %q, want nothing on a turn that worked", got.stderr)
-	}
-	// Every line is an Event and there is nothing else. A cost line here would
-	// mean the renderer had been built on the path a script parses.
-	for i, line := range strings.Split(strings.TrimSuffix(got.stdout, "\n"), "\n") {
-		if strings.HasPrefix(line, "turn ") {
-			t.Fatalf("line %d of the machine-readable stream is a cost line:\n%s", i+1, line)
-		}
-	}
-}
-
-// The turn a person sees: the answer as styled markdown, and what it cost.
-func TestARenderedTurnShowsTheAnswerAndWhatItCost(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
-	got := w.render(t, "what is this project")
-
-	if !strings.Contains(plain(got.stdout), recorded) {
-		t.Errorf("the rendered turn does not hold the answer:\n%s", got.stdout)
-	}
-	if got.stderr != "" {
-		t.Errorf("stderr = %q, want nothing on a turn that worked", got.stderr)
-	}
-
-	// The recorded figures, per turn and cumulative, with cache writes and
-	// cache reads apart and no dollar figure the provider never reported.
-	line := costLine(t, got.stdout)
-	turn, session, found := strings.Cut(line, "session")
-	if !found {
-		t.Fatalf("the cost line reports no cumulative spend: %s", line)
-	}
-	for _, want := range []string{"1.2k in", "340 out", "96 write", "1.0k read", "cost unreported"} {
-		if !strings.Contains(turn, want) {
-			t.Errorf("the turn does not report %q: %s", want, turn)
-		}
-	}
-	for _, want := range []string{"1.2k in", "340 out", "cost unreported"} {
-		if !strings.Contains(session, want) {
-			t.Errorf("the Session does not report %q: %s", want, session)
-		}
-	}
-	if strings.Contains(line, "$") {
-		t.Errorf("the cost line shows a dollar figure the recording never reported: %s", line)
-	}
-}
-
-// The two output modes are two projections of one Trace, so they describe one
-// turn. A script that parses --json and a person reading the rendered turn
-// cannot be shown different answers or different figures.
-func TestTheRenderedTurnAndTheMachineReadableTurnDescribeTheSameTurn(t *testing.T) {
-	const prompt = "what is this project"
-
-	// One world, two runs: the recording holds one turn and a fresh process
-	// replays it from the start, so both runs answer the same turn.
-	w := newWorld(t, fake(checkedIn(t)))
-	rendered := w.render(t, prompt)
-	printed := decodeStream(t, w.answer(t, prompt).stdout)
-
-	if len(printed) != 4 {
-		t.Fatalf("the machine-readable turn is %d records of kinds %v, want the four of a plain turn",
-			len(printed), kinds(printed))
-	}
-
-	text, ok := printed[1].Payload.(events.Text)
-	if !ok {
-		t.Fatalf("payload = %#v, want Text", printed[1].Payload)
-	}
-	if !strings.Contains(plain(rendered.stdout), text.Chunk) {
-		t.Errorf("the rendered answer is not the Text the Trace holds:\nrendered: %s\ntrace: %q",
-			plain(rendered.stdout), text.Chunk)
-	}
-
-	usage, ok := printed[2].Payload.(events.Usage)
-	if !ok {
-		t.Fatalf("payload = %#v, want Usage", printed[2].Payload)
-	}
-	// Every figure the Usage Event carries, and not a subset of them: a cost
-	// line that reported three of four would still describe a different turn
-	// from the one on stdout.
-	line := costLine(t, rendered.stdout)
-	for _, want := range []string{
-		figure(usage.InputTokens) + " in",
-		figure(usage.OutputTokens) + " out",
-		figure(usage.CacheWriteTokens) + " write",
-		figure(usage.CacheReadTokens) + " read",
-	} {
-		if !strings.Contains(line, want) {
-			t.Errorf("the cost line does not report %q, which the Usage Event holds: %s", want, line)
-		}
-	}
-	if usage.USD != nil {
-		t.Fatal("the recording reports a dollar figure, and the assertion below assumes it does not")
-	}
-	if !strings.Contains(line, "cost unreported") {
-		t.Errorf("the Usage Event carries no dollar figure and the cost line does not say so: %s", line)
-	}
-}
-
-// Colour is adapted to what the terminal can show rather than emitted as
-// written. A 16-colour terminal is sent 16 colours, a 256-colour terminal is
-// sent 256, and something that is not a terminal is sent none.
-func TestColourIsAdaptedToTheTerminalRatherThanEmittedRaw(t *testing.T) {
-	const (
-		indexed   = "38;5;"
-		trueColor = "38;2;"
-	)
-
-	for _, c := range []struct {
-		name     string
-		env      []string
-		styled   bool
-		rejected []string
-	}{
-		{
-			name:     "a terminal of sixteen colours",
-			env:      []string{"TERM=xterm", "CLICOLOR_FORCE=1"},
-			styled:   true,
-			rejected: []string{indexed, trueColor},
-		},
-		{
-			name:     "a terminal of 256 colours",
-			env:      []string{"TERM=xterm-256color", "CLICOLOR_FORCE=1"},
-			styled:   true,
-			rejected: []string{trueColor},
-		},
-		{
-			name:   "no terminal at all",
-			env:    nil,
-			styled: false,
-		},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			w := newWorld(t, fake(checkedIn(t)))
-			w.env = append(w.env, c.env...)
-			got := w.render(t, "what is this project")
-
-			if styled := strings.ContainsRune(got.stdout, 0x1b); styled != c.styled {
-				t.Fatalf("styled = %v, want %v:\n%q", styled, c.styled, got.stdout)
-			}
-			for _, rejected := range c.rejected {
-				if strings.Contains(got.stdout, rejected) {
-					t.Errorf("the output carries a %q colour this terminal cannot show:\n%q", rejected, got.stdout)
-				}
-			}
-			// Whatever the colour, the words are the same words.
-			if !strings.Contains(plain(got.stdout), recorded) {
-				t.Errorf("the answer did not survive the colour adaptation:\n%q", got.stdout)
-			}
-		})
-	}
-}
-
 func TestTheTurnIsAppendedToATraceThatParses(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
-	printed := decodeStream(t, w.answer(t, "what is this project").stdout)
+	w := newWorld(t, fake(recording(t)))
+	held := w.answer(t, "what is this project")
 
+	if len(held) == 0 {
+		t.Fatal("the Trace holds nothing about a turn that was answered")
+	}
 	body, err := os.ReadFile(w.trace)
 	if err != nil {
 		t.Fatalf("read the Trace: %v", err)
-	}
-	stored := decodeStream(t, string(body))
-
-	if len(stored) != len(printed) {
-		t.Fatalf("the Trace holds %d records and stdout printed %d", len(stored), len(printed))
-	}
-	for i := range stored {
-		if stored[i].ID != printed[i].ID || stored[i].Seq != printed[i].Seq || stored[i].Kind != printed[i].Kind {
-			t.Errorf("record %d: Trace has %+v, stdout printed %+v", i, stored[i], printed[i])
-		}
 	}
 	if !bytes.HasSuffix(body, []byte("\n")) {
 		t.Error("the Trace does not end on a record boundary")
 	}
 }
 
-// A second turn appends rather than replacing, so the Trace is a record the
+// A second process appends rather than replacing, so the Trace is a record the
 // developer did not have to ask for.
 func TestASecondRunAppendsToTheSameTrace(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
-	first := decodeStream(t, w.answer(t, "one").stdout)
+	w := newWorld(t, fake(oneTurnEach(t, 2)))
 
-	// The recording holds one turn, so the second run reports that it has run
-	// out of script. What matters here is that the Trace of the first run is
-	// still whole afterwards.
-	w.run(t, "-p", "two", "--json")
-
-	body, err := os.ReadFile(w.trace)
-	if err != nil {
-		t.Fatalf("read the Trace: %v", err)
+	first := w.answer(t, "one")
+	if len(first) == 0 {
+		t.Fatal("the first run recorded nothing")
 	}
-	stored := decodeStream(t, string(body))
-	if len(stored) < len(first) {
-		t.Fatalf("the Trace holds %d records, want at least the %d of the first run", len(stored), len(first))
+
+	// A fresh process over the same configuration, and therefore the same
+	// Trace. Its Session is its own; the file is not.
+	second := w.answer(t, "two")
+
+	if len(second) <= len(first) {
+		t.Fatalf("the Trace holds %d records after the second run and %d after the first",
+			len(second), len(first))
 	}
 	for i := range first {
-		if stored[i].ID != first[i].ID {
-			t.Errorf("record %d was overwritten: %+v", i, stored[i])
+		if second[i].ID != first[i].ID {
+			t.Errorf("record %d was overwritten: %+v", i, second[i])
 		}
 	}
+}
+
+// oneTurnEach writes a recording of n identical turns, for the tests that need
+// a console to answer more than once.
+func oneTurnEach(t *testing.T, n int) string {
+	t.Helper()
+
+	var body strings.Builder
+	for range n {
+		body.WriteString(oneTurn)
+	}
+	path := filepath.Join(t.TempDir(), "script.toml")
+	if err := os.WriteFile(path, []byte(body.String()), 0o600); err != nil {
+		t.Fatalf("write the recording: %v", err)
+	}
+	return path
 }
 
 // longRecording writes a turn of blocks, each split into chunks, and returns
@@ -702,28 +662,28 @@ func TestAChunkHeavyRunProducesOneRecordPerBlock(t *testing.T) {
 
 	script, folded := longRecording(t, blocks, chunks)
 	w := newWorld(t, fake(script))
-	printed := decodeStream(t, w.answer(t, "answer at length").stdout)
+	held := w.answer(t, "answer at length")
 
 	want := []events.Kind{events.KindStarted}
 	for range blocks {
 		want = append(want, events.KindText)
 	}
 	want = append(want, events.KindUsage, events.KindFinished)
-	if fmt.Sprint(kinds(printed)) != fmt.Sprint(want) {
+	if fmt.Sprint(kinds(held)) != fmt.Sprint(want) {
 		t.Fatalf("the run produced %d records of kinds %v, want %d of %v",
-			len(printed), kinds(printed), len(want), want)
+			len(held), kinds(held), len(want), want)
 	}
 
 	// The chunks really were thousands. The wire position counts what was sent,
 	// so it is what says the fold had something to fold.
-	if last := printed[len(printed)-1]; last.WireSeq < uint64(blocks*chunks) {
+	if last := held[len(held)-1]; last.WireSeq < uint64(blocks*chunks) {
 		t.Fatalf("the last record has wire position %d, want at least the %d chunks that were streamed",
 			last.WireSeq, blocks*chunks)
 	}
 
 	// Folding is not dropping: every chunk of a block is in the record it
 	// became.
-	for i, e := range printed[1 : 1+blocks] {
+	for i, e := range held[1 : 1+blocks] {
 		text, ok := e.Payload.(events.Text)
 		if !ok {
 			t.Fatalf("record %d = %#v, want Text", i+1, e.Payload)
@@ -736,16 +696,8 @@ func TestAChunkHeavyRunProducesOneRecordPerBlock(t *testing.T) {
 
 	// Dense and gapless per Session, over what the Trace holds rather than over
 	// what was sent.
-	body, err := os.ReadFile(w.trace)
-	if err != nil {
-		t.Fatalf("read the Trace: %v", err)
-	}
-	stored := decodeStream(t, string(body))
-	if len(stored) != len(printed) {
-		t.Fatalf("the Trace holds %d records and stdout printed %d", len(stored), len(printed))
-	}
 	next := map[events.SessionID]uint64{}
-	for i, e := range stored {
+	for i, e := range held {
 		next[e.Session]++
 		if e.Seq != next[e.Session] {
 			t.Fatalf("record %d of session %s has Seq %d, want %d — the sequence has a gap",
@@ -758,38 +710,55 @@ func TestAChunkHeavyRunProducesOneRecordPerBlock(t *testing.T) {
 // keeps: a killed process cannot flush, cannot close, and cannot run a deferred
 // anything.
 //
-// Nothing here waits for the right moment to kill. The test reads a few records
-// and then stops reading, so the run fills the pipe it prints to and blocks
-// there. It is provably mid-stream when the signal lands, rather than probably.
+// Nothing here waits for the right moment to kill. The Trace itself is watched
+// until it holds records of this turn and no claim closing it, and the signal
+// lands there. It is provably mid-stream when it does, rather than probably.
 //
 // Every group this stage commits is one record once the chunks of a block have
 // folded, so a torn group and a torn record are the same observation here. The
 // multi-record group is killed in trace/sink_test.go, where a group can be
 // constructed with the tool results stage 0 has no way to produce.
 func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
-	const blocks = 2000
+	const (
+		blocks = 2000
+		caught = 20
+	)
 
 	script, _ := longRecording(t, blocks, 3)
 	w := newWorld(t, fake(script))
 
-	cmd := exec.Command(binary, "-p", "answer at length", "--json")
+	cmd := exec.Command(binary)
 	cmd.Env = w.env
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	stdout, err := cmd.StdoutPipe()
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	keys, err := cmd.StdinPipe()
 	if err != nil {
-		t.Fatalf("open eva's output: %v", err)
+		t.Fatalf("open eva's input: %v", err)
 	}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start eva: %v", err)
 	}
+	if _, err := keys.Write([]byte("answer at length\r")); err != nil {
+		t.Fatalf("type a prompt: %v", err)
+	}
 
-	const read = 20
-	reader := bufio.NewReader(stdout)
-	for i := range read {
-		if _, err := reader.ReadString('\n'); err != nil {
-			t.Fatalf("record %d never arrived: %v\nstderr: %s", i+1, err, stderr.String())
+	var midStream bool
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		body, err := os.ReadFile(w.trace)
+		if err != nil || bytes.Count(body, []byte("\n")) < caught {
+			time.Sleep(time.Millisecond)
+			continue
 		}
+		if bytes.Contains(body, []byte(`"kind":"finished"`)) {
+			t.Fatal("the turn closed before it could be killed — the recording is too short")
+		}
+		midStream = true
+		break
+	}
+	if !midStream {
+		_ = cmd.Process.Kill()
+		t.Fatalf("the turn never reached %d records\nstderr: %s", caught, stderr.String())
 	}
 
 	if err := cmd.Process.Kill(); err != nil {
@@ -815,8 +784,9 @@ func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
 
 	// Parses completely: every line, not merely the ones before the last.
 	stored := decodeStream(t, string(body))
-	if len(stored) < read {
-		t.Fatalf("the Trace holds %d records, want at least the %d that were printed", len(stored), read)
+	if len(stored) < caught {
+		t.Fatalf("the Trace holds %d records, want at least the %d that were watched for",
+			len(stored), caught)
 	}
 	if len(stored) >= blocks {
 		t.Fatalf("the Trace holds %d records of a %d block turn — the run was not interrupted",
@@ -840,11 +810,12 @@ func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
 	}
 }
 
-// A typo must not quietly disable the thing the user meant to set.
+// A typo must not quietly disable the thing the user meant to set. The console
+// never opens: a configuration Eva would not act on is refused before it is.
 func TestAnUnknownConfigKeyExitsNonZeroNamingTheKey(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)).plus(`nmae = "anthropic"`))
+	w := newWorld(t, fake(recording(t)).plus(`nmae = "anthropic"`))
 
-	got := w.run(t, "-p", "hello", "--json")
+	got := w.run(t)
 	if got.code == 0 {
 		t.Fatalf("exit 0 on an unknown key, want non-zero\nstdout: %s", got.stdout)
 	}
@@ -853,9 +824,6 @@ func TestAnUnknownConfigKeyExitsNonZeroNamingTheKey(t *testing.T) {
 	}
 	if !strings.Contains(got.stderr, w.config) {
 		t.Errorf("stderr does not name the file:\n%s", got.stderr)
-	}
-	if got.stdout != "" {
-		t.Errorf("stdout = %q, want nothing", got.stdout)
 	}
 }
 
@@ -877,7 +845,7 @@ func TestAMissingAPIKeyExitsNonZeroSayingHowToSetOne(t *testing.T) {
 		),
 	}
 
-	got := w.run(t, "-p", "hello", "--json")
+	got := w.run(t)
 	if got.code == 0 {
 		t.Fatal("exit 0 with no API key, want non-zero")
 	}
@@ -898,10 +866,10 @@ func TestAMissingAPIKeyExitsNonZeroSayingHowToSetOne(t *testing.T) {
 func TestTheAPIKeyNeverReachesTheTraceOrTheStream(t *testing.T) {
 	const key = "sk-ant-canary-do-not-store-me"
 
-	w := newWorld(t, fake(checkedIn(t)))
+	w := newWorld(t, fake(recording(t)))
 	w.env = append(w.env, "ANTHROPIC_API_KEY="+key)
 
-	got := w.answer(t, "what is this project")
+	got, _ := w.converse(t, "what is this project")
 	if strings.Contains(got.stdout, key) || strings.Contains(got.stderr, key) {
 		t.Error("the credential reached the output stream")
 	}
@@ -918,77 +886,35 @@ func TestTheAPIKeyNeverReachesTheTraceOrTheStream(t *testing.T) {
 // Configuration is a file, and the flag says which one. The environment names
 // a default; the flag overrides it.
 func TestTheConfigFlagChoosesTheFile(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
+	w := newWorld(t, fake(recording(t)))
 	w.env = append(w.env, "EVA_CONFIG="+filepath.Join(w.dir, "there-is-no-such-file.toml"))
 
-	got := w.run(t, "-p", "hello", "--json", "--config", w.config)
+	// The console opens over the file the flag named and finds no input, so it
+	// leaves. A flag that had not won would have exited on the missing file the
+	// environment names.
+	got := w.run(t, "--config", w.config)
 	if got.code != 0 {
 		t.Fatalf("exit %d, want 0 — the flag did not win\nstderr: %s", got.code, got.stderr)
 	}
-	if len(decodeStream(t, got.stdout)) == 0 {
-		t.Error("the turn produced no Events")
-	}
 }
 
-// eva with no arguments is the console.
+// eva with no arguments is the console, and the console is all there is.
 //
 // It is driven here the way a terminal drives it, with keys on the input
 // stream, and what it left behind is read from the Trace rather than from
 // stdout: what a person saw was a screen redrawn in place, and the record is
-// not. The interface itself is exercised in chat_test.go, in this process,
+// not. The interface itself is exercised in console_test.go, in this process,
 // where the keys and the Events can be told apart.
 func TestNoArgumentsOpensAnInteractiveChat(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
+	w := newWorld(t, fake(recording(t)))
 
-	cmd := exec.Command(binary)
-	cmd.Env = w.env
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	keys, err := cmd.StdinPipe()
-	if err != nil {
-		t.Fatalf("open eva's input: %v", err)
-	}
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start eva: %v", err)
-	}
-
-	if _, err := keys.Write([]byte("what is this project\r")); err != nil {
-		t.Fatalf("type a prompt: %v", err)
-	}
-
-	// The turn happens beside this test, so the Trace is what says it is over.
-	deadline := time.Now().Add(10 * time.Second)
-	var stored []events.Event
-	for time.Now().Before(deadline) {
-		if body, err := os.ReadFile(w.trace); err == nil && bytes.Contains(body, []byte(`"kind":"finished"`)) {
-			stored = decodeStream(t, string(body))
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if len(stored) == 0 {
-		t.Fatalf("no turn was answered in 10s\nstderr: %s", stderr.String())
-	}
-
-	// No more keys. A chat whose input has ended has nothing left to read.
-	if err := keys.Close(); err != nil {
-		t.Fatalf("close eva's input: %v", err)
-	}
-
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("eva ended with %v\nstderr: %s", err, stderr.String())
-		}
-	case <-time.After(10 * time.Second):
-		_ = cmd.Process.Kill()
-		t.Fatal("eva did not leave when its input ended")
+	got, held := w.converse(t, "what is this project")
+	if got.code != 0 {
+		t.Fatalf("eva ended with %d, want 0\nstderr: %s", got.code, got.stderr)
 	}
 
 	var opened, answered bool
-	for _, e := range stored {
+	for _, e := range held {
 		if started, ok := e.Payload.(events.Started); ok && started.Intent == "what is this project" {
 			opened = true
 		}
@@ -997,15 +923,15 @@ func TestNoArgumentsOpensAnInteractiveChat(t *testing.T) {
 		}
 	}
 	if !opened {
-		t.Errorf("the Trace does not hold the prompt that was typed:\n%v", kinds(stored))
+		t.Errorf("the Trace does not hold the prompt that was typed:\n%v", kinds(held))
 	}
 	if !answered {
-		t.Errorf("the Trace does not hold the answer:\n%v", kinds(stored))
+		t.Errorf("the Trace does not hold the answer:\n%v", kinds(held))
 	}
 }
 
 func TestTheCommandLineFailsClosed(t *testing.T) {
-	w := newWorld(t, fake(checkedIn(t)))
+	w := newWorld(t, fake(recording(t)))
 
 	for _, c := range []struct {
 		name string
@@ -1013,9 +939,13 @@ func TestTheCommandLineFailsClosed(t *testing.T) {
 	}{
 		// No arguments at all is not here: it is the console, which is a command
 		// rather than a mistake.
-		{"the machine-readable stream with no prompt to answer", []string{"--json"}},
-		{"a flag Eva does not have", []string{"-p", "hello", "--json", "--turbo"}},
-		{"an argument that is not a flag", []string{"-p", "hello", "--json", "extra"}},
+		{"a flag Eva does not have", []string{"--turbo"}},
+		{"an argument that is not a flag", []string{"extra"}},
+		// The one-shot surface is gone, so what used to drive it is now a
+		// mistake like any other. A flag that was quietly ignored would leave a
+		// script believing it had asked for something.
+		{"a prompt on the command line", []string{"-p", "hello"}},
+		{"the machine-readable stream", []string{"--json"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got := w.run(t, c.args...)

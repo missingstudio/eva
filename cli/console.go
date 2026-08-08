@@ -35,9 +35,8 @@ type console struct {
 	// control is what a command may change about the turns that follow.
 	control control
 
-	// renderer is the projection a person reads. It is the same fold over
-	// committed Events the one-shot path uses, showing on this model instead
-	// of writing to a stream.
+	// renderer is the projection a person reads: a fold over committed Events,
+	// showing on this model rather than writing to a stream.
 	renderer *render.Renderer
 
 	// ctx is what a Run is started under. The one a turn actually runs under
