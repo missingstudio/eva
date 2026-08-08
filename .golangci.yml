@@ -6,7 +6,7 @@ version: "2"
 # dependency nobody thought about is rejected rather than quietly permitted.
 #
 # Adding a line to an allow list is therefore a deliberate act, and reviewing
-# that line is how a layer's contract stays true. See docs/adr/0010.
+# that line is how a layer's contract stays true.
 
 linters:
   enable:
@@ -62,7 +62,7 @@ linters:
 
         # core's tests get the standard library, and nothing else core does not
         # already have. The rule is separate so that core's own allow list stays
-        # the short, deliberate list ADR 0010 describes — a test needing a
+        # the short, deliberate list it was written as — a test needing a
         # package must not be the reason production code may import it.
         core-tests:
           list-mode: strict
@@ -100,7 +100,7 @@ linters:
             # imports the interface it satisfies. See the events rule for the
             # same line serving external test packages.
             - github.com/missingstudio/eva/providers
-            # toml, for the scripted Provider's recorded output. It reads the
+            # toml, for the fake Provider's recorded output. It reads the
             # recording itself rather than being handed one, because the layer
             # that reads files is config, and config may not import providers.
             - github.com/BurntSushi/toml

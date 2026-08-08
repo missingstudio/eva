@@ -7,7 +7,6 @@ import (
 	"github.com/missingstudio/eva/events"
 )
 
-// Call is one model call. CONTEXT.md retires "request", which belongs to Spec.
 type Call struct {
 	Model string
 	// Messages is the transcript the answer is conditioned on.
@@ -16,7 +15,7 @@ type Call struct {
 
 // Provider is a model behind one contract, so that a test is deterministic,
 // free, and needs no API key. Substitution is the point of the interface: the
-// scripted implementation replays recorded output, and the network ones sit
+// fake implementation replays recorded output, and the network ones sit
 // behind the same three methods.
 type Provider interface {
 	// Name is what configuration selects this Provider by.

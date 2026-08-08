@@ -68,7 +68,7 @@ type ProviderConfig struct {
 	Name string `toml:"name"`
 	// APIKeyEnv names the environment variable the credential is read from.
 	APIKeyEnv string `toml:"api_key_env"`
-	// Script is the recorded output the scripted provider replays.
+	// Script is the recorded output the fake provider replays.
 	Script string `toml:"script"`
 }
 
@@ -157,7 +157,7 @@ func Load(path string) (Config, error) {
 
 // decode reads the file strictly: a key Eva does not know is an error naming
 // the key, never a silent ignore. A typo that quietly disables the setting a
-// user meant to change is the failure this prevents (docs/adr/0009).
+// user meant to change is the failure this prevents.
 func decode(path string, cfg *Config) error {
 	md, err := toml.DecodeFile(path, cfg)
 	if err != nil {

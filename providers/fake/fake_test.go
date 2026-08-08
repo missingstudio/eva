@@ -1,4 +1,4 @@
-package scripted_test
+package fake_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/missingstudio/eva/events"
 	"github.com/missingstudio/eva/providers"
-	"github.com/missingstudio/eva/providers/scripted"
+	"github.com/missingstudio/eva/providers/fake"
 )
 
 // write puts a recording somewhere the test owns and returns its path.
@@ -56,7 +56,7 @@ func replay(t *testing.T, p providers.Provider) []events.Payload {
 // writes. Two ways to say which block a chunk belongs to is one way for a
 // recording to contradict itself.
 func TestARecordedTurnStreamsItsBlocksInFileOrder(t *testing.T) {
-	provider, err := scripted.Load(write(t, `
+	provider, err := fake.Load(write(t, `
 [[turn]]
 
   [[turn.block]]
@@ -103,7 +103,7 @@ func TestARecordedTurnStreamsItsBlocksInFileOrder(t *testing.T) {
 	if usage.InputTokens != 12 || usage.OutputTokens != 34 {
 		t.Errorf("usage = %+v, want the recorded figures", usage)
 	}
-	// ADR 0003: a figure the file leaves out is absent, not zero.
+	// A figure the file leaves out is absent, not zero.
 	if usage.ReasoningTokens != nil || usage.USD != nil {
 		t.Errorf("usage = %+v, want the unrecorded figures absent", usage)
 	}
@@ -112,7 +112,7 @@ func TestARecordedTurnStreamsItsBlocksInFileOrder(t *testing.T) {
 // The script records turns, and the Provider replays them one per call. A
 // recording that has run out says so, rather than repeating its last turn.
 func TestTheScriptIsReplayedOneTurnPerCall(t *testing.T) {
-	provider, err := scripted.Load(write(t, `
+	provider, err := fake.Load(write(t, `
 [[turn]]
   [[turn.block]]
   chunks = ["first"]
@@ -167,7 +167,7 @@ func TestARecordingIsRejectedRatherThanPartlyUnderstood(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := scripted.Load(write(t, c.body))
+			_, err := fake.Load(write(t, c.body))
 			if err == nil {
 				t.Fatal("the recording loaded, want an error")
 			}
@@ -181,7 +181,7 @@ func TestARecordingIsRejectedRatherThanPartlyUnderstood(t *testing.T) {
 func TestAMissingRecordingNamesTheFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "there-is-no-such-file.toml")
 
-	_, err := scripted.Load(path)
+	_, err := fake.Load(path)
 	if err == nil {
 		t.Fatal("a missing recording loaded, want an error")
 	}
@@ -193,7 +193,7 @@ func TestAMissingRecordingNamesTheFile(t *testing.T) {
 // A cancelled turn stops where it is. Nothing here holds a resource, so what
 // is being checked is that cancellation is reported rather than ignored.
 func TestACancelledContextStopsTheReplay(t *testing.T) {
-	provider, err := scripted.Load(write(t, "[[turn]]\n  [[turn.block]]\n  chunks = [\"one\", \"two\"]\n"))
+	provider, err := fake.Load(write(t, "[[turn]]\n  [[turn.block]]\n  chunks = [\"one\", \"two\"]\n"))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -215,11 +215,11 @@ func TestACancelledContextStopsTheReplay(t *testing.T) {
 }
 
 func TestTheProviderNamesWhatConfigurationSelectsItBy(t *testing.T) {
-	provider, err := scripted.Load(write(t, "[[turn]]\n  [[turn.block]]\n  chunks = [\"one\"]\n"))
+	provider, err := fake.Load(write(t, "[[turn]]\n  [[turn.block]]\n  chunks = [\"one\"]\n"))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if provider.Name() != scripted.Name {
-		t.Errorf("Name() = %q, want %q", provider.Name(), scripted.Name)
+	if provider.Name() != fake.Name {
+		t.Errorf("Name() = %q, want %q", provider.Name(), fake.Name)
 	}
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/missingstudio/eva/core"
 	"github.com/missingstudio/eva/events"
 	"github.com/missingstudio/eva/providers"
-	"github.com/missingstudio/eva/providers/scripted"
+	"github.com/missingstudio/eva/providers/fake"
 	"github.com/missingstudio/eva/trace"
 )
 
@@ -182,11 +182,11 @@ func run(ctx context.Context, opts options, stdout io.Writer) (code int, err err
 // open builds the Provider configuration selects.
 func open(cfg config.Config) (providers.Provider, error) {
 	switch cfg.Provider.Name {
-	case scripted.Name:
+	case fake.Name:
 		if cfg.Provider.Script == "" {
-			return nil, fmt.Errorf("provider %q needs a recording: set provider.script in %s", scripted.Name, cfg.Path)
+			return nil, fmt.Errorf("provider %q needs a recording: set provider.script in %s", fake.Name, cfg.Path)
 		}
-		return scripted.Load(cfg.Provider.Script)
+		return fake.Load(cfg.Provider.Script)
 
 	case config.DefaultProvider:
 		// The credential is resolved before anything else, so that a missing
@@ -196,11 +196,11 @@ func open(cfg config.Config) (providers.Provider, error) {
 			return nil, err
 		}
 		return nil, fmt.Errorf("provider %q is not built yet; set provider.name = %q with a recording in %s",
-			cfg.Provider.Name, scripted.Name, cfg.Path)
+			cfg.Provider.Name, fake.Name, cfg.Path)
 
 	default:
 		return nil, fmt.Errorf("unknown provider %q in %s: want %q or %q",
-			cfg.Provider.Name, cfg.Path, config.DefaultProvider, scripted.Name)
+			cfg.Provider.Name, cfg.Path, config.DefaultProvider, fake.Name)
 	}
 }
 
