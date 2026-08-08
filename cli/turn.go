@@ -108,6 +108,16 @@ func (t *Turn) stream(ctx context.Context) error {
 			return fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
 		}
 
+		if degraded, isCaveat := payload.(events.Degraded); isCaveat {
+			// A caveat is not a record of its own. The Recorder composes one
+			// for the whole Run and commits it with the claim, so a Provider
+			// that noticed two things — and a Run whose Trace also holds a
+			// record nobody understood — still close on a single Degraded
+			// rather than on a scattering of them a reader has to reconcile.
+			t.Recorder.Degrade(degraded.Missing...)
+			continue
+		}
+
 		if err := block.add(ctx, t.Recorder, payload); err != nil {
 			return err
 		}
@@ -162,7 +172,10 @@ func capabilities() events.Capabilities {
 		// The machine-readable stream is the contract this stage exists to
 		// establish.
 		StructuredEvents: true,
-		// Every turn emits a Usage Event carrying real provider figures.
+		// Real provider figures reach the Trace, and are never estimated to
+		// fill a gap. A turn the provider reported nothing for emits no Usage
+		// and closes the Run with a caveat saying so — which is the capability
+		// working rather than an exception to it.
 		CostReport: true,
 	}
 }

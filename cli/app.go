@@ -200,8 +200,9 @@ func open(cfg config.Config) (providers.Provider, error) {
 		// Reveal is the one place the credential leaves the type that stops it
 		// printing itself, and it goes straight into the client.
 		return anthropic.New(anthropic.Options{
-			APIKey:  key.Reveal(),
-			BaseURL: cfg.Provider.BaseURL,
+			APIKey:    key.Reveal(),
+			BaseURL:   cfg.Provider.BaseURL,
+			MaxTokens: cfg.Provider.MaxTokens,
 		})
 
 	default:
