@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/missingstudio/eva/config"
 	"github.com/missingstudio/eva/events"
 )
 
@@ -369,7 +370,14 @@ func TestHelpPrintsTheUsageBlock(t *testing.T) {
 	if got.code != 0 {
 		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
 	}
-	for _, want := range []string{"USAGE:", "eva ", "eva help", "--config"} {
+	// The flags a process is started with, and the environment it reads. The
+	// names and the default come from config's own constants rather than from
+	// a copy written here, so a default that moved and a help text that did not
+	// fail this rather than passing it.
+	for _, want := range []string{
+		"USAGE:", "eva help", "--config", "CONFIG (env):",
+		config.DefaultAPIKeyEnv, config.EnvConfig, config.EnvHome, config.DefaultModel,
+	} {
 		if !strings.Contains(got.stdout, want) {
 			t.Errorf("the usage block does not mention %q:\n%s", want, got.stdout)
 		}

@@ -6,9 +6,10 @@ import (
 	"fmt"
 )
 
-// The encoding is a published contract. Adapters, extensions, and every
-// --json consumer read it, so it is defined here once rather than left to
-// whatever struct tags happen to be in scope.
+// The encoding is a published contract. Every reader of a Trace reads it —
+// adapters, extensions, and the projections a person sees a turn in — so it is
+// defined here once rather than left to whatever struct tags happen to be in
+// scope.
 
 var (
 	// ErrNoPayload is returned when an Event carries no payload. Every Event

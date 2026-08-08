@@ -9,9 +9,10 @@ import (
 	"github.com/missingstudio/eva/events"
 )
 
-// The encoding is a published contract: adapters, extensions, and every
-// --json consumer read it. Exercising it is therefore testing external
-// behaviour, not reaching into the package.
+// The encoding is a published contract: every reader of a Trace reads it —
+// adapters, extensions, and the projections a person sees a turn in.
+// Exercising it is therefore testing external behaviour, not reaching into the
+// package.
 
 func envelope(t *testing.T, p events.Payload) events.Event {
 	t.Helper()

@@ -67,7 +67,7 @@ The one path an Event takes to the Trace. It stamps the envelope, commits a grou
 _Avoid_: Logger, writer, emitter (an emitter stamps, and stamping alone is not recording)
 
 **Subscriber**:
-A consumer of committed Events. It sees a record after the Trace holds it, never before, so what a Subscriber shows is the Trace rather than a claim about it. Every projection is one — the transcript, the machine-readable stream, the dashboard.
+A consumer of committed Events. It sees a record after the Trace holds it, never before, so what a Subscriber shows is the Trace rather than a claim about it. Every projection is one — the transcript, the console, the dashboard.
 
 **Console**:
 The interactive interface a person types into. It is not a Session: a Session is the transcript, and one console holds one while it runs. It shows a turn twice — arriving, in the live area, and then as the fold over what was committed.

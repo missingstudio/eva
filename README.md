@@ -18,13 +18,11 @@ cd eva
 go build -o eva ./cli/cmd/eva
 export ANTHROPIC_API_KEY=...
 
-./eva                                   # the console
-eva -p "what is this project"           # one-shot: the answer, and what it cost
-eva -p "what is this project" --json    # the same turn as typed Events
-git diff | eva -p "summarize this"      # the prompt, and what a shell piped in
+./eva            # the console, which is the whole command surface
+./eva help       # the flags a process is started with
 ```
 
-Text piped in is read by the one-shot command and follows the prompt, so a diff or a log reaches a model without being pasted. The console reads the same stream as keys, so it never reads a prompt from it — `git diff | eva` opens a console rather than quietly answering a diff nobody wrote a prompt for.
+`eva` is a console and nothing else. There is no prompt on the command line and no machine-readable output mode: a turn is something a person types, and the record of it is the Trace. Every turn is appended there as typed Events — that file, not a stream on stdout, is what a later reader folds.
 
 In the console, enter sends a prompt, ctrl+c interrupts the turn in flight and gives the prompt back, and ctrl+d leaves. An interrupted turn leaves a Session the next prompt can still use, and a Trace that says what happened.
 
@@ -41,7 +39,7 @@ A line that starts with a slash is a command the console answers itself — no R
 
 Every turn is conditioned on a base system prompt before the transcript, and that prompt is [`core/prompt/base.md`](core/prompt/base.md) — compiled into the binary, reviewed as prose in a diff, and held to a 2 KiB budget that `make check` enforces. What each turn spends before its first word is therefore a figure the repository states, rather than one that grows a paragraph at a time. See [`0020`](docs/adr/0020-the-base-system-prompt-is-compiled-in-and-its-size-is-a-gate.md).
 
-The style follows the terminal's background and the colour follows what the terminal can show — neither is configured. The machine-readable path builds no renderer at all, so what a script parses carries no terminal escapes.
+The style follows the terminal's background and the colour follows what the terminal can show — neither is configured. Rendering is a pure consumer of Events with no way to reach a Provider, a Session, or the Trace, so what the screen shows is what the record holds.
 
 Configuration is a file, not a pile of flags. `eva help` prints the command surface; `~/.eva/config.toml` holds the rest, and an API key is read from the environment and never from that file.
 
