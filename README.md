@@ -8,15 +8,23 @@
 
 # Eva
 
-An autonomous, multi-tenant, AI-native software factory. It builds, tests, improves, and maintains software with minimal human intervention.
+An autonomous, multi-tenant, AI-native software factory.
 
-**Status:** stage 0 in progress. The spine runs: a prompt goes in, typed Events come out, and a Trace lands on disk. `eva` holds a conversation, a turn renders as styled markdown and reports what it cost, and the console answers commands of its own.
+## Quick Start
 
-```
-eva                                     # the console
+```bash
+git clone git@github.com:missingstudio/eva.git
+cd eva
+go build -o eva ./cli/cmd/eva
+export ANTHROPIC_API_KEY=...
+
+./eva                                   # the console
 eva -p "what is this project"           # one-shot: the answer, and what it cost
 eva -p "what is this project" --json    # the same turn as typed Events
+git diff | eva -p "summarize this"      # the prompt, and what a shell piped in
 ```
+
+Text piped in is read by the one-shot command and follows the prompt, so a diff or a log reaches a model without being pasted. The console reads the same stream as keys, so it never reads a prompt from it — `git diff | eva` opens a console rather than quietly answering a diff nobody wrote a prompt for.
 
 In the console, enter sends a prompt, ctrl+c interrupts the turn in flight and gives the prompt back, and ctrl+d leaves. An interrupted turn leaves a Session the next prompt can still use, and a Trace that says what happened.
 

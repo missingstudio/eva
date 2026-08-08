@@ -8,11 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
-	"charm.land/lipgloss/v2"
-	"github.com/missingstudio/eva/cli/render"
 	"github.com/missingstudio/eva/config"
 	"github.com/missingstudio/eva/core"
 	"github.com/missingstudio/eva/core/prompt"
@@ -37,18 +34,14 @@ const (
 // usage is the command surface a shell sees. The console answers /help, which
 // is a different surface: these are the flags a process is started with, and
 // those are the commands a Session is steered by.
-const usage = `eva — a model client that leaves a complete record.
+const usage = `eva — an autonomous, multi-tenant, AI-native software factory.
 
 USAGE:
   eva                          Interactive console
-  eva -p <prompt>              One-shot: the answer, rendered, and what it cost
-  eva -p <prompt> --json       One-shot: the turn as typed Events on stdout
   eva help                     Show this help
 
 FLAGS:
-  -p, --prompt <text>          The prompt to answer
-      --json                   Emit typed Events, one per line, unrendered
-      --config <path>          Configuration file
+  --config <path>              Configuration file
                                (default $EVA_CONFIG, then ~/.eva/config.toml)
 
 In the console, enter sends a prompt, ctrl+c interrupts the turn in flight,
@@ -63,9 +56,8 @@ the environment — by default $ANTHROPIC_API_KEY — and never from that file.
 //
 // args is the command line without the program name. Reading and writing
 // through the passed streams rather than through the process's own is what
-// lets a test drive this with nothing attached — which the interactive path
-// needs as much as the one-shot one, because a terminal is the thing CI does
-// not have.
+// lets a test drive this with nothing attached, because a terminal is the
+// thing CI does not have.
 func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// A failure to write help or a diagnostic is not something the process
 	// can report anywhere else, so the exit code carries what it can.
@@ -90,9 +82,13 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 // a rejected one.
 var errHelp = errors.New("help requested")
 
+// options is the whole of what a command line can say.
+//
+// It is one field, and that is the shape the command surface was cut back to:
+// eva is the console, and a turn is something a person types rather than
+// something a process is started with. Configuration is the exception because
+// it has to be — a file has to be found before it can say anything.
 type options struct {
-	prompt string
-	json   bool
 	config string
 }
 
@@ -106,9 +102,6 @@ func parse(args []string) (options, error) {
 
 	// Eva prints its own usage, in its own words, on the stream it chooses.
 	fs.SetOutput(io.Discard)
-	fs.StringVar(&opts.prompt, "p", "", "the prompt to answer")
-	fs.StringVar(&opts.prompt, "prompt", "", "the prompt to answer")
-	fs.BoolVar(&opts.json, "json", false, "emit typed Events, unrendered")
 	fs.StringVar(&opts.config, "config", "", "configuration file")
 
 	if err := fs.Parse(args); err != nil {
@@ -120,13 +113,6 @@ func parse(args []string) (options, error) {
 
 	if rest := fs.Args(); len(rest) > 0 {
 		return options{}, fmt.Errorf("unexpected argument %q", rest[0])
-	}
-
-	// No prompt is the console. The machine-readable stream is not: it is the
-	// contract a script parses, one turn in and one turn out, and a console
-	// has no place to put the prompts.
-	if opts.prompt == "" && opts.json {
-		return options{}, errors.New("--json answers one prompt: give it with -p <prompt>")
 	}
 	return opts, nil
 }
@@ -162,48 +148,19 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 		model:    cfg.Model,
 	}
 
-	// The assembly is built once and handed to whichever frontend drives it.
-	// Both attach through eva's own door, which is the only place a Run learns
-	// who is watching it and what it may claim.
-	if opts.prompt == "" {
-		return converse(ctx, e, stdin, stdout)
-	}
-	return answerOnce(ctx, e, opts, stdin, stdout)
-}
-
-// answerOnce answers one prompt and reports it as an exit code.
-//
-// Nothing watches a turn here, so nothing is told what is arriving and the Run
-// claims no clean cancel: a signal to this command kills the process where it
-// stands, however it looks from outside. The turn is written when it is over,
-// which is all a command that prints once and exits has to show.
-func answerOnce(ctx context.Context, e *eva, opts options, stdin io.Reader, stdout io.Writer) (int, error) {
-	output, err := projection(opts.json, stdin, stdout)
-	if err != nil {
-		return ExitFailure, err
-	}
-	e.show(output)
-
-	outcome, err := e.answer(ctx, opts.prompt)
-	if err != nil {
-		// The record failed, so there is nothing in the Trace to report
-		// instead. Everything that happened to the turn itself is below.
-		return ExitFailure, err
-	}
-	if outcome.Result != events.ResultDone {
-		return ExitFailure, fmt.Errorf("%s: %s", outcome.Result, outcome.Summary)
-	}
-	return ExitOK, nil
+	// The assembly is built once and handed to the frontend that drives it. It
+	// attaches through eva's own door, which is the only place a Run learns who
+	// is watching it and what it may claim.
+	return converse(ctx, e, stdin, stdout)
 }
 
 // eva is one Session's worth of assembly: the Provider that answers, the sink
 // every Event lands in, the transcript both are folded into, and who is
 // watching.
 //
-// It exists because a Session has many Runs. The one-shot path runs one and
-// the console runs one per prompt, and everything except the Run itself is
-// the same each time — so this holds what lasts and answer builds what does
-// not.
+// It exists because a Session has many Runs. The console runs one per prompt,
+// and everything except the Run itself is the same each time — so this holds
+// what lasts and answer builds what does not.
 type eva struct {
 	provider providers.Provider
 	sink     core.TraceSink
@@ -217,8 +174,8 @@ type eva struct {
 	// Run, where a missing one only degrades it.
 	interrupt bool
 
-	// subs are the projections beyond the Session: the machine-readable
-	// stream, the rendered one-shot turn, or the interface.
+	// subs are the projections beyond the Session: the interface a person
+	// reads the turn in.
 	subs []core.Subscriber
 
 	// arriving is who is watching the turn happen, and is nil when nobody is.
@@ -246,19 +203,10 @@ func (e *eva) UseModel(model string) { e.model = model }
 // the same sink, and the same Provider. Session.Fresh has why it is a new one.
 func (e *eva) Clear() { e.session = e.session.Fresh(events.SessionID(newID("sess"))) }
 
-// show attaches a projection to every Run that follows.
-//
-// This is the whole of what a frontend that only reads the record gets. It is
-// told what was committed, after it was committed, and it claims nothing about
-// the Run beyond that — which is correct for a command that prints a turn when
-// the turn is over.
-func (e *eva) show(sub core.Subscriber) {
-	e.subs = []core.Subscriber{sub}
-}
-
-// watch attaches a frontend that is doing more than reading: it is told what is
-// arriving before any of it is committed, and it listens for a cancellation and
-// lets the Run close rather than letting the process die under it.
+// watch attaches the frontend that drives these turns. It is told what was
+// committed after the Trace holds it, it is told what is arriving before any of
+// it is committed, and it listens for a cancellation and lets the Run close
+// rather than letting the process die under it.
 //
 // So it also claims the Interrupt capability. The claim is made here because
 // this is where the listening is. A capability that is missing degrades a Run;
@@ -266,11 +214,11 @@ func (e *eva) show(sub core.Subscriber) {
 // here on a false claim would have no way to find out — which is why the claim
 // is not a field a Turn's builder can set on its own.
 //
-// show and watch are the only two doors. Everything a Run learns about who is
-// watching it comes through one of them, so the answer to "what does this Run
-// claim, and who sees what it commits?" is these ten lines rather than a search.
+// This is the only door. Everything a Run learns about who is watching it comes
+// through here, so the answer to "what does this Run claim, and who sees what it
+// commits?" is these five lines rather than a search.
 func (e *eva) watch(sub core.Subscriber, arriving func(chunk string)) {
-	e.show(sub)
+	e.subs = []core.Subscriber{sub}
 	e.arriving = arriving
 	e.interrupt = true
 }
@@ -330,40 +278,6 @@ func converse(ctx context.Context, e *eva, stdin io.Reader, stdout io.Writer) (i
 		return ExitFailure, err
 	}
 	return ExitOK, nil
-}
-
-// projection builds what writes to stdout: typed Events, or the turn rendered
-// for a person. Both are folds over the same committed record, which is what
-// lets them be swapped here and still describe one turn.
-//
-// The two are exclusive, and the machine-readable one builds no Renderer at
-// all. Not built and suppressed — never built. Otherwise the terminal stack
-// would sit in the output path a script parses, and the render boundary would
-// stop being a property of the program and become a habit.
-func projection(machineReadable bool, stdin io.Reader, stdout io.Writer) (core.Subscriber, error) {
-	if machineReadable {
-		return eventStream{out: stdout}, nil
-	}
-	return render.New(render.Stream(stdout), darkBackground(stdin, stdout))
-}
-
-// darkBackground asks the terminal what colour it is.
-//
-// Nothing configures this. A style a user had to select is a style most users
-// never select, and the answer is one the terminal already knows.
-//
-// Asking is a question written to the terminal and an answer read back, so it
-// needs both streams to be the terminal's. A pair that is not gets dark —
-// which is what an unknown terminal is assumed to be, and what the markdown
-// renderer would have defaulted to anyway. Colour never reaches such a
-// destination in any case: it is removed on the way out.
-func darkBackground(stdin io.Reader, stdout io.Writer) bool {
-	in, isInFile := stdin.(*os.File)
-	out, isOutFile := stdout.(*os.File)
-	if !isInFile || !isOutFile {
-		return true
-	}
-	return lipgloss.HasDarkBackground(in, out)
 }
 
 // open builds the Provider configuration selects.

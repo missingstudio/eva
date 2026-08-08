@@ -218,9 +218,9 @@ func TestASessionThatIsPartlyPricedReportsNoDollarFigure(t *testing.T) {
 }
 
 // A Run that did not understand part of what it saw closes on a caveat, and
-// the machine-readable stream carries it. A person is shown it too: the two
-// projections describe one turn, and a cost line over data known to be
-// incomplete, printed with nothing to say so, reads as a measurement.
+// the Trace carries it. A person is shown it too: the screen is a fold over
+// what was committed, and a cost line over data known to be incomplete,
+// printed with nothing to say so, reads as a measurement.
 //
 // The caveat is committed in the group Finished closes on, and before it,
 // which is the order folded here.

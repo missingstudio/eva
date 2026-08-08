@@ -163,10 +163,10 @@ linters:
         #
         # The omissions are the rule. A renderer that could reach a provider, a
         # Session, or the Trace could show a person a turn the record does not
-        # hold — and the machine-readable path, which builds no renderer, would
-        # stop describing the same turn. core is absent too, which costs a
-        # compile-time assertion that the Renderer satisfies Subscriber; the
-        # assertion happens where a Renderer is built instead.
+        # hold, and the screen would stop being an account of what was
+        # committed. core is absent too, which costs a compile-time assertion
+        # that the Renderer satisfies Subscriber; the assertion happens where a
+        # Renderer is built instead.
         render:
           list-mode: strict
           files:

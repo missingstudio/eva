@@ -15,7 +15,7 @@ import (
 // setting has one.
 const (
 	// DefaultModel is what a turn runs against when nothing selects a model.
-	DefaultModel = "claude-opus-5"
+	DefaultModel = "claude-sonnet-4-5"
 	// DefaultProvider is the real one. A fake is never the default: a build
 	// that quietly answered from a recording would be worse than one that
 	// says it has no API key.
