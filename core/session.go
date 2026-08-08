@@ -8,7 +8,7 @@ import (
 
 // Author is who said a Message.
 //
-// The word every model API uses here is "role", which CONTEXT.md retires: a
+// The word every model API uses here is "role", which the glossary retires: a
 // role is part of what a Mandate contains, and one concept gets one name.
 type Author string
 

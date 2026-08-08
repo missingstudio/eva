@@ -1,16 +1,19 @@
 # A recorded provider turn.
 #
-# The scripted Provider replays this, so no test and no demo needs network
-# access or an API key. What is here is a recording rather than a simulation:
-# a test that fails, fails because Eva changed.
+# The fake Provider replays this, so no test and no demo needs network access
+# or an API key. What is here is a recording rather than a simulation: a test
+# that fails, fails because Eva changed.
 
 [[turn]]
-block = 0
-chunks = [
-  "Eva is an autonomous, ",
-  "multi-tenant, ",
-  "AI-native software factory.",
-]
+
+  # One content block, delivered in three chunks. The block is what the sink
+  # folds on, so this turn reaches the Trace as one Text record.
+  [[turn.block]]
+  chunks = [
+    "Eva is an autonomous, ",
+    "multi-tenant, ",
+    "AI-native software factory.",
+  ]
 
   # A cached turn, so that cache writes and cache reads are separate non-zero
   # figures rather than one number that cannot compute cost.
@@ -22,4 +25,4 @@ chunks = [
   # reasoning_tokens, server_tool_tokens, and usd are left out on purpose.
   # Anthropic reports no reasoning figure and bills thinking tokens inside
   # output tokens, so a zero here would be a confident lie rather than a
-  # measurement (docs/adr/0003).
+  # measurement.

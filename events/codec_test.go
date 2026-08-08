@@ -139,8 +139,8 @@ func payloadEqual(a, b events.Payload) bool {
 	return string(x) == string(y)
 }
 
-// ADR 0001: the envelope carries the fold keys, so a projection never has to
-// replay the stream to attribute a record.
+// The envelope carries the fold keys, so a projection never has to replay the
+// stream to attribute a record.
 func TestEnvelopeCarriesEveryFoldKey(t *testing.T) {
 	b, err := json.Marshal(envelope(t, events.Text{Chunk: "x"}))
 	if err != nil {
@@ -160,7 +160,7 @@ func TestEnvelopeCarriesEveryFoldKey(t *testing.T) {
 	}
 }
 
-// ADR 0002: an unrecognised kind is preserved verbatim rather than dropped.
+// An unrecognised kind is preserved verbatim rather than dropped.
 func TestUnrecognisedKindIsPreservedWithItsBytes(t *testing.T) {
 	raw := `{"id":"evt_9","seq":1,"wire_seq":0,"at":{"wall":"2026-08-08T12:00:00Z","mono_ns":1},` +
 		`"version":1,"kind":"quantum_flux","tenant":"t","actor":{"id":"a","kind":"agent"},` +
@@ -185,8 +185,8 @@ func TestUnrecognisedKindIsPreservedWithItsBytes(t *testing.T) {
 	}
 }
 
-// ADR 0003: nil means the provider did not report a figure; 0 means none were
-// used. Collapsing the two is how a cost report becomes confidently wrong.
+// Nil means the provider did not report a figure; 0 means none were used.
+// Collapsing the two is how a cost report becomes confidently wrong.
 func TestUsageAbsenceIsDistinctFromZero(t *testing.T) {
 	zero := uint64(0)
 
@@ -218,7 +218,7 @@ func TestUsageAbsenceIsDistinctFromZero(t *testing.T) {
 }
 
 // Cache write and cache read are priced differently, so one field cannot
-// compute cost (ADR 0003).
+// compute cost.
 func TestUsageSeparatesCacheWritesFromCacheReads(t *testing.T) {
 	b, err := json.Marshal(events.Usage{CacheWriteTokens: 3, CacheReadTokens: 4})
 	if err != nil {
@@ -242,8 +242,8 @@ func TestKindAndPayloadCannotDisagree(t *testing.T) {
 	}
 }
 
-// ADR 0006: every record carries the version it was written under, so a reader
-// can migrate on read.
+// Every record carries the version it was written under, so a reader can
+// migrate on read.
 func TestAnEventWithoutASchemaVersionIsRejected(t *testing.T) {
 	e := envelope(t, events.Text{Chunk: "x"})
 	e.Version = 0
