@@ -34,6 +34,29 @@ type Turn struct {
 
 	// Model is which model to answer with.
 	Model string
+
+	// Interrupt says whether a cancellation of this turn is a clean cancel:
+	// whether something is listening for it and lets the Run close, rather
+	// than the process dying under it. It is a property of whoever drives the
+	// Turn, so it is told rather than worked out here.
+	Interrupt bool
+
+	// Arriving is told each chunk as the Provider yields it, before any of it
+	// is committed. It is nil on every path but the console, where nobody is
+	// watching a turn happen.
+	//
+	// It exists because a Trace and a person want different things from one
+	// stream. A Trace record is a unit of meaning, so chunks are held until
+	// the content block they belong to is whole — and an ordinary answer is
+	// one content block, so a person watching the record arrive would watch
+	// nothing until the answer was over.
+	//
+	// What is told here is not a record and is never kept. It goes to a live
+	// area that is erased when the Run closes, and what replaces it is the
+	// fold over what the Trace holds. So a chunk that never reached the Trace
+	// — a process killed mid-block — leaves nothing behind that says it did,
+	// and nothing a person keeps came from anywhere but the record.
+	Arriving func(chunk string)
 }
 
 var _ core.Unit = (*Turn)(nil)
@@ -47,7 +70,7 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	// The intent rides on Started, which is what puts the prompt in the Trace
 	// and therefore in the Session. A transcript whose first message lives
 	// only in this process is one a Trace cannot reconstruct.
-	started := events.Started{Intent: spec.Intent, Capabilities: capabilities()}
+	started := events.Started{Intent: spec.Intent, Capabilities: capabilities(t.Interrupt)}
 	if err := t.Recorder.Record(ctx, started); err != nil {
 		return core.Outcome{}, err
 	}
@@ -55,16 +78,27 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	streamErr := t.stream(ctx)
 
 	outcome := core.Outcome{Result: events.ResultDone, Summary: "answered"}
-	if streamErr != nil {
+	switch {
+	case errors.Is(streamErr, context.Canceled):
+		// A turn somebody stopped is not a turn that failed, and the closed
+		// set of Results has no third word for it. It closes as failed and
+		// says plainly what happened, rather than reporting the plumbing that
+		// carried the cancellation. It gets no caveat: a claim of failure is
+		// already the reason a Run is set aside, and a caveat over it would
+		// say nothing the claim does not.
+		outcome = core.Outcome{Result: events.ResultFailed, Summary: "interrupted"}
+	case streamErr != nil:
 		outcome = core.Outcome{Result: events.ResultFailed, Summary: streamErr.Error()}
 	}
 
-	// The claim is committed whichever way the turn went. A Run that failed
-	// and left no Finished record is a Run a reader cannot tell from one that
-	// is still going. The Recorder closes the Run rather than the Turn writing
-	// the record, because anything the Run could not understand qualifies the
-	// claim and has to be committed with it.
-	if err := t.Recorder.Finish(ctx, outcome.Claim()); err != nil {
+	// The claim is committed whichever way the turn went, and under a context
+	// the cancellation cannot reach. A Run that failed and left no Finished
+	// record is a Run a reader cannot tell from one that is still going — and
+	// an interrupted Run is exactly the one whose close would otherwise be
+	// cancelled along with it. The Recorder closes the Run rather than the
+	// Turn writing the record, because anything the Run could not understand
+	// qualifies the claim and has to be committed with it.
+	if err := t.Recorder.Finish(context.WithoutCancel(ctx), outcome.Claim()); err != nil {
 		return outcome, err
 	}
 	return outcome, streamErr
@@ -101,11 +135,22 @@ func (t *Turn) stream(ctx context.Context) error {
 		if err != nil {
 			// A failed stream still produced whatever came before it, and the
 			// Trace has to hold that: a partial answer that reached nobody's
-			// record is the failure with no instrument.
-			if ferr := block.flush(ctx, t.Recorder); ferr != nil {
+			// record is the failure with no instrument. The commit is out of
+			// reach of the cancellation for the same reason, because the
+			// commonest way for a stream to end early is somebody stopping
+			// it, and that is not a reason to lose what had arrived.
+			if ferr := block.flush(context.WithoutCancel(ctx), t.Recorder); ferr != nil {
 				return ferr
 			}
 			return fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
+		}
+
+		// Whoever is watching the turn happen is told first, because being
+		// told is the only reason they are watching. It is told what arrived,
+		// which is not the same act as recording it: the record is committed
+		// below, a content block at a time.
+		if text, isText := payload.(events.Text); isText && t.Arriving != nil {
+			t.Arriving(text.Chunk)
 		}
 
 		if degraded, isCaveat := payload.(events.Degraded); isCaveat {
@@ -167,8 +212,15 @@ func (g *blockGroup) flush(ctx context.Context, rec *core.Recorder) error {
 // sandbox, or a scheduler would need is false until the stage that builds it,
 // because a capability claimed and absent is worse than one that is missing:
 // a missing capability degrades a Run, and a false claim corrupts it.
-func capabilities() events.Capabilities {
+//
+// interrupt is the first one that differs between two Runs of one binary. The
+// console listens for a cancellation and lets the Run close; a signal to the
+// one-shot command kills the process where it stands, which is not a clean
+// cancel however it looks from outside.
+func capabilities(interrupt bool) events.Capabilities {
 	return events.Capabilities{
+		// The interface that drives the turn says whether it is listening.
+		Interrupt: interrupt,
 		// The machine-readable stream is the contract this stage exists to
 		// establish.
 		StructuredEvents: true,

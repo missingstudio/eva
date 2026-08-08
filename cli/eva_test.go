@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/missingstudio/eva/events"
 )
@@ -279,6 +280,29 @@ func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
 	}
 	if finished.Claim.Result != events.ResultDone {
 		t.Errorf("claim = %+v, want done", finished.Claim)
+	}
+}
+
+// A signal to the one-shot command kills the process where it stands, which is
+// not a clean cancel however it looks from outside. So this Run does not claim
+// that it can be interrupted — a capability that is missing degrades a Run, and
+// one that is claimed and absent corrupts it. The Run that does claim it is the
+// interactive one, asserted in console_test.go.
+func TestTheOneShotRunDoesNotClaimThatItCanBeInterrupted(t *testing.T) {
+	w := newWorld(t, "")
+	got := decodeStream(t, w.answer(t, "what is this project").stdout)
+
+	started, ok := got[0].Payload.(events.Started)
+	if !ok {
+		t.Fatalf("payload = %#v, want Started", got[0].Payload)
+	}
+	if started.Capabilities.Interrupt {
+		t.Error("a Run nothing is listening for a cancellation on claims it can be interrupted")
+	}
+	// The capabilities that are real at this stage are still claimed, so this
+	// is one capability reported honestly rather than a Run claiming nothing.
+	if !started.Capabilities.StructuredEvents || !started.Capabilities.CostReport {
+		t.Errorf("capabilities = %+v, want the two this stage does have", started.Capabilities)
 	}
 }
 
@@ -860,6 +884,80 @@ func TestTheConfigFlagChoosesTheFile(t *testing.T) {
 	}
 }
 
+// eva with no arguments is the console.
+//
+// It is driven here the way a terminal drives it, with keys on the input
+// stream, and what it left behind is read from the Trace rather than from
+// stdout: what a person saw was a screen redrawn in place, and the record is
+// not. The interface itself is exercised in chat_test.go, in this process,
+// where the keys and the Events can be told apart.
+func TestNoArgumentsOpensAnInteractiveChat(t *testing.T) {
+	w := newWorld(t, "")
+
+	cmd := exec.Command(binary)
+	cmd.Env = w.env
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	keys, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("open eva's input: %v", err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start eva: %v", err)
+	}
+
+	if _, err := keys.Write([]byte("what is this project\r")); err != nil {
+		t.Fatalf("type a prompt: %v", err)
+	}
+
+	// The turn happens beside this test, so the Trace is what says it is over.
+	deadline := time.Now().Add(10 * time.Second)
+	var stored []events.Event
+	for time.Now().Before(deadline) {
+		if body, err := os.ReadFile(w.trace); err == nil && bytes.Contains(body, []byte(`"kind":"finished"`)) {
+			stored = decodeStream(t, string(body))
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(stored) == 0 {
+		t.Fatalf("no turn was answered in 10s\nstderr: %s", stderr.String())
+	}
+
+	// No more keys. A chat whose input has ended has nothing left to read.
+	if err := keys.Close(); err != nil {
+		t.Fatalf("close eva's input: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("eva ended with %v\nstderr: %s", err, stderr.String())
+		}
+	case <-time.After(10 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("eva did not leave when its input ended")
+	}
+
+	var opened, answered bool
+	for _, e := range stored {
+		if started, ok := e.Payload.(events.Started); ok && started.Intent == "what is this project" {
+			opened = true
+		}
+		if text, ok := e.Payload.(events.Text); ok && strings.Contains(text.Chunk, recorded) {
+			answered = true
+		}
+	}
+	if !opened {
+		t.Errorf("the Trace does not hold the prompt that was typed:\n%v", kinds(stored))
+	}
+	if !answered {
+		t.Errorf("the Trace does not hold the answer:\n%v", kinds(stored))
+	}
+}
+
 func TestTheCommandLineFailsClosed(t *testing.T) {
 	w := newWorld(t, "")
 
@@ -867,7 +965,9 @@ func TestTheCommandLineFailsClosed(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"no arguments at all", nil},
+		// No arguments at all is not here: it is the console, which is a command
+		// rather than a mistake.
+		{"the machine-readable stream with no prompt to answer", []string{"--json"}},
 		{"a flag Eva does not have", []string{"-p", "hello", "--json", "--turbo"}},
 		{"an argument that is not a flag", []string{"-p", "hello", "--json", "extra"}},
 	} {

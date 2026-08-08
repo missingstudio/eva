@@ -33,11 +33,12 @@ const (
 	ExitUsage = 2
 )
 
-// usage is the command surface. eva help is shell-level help; the in-REPL
-// /help is a separate surface, and arrives with the REPL.
+// usage is the command surface. eva help is shell-level help; the in-console
+// /help is a separate surface, and arrives with the slash commands.
 const usage = `eva — a model client that leaves a complete record.
 
 USAGE:
+  eva                          Interactive console
   eva -p <prompt>              One-shot: the answer, rendered, and what it cost
   eva -p <prompt> --json       One-shot: the turn as typed Events on stdout
   eva help                     Show this help
@@ -48,16 +49,21 @@ FLAGS:
       --config <path>          Configuration file
                                (default $EVA_CONFIG, then ~/.eva/config.toml)
 
+In the console, enter sends a prompt, ctrl+c interrupts the turn in flight,
+and ctrl+d leaves.
+
 Configuration is a file rather than a pile of flags. An API key is read from
 the environment — by default $ANTHROPIC_API_KEY — and never from that file.
 `
 
 // Main runs eva and returns the process exit code.
 //
-// args is the command line without the program name. Writing through the
-// passed streams rather than through os.Stdout is what lets a test drive this
-// with nothing attached.
-func Main(args []string, stdout, stderr io.Writer) int {
+// args is the command line without the program name. Reading and writing
+// through the passed streams rather than through the process's own is what
+// lets a test drive this with nothing attached — which the interactive path
+// needs as much as the one-shot one, because a terminal is the thing CI does
+// not have.
+func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// A failure to write help or a diagnostic is not something the process
 	// can report anywhere else, so the exit code carries what it can.
 	opts, err := parse(args)
@@ -70,7 +76,7 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 
-	code, err := run(context.Background(), opts, stdout)
+	code, err := run(context.Background(), opts, stdin, stdout)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "eva: %v\n", err)
 	}
@@ -94,6 +100,7 @@ func parse(args []string) (options, error) {
 
 	var opts options
 	fs := flag.NewFlagSet("eva", flag.ContinueOnError)
+
 	// Eva prints its own usage, in its own words, on the stream it chooses.
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&opts.prompt, "p", "", "the prompt to answer")
@@ -107,12 +114,16 @@ func parse(args []string) (options, error) {
 		}
 		return options{}, err
 	}
+
 	if rest := fs.Args(); len(rest) > 0 {
 		return options{}, fmt.Errorf("unexpected argument %q", rest[0])
 	}
 
-	if opts.prompt == "" {
-		return options{}, errors.New("interactive mode is not built yet; answer one prompt with -p <prompt>")
+	// No prompt is the console. The machine-readable stream is not: it is the
+	// contract a script parses, one turn in and one turn out, and a console
+	// has no place to put the prompts.
+	if opts.prompt == "" && opts.json {
+		return options{}, errors.New("--json answers one prompt: give it with -p <prompt>")
 	}
 	return opts, nil
 }
@@ -120,7 +131,7 @@ func parse(args []string) (options, error) {
 // run is written with named results so that closing the Trace can report a
 // failure the turn itself did not see. A Trace that failed to flush is not a
 // successful run, whatever the turn claimed.
-func run(ctx context.Context, opts options, stdout io.Writer) (code int, err error) {
+func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (code int, err error) {
 	cfg, err := config.Load(opts.config)
 	if err != nil {
 		return ExitUsage, err
@@ -141,47 +152,133 @@ func run(ctx context.Context, opts options, stdout io.Writer) (code int, err err
 		}
 	}()
 
-	session := core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor())
+	e := &eva{
+		provider: provider,
+		sink:     sink,
+		session:  core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor()),
+		model:    cfg.Model,
+	}
 
-	output, err := projection(opts, stdout)
+	if opts.prompt == "" {
+		return converse(ctx, e, stdin, stdout)
+	}
+
+	output, err := projection(opts, stdin, stdout)
 	if err != nil {
 		return ExitFailure, err
 	}
+	e.subs = []core.Subscriber{output}
 
-	// The Session comes first, so the transcript is folded before the Event
-	// is printed. Both are projections of the same committed record; the order
-	// only decides which one is built first.
-	recorder, err := core.NewRecorder(core.RecorderOptions{
-		Sink:        sink,
-		Tenant:      cfg.Tenant(),
-		Actor:       cfg.Actor(),
-		Run:         events.RunID(newID("run")),
-		Session:     session.ID,
-		Now:         now,
-		NewID:       func() events.EventID { return events.EventID(newID("evt")) },
-		Subscribers: []core.Subscriber{session, output},
-	})
-	if err != nil {
-		return ExitFailure, err
-	}
-
-	turn := &Turn{
-		Provider: provider,
-		Recorder: recorder,
-		Session:  session,
-		Model:    cfg.Model,
-	}
-
-	outcome, err := turn.Execute(ctx, core.Spec{
-		Tenant: cfg.Tenant(),
-		Actor:  cfg.Actor(),
-		Intent: opts.prompt,
-	})
+	outcome, err := e.answer(ctx, opts.prompt)
 	if err != nil {
 		return ExitFailure, err
 	}
 	if outcome.Result != events.ResultDone {
 		return ExitFailure, fmt.Errorf("%s: %s", outcome.Result, outcome.Summary)
+	}
+	return ExitOK, nil
+}
+
+// eva is one Session's worth of assembly: the Provider that answers, the sink
+// every Event lands in, the transcript both are folded into, and who is
+// watching.
+//
+// It exists because a Session has many Runs. The one-shot path runs one and
+// the console runs one per prompt, and everything except the Run itself is
+// the same each time — so this holds what lasts and answer builds what does
+// not.
+type eva struct {
+	provider providers.Provider
+	sink     core.TraceSink
+	session  *core.Session
+	model    string
+
+	// interrupt says whether whoever is driving these turns listens for a
+	// cancellation and closes the Run, rather than letting the process die
+	// under it. It is a property of the frontend and not of a Turn, so it is
+	// told rather than assumed: a capability claimed and absent corrupts a
+	// Run, where a missing one only degrades it.
+	interrupt bool
+
+	// subs are the projections beyond the Session: the machine-readable
+	// stream, the rendered one-shot turn, or the interface.
+	subs []core.Subscriber
+
+	// arriving is who is watching the turn happen, and is nil when nobody is.
+	// See Turn.Arriving for why that is a different thing from a Subscriber.
+	arriving func(chunk string)
+}
+
+// watch attaches an interface to every Run that follows: the Subscriber that
+// receives what was committed, and whoever is told what is arriving.
+//
+// It also claims the Interrupt capability, because something that watches a
+// turn is something that can be asked to stop it — and the claim belongs
+// wherever the listening is rather than wherever a Turn is built.
+func (e *eva) watch(sub core.Subscriber, arriving func(chunk string)) {
+	e.subs = []core.Subscriber{sub}
+	e.arriving = arriving
+	e.interrupt = true
+}
+
+// answer runs one turn as one Run against the Session.
+//
+// A Recorder belongs to one Run, so a Session of many turns builds many. What
+// it does not build again is the Session: the transcript folds across every
+// Run of it, which is what makes the second prompt answered in the light of
+// the first.
+func (e *eva) answer(ctx context.Context, prompt string) (core.Outcome, error) {
+	// The Session comes first, so the transcript is folded before the Event
+	// reaches anyone else. All of them are projections of the same committed
+	// record; the order only decides which one is built first.
+	recorder, err := core.NewRecorder(core.RecorderOptions{
+		Sink:        e.sink,
+		Tenant:      e.session.Tenant,
+		Actor:       e.session.Actor,
+		Run:         events.RunID(newID("run")),
+		Session:     e.session.ID,
+		Now:         now,
+		NewID:       func() events.EventID { return events.EventID(newID("evt")) },
+		Subscribers: append([]core.Subscriber{e.session}, e.subs...),
+	})
+	if err != nil {
+		return core.Outcome{}, err
+	}
+
+	turn := &Turn{
+		Provider:  e.provider,
+		Recorder:  recorder,
+		Session:   e.session,
+		Model:     e.model,
+		Interrupt: e.interrupt,
+		Arriving:  e.arriving,
+	}
+
+	return turn.Execute(ctx, core.Spec{
+		Tenant: e.session.Tenant,
+		Actor:  e.session.Actor,
+		Intent: prompt,
+	})
+}
+
+// converse holds a conversation until the person leaves.
+func converse(ctx context.Context, e *eva, stdin io.Reader, stdout io.Writer) (int, error) {
+	program, c, err := newConsole(ctx, e, stdin, stdout)
+	if err != nil {
+		return ExitFailure, err
+	}
+
+	_, err = program.Run()
+
+	// Whatever ended the program — a key, a closed input, a signal — a Run may
+	// still be in flight. It is stopped first and waited for second: the wait
+	// is what keeps the sink from closing under a Run that is still
+	// committing, and the stop is what keeps the wait short.
+	c.stop()
+	c.running.Wait()
+
+	if err != nil {
+		return ExitFailure, err
 	}
 	return ExitOK, nil
 }
@@ -194,11 +291,11 @@ func run(ctx context.Context, opts options, stdout io.Writer) (code int, err err
 // all. Not built and suppressed — never built. Otherwise the terminal stack
 // would sit in the output path a script parses, and the render boundary would
 // stop being a property of the program and become a habit.
-func projection(opts options, stdout io.Writer) (core.Subscriber, error) {
+func projection(opts options, stdin io.Reader, stdout io.Writer) (core.Subscriber, error) {
 	if opts.json {
 		return eventStream{out: stdout}, nil
 	}
-	return render.New(stdout, darkBackground(stdout))
+	return render.New(stdout, darkBackground(stdin, stdout))
 }
 
 // darkBackground asks the terminal what colour it is.
@@ -206,16 +303,18 @@ func projection(opts options, stdout io.Writer) (core.Subscriber, error) {
 // Nothing configures this. A style a user had to select is a style most users
 // never select, and the answer is one the terminal already knows.
 //
-// A destination that is not a terminal has nothing to ask, and gets dark —
+// Asking is a question written to the terminal and an answer read back, so it
+// needs both streams to be the terminal's. A pair that is not gets dark —
 // which is what an unknown terminal is assumed to be, and what the markdown
 // renderer would have defaulted to anyway. Colour never reaches such a
 // destination in any case: it is removed on the way out.
-func darkBackground(stdout io.Writer) bool {
-	file, isFile := stdout.(*os.File)
-	if !isFile {
+func darkBackground(stdin io.Reader, stdout io.Writer) bool {
+	in, isInFile := stdin.(*os.File)
+	out, isOutFile := stdout.(*os.File)
+	if !isInFile || !isOutFile {
 		return true
 	}
-	return lipgloss.HasDarkBackground(os.Stdin, file)
+	return lipgloss.HasDarkBackground(in, out)
 }
 
 // open builds the Provider configuration selects.

@@ -65,6 +65,14 @@ _Avoid_: Logger, writer, emitter (an emitter stamps, and stamping alone is not r
 **Subscriber**:
 A consumer of committed Events. It sees a record after the Trace holds it, never before, so what a Subscriber shows is the Trace rather than a claim about it. Every projection is one — the transcript, the machine-readable stream, the dashboard.
 
+**Console**:
+The interactive interface a person types into. It is not a Session: a Session is the transcript, and one console holds one while it runs. It shows a turn twice — arriving, in the live area, and then as the fold over what was committed.
+_Avoid_: REPL (read-eval-print names a loop over expressions, and this is a conversation over turns), chat (retired above, for the Session)
+
+**Live area**:
+The part of an interface that shows a turn while it is still happening, from the stream rather than from the Trace. It is erased when the Run closes and replaced by the fold over what was committed, so nothing a person keeps came from anywhere but the record.
+_Avoid_: Preview, buffer, transcript (a transcript is the Session, and it is a fold)
+
 **Evidence**:
 The output of a Verifier run against a Spec's acceptance criteria. Distinct from a Claim.
 
