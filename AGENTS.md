@@ -19,7 +19,11 @@ When a check does not run, the report is **degraded**: name what did not run, an
 
 ### Checks
 
-There is no Go workspace yet. No checks exist to run, so every report is degraded on that basis until stage 0 lands. From then on, find the checks in `go.work`, the `Makefile`, and `.golangci.yml`, and run the tests, `go vet`, and the linter.
+Run `make check`. It covers formatting, build, `go vet`, and tests across every module in the workspace, and it is exactly what CI runs.
+
+One gotcha worth knowing, because no config file confesses it: **`go build ./...` from the repository root matches only the root module**, not the six beside it. A bare `./...` therefore reports success while another module is broken. `make check` iterates the modules from `go list -m`, which is why it is the command to run rather than a hand-typed `go` invocation.
+
+The layer boundaries are enforced by `depguard` inside golangci-lint, which `make lint` runs. Every rule is an allow list in strict mode, so an import that no rule permits is rejected rather than quietly allowed. Adding a module means adding both a `go.work` entry and a `.golangci.yml` rule — see `docs/adr/0010`.
 
 ## Tenant isolation
 

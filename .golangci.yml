@@ -1,0 +1,90 @@
+version: "2"
+
+# The layer boundaries are enforced here, by depguard, rather than by a
+# hand-written test. Every rule uses list-mode "strict": an import is allowed
+# only if it appears in the allow list. That means the rules fail CLOSED — a
+# dependency nobody thought about is rejected rather than quietly permitted.
+#
+# Adding a line to an allow list is therefore a deliberate act, and reviewing
+# that line is how a layer's contract stays true. See docs/adr/0010.
+
+linters:
+  enable:
+    - depguard
+
+  settings:
+    depguard:
+      rules:
+        # events is the bottom of the graph: every layer may depend on it, so a
+        # dependency here becomes a dependency everywhere. Standard library only.
+        events:
+          list-mode: strict
+          files:
+            - "**/events/**"
+          allow:
+            - $gostd
+
+        # core is pure. It holds the domain and the interfaces the outer layers
+        # implement, and it never reaches the outside world.
+        #
+        # The allow list is deliberately almost empty. core currently imports
+        # nothing, and each standard-library package it comes to need should be
+        # added here on purpose, by whoever needs it, rather than inherited from
+        # a blanket $gostd. That friction is the contract doing its job.
+        core:
+          list-mode: strict
+          files:
+            - "**/core/**"
+          allow:
+            - github.com/missingstudio/eva/events
+
+        # config reads files, so it sits outside core.
+        config:
+          list-mode: strict
+          files:
+            - "**/config/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/events
+            - github.com/missingstudio/eva/core
+            - github.com/BurntSushi/toml
+
+        # providers talk to the network, so they sit outside core.
+        providers:
+          list-mode: strict
+          files:
+            - "**/providers/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/events
+            - github.com/missingstudio/eva/core
+            - github.com/anthropics/anthropic-sdk-go
+
+        # trace writes files. core declares the TraceSink interface; this
+        # satisfies it.
+        trace:
+          list-mode: strict
+          files:
+            - "**/trace/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/events
+            - github.com/missingstudio/eva/core
+
+        # cli is the frontend and the top of the graph. It may import everything
+        # below it, plus the terminal libraries — which nothing else may touch.
+        cli:
+          list-mode: strict
+          files:
+            - "**/cli/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/events
+            - github.com/missingstudio/eva/core
+            - github.com/missingstudio/eva/config
+            - github.com/missingstudio/eva/providers
+            - github.com/missingstudio/eva/trace
+            - charm.land/bubbletea
+            - charm.land/bubbles
+            - charm.land/lipgloss
+            - charm.land/glamour
