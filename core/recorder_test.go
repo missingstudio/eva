@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -247,6 +248,125 @@ func TestRecordCommitsItsPayloadsAsOneGroup(t *testing.T) {
 	if len(s.groups[0]) != 3 || len(s.groups[1]) != 1 {
 		t.Errorf("group sizes = %d, %d, want 3, 1", len(s.groups[0]), len(s.groups[1]))
 	}
+}
+
+// unknown is an Event kind this build does not recognise. Eva's own loop
+// cannot emit one — it arrives from a foreign Harness — so a test that wants
+// one records it directly.
+func unknown(kind string) events.Unknown {
+	return events.Unknown{Kind: kind, Raw: json.RawMessage(`{"a":1}`)}
+}
+
+// A record nobody understood degrades the Run rather than failing it, and the
+// Run says so when it closes. The caveat and the claim are one group, so a
+// reader that has the claim has already been shown what qualifies it — and the
+// caveat cannot be lost by a caller that forgot to add it.
+func TestAnUnrecognisedKindDegradesTheRunRatherThanFailingIt(t *testing.T) {
+	s := &sink{}
+	rec := recorder(t, options(s))
+	ctx := context.Background()
+
+	if err := rec.Record(ctx, unknown("quantum_flux")); err != nil {
+		t.Fatalf("an unrecognised kind failed the Run: %v", err)
+	}
+	if err := rec.Finish(ctx, events.Claim{Result: events.ResultDone, Summary: "answered"}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	if len(s.groups) != 2 {
+		t.Fatalf("the sink saw %d groups, want 2", len(s.groups))
+	}
+	closing := s.groups[1]
+	want := []events.Kind{events.KindDegraded, events.KindFinished}
+	if fmt.Sprint(kinds(closing)) != fmt.Sprint(want) {
+		t.Fatalf("the Run closed with %v, want %v", kinds(closing), want)
+	}
+
+	degraded, ok := closing[0].Payload.(events.Degraded)
+	if !ok {
+		t.Fatalf("payload = %#v, want events.Degraded", closing[0].Payload)
+	}
+	wantMissing := []string{`unknown event kind "quantum_flux"`}
+	if fmt.Sprint(degraded.Missing) != fmt.Sprint(wantMissing) {
+		t.Errorf("Missing = %v, want %v", degraded.Missing, wantMissing)
+	}
+
+	// Degrading a Run does not change what it claimed.
+	finished, ok := closing[1].Payload.(events.Finished)
+	if !ok {
+		t.Fatalf("payload = %#v, want events.Finished", closing[1].Payload)
+	}
+	if finished.Claim.Result != events.ResultDone {
+		t.Errorf("claim = %+v, want the Run's own", finished.Claim)
+	}
+
+	// The record itself is kept. Preserving it is the whole point; the flag
+	// says it was not understood, and dropping it would leave a Trace that is
+	// structurally valid and quietly wrong.
+	if got := s.committed()[0].Payload.(events.Unknown); got.Kind != "quantum_flux" {
+		t.Errorf("the unrecognised record reached the sink as %#v", got)
+	}
+}
+
+// Degraded is absent when the Run is clean, so its presence alone is the flag
+// and a gate needs no separate boolean to read.
+func TestACleanRunClosesWithNoDegradedRecord(t *testing.T) {
+	s := &sink{}
+	rec := recorder(t, options(s))
+	ctx := context.Background()
+
+	if err := rec.Record(ctx, events.Text{Chunk: "hello"}); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if err := rec.Finish(ctx, events.Claim{Result: events.ResultDone}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	want := []events.Kind{events.KindText, events.KindFinished}
+	if got := kinds(s.committed()); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("the Run holds %v, want %v", got, want)
+	}
+}
+
+// One kind is one entry however many records of it arrive, and the entries are
+// in the order the Run met them. A list that repeated itself would report the
+// size of the stream rather than what was not understood.
+func TestEachUnrecognisedKindIsNamedOnceInTheOrderItWasMet(t *testing.T) {
+	s := &sink{}
+	rec := recorder(t, options(s))
+	ctx := context.Background()
+
+	for _, kind := range []string{"quantum_flux", "warp_field", "quantum_flux"} {
+		if err := rec.Record(ctx, unknown(kind)); err != nil {
+			t.Fatalf("record %s: %v", kind, err)
+		}
+	}
+	if err := rec.Finish(ctx, events.Claim{Result: events.ResultDone}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	if len(s.groups) != 4 {
+		t.Fatalf("the sink saw %d groups, want 3 records and the close", len(s.groups))
+	}
+	closing := s.groups[3]
+	degraded, ok := closing[0].Payload.(events.Degraded)
+	if !ok {
+		t.Fatalf("the Run closed with %#v, want a Degraded record first", closing[0].Payload)
+	}
+
+	want := []string{`unknown event kind "quantum_flux"`, `unknown event kind "warp_field"`}
+	if fmt.Sprint(degraded.Missing) != fmt.Sprint(want) {
+		t.Errorf("Missing = %v, want %v — one entry per kind, in the order they were met", degraded.Missing, want)
+	}
+}
+
+// kinds is what a group says it holds.
+func kinds(es []events.Event) []events.Kind {
+	out := make([]events.Kind, len(es))
+	for i, e := range es {
+		out[i] = e.Kind
+	}
+	return out
 }
 
 func TestRecordingNothingCommitsNothing(t *testing.T) {
