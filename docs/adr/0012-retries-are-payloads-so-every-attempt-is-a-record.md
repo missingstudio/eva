@@ -36,7 +36,9 @@ The API splits what a turn cost across two frames: `message_start` carries what 
 
 **`provider.base_url` is a configuration key.** It points the client at a gateway, a proxy, or a local server, and empty is the public API. It is what lets a real streaming turn — a real request, real server-sent events, real status codes — be exercised without the network, a credential, or money.
 
-**The retry policy is code, not configuration.** `Policy` is four attempts, 500ms of backoff doubling per attempt, capped at a minute, with half of each wait jittered so that a fleet of Workers that failed together does not return together. `MaxTokens` is a constant beside it, for the same reason: the API requires a cap and has no default of its own. Nothing in a configuration file reaches either yet, and a knob no caller turns is a knob that is never right — the ticket that needs a per-profile policy, or an answer longer than 8192 tokens, is the ticket that should add the key.
+**The retry policy is code, not configuration.** `Policy` is four attempts, 500ms of backoff doubling per attempt, capped at a minute, with half of each wait jittered so that a fleet of Workers that failed together does not return together. Nothing in a configuration file reaches it, and the ticket that needs a per-profile policy is the ticket that should add the key.
+
+**The answer cap is configuration, and the default is the Provider's.** `provider.max_tokens` overrides `DefaultMaxTokens`; zero means the file said nothing. The default lives in the Provider because the Provider is what knows the API, so there is no second number in `config` to be kept in step with it. A negative cap is rejected when the file is read — it is not a smaller cap, it is a turn that cannot answer.
 
 **Mid-stream failures are not retried.** The retry loop runs before the first frame. Resuming a half-delivered answer is not something the API offers, and re-requesting would bill the input twice and duplicate the text already recorded.
 
