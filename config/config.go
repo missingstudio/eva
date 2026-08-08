@@ -71,6 +71,10 @@ type ProviderConfig struct {
 	// BaseURL points a network provider somewhere other than its public API:
 	// a gateway, a proxy, or a local server. Empty is the public API.
 	BaseURL string `toml:"base_url"`
+	// MaxTokens caps one answer. Zero leaves the cap to the provider, which
+	// is what knows its own API — so there is no default here to be kept in
+	// step with the one that does the work.
+	MaxTokens int64 `toml:"max_tokens"`
 	// Script is the recorded output the fake provider replays.
 	Script string `toml:"script"`
 }
@@ -212,6 +216,14 @@ func (c *Config) normalize() error {
 	}
 	if c.Identity.ActorKind == "" {
 		c.Identity.ActorKind = d.Identity.ActorKind
+	}
+
+	// A cap of zero or less is not a smaller cap; it is a turn that cannot
+	// answer. Zero is how the file says nothing, so only a negative number is
+	// a value the file chose and Eva will not act on.
+	if c.Provider.MaxTokens < 0 {
+		return fmt.Errorf("config: %s: provider.max_tokens is %d, want a positive number of tokens (or leave it out, and the provider chooses)",
+			c.Path, c.Provider.MaxTokens)
 	}
 
 	switch events.ActorKind(c.Identity.ActorKind) {

@@ -241,6 +241,39 @@ func TestABaseURLIsReadAndIsEmptyByDefault(t *testing.T) {
 	}
 }
 
+// A cap on the answer is the Provider's to default, because the Provider is
+// what knows the API. Configuration says nothing unless it was asked to, so
+// nothing here has to be kept in step with a number in another module.
+func TestTheAnswerCapIsUnsetUntilTheFileSetsIt(t *testing.T) {
+	dir := home(t)
+
+	if got := load(t, write(t, dir, "")).Provider.MaxTokens; got != 0 {
+		t.Errorf("max_tokens = %d, want nothing — the Provider defaults it", got)
+	}
+
+	path := write(t, dir, "[provider]\nmax_tokens = 32000\n")
+	if got := load(t, path).Provider.MaxTokens; got != 32000 {
+		t.Errorf("max_tokens = %d, want 32000", got)
+	}
+}
+
+// A cap of zero or less is not a smaller cap, it is a turn that cannot answer.
+// It is rejected here, naming the file, rather than at the API.
+func TestACapThatCannotAnswerIsRejected(t *testing.T) {
+	dir := home(t)
+	path := write(t, dir, "[provider]\nmax_tokens = -1\n")
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("a negative cap was accepted")
+	}
+	for _, want := range []string{"max_tokens", path} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error does not mention %q: %v", want, err)
+		}
+	}
+}
+
 // The credential enters at the environment boundary and nowhere else. There is
 // no configuration key that holds one.
 func TestTheAPIKeyComesFromTheEnvironmentAndNotTheFile(t *testing.T) {
