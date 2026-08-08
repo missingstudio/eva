@@ -17,6 +17,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/missingstudio/eva/core"
+	"github.com/missingstudio/eva/core/prompt"
 	"github.com/missingstudio/eva/events"
 	"github.com/missingstudio/eva/providers"
 	"github.com/missingstudio/eva/trace"
@@ -98,6 +99,22 @@ func (d *driven) models() []string {
 		out[i] = call.Model
 	}
 	return out
+}
+
+// conversation is what a call was conditioned on beyond the base system
+// prompt, having first asserted that the prompt is what heads it.
+//
+// Every turn carries it, so a test about a transcript would otherwise restate
+// a kilobyte of prose in order to say something about three messages. The
+// assertion stays here rather than being skipped: it is what proves the
+// frontend hands the prompt to every turn it opens.
+func conversation(t *testing.T, call []core.Message) []core.Message {
+	t.Helper()
+
+	if len(call) == 0 || call[0].Author != core.AuthorSystem || call[0].Text != prompt.Base() {
+		t.Fatalf("the call is not headed by the base system prompt:\n%+v", call)
+	}
+	return call[1:]
 }
 
 type drivenStream struct {
@@ -376,8 +393,8 @@ func TestASecondPromptIsAnsweredInTheLightOfTheFirst(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("the Provider was called %d time(s), want 2", len(calls))
 	}
-	if len(calls[0]) != 1 || calls[0][0].Text != "what is this project" {
-		t.Fatalf("the first call was conditioned on %+v, want the first prompt alone", calls[0])
+	if first := conversation(t, calls[0]); len(first) != 1 || first[0].Text != "what is this project" {
+		t.Fatalf("the first call was conditioned on %+v, want the first prompt alone", first)
 	}
 
 	want := []core.Message{
@@ -385,8 +402,8 @@ func TestASecondPromptIsAnsweredInTheLightOfTheFirst(t *testing.T) {
 		{Author: core.AuthorAssistant, Text: "Eva is a software factory."},
 		{Author: core.AuthorUser, Text: "and what else"},
 	}
-	if fmt.Sprint(calls[1]) != fmt.Sprint(want) {
-		t.Errorf("the second call was conditioned on\n%+v\nwant\n%+v", calls[1], want)
+	if second := conversation(t, calls[1]); fmt.Sprint(second) != fmt.Sprint(want) {
+		t.Errorf("the second call was conditioned on\n%+v\nwant\n%+v", second, want)
 	}
 }
 
@@ -420,8 +437,8 @@ func TestCtrlCDuringAStreamReturnsThePromptAndLeavesTheSessionUsable(t *testing.
 		{Author: core.AuthorAssistant, Text: "a long answer nobody wanted"},
 		{Author: core.AuthorUser, Text: "shorter please"},
 	}
-	if fmt.Sprint(calls[1]) != fmt.Sprint(want) {
-		t.Errorf("the turn after the interrupt was conditioned on\n%+v\nwant\n%+v", calls[1], want)
+	if after := conversation(t, calls[1]); fmt.Sprint(after) != fmt.Sprint(want) {
+		t.Errorf("the turn after the interrupt was conditioned on\n%+v\nwant\n%+v", after, want)
 	}
 }
 

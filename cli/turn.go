@@ -35,6 +35,15 @@ type Turn struct {
 	// Model is which model to answer with.
 	Model string
 
+	// SystemPrompt is the base system prompt: what the answer is conditioned
+	// on before it is conditioned on anything anybody said. Empty sends none.
+	//
+	// It is told rather than read from the package that holds it, for the
+	// reason the Model is. A Turn assembles one call out of what it was
+	// handed, and a Turn that reached for a prompt of its own would be a Turn
+	// whose context spend no caller can see or substitute.
+	SystemPrompt string
+
 	// Interrupt says whether a cancellation of this turn is a clean cancel:
 	// whether something is listening for it and lets the Run close, rather
 	// than the process dying under it. It is a property of whoever drives the
@@ -122,6 +131,27 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	return outcome, nil
 }
 
+// conditioning is everything the answer is conditioned on: the base system
+// prompt, and then the transcript.
+//
+// The prompt is prepended here rather than folded into the transcript. A
+// Session learns what happened from committed Events, so a system Message
+// inside it would have to have been recorded — and what a Trace would then
+// hold is the same bytes on every Run of one binary, which is a record of the
+// build and not of the turn. The prompt is versioned, reviewed, and gated on
+// its size in the repository instead, which is where a constant belongs.
+//
+// The day it stops being constant — a profile that carries its own, a memory
+// folded in per Session — is the day it has to enter the record, because from
+// then on the Trace could no longer say what a turn was conditioned on.
+func (t *Turn) conditioning() []core.Message {
+	transcript := t.Session.Messages()
+	if t.SystemPrompt == "" {
+		return transcript
+	}
+	return append([]core.Message{{Author: core.AuthorSystem, Text: t.SystemPrompt}}, transcript...)
+}
+
 // unrecorded marks a failure to write rather than a failure to work.
 //
 // The two are told apart because a Unit answers them differently. A provider
@@ -145,7 +175,7 @@ func (u unrecorded) Unwrap() error { return u.err }
 func (t *Turn) stream(ctx context.Context) error {
 	stream, err := t.Provider.Stream(ctx, providers.Call{
 		Model:    t.Model,
-		Messages: t.Session.Messages(),
+		Messages: t.conditioning(),
 	})
 	if err != nil {
 		return fmt.Errorf("provider %s: %w", t.Provider.Name(), err)

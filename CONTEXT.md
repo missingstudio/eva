@@ -39,6 +39,10 @@ _Avoid_: Conversation, thread, chat
 One execution of a Unit against a Session. A Session that is resumed twice has one Session and multiple Runs.
 _Avoid_: Invocation, execution, turn
 
+**Base system prompt**:
+What every turn is conditioned on before the transcript. It is compiled into the build, held to a byte budget that CI enforces, and it is not part of the Session — a fold over a Trace gives back what was said, not what the binary said first.
+_Avoid_: Preamble, persona, instructions
+
 **Task**:
 Retired. A Spec plus its Jobs says the same thing with terms that already exist.
 
