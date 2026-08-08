@@ -1,0 +1,10 @@
+go 1.26
+
+use (
+	./cli
+	./config
+	./core
+	./events
+	./providers
+	./trace
+)
