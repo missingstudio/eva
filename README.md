@@ -10,11 +10,11 @@
 
 An autonomous, multi-tenant, AI-native software factory. It builds, tests, improves, and maintains software with minimal human intervention.
 
-**Status: no code.** Stage 0 has not started.
+**Status:** stage 0 in progress. The workspace, the layer boundaries, and CI are in; no behaviour yet.
 
 ## Documents
 
 - [docs/Product.md](docs/Product.md) — the plan: twenty stages, a failable exit test each. Draft.
 - [CONTEXT.md](CONTEXT.md) — the glossary. One concept, one name.
-- [docs/adr/](docs/adr/) — decisions and their reasons. `0001`–`0008` settle the stage 0 event schema.
+- [docs/adr/](docs/adr/) — decisions and their reasons. `0001`–`0008` settle the stage 0 event schema; `0009` fixes config as TOML; `0010` fixes the module layout.
 - [AGENTS.md](AGENTS.md) — how to work in this repo. `CLAUDE.md` points at it.

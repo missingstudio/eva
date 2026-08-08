@@ -4,6 +4,8 @@
 
 **Stage 0's event schema is settled and is no longer a draft.** It was resolved in a design session on 2026-08-08 and now lives in `docs/adr/0001`–`0008`, which own the reasoning. Part 2 below carries the resulting shape only. Where the two ever disagree, the ADRs win.
 
+Two later decisions also override this document: `docs/adr/0009` fixes config and profiles as TOML, and `docs/adr/0010` fixes the module layout, which differs from the tree in the final-repo-shape section below.
+
 One document. It goes from a single model call to an autonomous, multi-tenant software factory. It gives the frame, the primitive, the target architecture, the production platform, and the staged build path that connects them.
 
 **Implementation language: Go.** Use interfaces, not inheritance. Use one `go.work` workspace. Keep imports between layers one-way. All code sketches below are Go.
@@ -62,7 +64,7 @@ The whole ladder is one loop. The loop repeats at longer timescales: token (ms) 
 
 These are cheap on day one. They are very expensive to add on day four hundred.
 
-1. **Everything is a trace.** Every model call, tool call, and decision appends to an append-only trajectory. There are no quick paths.
+1. **Everything is a trace.** Every model call, tool call, and decision appends to an append-only Trace. There are no quick paths.
 2. **All side effects go through the tool registry.** You cannot sandbox, meter, or audit code that touches the filesystem, the network, or the shell outside a registered tool.
 3. **Every long operation is resumable.** Keep state on disk, not in a process.
 4. **The harness boundary enforces the budgets** — tokens, dollars, and wall clock.
@@ -713,7 +715,7 @@ region/
 - You must be able to rebuild the projector from the trace stream at any time. State that the traces cannot reconstruct is a second source of truth and a permanent consistency bug.
 - You must be able to restart the scheduler in mid-flight. Leases have deadlines. A restart expires nothing early, and it loses nothing.
 - Every side effect carries an idempotency key. A requeue after a lease expiry will occur.
-- Keep platform observability separate from the agent traces. Do not debug API latency inside the trajectory store.
+- Keep platform observability separate from the agent traces. Do not debug API latency inside the trace store.
 
 ---
 
@@ -730,27 +732,42 @@ Each stage also declares its **in/out contract**. The contract shows what a user
 A model client with a good terminal.
 
 ```
-events/       THE event schema: typed, versioned, cursor-numbered (invariant 8).
-              SETTLED — see docs/adr/0001-0008. Sealed payload interface, closed
-              kind set, Unknown preserved, envelope carries the fold keys.
-trace/        the TraceSink interface + a JSONL implementation. Ships HERE, not at
-              stage 6, because invariant 1 admits no quick paths and because the
-              sink is what OWNS Seq: it assigns trace position at commit and
-              appends an assistant message with all of its tool results as one
-              atomic write. Stage 6 adds replay, the public-contract version
-              freeze, and sink-side redaction — it does not add the sink.
-provider/     Provider interface + anthropic impl, streaming, retry w/ backoff,
-              token accounting — usage arrives split across message_start (input)
-              and message_delta (output), so a Usage event accumulates before it
-              emits (openai-compatible impl at stage 1 — local models, cheap
-              eval runs; it is also the only provider that reports reasoning
-              tokens, which is why the field is nullable)
-config/       ~/.eva/config.toml, profiles, key resolution, model selection
-session/      turn structure over the durable transcript; the Session is what
-              resume, branch, and rewind later act on (see CONTEXT.md)
-render/       streaming markdown to TTY, syntax highlight, spinner, cost line
-              — a pure consumer of events/; the core never renders
-cli/          repl, one-shot mode, print/JSON mode, slash command dispatch
+go.work       the workspace, plus the Makefile and .golangci.yml that gate it.
+              `make check` = fmt, build, vet, lint, test across every module.
+              Ships FIRST, as the prefactor: every later ticket then lands
+              against checks that already run. There is no root module.
+
+events/       MODULE. THE event schema: typed, versioned, sequence-numbered
+              (invariant 8). SETTLED — see docs/adr/0001-0008. Sealed payload
+              interface, closed kind set, Unknown preserved, envelope carries
+              the fold keys. Standard library only.
+core/         MODULE. Unit, Spec, Outcome, and the interfaces the outer layers
+              implement — including the TraceSink INTERFACE. Also session/:
+              turn structure over the durable transcript, the thing resume,
+              branch, and rewind later act on (see CONTEXT.md). Pure: no
+              filesystem, no network, no terminal. Imports events only.
+trace/        MODULE, beside core rather than inside it, because the sink writes
+              files and core is pure. The JSONL IMPLEMENTATION of core's
+              TraceSink. Ships HERE, not at stage 6, because invariant 1 admits
+              no quick paths and because the sink is what OWNS Seq: it assigns
+              trace position at commit and appends an assistant message with all
+              of its tool results as one atomic write. Stage 6 adds replay, the
+              public-contract version freeze, and sink-side redaction — it does
+              not add the sink.
+providers/    MODULE. Provider interface + anthropic impl, streaming, retry w/
+              backoff, token accounting — usage arrives split across
+              message_start (input) and message_delta (output), so a Usage event
+              accumulates before it emits (openai-compatible impl at stage 1 —
+              local models, cheap eval runs; it is also the only provider that
+              reports reasoning tokens, which is why the field is nullable)
+config/       MODULE, beside core because it reads files. ~/.eva/config.toml,
+              profiles, key resolution, model selection. TOML, decoded strictly
+              (docs/adr/0009).
+cli/          MODULE, the frontend and the top of the graph. repl, one-shot
+              mode, print/JSON mode, slash command dispatch, and render:
+              streaming markdown to TTY, syntax highlight, spinner, cost line.
+              A pure consumer of events/; the core never renders. Nothing
+              imports cli.
 ```
 
 ```
@@ -990,7 +1007,7 @@ memory/
 
 ```
 eva trace show <run-id>
-  ← the full trajectory, replayable: every step with cost, latency, tokens
+  ← the full Trace, replayable: every step with cost, latency, tokens
 eva > (a task similar to last week's)
   ← measurably cheaper: project memory recalls conventions, gotchas, and
     where things live, instead of re-discovering them
@@ -1115,7 +1132,7 @@ eval/
                 through the one path the design must not leave open. Freezing the
                 repo is not enough; freeze the harness too.
   score/        pass/fail + cost + turns + human-touch rate
-  compare/      A/B two prompt, profile, or harness versions; diff trajectories
+  compare/      A/B two prompt, profile, or harness versions; diff Traces
   gate/         CI check blocking merges that regress the suite; deterministic
                 size budgets (prompt bytes, binary size) are the only
                 performance regression gates — timings are informational,
@@ -1126,7 +1143,7 @@ eval/
 eva eval run --suite core-20
   ← pass@1, cost, turns, human-touch per task; trend against baseline
 eva eval compare profiles/fixer-v1 profiles/fixer-v2
-  ← A/B verdict with trajectory diffs
+  ← A/B verdict with Trace diffs
 (in CI) a deliberately worsened prompt
   ← merge blocked
 ```
@@ -1317,7 +1334,7 @@ learn/
   distill/      recurring fixes -> playbooks and memory entries
   propose/      prompt/profile changes, gated by the eval suite
   route/        which harness for which task class, learned from outcomes
-  tune/         optional distillation or fine-tuning on accepted trajectories
+  tune/         optional distillation or fine-tuning on accepted Traces
 ```
 
 ```
@@ -1388,16 +1405,24 @@ Use a `go.work` workspace. There is one module for each layer. Imports point one
 ```
 eva/                    # go.work
 ├── events/             # THE schema: events, trace records, versioning
-│                       #   imports: nothing                        (stage 0)
+│                       #   imports: stdlib only, nothing internal  (stage 0)
 ├── core/               # Unit, Spec, Outcome, loop, budget, hooks (HookBus),
 │   │                   # verifier contract, tool registry
 │   │                   #   imports: events                         (stages 0-2, 5-6)
 │   ├── prompt/ schema/ pipeline/                                 # stage 1
 │   ├── tools/ loop/ approval/ diff/                              # stage 2
 │   ├── context/ verify/ spec/                                    # stages 3, 5
-│   └── trace/ memory/                                            # stage 6
+│   ├── session/                                                  # stage 0
+│   └── memory/                                                   # stage 6
+├── trace/              # the JSONL sink: the TraceSink IMPLEMENTATION.
+│                       # NOT inside core — the sink writes files, and core is
+│                       # pure. core declares the interface; this satisfies it.
+│                       #   imports: events, core                   (stage 0)
+├── config/             # ~/.eva/config.toml, profiles, key resolution
+│                       # NOT inside core — it reads files.
+│                       #   imports: events, core                   (stage 0)
 ├── providers/          # Provider iface + anthropic, openai-compat, local
-│                       #   imports: events                        (stages 0-1)
+│                       #   imports: events, core                  (stages 0-1)
 ├── env/                # workspace, snapshot, net, secrets
 │                       #   imports: events                        (stage 4)
 ├── exthost/            # hook bus host, subprocess + wasm runtimes, pkg loader,
@@ -1411,6 +1436,9 @@ eva/                    # go.work
 ├── cli/                # repl, TUI, render, print/JSON/RPC modes
 │                       #   imports: harness — pure consumer of events/
 │                       #   the core never renders                 (stage 0)
+│                       #   UNTIL stage 7 there is no harness, so cli imports
+│                       #   config, providers, and trace directly. Narrow it
+│                       #   when harness lands; do not widen it further.
 ├── daemon/             # task, queue, scheduler, enroll, identity
 │                       #   imports: harness                       (stages 9a-9b)
 ├── skill/              # source format, compiler, per-harness targets; mcpserver/
@@ -1426,6 +1454,10 @@ eva/                    # go.work
 ```
 
 There are two rules, and CI enforces them with an import linter. `core` never imports UI, provider specifics, or OS and path specifics. Nothing imports a frontend.
+
+**The rule decides the tree, not the other way round.** Anything that touches the filesystem, the network, or the terminal sits in a module *beside* `core`, never inside it — which is why `trace/` and `config/` are top-level above rather than children of `core/`. `core` declares the interface; the outer module implements it. There is no root module: `go.work` is the root. See `docs/adr/0010`, which is authoritative on the layout.
+
+The linter is `depguard`, configured in `.golangci.yml` and run by `make lint`. Every rule is an **allow list in strict mode**, so the boundaries fail closed: an import nobody enumerated is rejected rather than quietly permitted. A new module needs an entry in `go.work` and a rule in `.golangci.yml`; a module with no rule falls through to a standard-library-only default, so a forgotten rule fails loudly.
 
 ---
 
