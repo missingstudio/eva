@@ -155,22 +155,36 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 	e := &eva{
 		provider: provider,
 		sink:     sink,
-		session:  core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor()),
+		session:  core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor(), origin()),
 		model:    cfg.Model,
 	}
 
+	// The assembly is built once and handed to whichever frontend drives it.
+	// Both attach through eva's own door, which is the only place a Run learns
+	// who is watching it and what it may claim.
 	if opts.prompt == "" {
 		return converse(ctx, e, stdin, stdout)
 	}
+	return answerOnce(ctx, e, opts, stdin, stdout)
+}
 
-	output, err := projection(opts, stdin, stdout)
+// answerOnce answers one prompt and reports it as an exit code.
+//
+// Nothing watches a turn here, so nothing is told what is arriving and the Run
+// claims no clean cancel: a signal to this command kills the process where it
+// stands, however it looks from outside. The turn is written when it is over,
+// which is all a command that prints once and exits has to show.
+func answerOnce(ctx context.Context, e *eva, opts options, stdin io.Reader, stdout io.Writer) (int, error) {
+	output, err := projection(opts.json, stdin, stdout)
 	if err != nil {
 		return ExitFailure, err
 	}
-	e.subs = []core.Subscriber{output}
+	e.show(output)
 
 	outcome, err := e.answer(ctx, opts.prompt)
 	if err != nil {
+		// The record failed, so there is nothing in the Trace to report
+		// instead. Everything that happened to the turn itself is below.
 		return ExitFailure, err
 	}
 	if outcome.Result != events.ResultDone {
@@ -209,38 +223,42 @@ type eva struct {
 	arriving func(chunk string)
 }
 
-// watch attaches an interface to every Run that follows: the Subscriber that
-// receives what was committed, and whoever is told what is arriving.
+// show attaches a projection to every Run that follows.
 //
-// It also claims the Interrupt capability, because something that watches a
-// turn is something that can be asked to stop it — and the claim belongs
-// wherever the listening is rather than wherever a Turn is built.
-func (e *eva) watch(sub core.Subscriber, arriving func(chunk string)) {
+// This is the whole of what a frontend that only reads the record gets. It is
+// told what was committed, after it was committed, and it claims nothing about
+// the Run beyond that — which is correct for a command that prints a turn when
+// the turn is over.
+func (e *eva) show(sub core.Subscriber) {
 	e.subs = []core.Subscriber{sub}
+}
+
+// watch attaches a frontend that is doing more than reading: it is told what is
+// arriving before any of it is committed, and it listens for a cancellation and
+// lets the Run close rather than letting the process die under it.
+//
+// So it also claims the Interrupt capability. The claim is made here because
+// this is where the listening is. A capability that is missing degrades a Run;
+// a capability claimed and absent corrupts it, and a scheduler that routed work
+// here on a false claim would have no way to find out — which is why the claim
+// is not a field a Turn's builder can set on its own.
+//
+// show and watch are the only two doors. Everything a Run learns about who is
+// watching it comes through one of them, so the answer to "what does this Run
+// claim, and who sees what it commits?" is these ten lines rather than a search.
+func (e *eva) watch(sub core.Subscriber, arriving func(chunk string)) {
+	e.show(sub)
 	e.arriving = arriving
 	e.interrupt = true
 }
 
 // answer runs one turn as one Run against the Session.
 //
-// A Recorder belongs to one Run, so a Session of many turns builds many. What
-// it does not build again is the Session: the transcript folds across every
-// Run of it, which is what makes the second prompt answered in the light of
-// the first.
+// What is assembled here is only what changes between turns. Who is running,
+// under which tenant, on whose clock — the Session holds all of it and opens
+// the Run with it, so this asks for a Run rather than restating one.
 func (e *eva) answer(ctx context.Context, prompt string) (core.Outcome, error) {
-	// The Session comes first, so the transcript is folded before the Event
-	// reaches anyone else. All of them are projections of the same committed
-	// record; the order only decides which one is built first.
-	recorder, err := core.NewRecorder(core.RecorderOptions{
-		Sink:        e.sink,
-		Tenant:      e.session.Tenant,
-		Actor:       e.session.Actor,
-		Run:         events.RunID(newID("run")),
-		Session:     e.session.ID,
-		Now:         now,
-		NewID:       func() events.EventID { return events.EventID(newID("evt")) },
-		Subscribers: append([]core.Subscriber{e.session}, e.subs...),
-	})
+	recorder, err := e.session.Open(e.sink, e.subs...)
 	if err != nil {
 		return core.Outcome{}, err
 	}
@@ -291,11 +309,11 @@ func converse(ctx context.Context, e *eva, stdin io.Reader, stdout io.Writer) (i
 // all. Not built and suppressed — never built. Otherwise the terminal stack
 // would sit in the output path a script parses, and the render boundary would
 // stop being a property of the program and become a habit.
-func projection(opts options, stdin io.Reader, stdout io.Writer) (core.Subscriber, error) {
-	if opts.json {
+func projection(machineReadable bool, stdin io.Reader, stdout io.Writer) (core.Subscriber, error) {
+	if machineReadable {
 		return eventStream{out: stdout}, nil
 	}
-	return render.New(stdout, darkBackground(stdin, stdout))
+	return render.New(render.Stream(stdout), darkBackground(stdin, stdout))
 }
 
 // darkBackground asks the terminal what colour it is.
@@ -345,6 +363,21 @@ func open(cfg config.Config) (providers.Provider, error) {
 	default:
 		return nil, fmt.Errorf("unknown provider %q in %s: want %q or %q",
 			cfg.Provider.Name, cfg.Path, anthropic.Name, fake.Name)
+	}
+}
+
+// origin is the outside world this process hands a Session: its clock, and its
+// source of identifiers.
+//
+// It is assembled here because core is pure and has neither. It is handed over
+// once, when the Session opens, so that every Run of a Session is stamped from
+// one clock and one allocator — which is what lets the Session's own Events be
+// ordered against each other.
+func origin() core.Origin {
+	return core.Origin{
+		Now:     now,
+		RunID:   func() events.RunID { return events.RunID(newID("run")) },
+		EventID: func() events.EventID { return events.EventID(newID("evt")) },
 	}
 }
 

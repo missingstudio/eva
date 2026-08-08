@@ -87,10 +87,12 @@ type styles struct {
 }
 
 func newStyles(dark bool) styles {
-	grey := lipgloss.LightDark(dark)(lipgloss.Color("#5C5C5C"), lipgloss.Color("#9E9E9E"))
 	return styles{
 		said: lipgloss.NewStyle().Bold(true),
-		hint: lipgloss.NewStyle().Faint(true).Foreground(grey),
+		// The same grey the cost line is written in. Both are subordinate to
+		// the answer, so both are one decision rather than two that happen to
+		// agree — see render.Subdued.
+		hint: render.Subdued(dark),
 	}
 }
 
@@ -185,7 +187,7 @@ func newConsole(ctx context.Context, e *eva, in io.Reader, out io.Writer) (*tea.
 		styles:  newStyles(true),
 	}
 
-	renderer, err := render.NewOn(c, c.dark)
+	renderer, err := render.New(c, c.dark)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -419,17 +421,23 @@ func (c *console) close(a answered) tea.Cmd {
 	c.stop()
 	c.arriving.Reset()
 
-	switch {
-	case errors.Is(a.err, context.Canceled):
-		// The person asked for this, so it is a note rather than a failure.
-		// The Trace holds the same thing: a Run that closed on a claim, and
-		// an answer that is not all of one.
-		c.put(c.styles.hint.Render("interrupted"))
+	// A turn that did not answer says why in its own claim, and that claim is
+	// the one the Trace holds. The interface reads it rather than working the
+	// reason out a second time from the error: "interrupted" for a turn
+	// somebody stopped, the provider's own words for one that broke. A
+	// classification made here could disagree with the record, and a person
+	// reading the screen would have no way to know which of the two was true.
+	//
+	// A turn that broke leaves the Session standing either way. A console that
+	// ended on the first provider failure would throw away a conversation over
+	// something the next prompt might not hit.
+	if a.outcome.Result != events.ResultDone && a.outcome.Summary != "" {
+		c.put(c.styles.hint.Render(a.outcome.Summary))
+	}
 
-	case a.err != nil:
-		// A turn that broke leaves the Session standing. A console that ended
-		// on the first provider error would throw away a conversation over
-		// something the next prompt might not hit.
+	// An error is not an Outcome. It is the record failing, which is the one
+	// thing a person cannot be shown from the Trace.
+	if a.err != nil {
 		c.blame(a.err)
 	}
 

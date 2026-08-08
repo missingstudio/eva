@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 
 	"github.com/missingstudio/eva/events"
 )
@@ -45,6 +46,8 @@ type Session struct {
 	Tenant events.TenantID
 	Actor  events.Identity
 
+	origin Origin
+
 	messages []Message
 
 	// openRun is the Run whose assistant Message is still being appended to,
@@ -58,9 +61,62 @@ type Session struct {
 	runIsOpen bool
 }
 
-// NewSession opens a Session under an identity.
-func NewSession(id events.SessionID, tenant events.TenantID, actor events.Identity) *Session {
-	return &Session{ID: id, Tenant: tenant, Actor: actor}
+// Origin is the outside world a Session needs in order to open a Run: a clock,
+// and a source of identifiers.
+//
+// core is pure and reaches nothing outside itself, so the layer that owns the
+// outside world hands both in. It hands them in once, when the Session opens,
+// rather than once per Run — a Session that minted its Runs from two different
+// clocks would be a Session whose own transcript could not be ordered.
+//
+// A test supplies a clock that does not move and identifiers that count, which
+// is what makes a committed Event something a test can assert on rather than
+// only check the shape of.
+type Origin struct {
+	Now     func() events.Timestamp
+	RunID   func() events.RunID
+	EventID func() events.EventID
+}
+
+// NewSession opens a Session under an identity, against the outside world it
+// will open its Runs with.
+func NewSession(id events.SessionID, tenant events.TenantID, actor events.Identity, origin Origin) *Session {
+	return &Session{ID: id, Tenant: tenant, Actor: actor, origin: origin}
+}
+
+// Open opens a Recorder for one new Run of this Session.
+//
+// A Recorder belongs to one Run, so a Session of many turns opens many. What is
+// not opened again is the Session: the transcript folds across every Run of it,
+// which is what makes the second prompt answered in the light of the first.
+//
+// Everything the envelope of a Run carries is already here — the tenant, the
+// actor, the Session, and the clock and identifiers that stamp it — so a caller
+// asks for a Run rather than restating who is running it. A caller free to
+// restate it is a caller free to get it wrong, and an Event stamped with the
+// wrong Session is one no fold will ever find.
+//
+// The Session is always the first Subscriber, so the transcript is folded
+// before the Event reaches anyone else. Every Subscriber is a projection of the
+// same committed record; the order only decides which is built first.
+func (s *Session) Open(sink TraceSink, subs ...Subscriber) (*Recorder, error) {
+	// The other two are checked by NewRecorder, in the words a caller of that
+	// would have read. This one is checked here because it is called rather
+	// than passed, and a nil called is a panic rather than a report.
+	if s.origin.RunID == nil {
+		return nil, errors.New("core: a Session needs a source of Run identifiers to open a Run")
+	}
+
+	return NewRecorder(RecorderOptions{
+		Sink:        sink,
+		Tenant:      s.Tenant,
+		Actor:       s.Actor,
+		Session:     s.ID,
+		Run:         s.origin.RunID(),
+		Now:         s.origin.Now,
+		NewID:       s.origin.EventID,
+		Subscribers: append([]Subscriber{s}, subs...),
+	})
 }
 
 // Session satisfies Subscriber, which is how it is fed.

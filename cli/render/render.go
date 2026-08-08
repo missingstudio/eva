@@ -71,32 +71,34 @@ type Renderer struct {
 	missing []string
 }
 
-// New builds a Renderer that writes each finished turn to out, with its colour
-// reduced to what out can show.
+// New builds a Renderer that shows each finished turn on a Screen.
+//
+// There is one constructor and the caller names its Screen, because which
+// destination a turn goes to is the decision the seam exists for. A second
+// constructor that picked one would be the same decision made in two places,
+// and the one it picked would be the one nobody thought about.
 //
 // dark says whether the terminal has a dark background. It is a parameter
 // rather than something this package detects, because detecting it means
 // querying the terminal and this package holds no terminal — the frontend that
 // owns the outside world asks, and hands in the answer. There is no
 // configuration key: a style nobody chose is the only style there is.
-func New(out io.Writer, dark bool) (*Renderer, error) {
-	return NewOn(stream{out: out}, dark)
-}
-
-// NewOn builds a Renderer that shows each finished turn on screen, with its
-// colour as it was chosen rather than as the destination can show it.
-//
-// It is for the caller that owns the terminal and adapts the colour itself.
-// A Renderer that adapted first would have nothing left to adapt: a screen is
-// not a byte stream, so there is nothing to ask what it can show, and the
-// honest answer for something that is not a terminal is no colour at all.
-func NewOn(screen Screen, dark bool) (*Renderer, error) {
+func New(screen Screen, dark bool) (*Renderer, error) {
 	r := &Renderer{screen: screen}
 	if err := r.Background(dark); err != nil {
 		return nil, err
 	}
 	return r, nil
 }
+
+// Stream is the Screen a byte stream is: it writes the turn out, with its
+// colour reduced to what the destination can show.
+//
+// It is the Screen for a caller that owns nothing but a writer. A caller that
+// owns a terminal passes its own, and reduces the colour itself — a Renderer
+// that reduced first would have nothing left to reduce, because a screen is not
+// a byte stream and there is nothing to ask what it can show.
+func Stream(out io.Writer) Screen { return stream{out: out} }
 
 // Background tells the Renderer what colour the terminal is.
 //
@@ -119,8 +121,20 @@ func (r *Renderer) Background(dark bool) error {
 	}
 
 	r.markdown = markdown
-	r.costStyle = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.LightDark(dark)(costOnLight, costOnDark))
+	r.costStyle = Subdued(dark)
 	return nil
+}
+
+// Subdued is the style of what sits beside an answer rather than inside it:
+// the cost line here, and — in the frontend that has them — a prompt echoed
+// back and a status line. All of it is subordinate to the answer, which is a
+// person's reason for being here.
+//
+// It is exported because it was written twice. The frontend cannot import the
+// two greys below without importing this package, and two packages naming one
+// colour is two places to change it and one place to forget.
+func Subdued(dark bool) lipgloss.Style {
+	return lipgloss.NewStyle().Faint(true).Foreground(lipgloss.LightDark(dark)(subduedOnLight, subduedOnDark))
 }
 
 // stream is the Screen a byte stream is: it writes the turn out, and that is
@@ -138,12 +152,12 @@ func (s stream) Show(turn string) error {
 	return nil
 }
 
-// The cost line's grey, one per background. Both are true colour, and neither
-// is emitted as written: what reaches the terminal is downsampled to what the
+// The subdued grey, one per background. Both are true colour, and neither is
+// emitted as written: what reaches the terminal is downsampled to what the
 // terminal can show.
 var (
-	costOnLight = lipgloss.Color("#5C5C5C")
-	costOnDark  = lipgloss.Color("#9E9E9E")
+	subduedOnLight = lipgloss.Color("#5C5C5C")
+	subduedOnDark  = lipgloss.Color("#9E9E9E")
 )
 
 // Committed folds one committed Event into what the person sees.
