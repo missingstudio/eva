@@ -36,6 +36,16 @@ func answered(answer string, usage events.Usage) []events.Payload {
 func show(t *testing.T, dark bool, payloads ...events.Payload) string {
 	t.Helper()
 
+	_, out := fold(t, dark, payloads...)
+	return out.String()
+}
+
+// fold folds the payloads into a Renderer and returns it, along with what it
+// wrote. It is what a test that asks a Renderer something uses, rather than one
+// that only reads the bytes.
+func fold(t *testing.T, dark bool, payloads ...events.Payload) (*render.Renderer, *bytes.Buffer) {
+	t.Helper()
+
 	var out bytes.Buffer
 	renderer, err := render.New(render.Stream(&out), dark)
 	if err != nil {
@@ -54,7 +64,7 @@ func show(t *testing.T, dark bool, payloads ...events.Payload) string {
 			t.Fatalf("commit event %d: %v", i+1, err)
 		}
 	}
-	return out.String()
+	return renderer, &out
 }
 
 // escape matches an ANSI style sequence, so that a test can assert on the
@@ -326,4 +336,69 @@ func costLines(t *testing.T, out string) []string {
 		t.Fatalf("the output holds no cost line:\n%s", out)
 	}
 	return lines
+}
+
+// A Renderer answers what a turn cost after the turn is over, so that a person
+// can ask rather than scroll back for the line the turn wrote.
+//
+// Two turns, so the two figures cannot be confused: the turn is the second
+// alone and the Session is both.
+func TestTheCostIsAnsweredOnDemandAfterTheTurnIsOver(t *testing.T) {
+	renderer, _ := fold(t, true,
+		append(
+			answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340}),
+			answered("second", events.Usage{InputTokens: 800, OutputTokens: 60})...,
+		)...,
+	)
+
+	turn, session, split := strings.Cut(plain(renderer.Cost()), "session")
+	if !split {
+		t.Fatalf("the cost answers with one figure, want the turn and the Session: %s", turn)
+	}
+	for _, want := range []string{"800 in", "60 out"} {
+		if !strings.Contains(turn, want) {
+			t.Errorf("the turn does not report %q, and the last turn is what it is: %s", want, turn)
+		}
+	}
+	for _, want := range []string{"2.0k in", "400 out"} {
+		if !strings.Contains(session, want) {
+			t.Errorf("the Session does not report %q, which is both turns: %s", want, session)
+		}
+	}
+}
+
+// A cleared transcript is a new Session, and its spend starts at nothing. A
+// figure that outlived the Session it names would be two conversations summed
+// and reported as one.
+func TestClearingStartsTheAccountingOver(t *testing.T) {
+	renderer, _ := fold(t, true, answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340})...)
+
+	renderer.Cleared()
+
+	line := plain(renderer.Cost())
+	if strings.Count(line, "no usage reported") != 2 {
+		t.Errorf("a cleared Renderer still reports a spend: %s", line)
+	}
+}
+
+// The caveat qualifies the figures, so it travels with them. A cost answered on
+// demand over data known to be incomplete, with nothing to say so, is a figure
+// that reads as a measurement — which is the reason the end of a turn writes the
+// caveat above the cost line in the first place.
+func TestTheCostAnsweredOnDemandCarriesTheCaveat(t *testing.T) {
+	renderer, _ := fold(t, true,
+		events.Started{Intent: "what is this project"},
+		events.Text{Chunk: "partly"},
+		events.Usage{InputTokens: 1200, OutputTokens: 340},
+		events.Degraded{Missing: []string{"the provider reported no cost"}},
+		events.Finished{Claim: events.Claim{Result: events.ResultDone}},
+	)
+
+	said := plain(renderer.Cost())
+	if !strings.Contains(said, "the provider reported no cost") {
+		t.Errorf("the cost is answered with no sign that the turn was degraded:\n%s", said)
+	}
+	if !strings.Contains(said, "1.2k in") {
+		t.Errorf("the cost does not report what the turn cost:\n%s", said)
+	}
 }

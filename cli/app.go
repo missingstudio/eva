@@ -33,8 +33,9 @@ const (
 	ExitUsage = 2
 )
 
-// usage is the command surface. eva help is shell-level help; the in-console
-// /help is a separate surface, and arrives with the slash commands.
+// usage is the command surface a shell sees. The console answers /help, which
+// is a different surface: these are the flags a process is started with, and
+// those are the commands a Session is steered by.
 const usage = `eva — a model client that leaves a complete record.
 
 USAGE:
@@ -50,7 +51,8 @@ FLAGS:
                                (default $EVA_CONFIG, then ~/.eva/config.toml)
 
 In the console, enter sends a prompt, ctrl+c interrupts the turn in flight,
-and ctrl+d leaves.
+and ctrl+d leaves. A line that starts with a slash is a command the console
+answers itself, and /help lists them.
 
 Configuration is a file rather than a pile of flags. An API key is read from
 the environment — by default $ANTHROPIC_API_KEY — and never from that file.
@@ -222,6 +224,26 @@ type eva struct {
 	// See Turn.Arriving for why that is a different thing from a Subscriber.
 	arriving func(chunk string)
 }
+
+// eva is what a console's commands act on.
+var _ control = (*eva)(nil)
+
+// Model is which model the turns that follow will use.
+func (e *eva) Model() string { return e.model }
+
+// UseModel switches the model, from the next turn on. The Session is not
+// disturbed: what a model change is for is answering the same conversation with
+// something else.
+//
+// Nothing here checks the name against a list. Eva holds no list, and one built
+// from what was true when this was written would refuse a model released since
+// — so the Provider is what answers, and a name it does not know fails the turn
+// and says so in the words the Trace holds.
+func (e *eva) UseModel(model string) { e.model = model }
+
+// Clear empties the transcript by opening a new Session over the same identity,
+// the same sink, and the same Provider. Session.Fresh has why it is a new one.
+func (e *eva) Clear() { e.session = e.session.Fresh(events.SessionID(newID("sess"))) }
 
 // show attaches a projection to every Run that follows.
 //

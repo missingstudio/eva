@@ -337,3 +337,55 @@ func TestASessionIsFedByTheRecorder(t *testing.T) {
 		t.Errorf("transcript = %q, want %q", got, want)
 	}
 }
+
+// A fresh Session is the same identity with an empty transcript, and it can
+// open Runs of its own.
+//
+// That is what emptying a transcript is here. A Session that deleted its own
+// messages would leave the fold and the Trace disagreeing about one
+// conversation from that moment on; a new identifier diverges from nothing,
+// because the Events already committed are stamped with the old one and no
+// fold over the new one will ever take them.
+func TestAFreshSessionKeepsTheIdentityAndEmptiesTheTranscript(t *testing.T) {
+	s := opened(t)
+	fold(t, s,
+		event("run_1", events.Started{Intent: "what is this project"}),
+		event("run_1", events.Text{Chunk: "Eva is a software factory."}),
+		event("run_1", events.Finished{Claim: events.Claim{Result: events.ResultDone}}),
+	)
+
+	next := s.Fresh("sess_2")
+
+	if got := transcript(next); got != "" {
+		t.Errorf("the fresh Session holds %q, want an empty transcript", got)
+	}
+	if next.ID != "sess_2" {
+		t.Errorf("the fresh Session is %q, want the identifier it was opened with", next.ID)
+	}
+	if next.Tenant != s.Tenant || next.Actor != s.Actor {
+		t.Errorf("the fresh Session runs as %s/%+v, want %s/%+v", next.Tenant, next.Actor, s.Tenant, s.Actor)
+	}
+	if _, err := next.Open(&collected{}); err != nil {
+		t.Errorf("the fresh Session cannot open a Run: %v", err)
+	}
+
+	// And the Session it came from is untouched. Nothing was deleted; the
+	// transcript that was there is still there, and so is the Trace behind it.
+	if got, want := transcript(s), "user:what is this project|assistant:Eva is a software factory.|"; got != want {
+		t.Errorf("the Session that was cleared now holds %q, want %q", got, want)
+	}
+
+	// The fresh Session takes only what is stamped with its own identifier, so
+	// the two transcripts cannot drift into each other.
+	said := event("run_2", events.Started{Intent: "and what else"})
+	fold(t, next, said)
+	if got := transcript(next); got != "" {
+		t.Errorf("the fresh Session folded an Event of Session %q: %q", said.Session, got)
+	}
+
+	said.Session = next.ID
+	fold(t, next, said)
+	if got, want := transcript(next), "user:and what else|"; got != want {
+		t.Errorf("the fresh Session holds %q, want %q", got, want)
+	}
+}
