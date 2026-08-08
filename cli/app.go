@@ -14,6 +14,7 @@ import (
 	"github.com/missingstudio/eva/core"
 	"github.com/missingstudio/eva/events"
 	"github.com/missingstudio/eva/providers"
+	"github.com/missingstudio/eva/providers/anthropic"
 	"github.com/missingstudio/eva/providers/fake"
 	"github.com/missingstudio/eva/trace"
 )
@@ -188,19 +189,24 @@ func open(cfg config.Config) (providers.Provider, error) {
 		}
 		return fake.Load(cfg.Provider.Script)
 
-	case config.DefaultProvider:
+	case anthropic.Name:
 		// The credential is resolved before anything else, so that a missing
 		// key is reported as a missing key rather than as whatever the first
 		// call to fail happens to say.
-		if _, err := cfg.RequireAPIKey(); err != nil {
+		key, err := cfg.RequireAPIKey()
+		if err != nil {
 			return nil, err
 		}
-		return nil, fmt.Errorf("provider %q is not built yet; set provider.name = %q with a recording in %s",
-			cfg.Provider.Name, fake.Name, cfg.Path)
+		// Reveal is the one place the credential leaves the type that stops it
+		// printing itself, and it goes straight into the client.
+		return anthropic.New(anthropic.Options{
+			APIKey:  key.Reveal(),
+			BaseURL: cfg.Provider.BaseURL,
+		})
 
 	default:
 		return nil, fmt.Errorf("unknown provider %q in %s: want %q or %q",
-			cfg.Provider.Name, cfg.Path, config.DefaultProvider, fake.Name)
+			cfg.Provider.Name, cfg.Path, anthropic.Name, fake.Name)
 	}
 }
 
