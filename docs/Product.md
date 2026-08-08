@@ -4,6 +4,8 @@
 
 **Stage 0's event schema is settled and is no longer a draft.** It was resolved in a design session on 2026-08-08 and now lives in `docs/adr/0001`–`0008`, which own the reasoning. Part 2 below carries the resulting shape only. Where the two ever disagree, the ADRs win.
 
+Two later decisions also override this document: `docs/adr/0009` fixes config and profiles as TOML, and `docs/adr/0010` fixes the module layout, which differs from the tree in the final-repo-shape section below.
+
 One document. It goes from a single model call to an autonomous, multi-tenant software factory. It gives the frame, the primitive, the target architecture, the production platform, and the staged build path that connects them.
 
 **Implementation language: Go.** Use interfaces, not inheritance. Use one `go.work` workspace. Keep imports between layers one-way. All code sketches below are Go.
@@ -1395,9 +1397,17 @@ eva/                    # go.work
 │   ├── prompt/ schema/ pipeline/                                 # stage 1
 │   ├── tools/ loop/ approval/ diff/                              # stage 2
 │   ├── context/ verify/ spec/                                    # stages 3, 5
-│   └── trace/ memory/                                            # stage 6
+│   ├── session/                                                  # stage 0
+│   └── memory/                                                   # stage 6
+├── trace/              # the JSONL sink: the TraceSink IMPLEMENTATION.
+│                       # NOT inside core — the sink writes files, and core is
+│                       # pure. core declares the interface; this satisfies it.
+│                       #   imports: events, core                   (stage 0)
+├── config/             # ~/.eva/config.toml, profiles, key resolution
+│                       # NOT inside core — it reads files.
+│                       #   imports: events, core                   (stage 0)
 ├── providers/          # Provider iface + anthropic, openai-compat, local
-│                       #   imports: events                        (stages 0-1)
+│                       #   imports: events, core                  (stages 0-1)
 ├── env/                # workspace, snapshot, net, secrets
 │                       #   imports: events                        (stage 4)
 ├── exthost/            # hook bus host, subprocess + wasm runtimes, pkg loader,
@@ -1426,6 +1436,10 @@ eva/                    # go.work
 ```
 
 There are two rules, and CI enforces them with an import linter. `core` never imports UI, provider specifics, or OS and path specifics. Nothing imports a frontend.
+
+**The rule decides the tree, not the other way round.** Anything that touches the filesystem, the network, or the terminal sits in a module *beside* `core`, never inside it — which is why `trace/` and `config/` are top-level above rather than children of `core/`. `core` declares the interface; the outer module implements it. There is no root module: `go.work` is the root. See `docs/adr/0010`, which is authoritative on the layout.
+
+The linter is `depguard`, configured in `.golangci.yml` and run by `make lint`. Every rule is an **allow list in strict mode**, so the boundaries fail closed: an import nobody enumerated is rejected rather than quietly permitted. A new module needs an entry in `go.work` and a rule in `.golangci.yml`; a module with no rule falls through to a standard-library-only default, so a forgotten rule fails loudly.
 
 ---
 
