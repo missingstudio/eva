@@ -2,11 +2,9 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/missingstudio/eva/core"
 	"github.com/missingstudio/eva/events"
@@ -18,55 +16,43 @@ import (
 // agent, or a factory does at a longer timescale.
 //
 // A Turn is not a Run. A Run is one execution of a Unit against a Session, and
-// it is the RunID below; a Turn is the Unit being executed. The words are
-// close and CONTEXT.md keeps them apart on purpose.
+// it is the Run the Recorder stamps; a Turn is the Unit being executed. The
+// words are close and CONTEXT.md keeps them apart on purpose.
+//
+// What a Turn does not hold is as telling as what it does. It has no clock, no
+// identifier source, no output stream, and no way to write to the Session —
+// the Recorder owns all four. A Turn says what happened; it does not decide
+// how that is recorded, and it cannot record one thing and report another.
 type Turn struct {
 	Provider providers.Provider
-	Sink     core.TraceSink
-	Session  *core.Session
-	Run      events.RunID
+	Recorder *core.Recorder
+
+	// Session is read, never written. The transcript the answer is
+	// conditioned on is a fold over committed Events, so the Recorder is what
+	// puts things into it.
+	Session *core.Session
 
 	// Model is which model to answer with.
 	Model string
-
-	// Out receives each committed Event as one line of JSON. It is nil when
-	// nothing is consuming the machine-readable stream.
-	//
-	// Events are written after the sink commits them, not before, so what a
-	// consumer reads carries the Trace position the Trace actually holds.
-	Out io.Writer
-
-	// Clock and IDs come from the caller because core is pure and this is the
-	// layer that owns the outside world.
-	Now   func() events.Timestamp
-	NewID func() events.EventID
 }
 
 var _ core.Unit = (*Turn)(nil)
 
 // Execute answers one prompt.
 //
-// Every step appends to the Trace before it reaches anyone: there are no quick
+// Every step reaches the Trace before it reaches anyone: there are no quick
 // paths, and a turn that produced output nobody recorded would be the one
 // failure the project has no instrument to detect (invariant 1).
 func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error) {
-	emitter := &core.Emitter{
-		Tenant:  spec.Tenant,
-		Actor:   spec.Actor,
-		Run:     t.Run,
-		Session: t.Session.ID,
-	}
-
-	if err := t.commit(ctx, emitter, events.Started{Capabilities: capabilities()}); err != nil {
+	// The intent rides on Started, which is what puts the prompt in the Trace
+	// and therefore in the Session. A transcript whose first message lives
+	// only in this process is one a Trace cannot reconstruct.
+	started := events.Started{Intent: spec.Intent, Capabilities: capabilities()}
+	if err := t.Recorder.Record(ctx, started); err != nil {
 		return core.Outcome{}, err
 	}
 
-	t.Session.Append(core.Message{Author: core.AuthorUser, Text: spec.Intent})
-
-	answer, streamErr := t.stream(ctx, emitter)
-	if streamErr == nil {
-		t.Session.Append(core.Message{Author: core.AuthorAssistant, Text: answer})
-	}
+	streamErr := t.stream(ctx)
 
 	outcome := core.Outcome{Result: events.ResultDone, Summary: "answered"}
 	if streamErr != nil {
@@ -76,65 +62,90 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	// The claim is committed whichever way the turn went. A Run that failed
 	// and left no Finished record is a Run a reader cannot tell from one that
 	// is still going.
-	if err := t.commit(ctx, emitter, events.Finished{Claim: outcome.Claim()}); err != nil {
+	if err := t.Recorder.Record(ctx, events.Finished{Claim: outcome.Claim()}); err != nil {
 		return outcome, err
 	}
 	return outcome, streamErr
 }
 
-// stream replays the provider's turn into the Trace and returns the answer.
-func (t *Turn) stream(ctx context.Context, emitter *core.Emitter) (string, error) {
+// stream replays the provider's turn into the Trace.
+//
+// Payloads are recorded a content block at a time rather than one at a time,
+// because the group is what the sink folds within (docs/adr/0004). A block is
+// also the largest batch that is safe to hold: everything already recorded
+// survives the process dying, so buffering a whole turn would trade the
+// property invariant 1 rests on for a smaller file.
+func (t *Turn) stream(ctx context.Context) error {
 	stream, err := t.Provider.Stream(ctx, providers.Call{
 		Model:    t.Model,
 		Messages: t.Session.Messages(),
 	})
 	if err != nil {
-		return "", fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
+		return fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
 	}
 	// The turn's outcome is what the caller acts on. A stream that failed to
 	// close has nothing to add to it, and the Trace already holds what
 	// happened.
 	defer func() { _ = stream.Close() }()
 
-	var answer strings.Builder
+	var block blockGroup
 	for {
 		payload, err := stream.Next(ctx)
 		if errors.Is(err, io.EOF) {
-			return answer.String(), nil
+			// Whatever is still pending is part of the answer, so it is
+			// committed before the turn is called complete.
+			return block.flush(ctx, t.Recorder)
 		}
 		if err != nil {
-			return answer.String(), fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
+			// A failed stream still produced whatever came before it, and the
+			// Trace has to hold that: a partial answer that reached nobody's
+			// record is the failure with no instrument.
+			if ferr := block.flush(ctx, t.Recorder); ferr != nil {
+				return ferr
+			}
+			return fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
 		}
-		if text, ok := payload.(events.Text); ok {
-			answer.WriteString(text.Chunk)
-		}
-		if err := t.commit(ctx, emitter, payload); err != nil {
-			return answer.String(), err
+
+		if err := block.add(ctx, t.Recorder, payload); err != nil {
+			return err
 		}
 	}
 }
 
-// commit appends one Event to the Trace and then writes what was committed.
-func (t *Turn) commit(ctx context.Context, emitter *core.Emitter, payload events.Payload) error {
-	event := emitter.Emit(t.NewID(), t.Now(), payload)
+// blockGroup accumulates the chunks of one content block so that they commit
+// as one group. Anything that is not a chunk closes the block and commits on
+// its own.
+type blockGroup struct {
+	pending []events.Payload
+	block   int
+}
 
-	committed, err := t.Sink.Append(ctx, []events.Event{event})
-	if err != nil {
-		return err
+func (g *blockGroup) add(ctx context.Context, rec *core.Recorder, payload events.Payload) error {
+	text, isText := payload.(events.Text)
+	if !isText {
+		if err := g.flush(ctx, rec); err != nil {
+			return err
+		}
+		return rec.Record(ctx, payload)
 	}
-	if t.Out == nil {
+
+	if len(g.pending) > 0 && text.Block != g.block {
+		if err := g.flush(ctx, rec); err != nil {
+			return err
+		}
+	}
+	g.block = text.Block
+	g.pending = append(g.pending, text)
+	return nil
+}
+
+func (g *blockGroup) flush(ctx context.Context, rec *core.Recorder) error {
+	if len(g.pending) == 0 {
 		return nil
 	}
-	for _, e := range committed {
-		line, err := json.Marshal(e)
-		if err != nil {
-			return fmt.Errorf("encode %s event: %w", e.Kind, err)
-		}
-		if _, err := fmt.Fprintf(t.Out, "%s\n", line); err != nil {
-			return fmt.Errorf("write %s event: %w", e.Kind, err)
-		}
-	}
-	return nil
+	group := g.pending
+	g.pending = nil
+	return rec.Record(ctx, group...)
 }
 
 // capabilities is what a Run can do in this build.

@@ -175,6 +175,9 @@ func TestHelpPrintsTheUsageBlock(t *testing.T) {
 	}
 }
 
+// The recording delivers the answer in three chunks of one content block, and
+// the sink folds them into one record at commit (docs/adr/0004). A Trace
+// record is a unit of meaning, so three chunks are one Text.
 func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
 	w := newWorld(t, "")
 
@@ -182,7 +185,7 @@ func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
 
 	want := []events.Kind{
 		events.KindStarted,
-		events.KindText, events.KindText, events.KindText,
+		events.KindText,
 		events.KindUsage,
 		events.KindFinished,
 	}
@@ -190,19 +193,17 @@ func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
 		t.Fatalf("kinds = %v, want %v", kinds(got), want)
 	}
 
-	var answer strings.Builder
-	for _, e := range got {
-		if text, ok := e.Payload.(events.Text); ok {
-			answer.WriteString(text.Chunk)
-		}
+	text, ok := got[1].Payload.(events.Text)
+	if !ok {
+		t.Fatalf("payload = %#v, want Text", got[1].Payload)
 	}
-	if !strings.Contains(answer.String(), "software factory") {
-		t.Errorf("the answer is %q", answer.String())
+	if want := "Eva is an autonomous, multi-tenant, AI-native software factory."; text.Chunk != want {
+		t.Errorf("the folded answer is %q, want %q", text.Chunk, want)
 	}
 
-	usage, ok := got[4].Payload.(events.Usage)
+	usage, ok := got[2].Payload.(events.Usage)
 	if !ok {
-		t.Fatalf("payload = %#v, want Usage", got[4].Payload)
+		t.Fatalf("payload = %#v, want Usage", got[2].Payload)
 	}
 	if usage.InputTokens != 1200 || usage.OutputTokens != 340 {
 		t.Errorf("usage = %+v, want the recorded figures", usage)
@@ -218,12 +219,38 @@ func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
 		t.Errorf("USD = %v, want absent — it is never an estimate", *usage.USD)
 	}
 
-	finished, ok := got[5].Payload.(events.Finished)
+	finished, ok := got[3].Payload.(events.Finished)
 	if !ok {
-		t.Fatalf("payload = %#v, want Finished", got[5].Payload)
+		t.Fatalf("payload = %#v, want Finished", got[3].Payload)
 	}
 	if finished.Claim.Result != events.ResultDone {
 		t.Errorf("claim = %+v, want done", finished.Claim)
+	}
+}
+
+// The Trace is the single source of truth, so the prompt has to be in it.
+// Without this the transcript's first message exists only in the process that
+// answered it, and resume has nothing to resume from.
+func TestThePromptReachesTheTrace(t *testing.T) {
+	const prompt = "what is this project"
+
+	w := newWorld(t, "")
+	got := decodeStream(t, w.answer(t, prompt).stdout)
+
+	started, ok := got[0].Payload.(events.Started)
+	if !ok {
+		t.Fatalf("payload = %#v, want Started", got[0].Payload)
+	}
+	if started.Intent != prompt {
+		t.Errorf("intent = %q, want %q", started.Intent, prompt)
+	}
+
+	body, err := os.ReadFile(w.trace)
+	if err != nil {
+		t.Fatalf("read the Trace: %v", err)
+	}
+	if !bytes.Contains(body, []byte(prompt)) {
+		t.Error("the Trace does not hold the prompt it answered")
 	}
 }
 
@@ -270,30 +297,28 @@ func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
 }
 
 // The Trace position is the sink's, assigned at commit. The wire position is
-// the producer's. They are two sequences (docs/adr/0008).
-//
-// What this test can prove from outside the process is limited, and the limit
-// is worth stating: with nothing yet coalescing, one wire Event becomes one
-// Trace record, so a sink that passed the wire position straight through would
-// also satisfy every assertion here. The proof that the sink assigns the
-// position lives in TestTracePositionIsAssignedBySinkNotPassedThrough, which
-// hands the sink wire positions in the nine hundreds and watches the Trace
-// count from one. Once the sink coalesces, the two sequences diverge in a run
-// like this one and the property becomes observable from out here too.
+// the producer's. They are two sequences (docs/adr/0008), and now that the
+// sink coalesces they diverge in a plain run: six payloads go out on the wire
+// and four records reach the Trace, so the Trace sequence stays dense while
+// the wire sequence skips the chunks the fold absorbed.
 func TestTracePositionIsDenseAndIsNotTheWirePosition(t *testing.T) {
 	w := newWorld(t, "")
 	got := decodeStream(t, w.answer(t, "what is this project").stdout)
 
+	var skipped bool
 	for i, e := range got {
 		if want := uint64(i + 1); e.Seq != want {
 			t.Errorf("event %d Seq = %d, want %d — the Trace sequence has a gap", i, e.Seq, want)
 		}
-		if want := uint64(i); e.WireSeq != want {
-			t.Errorf("event %d WireSeq = %d, want %d", i, e.WireSeq, want)
-		}
 		if e.Seq == e.WireSeq {
 			t.Errorf("event %d has one number where the schema has two", i)
 		}
+		if i > 0 && e.WireSeq != got[i-1].WireSeq+1 {
+			skipped = true
+		}
+	}
+	if !skipped {
+		t.Error("the wire sequence never skips — the fold absorbed no chunks")
 	}
 }
 
