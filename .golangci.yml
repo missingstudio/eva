@@ -83,6 +83,8 @@ linters:
             - github.com/missingstudio/eva/events
             - github.com/missingstudio/eva/core
             - github.com/BurntSushi/toml
+            # See the events rule: this reaches the external test package only.
+            - github.com/missingstudio/eva/config
 
         # providers talk to the network, so they sit outside core.
         providers:
