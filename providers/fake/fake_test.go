@@ -219,7 +219,10 @@ func TestTheProviderNamesWhatConfigurationSelectsItBy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if provider.Name() != fake.Name {
-		t.Errorf("Name() = %q, want %q", provider.Name(), fake.Name)
+	// The literal, not the constant. Configuration is a file a person writes,
+	// so the name is a published string: comparing the constant to itself would
+	// hold however it were renamed, and every existing config would break.
+	if provider.Name() != "fake" {
+		t.Errorf("Name() = %q, want %q", provider.Name(), "fake")
 	}
 }
