@@ -770,12 +770,15 @@ Define the `Unit` interface, the event schema, and the trace invariant here, bef
 **Primitive:** context assembly and budget accounting.
 **Exit test:** a multi-turn conversation keeps the correct history, streams the output, and shows the per-turn cost and the cumulative cost. Ctrl-C cancels in mid-stream and does not corrupt the session. `eva -p --json` emits the identical turn as typed events, with no TTY rendering in the output path. The base system prompt has a byte budget, and CI enforces it as a gate (owainlewis/neo's bar is ≤ 2 KiB). Thus context spend is a reviewed, versioned artifact from the first commit.
 
-Four assertions come from the settled schema, and each one fails loudly if the sink is wrong:
+Five assertions come from the settled schema. Each one fails loudly if the sink is wrong. Stage 0 has no tools, so two of them are driven by constructed events rather than by a real turn:
 
 - A `Usage` event on a cached turn reports cache **write** and cache **read** as separate non-zero figures, and `ReasoningTokens` is **absent** rather than `0` on an Anthropic turn.
-- A synthetic unknown event kind survives a round-trip through the JSONL sink with its bytes intact, and the run carries `Degraded`.
-- `kill -9` in mid-stream leaves no assistant message persisted without its tool results, and no partial turn group.
+- A synthetic unknown event kind survives a round-trip through the JSONL sink with its bytes intact, and the run carries `Degraded`. Eva's own loop cannot emit an unknown kind — that arrives from a foreign harness at stage 9c — so this one is driven by constructing the event.
+- `kill -9` in mid-stream leaves the trace file parseable, holding no partial event and no partial turn group.
+- The sink, handed a constructed turn group that contains tool results, appends it as one unit. The rule that no `tool_use` is ever persisted without its `tool_result` is therefore tested before stage 2 builds anything that depends on it.
 - Trace `Seq` is dense and gapless per Session after a run that streamed thousands of text chunks — proving the sink assigned it and coalesced, rather than passing `WireSeq` through.
+
+`Disposition` reaches only `budget_denied` at stage 0, because the other six values need tools. They get encoding coverage here and behavioural coverage at stage 2.
 
 ### Stage 1: Workflow
 
