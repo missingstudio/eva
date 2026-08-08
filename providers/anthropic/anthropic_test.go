@@ -103,6 +103,33 @@ func serve(t *testing.T, replies ...reply) (base string, requests func() int) {
 	}
 }
 
+// records answers every request the same way, and reports the body of the last
+// one. It is for the tests whose subject is what Eva sent rather than what it
+// read back.
+func records(t *testing.T, rep reply) (base string, sent func() string) {
+	t.Helper()
+
+	var mu sync.Mutex
+	var body string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		body = string(raw)
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, rep.body)
+	}))
+	t.Cleanup(srv.Close)
+
+	return srv.URL, func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return body
+	}
+}
+
 // open builds a Provider against the recorded server. The backoff is a few
 // milliseconds, because what these tests measure is which delays are reported,
 // never how long one takes.
@@ -283,6 +310,94 @@ func TestATurnWithNoReportedFiguresEmitsNoUsage(t *testing.T) {
 		if usage, ok := p.(events.Usage); ok {
 			t.Fatalf("the turn reported %+v, and the API reported nothing", usage)
 		}
+	}
+
+	// Silence is not the same as free. A turn whose cost nobody knows says so,
+	// or it is indistinguishable from a turn nobody looked at.
+	degraded := only[events.Degraded](t, got)
+	if len(degraded.Missing) != 1 || !strings.Contains(degraded.Missing[0], "cost") {
+		t.Errorf("the caveat is %v, and it does not say the cost is unreported", degraded.Missing)
+	}
+}
+
+// An answer cut off at the cap is not a complete answer, and nothing else in
+// the stream says so: the frames of a truncated turn are the frames of a whole
+// one until the stop reason arrives.
+func TestAnAnswerCutOffAtTheCapSaysSo(t *testing.T) {
+	base, _ := serve(t, stream(
+		frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":12,"output_tokens":1}}}`),
+		frame("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"as much as would fit"}}`),
+		frame("message_delta", `{"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":8192}}`),
+		frame("message_stop", `{"type":"message_stop"}`),
+	))
+
+	got, err := ask(t, open(t, base))
+	if err != nil {
+		t.Fatalf("the turn failed: %v", err)
+	}
+
+	// The turn still answered, and what it spent is still reported.
+	if want := "as much as would fit"; text(got) != want {
+		t.Errorf("the answer is %q, want %q", text(got), want)
+	}
+	if usage := only[events.Usage](t, got); usage.OutputTokens != 8192 {
+		t.Errorf("usage = %+v, want what the truncated turn cost", usage)
+	}
+
+	degraded := only[events.Degraded](t, got)
+	if len(degraded.Missing) != 1 || !strings.Contains(degraded.Missing[0], "cut off") {
+		t.Errorf("the caveat is %v, and it does not say the answer was cut off", degraded.Missing)
+	}
+}
+
+// A turn that ran to its own end carries no caveat. A flag raised on every
+// turn is a flag nothing reads.
+func TestAWholeAnswerCarriesNoCaveat(t *testing.T) {
+	base, _ := serve(t, answers("all of it"))
+
+	got, err := ask(t, open(t, base))
+	if err != nil {
+		t.Fatalf("the turn failed: %v", err)
+	}
+	for _, p := range got {
+		if degraded, ok := p.(events.Degraded); ok {
+			t.Errorf("a whole turn was degraded by %v", degraded.Missing)
+		}
+	}
+}
+
+// The cap is the caller's, because the caller is what configuration reaches.
+func TestTheAnswerCapIsWhatTheCallerChose(t *testing.T) {
+	base, sent := records(t, answers("capped"))
+
+	p, err := anthropic.New(anthropic.Options{
+		APIKey:    "sk-ant-test",
+		BaseURL:   base,
+		MaxTokens: 1234,
+	})
+	if err != nil {
+		t.Fatalf("open the Provider: %v", err)
+	}
+	if _, err := ask(t, p); err != nil {
+		t.Fatalf("the turn failed: %v", err)
+	}
+
+	if body := sent(); !strings.Contains(body, `"max_tokens":1234`) {
+		t.Errorf("the request does not carry the cap the caller chose:\n%s", body)
+	}
+}
+
+// A caller that chose nothing gets a cap all the same, because the API
+// requires one and has no default of its own.
+func TestACallerThatChoseNoCapGetsTheDefault(t *testing.T) {
+	base, sent := records(t, answers("capped"))
+
+	if _, err := ask(t, open(t, base)); err != nil {
+		t.Fatalf("the turn failed: %v", err)
+	}
+	want := fmt.Sprintf(`"max_tokens":%d`, anthropic.DefaultMaxTokens)
+	if body := sent(); !strings.Contains(body, want) {
+		t.Errorf("the request does not carry %s:\n%s", want, body)
 	}
 }
 
@@ -521,23 +636,30 @@ func TestAStreamThatBreaksReportsWhatWasBilledAndThenTheFailure(t *testing.T) {
 	}
 }
 
+// A turn that failed says so in its claim, and needs no caveat saying its cost
+// is unknown. Only a turn that answered can be the turn nobody could price.
+func TestABrokenStreamIsNotAlsoDegraded(t *testing.T) {
+	base, _ := serve(t, stream(
+		frame("error", `{"type":"error","error":{"type":"overloaded_error","message":"the test asked for this"}}`),
+	))
+
+	got, err := ask(t, open(t, base))
+	if err == nil {
+		t.Fatal("the turn succeeded on a stream that broke")
+	}
+	for _, p := range got {
+		if degraded, ok := p.(events.Degraded); ok {
+			t.Errorf("a failed turn was also degraded by %v", degraded.Missing)
+		}
+	}
+}
+
 // The transcript is what the answer is conditioned on, so it has to reach the
 // API as the API's own shape.
 func TestTheTranscriptIsSentAsMessagesAndASystemPrompt(t *testing.T) {
-	var body string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		body = string(raw)
-		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = io.WriteString(w, stream(
-			frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":12,"output_tokens":1}}}`),
-			frame("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}`),
-			frame("message_stop", `{"type":"message_stop"}`),
-		).body)
-	}))
-	t.Cleanup(srv.Close)
+	base, sent := records(t, answers("anything"))
 
-	p := open(t, srv.URL)
+	p := open(t, base)
 	s, err := p.Stream(context.Background(), providers.Call{
 		Model: "claude-test",
 		Messages: []core.Message{
@@ -557,6 +679,7 @@ func TestTheTranscriptIsSentAsMessagesAndASystemPrompt(t *testing.T) {
 	}
 	_ = s.Close()
 
+	body := sent()
 	for _, want := range []string{
 		`"model":"claude-test"`,
 		`"system":[{"text":"answer briefly","type":"text"}]`,
