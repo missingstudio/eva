@@ -104,8 +104,8 @@ func TestTheEnvironmentNamesTheFileAndTheFlagOverridesIt(t *testing.T) {
 	}
 }
 
-// ADR 0009: a typo must not quietly disable the setting the user meant to
-// change, and the message has to name both the key and the file.
+// A typo must not quietly disable the setting the user meant to change, and
+// the message has to name both the key and the file.
 func TestAnUnknownKeyIsRejectedByName(t *testing.T) {
 	dir := home(t)
 	path := write(t, dir, "[provider]\nnmae = \"anthropic\"\n")
@@ -185,11 +185,11 @@ func TestTheIdentityBecomesTheEnvelopeFields(t *testing.T) {
 	}
 }
 
-// The recording a scripted provider replays is named relative to the file that
+// The recording a fake provider replays is named relative to the file that
 // names it, so a configuration and its script can move together.
 func TestARelativeScriptResolvesAgainstTheConfigFile(t *testing.T) {
 	dir := home(t)
-	path := write(t, dir, "[provider]\nname = \"scripted\"\nscript = \"testdata/script.toml\"\n")
+	path := write(t, dir, "[provider]\nname = \"fake\"\nscript = \"testdata/script.toml\"\n")
 
 	if want := filepath.Join(dir, "testdata", "script.toml"); load(t, path).Provider.Script != want {
 		t.Errorf("script = %q, want %q", load(t, path).Provider.Script, want)
@@ -199,7 +199,7 @@ func TestARelativeScriptResolvesAgainstTheConfigFile(t *testing.T) {
 func TestAnAbsoluteScriptIsLeftAlone(t *testing.T) {
 	dir := home(t)
 	absolute := filepath.Join(dir, "elsewhere", "script.toml")
-	path := write(t, dir, "[provider]\nname = \"scripted\"\nscript = "+quote(absolute)+"\n")
+	path := write(t, dir, "[provider]\nname = \"fake\"\nscript = "+quote(absolute)+"\n")
 
 	if got := load(t, path).Provider.Script; got != absolute {
 		t.Errorf("script = %q, want %q", got, absolute)

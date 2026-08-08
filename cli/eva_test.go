@@ -87,7 +87,7 @@ func newWorld(t *testing.T, extra string) *world {
 		"actor = \"seam-a\"\n"+
 		"actor_kind = \"agent\"\n\n"+
 		"[provider]\n"+
-		"name = \"scripted\"\n"+
+		"name = \"fake\"\n"+
 		"script = %q\n%s",
 		w.trace, script, extra)
 	if err := os.WriteFile(w.config, []byte(body), 0o600); err != nil {

@@ -1,10 +1,10 @@
-// Package scripted replays a recorded model turn from a file.
+// Package fake replays a recorded model turn from a file.
 //
 // It exists so that no test and no demo needs network access or an API key.
 // What it replays is a recording, not a simulation: the file names the chunks
 // and the usage figures, and the Provider hands them back in order. A test
 // that fails therefore fails because Eva changed, not because a model did.
-package scripted
+package fake
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 )
 
 // Name is what configuration selects this Provider by.
-const Name = "scripted"
+const Name = "fake"
 
 // Script is a recorded provider session: one entry per turn, replayed in
 // order.
@@ -37,13 +37,13 @@ type Turn struct {
 	Blocks []Block `toml:"block"`
 	// Usage is what the provider reported for this turn. A figure left out of
 	// the file is left out of the Event: nil means the provider did not report
-	// it, and 0 means none were used (docs/adr/0003).
+	// it, and 0 means none were used.
 	Usage Usage `toml:"usage"`
 }
 
-// Block is one content block: the unit the sink folds on when it commits
-// (docs/adr/0004). Chunks of one block become one Trace record, so a recording
-// that splits an answer across two blocks records two.
+// Block is one content block: the unit the sink folds on when it commits.
+// Chunks of one block become one Trace record, so a recording that splits an
+// answer across two blocks records two.
 //
 // The block index is the position in the file rather than a number the author
 // writes. Two ways to say which block a chunk belongs to is one way for a
@@ -80,24 +80,24 @@ var _ providers.Provider = (*Provider)(nil)
 // test pass for a reason nobody chose.
 func Load(path string) (*Provider, error) {
 	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("scripted: script %s: %w", path, err)
+		return nil, fmt.Errorf("fake: script %s: %w", path, err)
 	}
 
 	var script Script
 	md, err := toml.DecodeFile(path, &script)
 	if err != nil {
-		return nil, fmt.Errorf("scripted: read %s: %w", path, err)
+		return nil, fmt.Errorf("fake: read %s: %w", path, err)
 	}
 	if undecoded := md.Undecoded(); len(undecoded) > 0 {
 		keys := make([]string, 0, len(undecoded))
 		for _, k := range undecoded {
 			keys = append(keys, k.String())
 		}
-		return nil, fmt.Errorf("scripted: %s: unknown key %q (the file has %d key(s) the scripted Provider does not know: %s)",
+		return nil, fmt.Errorf("fake: %s: unknown key %q (the file has %d key(s) the fake Provider does not know: %s)",
 			path, keys[0], len(keys), strings.Join(keys, ", "))
 	}
 	if len(script.Turns) == 0 {
-		return nil, fmt.Errorf("scripted: %s records no turns", path)
+		return nil, fmt.Errorf("fake: %s records no turns", path)
 	}
 	return &Provider{script: script}, nil
 }
@@ -115,7 +115,7 @@ func (p *Provider) Stream(ctx context.Context, _ providers.Call) (providers.Stre
 	defer p.mu.Unlock()
 
 	if p.turn >= len(p.script.Turns) {
-		return nil, fmt.Errorf("scripted: the script records %d turn(s) and this is turn %d", len(p.script.Turns), p.turn+1)
+		return nil, fmt.Errorf("fake: the script records %d turn(s) and this is turn %d", len(p.script.Turns), p.turn+1)
 	}
 	turn := p.script.Turns[p.turn]
 	p.turn++
