@@ -23,6 +23,10 @@ linters:
             - "**/events/**"
           allow:
             - $gostd
+            # The external test package events_test sits in this directory and
+            # imports the package it tests. A package cannot import itself, so
+            # this line reaches test files and nothing else.
+            - github.com/missingstudio/eva/events
 
         # core is pure. It holds the domain and the interfaces the outer layers
         # implement, and it never reaches the outside world.
@@ -37,6 +41,10 @@ linters:
             - "**/core/**"
           allow:
             - github.com/missingstudio/eva/events
+            # context, for the TraceSink interface: a durable append is
+            # cancellable, and an interface that cannot carry cancellation
+            # forces every implementation to invent its own.
+            - context
 
         # config reads files, so it sits outside core.
         config:
@@ -59,6 +67,14 @@ linters:
             - github.com/missingstudio/eva/events
             - github.com/missingstudio/eva/core
             - github.com/anthropics/anthropic-sdk-go
+            # Each implementation is its own package under providers/ and
+            # imports the interface it satisfies. See the events rule for the
+            # same line serving external test packages.
+            - github.com/missingstudio/eva/providers
+            # toml, for the scripted Provider's recorded output. It reads the
+            # recording itself rather than being handed one, because the layer
+            # that reads files is config, and config may not import providers.
+            - github.com/BurntSushi/toml
 
         # trace writes files. core declares the TraceSink interface; this
         # satisfies it.
@@ -70,6 +86,8 @@ linters:
             - $gostd
             - github.com/missingstudio/eva/events
             - github.com/missingstudio/eva/core
+            # See the events rule: this reaches the external test package only.
+            - github.com/missingstudio/eva/trace
 
         # cli is the frontend and the top of the graph. It may import everything
         # below it, plus the terminal libraries — which nothing else may touch.
@@ -84,6 +102,10 @@ linters:
             - github.com/missingstudio/eva/config
             - github.com/missingstudio/eva/providers
             - github.com/missingstudio/eva/trace
+            # The eva command lives inside this module, so the frontend
+            # imports itself. "Nothing imports a frontend" is about the layers
+            # below it, and none of them list this path.
+            - github.com/missingstudio/eva/cli
             - charm.land/bubbletea
             - charm.land/bubbles
             - charm.land/lipgloss
