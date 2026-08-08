@@ -183,3 +183,153 @@ func TestARejectedGroupLeavesNoTraceAndNoGap(t *testing.T) {
 		t.Errorf("Seq = %d after a rejected group, want 1 — the rejected group burned a position", committed[0].Seq)
 	}
 }
+
+// ADR 0004: consecutive chunks of one content block become a single record, so
+// a Trace record is a unit of meaning rather than a token.
+func TestConsecutiveChunksOfOneBlockFoldIntoOneRecord(t *testing.T) {
+	sink, path := open(t)
+
+	committed, err := sink.Append(context.Background(), []events.Event{
+		wired("sess_1", 0, events.Started{}),
+		wired("sess_1", 1, events.Text{Block: 0, Chunk: "Eva is "}),
+		wired("sess_1", 2, events.Text{Block: 0, Chunk: "a software "}),
+		wired("sess_1", 3, events.Text{Block: 0, Chunk: "factory."}),
+		wired("sess_1", 4, events.Usage{InputTokens: 10}),
+	})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	if len(committed) != 3 {
+		t.Fatalf("committed %d records, want 3 — the chunks did not fold", len(committed))
+	}
+	text, ok := committed[1].Payload.(events.Text)
+	if !ok {
+		t.Fatalf("payload = %#v, want Text", committed[1].Payload)
+	}
+	if want := "Eva is a software factory."; text.Chunk != want {
+		t.Errorf("chunk = %q, want %q", text.Chunk, want)
+	}
+
+	// The merged record keeps the first chunk's identity and wire position:
+	// what was sent began there, and the timestamp is what time-to-first-token
+	// is measured from.
+	if committed[1].WireSeq != 1 {
+		t.Errorf("WireSeq = %d, want the first chunk's 1", committed[1].WireSeq)
+	}
+	if committed[1].ID != "evt_sess_1_1" {
+		t.Errorf("ID = %q, want the first chunk's", committed[1].ID)
+	}
+
+	// The Trace position stays dense over what was actually written.
+	for i, e := range committed {
+		if want := uint64(i + 1); e.Seq != want {
+			t.Errorf("committed[%d].Seq = %d, want %d", i, e.Seq, want)
+		}
+	}
+	if stored := readTrace(t, path); len(stored) != 3 {
+		t.Fatalf("the Trace holds %d records, want 3", len(stored))
+	}
+}
+
+// The fold merges what a reader would not have to tell apart, and nothing
+// else. Everything here is a reason two adjacent chunks stay two records.
+func TestTheFoldNeverMergesRecordsAReaderMustTellApart(t *testing.T) {
+	other := events.RunID("run_2")
+
+	cases := []struct {
+		name   string
+		second func(events.Event) events.Event
+	}{
+		{"another content block", func(e events.Event) events.Event {
+			e.Payload = events.Text{Block: 1, Chunk: "b"}
+			return e
+		}},
+		{"another session", func(e events.Event) events.Event {
+			e.Session = "sess_2"
+			return e
+		}},
+		{"another run", func(e events.Event) events.Event {
+			e.Run = "run_9"
+			return e
+		}},
+		{"another tenant", func(e events.Event) events.Event {
+			e.Tenant = "tenant_2"
+			return e
+		}},
+		{"another actor", func(e events.Event) events.Event {
+			e.Actor = events.Identity{ID: "someone-else", Kind: events.ActorHuman}
+			return e
+		}},
+		{"another schema version", func(e events.Event) events.Event {
+			e.Version = events.SchemaVersion + 1
+			return e
+		}},
+		{"a parent run", func(e events.Event) events.Event {
+			e.Parent = &other
+			return e
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sink, _ := open(t)
+
+			first := wired("sess_1", 0, events.Text{Block: 0, Chunk: "a"})
+			second := c.second(wired("sess_1", 1, events.Text{Block: 0, Chunk: "b"}))
+
+			committed, err := sink.Append(context.Background(), []events.Event{first, second})
+			if err != nil {
+				t.Fatalf("append: %v", err)
+			}
+			if len(committed) != 2 {
+				t.Fatalf("committed %d records, want 2 — the fold merged across %s", len(committed), c.name)
+			}
+		})
+	}
+}
+
+// A chunk between two chunks of another block is a boundary, not something to
+// reorder around. The fold is consecutive-only, so it can never move a record.
+func TestTheFoldIsConsecutiveOnlyAndNeverReorders(t *testing.T) {
+	sink, _ := open(t)
+
+	committed, err := sink.Append(context.Background(), []events.Event{
+		wired("sess_1", 0, events.Text{Block: 0, Chunk: "a"}),
+		wired("sess_1", 1, events.Text{Block: 1, Chunk: "x"}),
+		wired("sess_1", 2, events.Text{Block: 0, Chunk: "b"}),
+	})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if len(committed) != 3 {
+		t.Fatalf("committed %d records, want 3", len(committed))
+	}
+
+	var got []string
+	for _, e := range committed {
+		got = append(got, e.Payload.(events.Text).Chunk)
+	}
+	if fmt.Sprint(got) != fmt.Sprint([]string{"a", "x", "b"}) {
+		t.Errorf("chunks = %v, want [a x b]", got)
+	}
+}
+
+// A group that folds to nothing writeable still must not burn a position, and
+// a malformed chunk must not disappear into the chunk before it.
+func TestTheFoldDoesNotAbsorbAMalformedChunk(t *testing.T) {
+	sink, path := open(t)
+
+	unversioned := wired("sess_1", 1, events.Text{Block: 0, Chunk: "bad"})
+	unversioned.Version = 0
+
+	if _, err := sink.Append(context.Background(), []events.Event{
+		wired("sess_1", 0, events.Text{Block: 0, Chunk: "good"}),
+		unversioned,
+	}); err == nil {
+		t.Fatal("append accepted a chunk with no schema version, want an error")
+	}
+	if got := readTrace(t, path); len(got) != 0 {
+		t.Fatalf("the Trace holds %d records after a rejected group, want 0", len(got))
+	}
+}
