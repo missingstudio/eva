@@ -224,6 +224,23 @@ func TestALeadingTildeExpands(t *testing.T) {
 	}
 }
 
+// A network provider can be pointed at a gateway, a proxy, or a local server.
+// Empty is the public API, which is why the default is nothing rather than a
+// URL the file would have to repeat.
+func TestABaseURLIsReadAndIsEmptyByDefault(t *testing.T) {
+	dir := home(t)
+
+	if got := load(t, write(t, dir, "")).Provider.BaseURL; got != "" {
+		t.Errorf("base_url = %q, want nothing", got)
+	}
+
+	const gateway = "http://127.0.0.1:8080"
+	path := write(t, dir, "[provider]\nbase_url = "+quote(gateway)+"\n")
+	if got := load(t, path).Provider.BaseURL; got != gateway {
+		t.Errorf("base_url = %q, want %q", got, gateway)
+	}
+}
+
 // The credential enters at the environment boundary and nowhere else. There is
 // no configuration key that holds one.
 func TestTheAPIKeyComesFromTheEnvironmentAndNotTheFile(t *testing.T) {

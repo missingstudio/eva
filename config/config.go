@@ -68,6 +68,9 @@ type ProviderConfig struct {
 	Name string `toml:"name"`
 	// APIKeyEnv names the environment variable the credential is read from.
 	APIKeyEnv string `toml:"api_key_env"`
+	// BaseURL points a network provider somewhere other than its public API:
+	// a gateway, a proxy, or a local server. Empty is the public API.
+	BaseURL string `toml:"base_url"`
 	// Script is the recorded output the fake provider replays.
 	Script string `toml:"script"`
 }
