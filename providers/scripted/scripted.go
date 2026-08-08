@@ -30,16 +30,27 @@ type Script struct {
 
 // Turn is one recorded answer.
 type Turn struct {
-	// Block is the content block the chunks belong to, and what the sink folds
-	// on when it commits (docs/adr/0004). Chunks of one block become one Trace
-	// record; a recording that splits an answer across two blocks records two.
-	Block int `toml:"block"`
-	// Chunks is the answer, split the way a stream would deliver it.
-	Chunks []string `toml:"chunks"`
+	// Blocks are the content blocks of the answer, replayed in the order the
+	// file lists them. A real turn is several — text, then a tool call, then
+	// more text — and a turn is where they belong, because a provider call
+	// returns a turn rather than a block.
+	Blocks []Block `toml:"block"`
 	// Usage is what the provider reported for this turn. A figure left out of
 	// the file is left out of the Event: nil means the provider did not report
 	// it, and 0 means none were used (docs/adr/0003).
 	Usage Usage `toml:"usage"`
+}
+
+// Block is one content block: the unit the sink folds on when it commits
+// (docs/adr/0004). Chunks of one block become one Trace record, so a recording
+// that splits an answer across two blocks records two.
+//
+// The block index is the position in the file rather than a number the author
+// writes. Two ways to say which block a chunk belongs to is one way for a
+// recording to contradict itself.
+type Block struct {
+	// Chunks is the block, split the way a stream would deliver it.
+	Chunks []string `toml:"chunks"`
 }
 
 // Usage mirrors the normalized Usage payload, with the same nullability.
@@ -109,9 +120,11 @@ func (p *Provider) Stream(ctx context.Context, _ providers.Call) (providers.Stre
 	turn := p.script.Turns[p.turn]
 	p.turn++
 
-	payloads := make([]events.Payload, 0, len(turn.Chunks)+1)
-	for _, chunk := range turn.Chunks {
-		payloads = append(payloads, events.Text{Block: turn.Block, Chunk: chunk})
+	var payloads []events.Payload
+	for block, content := range turn.Blocks {
+		for _, chunk := range content.Chunks {
+			payloads = append(payloads, events.Text{Block: block, Chunk: chunk})
+		}
 	}
 	payloads = append(payloads, events.Usage{
 		InputTokens:      turn.Usage.InputTokens,
