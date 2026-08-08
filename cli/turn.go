@@ -17,7 +17,7 @@ import (
 //
 // A Turn is not a Run. A Run is one execution of a Unit against a Session, and
 // it is the Run the Recorder stamps; a Turn is the Unit being executed. The
-// words are close and CONTEXT.md keeps them apart on purpose.
+// words are close and the glossary keeps them apart on purpose.
 //
 // What a Turn does not hold is as telling as what it does. It has no clock, no
 // identifier source, no output stream, and no way to write to the Session —
@@ -71,10 +71,10 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 // stream replays the provider's turn into the Trace.
 //
 // Payloads are recorded a content block at a time rather than one at a time,
-// because the group is what the sink folds within (docs/adr/0004). A block is
-// also the largest batch that is safe to hold: everything already recorded
-// survives the process dying, so buffering a whole turn would trade the
-// property invariant 1 rests on for a smaller file.
+// because the group is what the sink folds within. A block is also the largest
+// batch that is safe to hold: everything already recorded survives the process
+// dying, so buffering a whole turn would trade the property invariant 1 rests
+// on for a smaller file.
 func (t *Turn) stream(ctx context.Context) error {
 	stream, err := t.Provider.Stream(ctx, providers.Call{
 		Model:    t.Model,

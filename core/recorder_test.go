@@ -153,7 +153,7 @@ func TestARecorderReportsWhatItIsMissing(t *testing.T) {
 }
 
 // Every Event carries the whole envelope, so a projection can fold or filter
-// without replaying the stream (docs/adr/0001).
+// without replaying the stream.
 func TestEveryRecordedEventCarriesTheWholeEnvelope(t *testing.T) {
 	s := &sink{}
 	rec := recorder(t, options(s))
@@ -203,9 +203,8 @@ func TestTheRecorderDerivesKindFromThePayload(t *testing.T) {
 	}
 }
 
-// ADR 0008: the wire position counts what was sent, and the Trace position
-// counts what was durably committed. The Recorder assigns the first and never
-// the second.
+// The wire position counts what was sent, and the Trace position counts what
+// was durably committed. The Recorder assigns the first and never the second.
 func TestTheWirePositionCountsUpAndTheTracePositionIsLeftToTheSink(t *testing.T) {
 	s := &sink{}
 	rec := recorder(t, options(s))
@@ -361,7 +360,7 @@ func TestAForgedPayloadNeverReachesTheSink(t *testing.T) {
 }
 
 // forged borrows isPayload by embedding, which is the one hole the compiler
-// leaves open in the sealed set (docs/adr/0005).
+// leaves open in the sealed set.
 type forged struct{ events.Payload }
 
 // A cancelled context stops the commit, and the sink is the thing that sees it.

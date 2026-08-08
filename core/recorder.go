@@ -70,7 +70,7 @@ type RecorderOptions struct {
 // every Event in it is stored or none is. That is what will make "no tool_use
 // is ever persisted without its tool_result" a property of the writer rather
 // than a rule contributors are expected to remember, and it is what gives the
-// sink's fold something to fold within (docs/adr/0004).
+// sink's fold something to fold within.
 //
 // A Recorder belongs to one Run. It is safe for concurrent use, because stage
 // 2 runs parallel tool groups and a wire counter that is only safe by

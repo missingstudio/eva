@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// ADR 0005: the closed kind set is a guarantee, not a review habit. The only
-// way to assert that is to compile a package that tries to break it, so the
-// test writes one — a source file that fails to compile cannot live in this
+// The closed kind set is a guarantee, not a review habit. The only way to
+// assert that is to compile a package that tries to break it, so the test
+// writes one — a source file that fails to compile cannot live in this
 // module — and builds it.
 func TestAPayloadCannotBeDeclaredOutsideThisModule(t *testing.T) {
 	out, err := buildOutside(t, `package main
