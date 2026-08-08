@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/missingstudio/eva/core"
 	"github.com/missingstudio/eva/events"
 	"github.com/missingstudio/eva/trace"
 )
@@ -391,6 +392,170 @@ func TestAGroupCarryingToolResultsIsWrittenAsOneUnit(t *testing.T) {
 	}
 	if calls != results {
 		t.Errorf("the Trace holds %d tool calls and %d results", calls, results)
+	}
+}
+
+// An Event kind this build does not recognise reaches the Trace with the bytes
+// it arrived with. Dropping it would produce a Trace that is structurally
+// valid and quietly wrong, and the Trace is the only instrument the project
+// has.
+//
+// The path here is the one a foreign Harness takes: a record arrives as bytes,
+// is decoded into an Event this build cannot name, and is committed. Eva's own
+// loop cannot produce one, so the record is written out by hand — which is the
+// only way to drive this at stage 0.
+//
+// What is stored is the preserving envelope: the record is kept under the
+// unknown kind, holding the kind it arrived as and its payload untouched. A
+// later build that does know quantum_flux can read both back out of a Trace
+// written by this one.
+func TestAnUnrecognisedKindReachesTheTraceWithItsBytes(t *testing.T) {
+	sink, path := open(t)
+	payload := `{"nested":{"b":[1,2]},"a":1}`
+	arrived := `{"id":"evt_9","seq":0,"wire_seq":4,"at":{"wall":"2026-08-08T12:00:00Z","mono_ns":1},` +
+		`"version":1,"kind":"quantum_flux","tenant":"tenant_1","actor":{"id":"agent","kind":"agent"},` +
+		`"run":"run_1","session":"sess_1","parent":null,"payload":` + payload + `}`
+
+	var foreign events.Event
+	if err := json.Unmarshal([]byte(arrived), &foreign); err != nil {
+		t.Fatalf("a foreign record did not decode: %v", err)
+	}
+
+	committed, err := sink.Append(context.Background(), []events.Event{foreign})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if len(committed) != 1 {
+		t.Fatalf("committed %d records, want 1 — the unrecognised record was dropped", len(committed))
+	}
+
+	stored := readTrace(t, path)
+	if len(stored) != 1 {
+		t.Fatalf("the Trace holds %d records, want 1", len(stored))
+	}
+	if stored[0].Seq != 1 {
+		t.Errorf("Seq = %d, want 1 — an unrecognised record takes a Trace position like any other", stored[0].Seq)
+	}
+	if stored[0].Kind != events.KindUnknown {
+		t.Errorf("kind = %q, want %q", stored[0].Kind, events.KindUnknown)
+	}
+
+	unknown, ok := stored[0].Payload.(events.Unknown)
+	if !ok {
+		t.Fatalf("payload = %#v, want events.Unknown", stored[0].Payload)
+	}
+	if unknown.Kind != "quantum_flux" {
+		t.Errorf("preserved kind = %q, want %q", unknown.Kind, "quantum_flux")
+	}
+	if string(unknown.Raw) != payload {
+		t.Errorf("preserved bytes = %s, want %s", unknown.Raw, payload)
+	}
+
+	// The envelope the record arrived under is the envelope it is stored
+	// under. A sink that re-attributed a foreign record would make the Trace
+	// disagree with the Harness it came from.
+	if stored[0].Run != "run_1" || stored[0].Session != "sess_1" || stored[0].WireSeq != 4 {
+		t.Errorf("stored envelope = %+v, want the one it arrived with", stored[0])
+	}
+}
+
+// The stage-0 assertion in full: an unrecognised kind survives the JSONL sink
+// with its bytes intact, and the Run that committed it says so when it closes.
+//
+// The two halves are asserted together and against a real Trace file, because
+// separately they are two facts about two packages and neither is the promise:
+// the promise is that a Run cannot end up claiming a clean finish while its
+// Trace holds a record nobody understood.
+func TestARunThatCommittedAnUnrecognisedKindIsDegradedInTheTrace(t *testing.T) {
+	sink, path := open(t)
+	ctx := context.Background()
+
+	var n int
+	rec, err := core.NewRecorder(core.RecorderOptions{
+		Sink:    sink,
+		Tenant:  "tenant_1",
+		Actor:   events.Identity{ID: "agent", Kind: events.ActorAgent},
+		Run:     "run_1",
+		Session: "sess_1",
+		Now: func() events.Timestamp {
+			n++
+			return events.Timestamp{Wall: time.Unix(int64(n), 0).UTC(), Mono: int64(n)}
+		},
+		NewID: func() events.EventID {
+			n++
+			return events.EventID(fmt.Sprintf("evt_%d", n))
+		},
+	})
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+
+	if err := rec.Record(ctx, events.Started{Intent: "answer"}); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	// An unrecognised record does not fail the Run: it is committed like any
+	// other, and the Run goes on to claim what it did.
+	if err := rec.Record(ctx, events.Unknown{Kind: "quantum_flux", Raw: json.RawMessage(`{"a":1}`)}); err != nil {
+		t.Fatalf("an unrecognised kind failed the Run: %v", err)
+	}
+	if err := rec.Finish(ctx, events.Claim{Result: events.ResultDone, Summary: "answered"}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	stored := readTrace(t, path)
+	want := []events.Kind{events.KindStarted, events.KindUnknown, events.KindDegraded, events.KindFinished}
+	if fmt.Sprint(kinds(stored)) != fmt.Sprint(want) {
+		t.Fatalf("the Trace holds %v, want %v", kinds(stored), want)
+	}
+
+	if got := stored[1].Payload.(events.Unknown); got.Kind != "quantum_flux" || string(got.Raw) != `{"a":1}` {
+		t.Errorf("the preserved record = %#v, want its kind and bytes", got)
+	}
+
+	degraded, ok := stored[2].Payload.(events.Degraded)
+	if !ok {
+		t.Fatalf("payload = %#v, want events.Degraded", stored[2].Payload)
+	}
+	wantMissing := []string{`unknown event kind "quantum_flux"`}
+	if fmt.Sprint(degraded.Missing) != fmt.Sprint(wantMissing) {
+		t.Errorf("Missing = %v, want %v", degraded.Missing, wantMissing)
+	}
+
+	// Degrading a Run does not fail it. The claim in the Trace is the one the
+	// Unit made, and the caveat sits beside it rather than replacing it.
+	finished := stored[3].Payload.(events.Finished)
+	if finished.Claim.Result != events.ResultDone || finished.Claim.Summary != "answered" {
+		t.Errorf("claim = %+v, want the Run's own", finished.Claim)
+	}
+}
+
+// Degraded is absent when the Run is clean, so its presence in a Trace is on
+// its own the flag a gate reads.
+func TestACleanRunLeavesNoDegradedRecordInTheTrace(t *testing.T) {
+	sink, path := open(t)
+	ctx := context.Background()
+
+	rec, err := core.NewRecorder(core.RecorderOptions{
+		Sink:    sink,
+		Run:     "run_1",
+		Session: "sess_1",
+		Now:     func() events.Timestamp { return events.Timestamp{Wall: time.Unix(1, 0).UTC(), Mono: 1} },
+		NewID:   func() events.EventID { return "evt_1" },
+	})
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+
+	if err := rec.Record(ctx, events.Text{Chunk: "hello"}); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if err := rec.Finish(ctx, events.Claim{Result: events.ResultDone}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	want := []events.Kind{events.KindText, events.KindFinished}
+	if got := kinds(readTrace(t, path)); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("the Trace holds %v, want %v", got, want)
 	}
 }
 

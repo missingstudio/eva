@@ -61,8 +61,10 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 
 	// The claim is committed whichever way the turn went. A Run that failed
 	// and left no Finished record is a Run a reader cannot tell from one that
-	// is still going.
-	if err := t.Recorder.Record(ctx, events.Finished{Claim: outcome.Claim()}); err != nil {
+	// is still going. The Recorder closes the Run rather than the Turn writing
+	// the record, because anything the Run could not understand qualifies the
+	// claim and has to be committed with it.
+	if err := t.Recorder.Finish(ctx, outcome.Claim()); err != nil {
 		return outcome, err
 	}
 	return outcome, streamErr

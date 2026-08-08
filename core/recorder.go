@@ -81,11 +81,18 @@ type Recorder struct {
 	newID func() events.EventID
 	subs  []Subscriber
 
-	// mu covers the emitter's wire counter, the commit, and the publish, so
-	// that two goroutines cannot interleave the Events of two groups and no
-	// Subscriber sees the Trace out of the order the Trace holds.
+	// mu covers the emitter's wire counter, the commit, the publish, and what
+	// the Run did not understand, so that two goroutines cannot interleave the
+	// Events of two groups and no Subscriber sees the Trace out of the order
+	// the Trace holds.
 	mu  sync.Mutex
 	emt emitter
+	// unknownKinds names each Event kind this build does not recognise that
+	// the Run has committed, once, in the order it met them. It holds the
+	// kinds themselves rather than the sentences they become, so that what is
+	// compared for repeats is the kind and not its wording. Finish is what
+	// turns it into the Run's Degraded record.
+	unknownKinds []string
 }
 
 // NewRecorder builds a Recorder, or reports what the options are missing.
@@ -148,6 +155,54 @@ func (r *Recorder) Record(ctx context.Context, payloads ...events.Payload) error
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	return r.commit(ctx, payloads...)
+}
+
+// Finish closes the Run: the claim it makes about itself, and the caveat on
+// that claim, as one group.
+//
+// The caveat is not the caller's to remember. A Run that committed a record
+// nobody understood and then claimed a clean finish would leave a Trace that
+// is structurally valid and quietly wrong, and the Trace is the only
+// instrument the project has. The Recorder is the one path an Event takes to
+// the Trace and therefore the only thing that sees all of them, so it composes
+// the two rather than trusting each Unit to.
+//
+// This is the one group the Recorder decides the boundary of. Everywhere else
+// the caller decides what commits together, and the caveat is the exception
+// because it belongs to no producer: it is a property of what the Trace holds.
+//
+// Degraded is omitted when the Run is clean, because its presence is the flag:
+// a gate reads whether the record is there rather than reading a boolean
+// inside it.
+func (r *Recorder) Finish(ctx context.Context, claim events.Claim) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	finished := events.Finished{Claim: claim}
+	if len(r.unknownKinds) == 0 {
+		return r.commit(ctx, finished)
+	}
+
+	// The caveat is first in the group, because Finished is what closes the
+	// Run and a record behind it would be one the close does not cover.
+	//
+	// An entry says what sort of thing was not understood, rather than naming
+	// the kind alone: this list is read by someone working out why a Run was
+	// excluded, and "quantum_flux" on its own does not say whether a record or
+	// a figure is meant.
+	missing := make([]string, len(r.unknownKinds))
+	for i, kind := range r.unknownKinds {
+		missing[i] = fmt.Sprintf("unknown event kind %q", kind)
+	}
+	return r.commit(ctx, events.Degraded{Missing: missing}, finished)
+}
+
+// commit is the body of Record, and runs with mu held. Finish needs to read
+// what the Run did not understand and commit in one step, which a second call
+// to Record could not do: the two would be separated by anything another
+// goroutine committed in between.
+func (r *Recorder) commit(ctx context.Context, payloads ...events.Payload) error {
 	group := make([]events.Event, len(payloads))
 	for i, payload := range payloads {
 		if payload == nil {
@@ -164,6 +219,14 @@ func (r *Recorder) Record(ctx context.Context, payloads ...events.Payload) error
 		return err
 	}
 
+	// What the Run did not understand is noted before anything is published,
+	// because it is a property of what the Trace holds. A Subscriber that
+	// breaks half way through stops the publishing; it does not unsee a record
+	// the Trace already has.
+	for _, e := range committed {
+		r.noteUnknown(e)
+	}
+
 	for _, e := range committed {
 		for _, sub := range r.subs {
 			if err := sub.Committed(ctx, e); err != nil {
@@ -172,4 +235,24 @@ func (r *Recorder) Record(ctx context.Context, payloads ...events.Payload) error
 		}
 	}
 	return nil
+}
+
+// noteUnknown collects the kind of a committed Event this build does not
+// recognise.
+//
+// It reads what the sink returned rather than what the producer sent, because
+// what degrades a Run is what its Trace holds. Each kind is named once however
+// many records of it arrive: the list says what was not understood, not how
+// often.
+func (r *Recorder) noteUnknown(e events.Event) {
+	unknown, ok := e.Payload.(events.Unknown)
+	if !ok {
+		return
+	}
+	for _, already := range r.unknownKinds {
+		if already == unknown.Kind {
+			return
+		}
+	}
+	r.unknownKinds = append(r.unknownKinds, unknown.Kind)
 }
