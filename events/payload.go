@@ -83,8 +83,8 @@ type Capabilities struct {
 	Resume bool `json:"resume"`
 	// CostReport emits real token and dollar usage.
 	CostReport bool `json:"cost_report"`
-	// StructuredEvents means a machine-readable stream, rather than output an
-	// adapter has to scrape.
+	// StructuredEvents means every step is recorded as a typed Event, rather
+	// than as output an adapter has to scrape.
 	StructuredEvents bool `json:"structured_events"`
 	// ToolPolicy honours an external allowlist.
 	ToolPolicy bool `json:"tool_policy"`

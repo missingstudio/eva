@@ -1,10 +1,10 @@
 # Eva
 
-**Status: draft.** This document describes what Eva will be, not what it is. No code exists yet and stage 0 has not started. Verification basis: none — there is no implementation to verify against. The first stage to ship sets this to its commit.
+**Status: draft, except for stage 0.** This document describes what Eva will be, not what it is: stages 1 to 19 are unbuilt. Stage 0 is built and its exit test passes, with one clause superseded — see that stage's section. Verification basis: the tip of `main` on 2026-08-09. Each later stage sets this to its own commit as it ships.
 
 **Stage 0's event schema is settled and is no longer a draft.** It was resolved in a design session on 2026-08-08 and now lives in `docs/adr/0001`–`0008`, which own the reasoning. Part 2 below carries the resulting shape only. Where the two ever disagree, the ADRs win.
 
-Two later decisions also override this document: `docs/adr/0009` fixes config and profiles as TOML, and `docs/adr/0010` fixes the module layout, which differs from the tree in the final-repo-shape section below.
+Three later decisions also override this document: `docs/adr/0009` fixes config and profiles as TOML, `docs/adr/0010` fixes the module layout, which differs from the tree in the final-repo-shape section below, and `docs/adr/0021` removes the one-shot and machine-readable command surfaces.
 
 One document. It goes from a single model call to an autonomous, multi-tenant software factory. It gives the frame, the primitive, the target architecture, the production platform, and the staged build path that connects them.
 
@@ -767,29 +767,27 @@ providers/    MODULE. Provider interface + anthropic impl, streaming, retry w/
 config/       MODULE, beside core because it reads files. ~/.eva/config.toml,
               profiles, key resolution, model selection. TOML, decoded strictly
               (docs/adr/0009).
-cli/          MODULE, the frontend and the top of the graph. repl, one-shot
-              mode, print/JSON mode, slash command dispatch, and render:
-              streaming markdown to TTY, syntax highlight, spinner, cost line.
-              A pure consumer of events/; the core never renders. Nothing
-              imports cli.
+cli/          MODULE, the frontend and the top of the graph. The console, slash
+              command dispatch, and render: streaming markdown to TTY, syntax
+              highlight, live area, cost line. A pure consumer of events/; the
+              core never renders. Nothing imports cli.
 ```
 
 ```
 eva > explain what this project does
   ← streamed markdown answer; cost line: $0.003 · 1.2k in / 340 out
-eva -p "summarize this diff" --json
-  ← the same turn as typed events on stdout, unrendered — proves the render
-    boundary exists; CI and stage 1 consume this
 eva > /model  /cost  /clear  /help
   ← switch model mid-session; per-turn and cumulative spend
 ```
 
-**In:** prompt text, piped stdin, config, and an API key. **Out:** answers and typed events. There is no file access and there are no tools yet.
+**In:** typed prompts, config, and an API key. **Out:** answers on screen and typed events in the Trace. There is no file access and there are no tools yet.
 
 Define the `Unit` interface, the event schema, and the trace invariant here, before the model client. Include `Tenant` and `Actor` on `Spec` — and on the `Event` envelope, for the same reason. If you add tenancy later, you touch every table, query, cache key, object path, and trace record.
 
 **Primitive:** context assembly and budget accounting.
-**Exit test:** a multi-turn conversation keeps the correct history, streams the output, and shows the per-turn cost and the cumulative cost. Ctrl-C cancels in mid-stream and does not corrupt the session. `eva -p --json` emits the identical turn as typed events, with no TTY rendering in the output path. The base system prompt has a byte budget, and CI enforces it as a gate (owainlewis/neo's bar is ≤ 2 KiB). Thus context spend is a reviewed, versioned artifact from the first commit.
+**Exit test:** a multi-turn conversation keeps the correct history, streams the output, and shows the per-turn cost and the cumulative cost. Ctrl-C cancels in mid-stream and does not corrupt the session. The base system prompt has a byte budget, and CI enforces it as a gate (owainlewis/neo's bar is ≤ 2 KiB). Thus context spend is a reviewed, versioned artifact from the first commit.
+
+This exit test had one more clause: `eva -p --json` emitting the identical turn as typed events with no TTY rendering. The one-shot and machine-readable surfaces were removed — `eva` is a console, and `--config` and `help` are the whole of what a process is started with — so the clause is gone with them. The Trace carries what it was protecting: the same typed events, by the same schema and sink, committed before anything is shown, so a reader that would have parsed stdout reads the file. The render boundary is unchanged and still enforced by the linter, and the process-level tests still drive a real process, typing keys into the console and asserting on the Trace. Two assertions were lost with the surface: colour downsampling per terminal, which was read off stdout and cannot be read off a screen redrawn in place, and the non-zero exit of a failed turn, which a console does not have because it stays open.
 
 Five assertions come from the settled schema. Each one fails loudly if the sink is wrong. Stage 0 has no tools, so two of them are driven by constructed events rather than by a real turn:
 

@@ -34,23 +34,29 @@ const (
 // usage is the command surface a shell sees. The console answers /help, which
 // is a different surface: these are the flags a process is started with, and
 // those are the commands a Session is steered by.
-const usage = `eva — an autonomous, multi-tenant, AI-native software factory.
+//
+// The figures are read from config rather than written out here. A help text
+// that states a default in its own words is a help text that goes stale in the
+// commit that changes one, and nothing fails when it does.
+var usage = fmt.Sprintf(`eva — an autonomous, multi-tenant, AI-native software factory.
 
 USAGE:
-  eva                          Interactive console
-  eva help                     Show this help
+  eva                    Interactive console
+  eva help               Show this help
 
 FLAGS:
-  --config <path>              Configuration file
-                               (default $EVA_CONFIG, then ~/.eva/config.toml)
+  --config <path>        Configuration file
 
-In the console, enter sends a prompt, ctrl+c interrupts the turn in flight,
-and ctrl+d leaves. A line that starts with a slash is a command the console
-answers itself, and /help lists them.
+CONFIG (env):
+  %-20s   required
+  %-20s   default: ~/.eva/config.toml
+  %-20s   default: the user's home directory
 
-Configuration is a file rather than a pile of flags. An API key is read from
-the environment — by default $ANTHROPIC_API_KEY — and never from that file.
-`
+The model is the config file's to choose (default: %s).
+
+In the console: enter sends, ctrl+c interrupts the turn in flight, ctrl+d
+leaves, and /help lists the commands.
+`, config.DefaultAPIKeyEnv, config.EnvConfig, config.EnvHome, config.DefaultModel)
 
 // Main runs eva and returns the process exit code.
 //
