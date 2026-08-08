@@ -2,6 +2,7 @@ package events_test
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -46,33 +47,61 @@ func roundTrip(t *testing.T, in events.Event) events.Event {
 	return out
 }
 
-func TestEveryKindRoundTrips(t *testing.T) {
+// samples is one populated payload per Kind. It is checked against the
+// registry rather than trusted, so a kind added without a sample fails here
+// instead of going untested.
+func samples() map[events.Kind]events.Payload {
 	reasoning := uint64(0)
 	usd := 0.25
-	cases := []struct {
-		kind    events.Kind
-		payload events.Payload
-	}{
-		{events.KindStarted, events.Started{Capabilities: events.Capabilities{StructuredEvents: true, CostReport: true}}},
-		{events.KindText, events.Text{Block: 2, Chunk: "hello"}},
-		{events.KindToolCall, events.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"go.mod"}`), Redacted: true}},
-		{events.KindToolResult, events.ToolResult{Name: "read", Disposition: events.DispositionBudgetDenied, Bytes: 12}},
-		{events.KindUsage, events.Usage{InputTokens: 1200, OutputTokens: 340, ReasoningTokens: &reasoning, USD: &usd}},
-		{events.KindRetry, events.Retry{Attempt: 2, Max: 5, DelayMS: 750, ErrorClass: events.ErrorRateLimit}},
-		{events.KindEdit, events.Edit{Path: "cli/main.go", Hunks: 3}},
-		{events.KindNeedsHuman, events.NeedsHuman{Question: "merge?", Resume: events.Cursor{Session: "sess_1", Seq: 7}}},
-		{events.KindFinished, events.Finished{Claim: events.Claim{Result: events.ResultDone, Summary: "answered"}}},
-		{events.KindDegraded, events.Degraded{Missing: []string{"usage"}}},
-		{events.KindUnknown, events.Unknown{Kind: "quantum_flux", Raw: json.RawMessage(`{"a":1}`)}},
+	return map[events.Kind]events.Payload{
+		events.KindStarted:    events.Started{Intent: "what is this project", Capabilities: events.Capabilities{StructuredEvents: true, CostReport: true}},
+		events.KindText:       events.Text{Block: 2, Chunk: "hello"},
+		events.KindToolCall:   events.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"go.mod"}`), Redacted: true},
+		events.KindToolResult: events.ToolResult{Name: "read", Disposition: events.DispositionBudgetDenied, Bytes: 12},
+		events.KindUsage:      events.Usage{InputTokens: 1200, OutputTokens: 340, ReasoningTokens: &reasoning, USD: &usd},
+		events.KindRetry:      events.Retry{Attempt: 2, Max: 5, DelayMS: 750, ErrorClass: events.ErrorRateLimit},
+		events.KindEdit:       events.Edit{Path: "cli/main.go", Hunks: 3},
+		events.KindNeedsHuman: events.NeedsHuman{Question: "merge?", Resume: events.Cursor{Session: "sess_1", Seq: 7}},
+		events.KindFinished:   events.Finished{Claim: events.Claim{Result: events.ResultDone, Summary: "answered"}},
+		events.KindDegraded:   events.Degraded{Missing: []string{"usage"}},
+		events.KindUnknown:    events.Unknown{Kind: "quantum_flux", Raw: json.RawMessage(`{"a":1}`)},
+	}
+}
+
+// The kinds come from the registry, so this covers the kind added after the
+// test was written. A hand-typed list would have let a new kind ship with no
+// round-trip at all — which is how a Trace becomes structurally valid and
+// quietly unreadable.
+func TestEveryKindRoundTrips(t *testing.T) {
+	registered := events.Kinds()
+	if len(registered) == 0 {
+		t.Fatal("the registry is empty")
 	}
 
-	for _, c := range cases {
-		t.Run(string(c.kind), func(t *testing.T) {
-			in := envelope(t, c.payload)
+	have := samples()
+	for _, kind := range registered {
+		payload, ok := have[kind]
+		if !ok {
+			t.Fatalf("kind %q is registered but has no sample to round-trip", kind)
+		}
+		if got, _ := events.KindOf(payload); got != kind {
+			t.Fatalf("the sample for %q is a %T, which KindOf names %q", kind, payload, got)
+		}
+	}
+	for kind := range have {
+		if !slices.Contains(registered, kind) {
+			t.Errorf("kind %q has a sample but is not registered", kind)
+		}
+	}
+
+	for _, kind := range registered {
+		t.Run(string(kind), func(t *testing.T) {
+			payload := have[kind]
+			in := envelope(t, payload)
 			out := roundTrip(t, in)
 
-			if out.Kind != c.kind {
-				t.Errorf("kind = %q, want %q", out.Kind, c.kind)
+			if out.Kind != kind {
+				t.Errorf("kind = %q, want %q", out.Kind, kind)
 			}
 			if out.ID != in.ID || out.Seq != in.Seq || out.WireSeq != in.WireSeq {
 				t.Errorf("identity or positions lost: %+v", out)
@@ -89,8 +118,8 @@ func TestEveryKindRoundTrips(t *testing.T) {
 			if !out.At.Wall.Equal(in.At.Wall) || out.At.Mono != in.At.Mono {
 				t.Errorf("timestamp = %+v, want %+v", out.At, in.At)
 			}
-			if !payloadEqual(out.Payload, c.payload) {
-				t.Errorf("payload = %#v, want %#v", out.Payload, c.payload)
+			if !payloadEqual(out.Payload, payload) {
+				t.Errorf("payload = %#v, want %#v", out.Payload, payload)
 			}
 		})
 	}

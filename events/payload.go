@@ -1,6 +1,11 @@
 package events
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"reflect"
+	"sort"
+)
 
 // Payload is what an Event carries beyond its envelope.
 //
@@ -22,12 +27,55 @@ import "encoding/json"
 // without declaring anything. The compiler cannot tell that apart from a
 // legitimate wrapper.
 //
-// The codec closes it instead, and closes it shut: KindOf does not recognise
-// such a value, and Event.MarshalJSON refuses to encode one rather than
-// writing a record with no kind. So a forged payload cannot reach a Trace —
-// the guarantee holds, but at the codec rather than at the compiler, and the
-// distinction is worth knowing before someone relies on the wrong one.
+// The codec closes it instead, and closes it shut: such a value is not in the
+// registry below, so KindOf does not recognise it and Event.MarshalJSON
+// refuses to encode it rather than writing a record with no kind. So a forged
+// payload cannot reach a Trace — the guarantee holds, but at the codec rather
+// than at the compiler, and the distinction is worth knowing before someone
+// relies on the wrong one.
 type Payload interface{ isPayload() }
+
+// The registry is the one place a Kind and its payload type are tied together.
+//
+// Before it there were two switches — one to name a payload, one to read it
+// back — and nothing made them agree. A payload missing from the second
+// encoded fine and decoded as Unknown, which is a Trace that is structurally
+// valid and quietly wrong: the exact failure docs/adr/0002 exists to prevent.
+// One table cannot half-agree with itself.
+var (
+	// kindByType names the Kind a payload's dynamic type belongs to.
+	kindByType = map[reflect.Type]Kind{}
+	// decoderByKind reads a payload back from its stored bytes.
+	decoderByKind = map[Kind]func(json.RawMessage) (Payload, error){}
+)
+
+// register ties a Kind to its payload type. It is called from init below, once
+// per kind, beside the type it names.
+//
+// A duplicate registration panics at init rather than at the first Event that
+// meets it: two kinds sharing a type, or two types sharing a kind, is a schema
+// that cannot round-trip, and a program that cannot round-trip its own Trace
+// has nothing to run.
+func register[T Payload](kind Kind) {
+	var zero T
+	typ := reflect.TypeOf(zero)
+
+	if existing, dup := kindByType[typ]; dup {
+		panic(fmt.Sprintf("events: %s is already registered as %q", typ, existing))
+	}
+	if _, dup := decoderByKind[kind]; dup {
+		panic(fmt.Sprintf("events: kind %q is registered twice", kind))
+	}
+
+	kindByType[typ] = kind
+	decoderByKind[kind] = func(raw json.RawMessage) (Payload, error) {
+		var p T
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, fmt.Errorf("events: decode %s payload: %w", kind, err)
+		}
+		return p, nil
+	}
+}
 
 // Capabilities is what a Run can actually do. It is discovered twice and the
 // per-run value wins, because configuration — bare mode, managed settings, a
@@ -51,6 +99,9 @@ type Capabilities struct {
 	Interrupt bool `json:"interrupt"`
 }
 
+// KindStarted opens a Run.
+const KindStarted Kind = "started"
+
 // Started opens a Run.
 //
 // It carries the Spec's intent because the Trace is the single source of
@@ -65,16 +116,26 @@ type Started struct {
 	Capabilities Capabilities `json:"capabilities"`
 }
 
+func (Started) isPayload() {}
+
+// KindText names one chunk of one content block.
+const KindText Kind = "text"
+
 // Text is one chunk of one content block.
 //
-// ADR 0004 has the sink fold consecutive chunks of one block into a single
-// record, so that a Trace record corresponds to a unit of meaning rather than
-// to a token. The sink does not fold yet: at this stage one chunk becomes one
-// record, and a chunk-heavy turn makes a Trace proportionate to tokens.
+// Chunks stream one at a time on the wire, and the Trace sink folds
+// consecutive chunks of one block into a single record when it commits
+// (docs/adr/0004), so a Trace record corresponds to a unit of meaning rather
+// than to a token. Block is what the fold folds on.
 type Text struct {
 	Block int    `json:"block"`
 	Chunk string `json:"chunk"`
 }
+
+func (Text) isPayload() {}
+
+// KindToolCall names a request to run a tool.
+const KindToolCall Kind = "tool_call"
 
 // ToolCall is a request to run a tool.
 type ToolCall struct {
@@ -82,6 +143,8 @@ type ToolCall struct {
 	Args     json.RawMessage `json:"args"`
 	Redacted bool            `json:"redacted"`
 }
+
+func (ToolCall) isPayload() {}
 
 // Disposition is how a tool call ended. Each value implies a different
 // recovery, so a boolean would make the model infer the right one from prose
@@ -110,6 +173,9 @@ const (
 	DispositionBudgetDenied Disposition = "budget_denied"
 )
 
+// KindToolResult names how a tool call ended.
+const KindToolResult Kind = "tool_result"
+
 // ToolResult is how a tool call ended. A tool call always has one, whatever
 // happened to it, so the transcript stays structurally valid for the next
 // provider call.
@@ -118,6 +184,11 @@ type ToolResult struct {
 	Disposition Disposition `json:"disposition"`
 	Bytes       int         `json:"bytes"`
 }
+
+func (ToolResult) isPayload() {}
+
+// KindUsage names what a turn cost.
+const KindUsage Kind = "usage"
 
 // Usage is normalized, rather than mirroring any one provider's shape.
 //
@@ -143,6 +214,8 @@ type Usage struct {
 	USD *float64 `json:"usd"`
 }
 
+func (Usage) isPayload() {}
+
 // ErrorClass is why a retry happened, from a fixed set, so that rate limits
 // can be told apart from server errors without parsing prose.
 type ErrorClass string
@@ -155,6 +228,9 @@ const (
 	ErrorOther       ErrorClass = "other"
 )
 
+// KindRetry names an attempt that spent money and produced nothing.
+const KindRetry Kind = "retry"
+
 // Retry spends money and wall clock but produces no ToolCall, so it is its own
 // record. Without it, the cost of retries is invisible.
 type Retry struct {
@@ -164,11 +240,21 @@ type Retry struct {
 	ErrorClass ErrorClass `json:"error_class"`
 }
 
+func (Retry) isPayload() {}
+
+// KindEdit names a change to a file.
+const KindEdit Kind = "edit"
+
 // Edit is a change to a file.
 type Edit struct {
 	Path  string `json:"path"`
 	Hunks int    `json:"hunks"`
 }
+
+func (Edit) isPayload() {}
+
+// KindNeedsHuman names an escalation.
+const KindNeedsHuman Kind = "needs_human"
 
 // NeedsHuman is escalation, which is an Outcome rather than an error. Resume
 // is the position the answer re-enters at, not the Session it belongs to.
@@ -176,6 +262,8 @@ type NeedsHuman struct {
 	Question string `json:"question"`
 	Resume   Cursor `json:"resume"`
 }
+
+func (NeedsHuman) isPayload() {}
 
 // Result is how a Unit ended.
 type Result string
@@ -194,10 +282,18 @@ type Claim struct {
 	Summary string `json:"summary,omitempty"`
 }
 
+// KindFinished names the close of a Run.
+const KindFinished Kind = "finished"
+
 // Finished closes a Run with a claim, not a verdict.
 type Finished struct {
 	Claim Claim `json:"claim"`
 }
+
+func (Finished) isPayload() {}
+
+// KindDegraded names incomplete data.
+const KindDegraded Kind = "degraded"
 
 // Degraded says that some data is incomplete, estimated, or unreported.
 // Its presence is the flag — it is absent when the Run is clean, so a CI gate
@@ -205,6 +301,11 @@ type Finished struct {
 type Degraded struct {
 	Missing []string `json:"missing"`
 }
+
+func (Degraded) isPayload() {}
+
+// KindUnknown names a kind this build does not recognise.
+const KindUnknown Kind = "unknown"
 
 // Unknown is an Event kind this build does not recognise, preserved verbatim.
 // Eva's own loop cannot emit one; it arrives from a foreign Harness. Dropping
@@ -215,45 +316,42 @@ type Unknown struct {
 	Raw  json.RawMessage `json:"raw"`
 }
 
-func (Started) isPayload()    {}
-func (Text) isPayload()       {}
-func (ToolCall) isPayload()   {}
-func (ToolResult) isPayload() {}
-func (Usage) isPayload()      {}
-func (Retry) isPayload()      {}
-func (Edit) isPayload()       {}
-func (NeedsHuman) isPayload() {}
-func (Finished) isPayload()   {}
-func (Degraded) isPayload()   {}
-func (Unknown) isPayload()    {}
+func (Unknown) isPayload() {}
+
+func init() {
+	register[Started](KindStarted)
+	register[Text](KindText)
+	register[ToolCall](KindToolCall)
+	register[ToolResult](KindToolResult)
+	register[Usage](KindUsage)
+	register[Retry](KindRetry)
+	register[Edit](KindEdit)
+	register[NeedsHuman](KindNeedsHuman)
+	register[Finished](KindFinished)
+	register[Degraded](KindDegraded)
+	register[Unknown](KindUnknown)
+}
 
 // KindOf names the Kind a payload belongs to. It reports false for a payload
-// this build does not know, which nothing outside this package can construct.
+// this build does not know, which nothing outside this package can construct —
+// and for a type that embeds Payload to borrow its method, which is the one
+// hole the compiler leaves open.
 func KindOf(p Payload) (Kind, bool) {
-	switch p.(type) {
-	case Started:
-		return KindStarted, true
-	case Text:
-		return KindText, true
-	case ToolCall:
-		return KindToolCall, true
-	case ToolResult:
-		return KindToolResult, true
-	case Usage:
-		return KindUsage, true
-	case Retry:
-		return KindRetry, true
-	case Edit:
-		return KindEdit, true
-	case NeedsHuman:
-		return KindNeedsHuman, true
-	case Finished:
-		return KindFinished, true
-	case Degraded:
-		return KindDegraded, true
-	case Unknown:
-		return KindUnknown, true
-	default:
+	if p == nil {
 		return "", false
 	}
+	kind, ok := kindByType[reflect.TypeOf(p)]
+	return kind, ok
+}
+
+// Kinds is the registered set, sorted so that the order is the same on every
+// run. A test that iterates this covers every kind the build knows, including
+// the one added after the test was written.
+func Kinds() []Kind {
+	out := make([]Kind, 0, len(decoderByKind))
+	for kind := range decoderByKind {
+		out = append(out, kind)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }

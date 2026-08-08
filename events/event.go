@@ -57,29 +57,18 @@ type Timestamp struct {
 }
 
 // Kind names the payload an Event carries. The set is closed: a kind that is
-// not listed here arrives as KindUnknown with its bytes intact, and the Run is
+// not listed arrives as KindUnknown with its bytes intact, and the Run is
 // marked Degraded rather than the record being dropped (docs/adr/0002).
 //
-// Adding a Kind is additive and keeps SchemaVersion, but it touches four
-// places that must agree: this list, the payload struct and its isPayload
-// method in payload.go, the switch in KindOf, and the switch in
-// decodePayload. Miss one and the codec either cannot name the payload or
-// cannot read it back.
+// Every kind is declared in payload.go, in one block beside the payload it
+// names: the constant, the struct, its isPayload method, and its registration.
+// Adding a kind is therefore four adjacent lines in one file rather than four
+// edits in three, and the registration is what KindOf and the codec read — so
+// there is no second switch that can silently disagree with the first.
+//
+// Kinds reports the registered set at run time, which is what makes the
+// round-trip test exhaustive by construction rather than by a hand-typed list.
 type Kind string
-
-const (
-	KindStarted    Kind = "started"
-	KindText       Kind = "text"
-	KindToolCall   Kind = "tool_call"
-	KindToolResult Kind = "tool_result"
-	KindUsage      Kind = "usage"
-	KindRetry      Kind = "retry"
-	KindEdit       Kind = "edit"
-	KindNeedsHuman Kind = "needs_human"
-	KindFinished   Kind = "finished"
-	KindDegraded   Kind = "degraded"
-	KindUnknown    Kind = "unknown"
-)
 
 // Event is the one typed, versioned, sequence-numbered record that every
 // observable thing in Eva is an instance of. There is no second vocabulary:

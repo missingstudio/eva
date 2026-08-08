@@ -117,41 +117,17 @@ func (e *Event) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// decodePayload reads a payload back using the registry in payload.go. A kind
+// with no registration is preserved as Unknown rather than dropped, which is
+// the one branch here that is a decision rather than a lookup.
 func decodePayload(kind Kind, raw json.RawMessage) (Payload, Kind, error) {
-	switch kind {
-	case KindStarted:
-		return decodeInto[Started](kind, raw)
-	case KindText:
-		return decodeInto[Text](kind, raw)
-	case KindToolCall:
-		return decodeInto[ToolCall](kind, raw)
-	case KindToolResult:
-		return decodeInto[ToolResult](kind, raw)
-	case KindUsage:
-		return decodeInto[Usage](kind, raw)
-	case KindRetry:
-		return decodeInto[Retry](kind, raw)
-	case KindEdit:
-		return decodeInto[Edit](kind, raw)
-	case KindNeedsHuman:
-		return decodeInto[NeedsHuman](kind, raw)
-	case KindFinished:
-		return decodeInto[Finished](kind, raw)
-	case KindDegraded:
-		return decodeInto[Degraded](kind, raw)
-	case KindUnknown:
-		return decodeInto[Unknown](kind, raw)
-	default:
+	decode, known := decoderByKind[kind]
+	if !known {
 		return Unknown{Kind: string(kind), Raw: raw}, KindUnknown, nil
 	}
-}
-
-// decodeInto is constrained to Payload, which no package outside this one can
-// satisfy, so the switch above cannot be extended from elsewhere either.
-func decodeInto[T Payload](kind Kind, raw json.RawMessage) (Payload, Kind, error) {
-	var p T
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return nil, "", fmt.Errorf("events: decode %s payload: %w", kind, err)
+	payload, err := decode(raw)
+	if err != nil {
+		return nil, "", err
 	}
-	return p, kind, nil
+	return payload, kind, nil
 }
