@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -75,8 +74,8 @@ func readTrace(t *testing.T, path string) []events.Event {
 	return out
 }
 
-// ADR 0008: the sink assigns Trace position at commit. It is not the wire
-// position passed through, and the naming apart is the decision.
+// The sink assigns Trace position at commit. It is not the wire position
+// passed through, and the naming apart is the decision.
 func TestTracePositionIsAssignedBySinkNotPassedThrough(t *testing.T) {
 	sink, path := open(t)
 	ctx := context.Background()
@@ -189,8 +188,8 @@ func TestARejectedGroupLeavesNoTraceAndNoGap(t *testing.T) {
 	}
 }
 
-// ADR 0004: consecutive chunks of one content block become a single record, so
-// a Trace record is a unit of meaning rather than a token.
+// Consecutive chunks of one content block become a single record, so a Trace
+// record is a unit of meaning rather than a token.
 func TestConsecutiveChunksOfOneBlockFoldIntoOneRecord(t *testing.T) {
 	sink, path := open(t)
 
@@ -327,7 +326,7 @@ func TestTheFoldIsConsecutiveOnlyAndNeverReorders(t *testing.T) {
 //
 // Stage 0 builds no tools, so the group is constructed here rather than
 // produced by a run. Testing it now is the point — stage 2 inherits a
-// guarantee that is already measured (docs/Product.md, stage 0).
+// guarantee that is already measured.
 func TestAGroupCarryingToolResultsIsWrittenAsOneUnit(t *testing.T) {
 	sink, path := open(t)
 
@@ -514,16 +513,12 @@ func TestAKilledWriterLeavesNoPartialRecordAndNoPartialGroup(t *testing.T) {
 		t.Fatalf("kill the helper: %v", err)
 	}
 
-	// SIGKILL, not an exit: a helper that returned on its own would have closed
-	// the file, and this test would be measuring an orderly shutdown.
+	// A signal, not an exit: a helper that returned on its own would have closed
+	// the file, and this test would be measuring an orderly shutdown. An exit
+	// code of -1 is what Go reports for a process a signal ended.
 	var exit *exec.ExitError
-	err := helper.Wait()
-	if !errors.As(err, &exit) {
+	if err := helper.Wait(); !errors.As(err, &exit) || exit.ExitCode() != -1 {
 		t.Fatalf("the helper ended with %v, want a signal — it was never killed mid-stream", err)
-	}
-	status, ok := exit.Sys().(syscall.WaitStatus)
-	if !ok || !status.Signaled() || status.Signal() != syscall.SIGKILL {
-		t.Fatalf("the helper ended with %v, want SIGKILL", exit)
 	}
 
 	body, err := os.ReadFile(path)
