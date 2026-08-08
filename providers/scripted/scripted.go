@@ -30,9 +30,9 @@ type Script struct {
 
 // Turn is one recorded answer.
 type Turn struct {
-	// Block is the content block the chunks belong to. It is what the sink
-	// will fold on once it coalesces (docs/adr/0004); today one chunk is one
-	// Trace record.
+	// Block is the content block the chunks belong to, and what the sink folds
+	// on when it commits (docs/adr/0004). Chunks of one block become one Trace
+	// record; a recording that splits an answer across two blocks records two.
 	Block int `toml:"block"`
 	// Chunks is the answer, split the way a stream would deliver it.
 	Chunks []string `toml:"chunks"`

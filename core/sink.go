@@ -19,6 +19,14 @@ type TraceSink interface {
 	// with their Trace positions assigned. A group is never partially
 	// written: either every Event in it is stored or none is.
 	//
+	// Fewer Events may come back than went in. The sink folds consecutive
+	// chunks of one content block into a single record (docs/adr/0004), so a
+	// Trace record corresponds to a unit of meaning rather than to a token.
+	// The fold is why the group is the unit: a caller that appends one Event
+	// at a time gives the sink nothing to fold, and a sink that buffered
+	// across calls to compensate would be reporting records as committed
+	// before they were written.
+	//
 	// Stored is not the same as flushed to the platter. A Trace survives the
 	// process dying, which is what kill -9 tests; surviving the machine dying
 	// is a stronger promise, and the stage that makes it will say so here.
