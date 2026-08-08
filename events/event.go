@@ -7,7 +7,7 @@ import "time"
 // Adding a Kind or a nullable field is additive and keeps this number.
 // Removing a field, retyping one, renaming one, or narrowing an enum
 // increments it. Readers migrate old records on read; stored Traces are never
-// rewritten. See docs/adr/0006.
+// rewritten.
 const SchemaVersion uint32 = 1
 
 type (
@@ -16,7 +16,7 @@ type (
 	// TenantID identifies the tenant an Event belongs to. It is populated
 	// from commit one, long before a second tenant exists, because adding it
 	// later would touch every stored record, query, cache key, and object
-	// path (docs/adr/0001).
+	// path.
 	TenantID string
 	// RunID identifies one execution of a Unit against a Session.
 	RunID string
@@ -58,7 +58,7 @@ type Timestamp struct {
 
 // Kind names the payload an Event carries. The set is closed: a kind that is
 // not listed arrives as KindUnknown with its bytes intact, and the Run is
-// marked Degraded rather than the record being dropped (docs/adr/0002).
+// marked Degraded rather than the record being dropped.
 //
 // Every kind is declared in payload.go, in one block beside the payload it
 // names: the constant, the struct, its isPayload method, and its registration.
@@ -77,14 +77,14 @@ type Kind string
 //
 // The envelope carries everything a projection needs in order to fold or
 // filter. The payload carries only what a projection needs in order to
-// display. See docs/adr/0001.
+// display.
 type Event struct {
 	// ID identifies this record.
 	ID EventID
 
 	// Seq is the Trace position: per Session, assigned by the sink at commit.
 	// Zero means the record has not been committed. It is not WireSeq, and
-	// the two are named apart on purpose (docs/adr/0008).
+	// the two are named apart on purpose.
 	Seq uint64
 
 	// WireSeq is the wire position: per connection, assigned by the producer,

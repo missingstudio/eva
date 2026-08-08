@@ -10,15 +10,13 @@ import (
 // Payload is what an Event carries beyond its envelope.
 //
 // The single method is unexported, so no package outside this one can declare
-// a payload and the closed kind set of docs/adr/0002 is enforced by the
-// compiler rather than by review. The alternative — one struct with an
-// optional pointer per payload — makes "which pointer is set" and "what Kind
-// says" able to disagree, which is an invariant you must then write tests to
-// defend.
+// a payload and the closed kind set is enforced by the compiler rather than by
+// review. The alternative — one struct with an optional pointer per payload —
+// makes "which pointer is set" and "what Kind says" able to disagree, which is
+// an invariant you must then write tests to defend.
 //
 // isPayload looks like dead code and invites removal. It is the mechanism, not
 // decoration: deleting it opens the kind set to every importing package.
-// See docs/adr/0005.
 //
 // # Where the compiler stops
 //
@@ -40,8 +38,7 @@ type Payload interface{ isPayload() }
 // Before it there were two switches — one to name a payload, one to read it
 // back — and nothing made them agree. A payload missing from the second
 // encoded fine and decoded as Unknown, which is a Trace that is structurally
-// valid and quietly wrong: the exact failure docs/adr/0002 exists to prevent.
-// One table cannot half-agree with itself.
+// valid and quietly wrong. One table cannot half-agree with itself.
 var (
 	// kindByType names the Kind a payload's dynamic type belongs to.
 	kindByType = map[reflect.Type]Kind{}
@@ -124,9 +121,9 @@ const KindText Kind = "text"
 // Text is one chunk of one content block.
 //
 // Chunks stream one at a time on the wire, and the Trace sink folds
-// consecutive chunks of one block into a single record when it commits
-// (docs/adr/0004), so a Trace record corresponds to a unit of meaning rather
-// than to a token. Block is what the fold folds on.
+// consecutive chunks of one block into a single record when it commits, so a
+// Trace record corresponds to a unit of meaning rather than to a token. Block
+// is what the fold folds on.
 type Text struct {
 	Block int    `json:"block"`
 	Chunk string `json:"chunk"`
@@ -148,7 +145,7 @@ func (ToolCall) isPayload() {}
 
 // Disposition is how a tool call ended. Each value implies a different
 // recovery, so a boolean would make the model infer the right one from prose
-// in an error string (docs/adr/0007).
+// in an error string.
 type Disposition string
 
 const (
@@ -194,7 +191,7 @@ const KindUsage Kind = "usage"
 //
 // Nullability here is load-bearing, not stylistic: nil means the provider did
 // not tell us, and 0 means none were used. Collapsing the two is how a cost
-// report becomes confidently wrong. See docs/adr/0003.
+// report becomes confidently wrong.
 type Usage struct {
 	InputTokens  uint64 `json:"input_tokens"`
 	OutputTokens uint64 `json:"output_tokens"`
@@ -310,7 +307,7 @@ const KindUnknown Kind = "unknown"
 // Unknown is an Event kind this build does not recognise, preserved verbatim.
 // Eva's own loop cannot emit one; it arrives from a foreign Harness. Dropping
 // it would produce a Trace that is structurally valid and quietly wrong, and
-// the Trace is the only instrument the project has (docs/adr/0002).
+// the Trace is the only instrument the project has.
 type Unknown struct {
 	Kind string          `json:"kind"`
 	Raw  json.RawMessage `json:"raw"`

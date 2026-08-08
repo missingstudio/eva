@@ -17,7 +17,7 @@ var (
 
 	// ErrNoVersion is returned when an Event carries no schema version. A
 	// record without one cannot be migrated on read, which is the whole
-	// mechanism of docs/adr/0006.
+	// mechanism SchemaVersion exists for.
 	ErrNoVersion = errors.New("events: event has no schema version")
 
 	// ErrKindMismatch is returned when an Event's Kind names something other
@@ -88,7 +88,7 @@ func (e Event) MarshalJSON() ([]byte, error) {
 // payload type. A kind this build does not know becomes an Unknown holding the
 // original bytes, and the Kind on the envelope becomes KindUnknown — the
 // record is preserved rather than dropped, and the caller can see that it was
-// not understood (docs/adr/0002).
+// not understood.
 func (e *Event) UnmarshalJSON(b []byte) error {
 	var env envelope
 	if err := json.Unmarshal(b, &env); err != nil {
