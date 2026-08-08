@@ -162,29 +162,47 @@ func TestAnEmptyGroupWritesNothing(t *testing.T) {
 
 // Fail closed: a group that cannot be encoded is not half-written, and it does
 // not consume a Trace position that a later record would then be missing.
+// The rejected record is last in both cases, because that is the ordering a
+// sink writing as it went would already have got wrong: everything before it
+// would be in the Trace, and in the second case that is a tool call stored
+// with no result.
 func TestARejectedGroupLeavesNoTraceAndNoGap(t *testing.T) {
-	sink, path := open(t)
-	ctx := context.Background()
+	for _, c := range []struct {
+		name     string
+		first    events.Event
+		rejected events.Event
+	}{
+		{
+			name:     "a chunk with no schema version",
+			first:    wired("sess_1", 0, events.Text{Chunk: "good"}),
+			rejected: wired("sess_1", 1, events.Text{Chunk: "bad"}),
+		},
+		{
+			name:     "a tool result with no schema version",
+			first:    wired("sess_1", 0, events.ToolCall{Name: "read_file", Args: json.RawMessage(`{}`)}),
+			rejected: wired("sess_1", 1, events.ToolResult{Name: "read_file", Disposition: events.DispositionOK}),
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sink, path := open(t)
+			ctx := context.Background()
 
-	unversioned := wired("sess_1", 1, events.Text{Chunk: "bad"})
-	unversioned.Version = 0
+			c.rejected.Version = 0
+			if _, err := sink.Append(ctx, []events.Event{c.first, c.rejected}); err == nil {
+				t.Fatal("append accepted an unencodable group, want an error")
+			}
+			if got := readTrace(t, path); len(got) != 0 {
+				t.Fatalf("the Trace holds %d records after a rejected group, want 0 — the group was half written", len(got))
+			}
 
-	if _, err := sink.Append(ctx, []events.Event{
-		wired("sess_1", 0, events.Text{Chunk: "good"}),
-		unversioned,
-	}); err == nil {
-		t.Fatal("append accepted an unencodable group, want an error")
-	}
-	if got := readTrace(t, path); len(got) != 0 {
-		t.Fatalf("trace holds %d records after a rejected group, want 0", len(got))
-	}
-
-	committed, err := sink.Append(ctx, []events.Event{wired("sess_1", 2, events.Text{Chunk: "next"})})
-	if err != nil {
-		t.Fatalf("append: %v", err)
-	}
-	if committed[0].Seq != 1 {
-		t.Errorf("Seq = %d after a rejected group, want 1 — the rejected group burned a position", committed[0].Seq)
+			committed, err := sink.Append(ctx, []events.Event{wired("sess_1", 2, events.Text{Chunk: "next"})})
+			if err != nil {
+				t.Fatalf("append: %v", err)
+			}
+			if committed[0].Seq != 1 {
+				t.Errorf("Seq = %d after a rejected group, want 1 — the rejected group burned a position", committed[0].Seq)
+			}
+		})
 	}
 }
 
@@ -352,8 +370,8 @@ func TestAGroupCarryingToolResultsIsWrittenAsOneUnit(t *testing.T) {
 		events.KindToolResult, events.KindToolResult,
 	}
 	stored := readTrace(t, path)
-	if fmt.Sprint(kindsOf(stored)) != fmt.Sprint(want) {
-		t.Fatalf("the Trace holds %v, want %v", kindsOf(stored), want)
+	if fmt.Sprint(kinds(stored)) != fmt.Sprint(want) {
+		t.Fatalf("the Trace holds %v, want %v", kinds(stored), want)
 	}
 	if len(committed) != len(stored) {
 		t.Fatalf("committed %d records and the Trace holds %d", len(committed), len(stored))
@@ -373,37 +391,6 @@ func TestAGroupCarryingToolResultsIsWrittenAsOneUnit(t *testing.T) {
 	}
 	if calls != results {
 		t.Errorf("the Trace holds %d tool calls and %d results", calls, results)
-	}
-}
-
-// The group is atomic in the direction that matters: a record the encoder
-// rejects takes the whole group with it, so the tool calls before it are not
-// left in the Trace with no results.
-func TestARejectedResultTakesItsWholeGroupWithIt(t *testing.T) {
-	sink, path := open(t)
-	ctx := context.Background()
-
-	// The unencodable record is last, so a sink that wrote as it went would
-	// already have stored the call it belongs to.
-	orphaned := wired("sess_1", 21, events.ToolResult{Name: "read_file", Disposition: events.DispositionOK})
-	orphaned.Version = 0
-
-	if _, err := sink.Append(ctx, []events.Event{
-		wired("sess_1", 20, events.ToolCall{Name: "read_file", Args: json.RawMessage(`{}`)}),
-		orphaned,
-	}); err == nil {
-		t.Fatal("append accepted a result with no schema version, want an error")
-	}
-	if got := readTrace(t, path); len(got) != 0 {
-		t.Fatalf("the Trace holds %d records after a rejected group, want 0 — a tool call is stored with no result", len(got))
-	}
-
-	committed, err := sink.Append(ctx, []events.Event{wired("sess_1", 22, events.Text{Chunk: "next"})})
-	if err != nil {
-		t.Fatalf("append: %v", err)
-	}
-	if committed[0].Seq != 1 {
-		t.Errorf("Seq = %d after a rejected group, want 1 — the rejected group burned a position", committed[0].Seq)
 	}
 }
 
@@ -586,7 +573,7 @@ func TestCrashHelperAppendsGroupsUntilKilled(t *testing.T) {
 	}
 }
 
-func kindsOf(es []events.Event) []events.Kind {
+func kinds(es []events.Event) []events.Kind {
 	out := make([]events.Kind, len(es))
 	for i, e := range es {
 		out[i] = e.Kind
