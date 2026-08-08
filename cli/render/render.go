@@ -1,0 +1,259 @@
+// Package render is the projection that shows a turn to a person.
+//
+// It folds committed Events into a rendered answer and a cost line, and it
+// reads nothing else. What it may import is the contract, and it is a short
+// list: the Event schema, and the terminal libraries. No provider, no Session,
+// and no path to the Trace — a renderer that could reach any of those could
+// show a turn the record does not hold, and the machine-readable path, which
+// builds no renderer at all, would stop describing the same turn.
+//
+// That list is an allow list in the linter rather than a promise in this
+// comment, because a boundary this layer only documents is a boundary the next
+// import quietly crosses.
+package render
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"strconv"
+	"strings"
+
+	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/styles"
+	"charm.land/lipgloss/v2"
+	"github.com/missingstudio/eva/events"
+)
+
+// Renderer shows committed Events to a person.
+//
+// It is a Subscriber, which is what makes it a fold over the Trace rather than
+// a second account of the turn: it sees a record after the Trace holds it,
+// never before. The interface it satisfies is declared in core, and this
+// package does not import core to say so — an assertion at the one place a
+// Renderer is built is enough, and the shorter import list is worth more.
+type Renderer struct {
+	out      io.Writer
+	markdown *glamour.TermRenderer
+	// costStyle dims the cost line. It is subordinate to the answer: a
+	// developer reads it at the end of a turn, not during one.
+	costStyle lipgloss.Style
+
+	// answer accumulates the text of the open Run. Markdown is rendered whole
+	// rather than a block at a time, because a heading, a list, and a fenced
+	// block are each only meaningful once they are complete.
+	answer strings.Builder
+
+	// turn is this Run's spend and session is the Session's. Both are folded
+	// from the same Usage records, so they cannot disagree.
+	turn    spend
+	session spend
+
+	// missing is what the Run did not understand, from the caveat that closes
+	// it. A person is shown it for the same reason the machine-readable stream
+	// carries it: a cost line over data known to be incomplete, printed with
+	// nothing to say so, is a figure that reads as a measurement.
+	missing []string
+}
+
+// New builds a Renderer that writes to out.
+//
+// dark says whether the terminal has a dark background. It is a parameter
+// rather than something this package detects, because detecting it means
+// querying the terminal and this package holds no terminal — the frontend that
+// owns the outside world asks, and hands in the answer. There is no
+// configuration key: a style nobody chose is the only style there is.
+func New(out io.Writer, dark bool) (*Renderer, error) {
+	// The markdown renderer no longer detects a background for itself and
+	// defaults to dark, so the style is named here rather than left to it.
+	style := styles.LightStyle
+	if dark {
+		style = styles.DarkStyle
+	}
+	markdown, err := glamour.NewTermRenderer(glamour.WithStandardStyle(style))
+	if err != nil {
+		return nil, fmt.Errorf("render: build the markdown renderer: %w", err)
+	}
+
+	return &Renderer{
+		out:       out,
+		markdown:  markdown,
+		costStyle: lipgloss.NewStyle().Faint(true).Foreground(lipgloss.LightDark(dark)(costOnLight, costOnDark)),
+	}, nil
+}
+
+// The cost line's grey, one per background. Both are true colour, and neither
+// is emitted as written: what reaches the terminal is downsampled to what the
+// terminal can show.
+var (
+	costOnLight = lipgloss.Color("#5C5C5C")
+	costOnDark  = lipgloss.Color("#9E9E9E")
+)
+
+// Committed folds one committed Event into what the person sees.
+//
+// Only the kinds that a person reads fold. Started opens a turn, Text is the
+// answer, Usage is what it cost, and Degraded is what the Run did not
+// understand; Finished is what makes all four appear, because a turn is shown
+// when it is over. Every other kind is real and recorded and simply has
+// nothing to show at this stage.
+//
+// Degraded arrives in the group Finished closes on, so it is folded before the
+// turn is written rather than after it.
+func (r *Renderer) Committed(_ context.Context, e events.Event) error {
+	switch payload := e.Payload.(type) {
+	case events.Started:
+		r.reset()
+
+	case events.Text:
+		r.answer.WriteString(payload.Chunk)
+
+	case events.Usage:
+		r.turn.add(payload)
+		r.session.add(payload)
+
+	case events.Degraded:
+		r.missing = append(r.missing, payload.Missing...)
+
+	case events.Finished:
+		return r.show()
+	}
+	return nil
+}
+
+// reset clears what belongs to one turn. The Session's spend is not part of
+// that: it outlives every turn it is a sum of.
+func (r *Renderer) reset() {
+	r.answer.Reset()
+	r.turn = spend{}
+	r.missing = nil
+}
+
+// show writes the turn: the answer, then what it cost.
+func (r *Renderer) show() error {
+	if answer := strings.TrimSpace(r.answer.String()); answer != "" {
+		styled, err := r.markdown.Render(answer)
+		if err != nil {
+			return fmt.Errorf("render: the answer: %w", err)
+		}
+		// Through lipgloss rather than to the writer directly: this is where
+		// colour is adapted to what the terminal can show, and where a
+		// terminal that shows none has the escapes removed rather than
+		// printed.
+		if _, err := lipgloss.Fprint(r.out, styled); err != nil {
+			return fmt.Errorf("render: write the answer: %w", err)
+		}
+	}
+
+	// The caveat comes before the cost line, because it qualifies it. A reader
+	// who has already taken the figures as whole has read them once too many.
+	if len(r.missing) > 0 {
+		caveat := "degraded: " + strings.Join(r.missing, ", ")
+		if _, err := lipgloss.Fprintln(r.out, r.costStyle.Render(caveat)); err != nil {
+			return fmt.Errorf("render: write the caveat: %w", err)
+		}
+	}
+
+	if _, err := lipgloss.Fprintln(r.out, r.costStyle.Render(costLine(r.turn, r.session))); err != nil {
+		return fmt.Errorf("render: write the cost line: %w", err)
+	}
+
+	r.reset()
+	return nil
+}
+
+// costLine is what a turn cost and what the Session has cost so far.
+//
+// Both, on every turn: per-turn spend is what a developer reacts to, and
+// cumulative spend is what tells them a conversation has become expensive
+// before it ends. The cache figures ride with the turn only, so that the line
+// stays one line.
+func costLine(turn, session spend) string {
+	return "turn " + segments(turn.tokens(), turn.cache(), turn.money()) +
+		" │ session " + segments(session.tokens(), session.money())
+}
+
+// segments joins the parts that have something to say.
+func segments(parts ...string) string {
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			kept = append(kept, part)
+		}
+	}
+	return strings.Join(kept, " · ")
+}
+
+// spend is what a set of Usage records adds up to.
+//
+// The dollar figure is summed only when every record in the set carried one.
+// A sum over a set where one turn reported nothing looks whole and is short by
+// an unknown amount, and a cost report that is confidently wrong is worse than
+// one that says it does not know.
+type spend struct {
+	in, out, cacheWrite, cacheRead uint64
+
+	usd float64
+	// records is how many Usage records this is a sum of, and priced is how
+	// many of those carried a dollar figure.
+	records int
+	priced  int
+}
+
+func (s *spend) add(u events.Usage) {
+	s.in += u.InputTokens
+	s.out += u.OutputTokens
+	s.cacheWrite += u.CacheWriteTokens
+	s.cacheRead += u.CacheReadTokens
+
+	s.records++
+	if u.USD != nil {
+		s.usd += *u.USD
+		s.priced++
+	}
+}
+
+// tokens is what went in and what came out.
+func (s spend) tokens() string {
+	if s.records == 0 {
+		return "no usage reported"
+	}
+	return count(s.in) + " in / " + count(s.out) + " out"
+}
+
+// cache is the write and the read, apart. A cache write costs more than base
+// input and a cache read costs far less, so one figure could not compute a
+// cost — and the ratio of the two is the largest single lever on what a turn
+// costs. It is absent from the line when the turn used no cache.
+func (s spend) cache() string {
+	if s.cacheWrite+s.cacheRead == 0 {
+		return ""
+	}
+	return "cache " + count(s.cacheWrite) + " write / " + count(s.cacheRead) + " read"
+}
+
+// money is the dollar figure, or the statement that there is none. It is never
+// an estimate: a figure derived here would become the number a bill is argued
+// from.
+func (s spend) money() string {
+	if s.records == 0 || s.priced != s.records {
+		return "cost unreported"
+	}
+	if s.usd >= 1 {
+		return "$" + strconv.FormatFloat(s.usd, 'f', 2, 64)
+	}
+	return "$" + strconv.FormatFloat(s.usd, 'f', 4, 64)
+}
+
+// count is a token figure at the precision a person reads: exact while it is
+// small enough to mean something, and rounded once it is not.
+func count(n uint64) string {
+	switch {
+	case n >= 1_000_000:
+		return strconv.FormatFloat(float64(n)/1_000_000, 'f', 1, 64) + "m"
+	case n >= 1_000:
+		return strconv.FormatFloat(float64(n)/1_000, 'f', 1, 64) + "k"
+	default:
+		return strconv.FormatUint(n, 10)
+	}
+}
