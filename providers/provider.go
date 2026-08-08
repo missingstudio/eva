@@ -36,6 +36,12 @@ type Stream interface {
 	// Next returns the next payload of the turn, or io.EOF when the turn is
 	// complete. A provider failure arrives here as an error rather than as a
 	// panic.
+	//
+	// A payload says what happened; it does not say what becomes of it. A
+	// Degraded yielded here is a caveat rather than a record — the caller
+	// folds it into the one a Run closes with — so a Provider states each
+	// thing it noticed where it noticed it, and states it once, rather than
+	// saving them up to be emitted together.
 	Next(ctx context.Context) (events.Payload, error)
 
 	// Close releases the turn, whether or not it ran to completion.

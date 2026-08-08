@@ -12,4 +12,10 @@
 // An attempt that failed spent money and produced no tool call, so it is a
 // payload of its own rather than something the client swallows. The SDK's own
 // retrying is turned off here precisely so that every attempt is observable.
+//
+// What the API leaves out is said out loud on the same principle. A cost it
+// never reported and an answer it cut off at the cap both leave the stream
+// looking whole, so each is stated where it is learned; what a Run's single
+// caveat ends up reading is composed elsewhere, by the one thing that sees
+// every degradation rather than only this Provider's.
 package anthropic

@@ -127,18 +127,19 @@ func (s *stream) dial(ctx context.Context) {
 
 // pump advances the connection by one frame.
 //
-// Only two things become payloads: the text of an answer, and what the turn
-// cost. A frame that opens or closes a content block is real and says nothing
-// a Trace needs, and a thinking delta is billed inside the output tokens the
-// Usage already carries.
+// Only two things become payloads here: the text of an answer, and what the
+// turn cost. A frame that opens or closes a content block is real and says
+// nothing a Trace needs, and a thinking delta is billed inside the output
+// tokens the Usage already carries.
 func (s *stream) pump() {
 	if !s.sse.Next() {
-		// The cost is emitted whichever way the stream ended. A turn that
+		// The books are closed whichever way the stream ended. A turn that
 		// broke after message_start still spent the input tokens the API
 		// charged for, and a cost nobody recorded is a cost nobody can bill.
-		s.flush()
+		err := s.sse.Err()
+		s.end(err == nil)
 
-		if err := s.sse.Err(); err != nil {
+		if err != nil {
 			class, _ := classify(err)
 			s.fatal = fmt.Errorf("anthropic: %s: %w", class, err)
 			return
@@ -153,6 +154,15 @@ func (s *stream) pump() {
 		s.spent.opened(frame.Message.Usage)
 	case "message_delta":
 		s.spent.closed(frame.Usage)
+		if frame.Delta.StopReason == sdk.StopReasonMaxTokens {
+			// Said where it is learned. Nothing else in the stream says it:
+			// the frames of a truncated turn are the frames of a whole one,
+			// so an answer that stopped mid-sentence would otherwise reach
+			// the Trace looking finished.
+			s.queue = append(s.queue, events.Degraded{
+				Missing: []string{"the end of the answer, cut off at the model's token cap"},
+			})
+		}
 	case "content_block_delta":
 		if frame.Delta.Type == "text_delta" && frame.Delta.Text != "" {
 			s.queue = append(s.queue, events.Text{Block: int(frame.Index), Chunk: frame.Delta.Text})
@@ -160,17 +170,37 @@ func (s *stream) pump() {
 	}
 }
 
-// flush emits what the turn cost, once.
+// end closes the turn's books: what it cost, or that nobody said.
 //
-// A turn the API reported nothing for emits nothing. A Usage of all zeros
-// would say "none were used", which is a different claim from "we were never
-// told", and this is the field where the two must not be confused.
-func (s *stream) flush() {
-	if !s.spent.reported {
+// pump calls it exactly once, on the frame that ends the stream, and whole says
+// the stream reached its own end rather than breaking. Everything the API did
+// report is emitted either way, because a turn that broke after message_start
+// was charged for the input tokens regardless.
+//
+// A Provider says each thing where it learns it and says it once. What a Run's
+// single caveat ends up reading is composed at the close, by the one thing that
+// sees every degradation rather than only this Provider's.
+func (s *stream) end(whole bool) {
+	if s.spent.reported {
+		s.queue = append(s.queue, s.spent.usage())
 		return
 	}
-	s.spent.reported = false
-	s.queue = append(s.queue, s.spent.usage())
+	if !whole {
+		// A turn that broke says so in its claim, and a claim of failure is
+		// already the reason a Run is set aside. A caveat here would qualify a
+		// claim that needs no qualifying — and it would be the only caveat a
+		// failed turn ever got, since a turn that never connected at all
+		// reaches none of this.
+		return
+	}
+
+	// Silence is not the same as free. A Usage of all zeros would say "none
+	// were used", which is a different claim from "we were never told", so
+	// nothing is emitted — and the caveat is what stops the absence reading as
+	// a turn nobody looked at.
+	s.queue = append(s.queue, events.Degraded{
+		Missing: []string{"what this turn cost: the provider reported no usage"},
+	})
 }
 
 // spend accumulates what the API says a turn cost.

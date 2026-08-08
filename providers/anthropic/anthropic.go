@@ -14,11 +14,11 @@ import (
 // Name is what configuration selects this Provider by.
 const Name = "anthropic"
 
-// MaxTokens caps one answer. The API requires a cap and has no default of its
-// own, so every turn runs under this one. Nothing overrides it yet: the ticket
-// that needs a longer answer is the ticket that should add the configuration
-// key, and a knob no caller turns is a knob that is never right.
-const MaxTokens int64 = 8192
+// DefaultMaxTokens caps one answer when the caller chooses no cap of its own.
+// The API requires one and has no default, so a turn always runs under a
+// number — and a turn that ran under this one and hit it says so, rather than
+// returning a truncated answer that looks whole.
+const DefaultMaxTokens int64 = 8192
 
 // Options is everything the Provider needs to reach the API.
 type Options struct {
@@ -35,6 +35,9 @@ type Options struct {
 	// the public API.
 	BaseURL string
 
+	// MaxTokens caps one answer. Zero takes DefaultMaxTokens.
+	MaxTokens int64
+
 	// Retry is how a refused attempt is retried. The zero value takes
 	// DefaultPolicy.
 	Retry Policy
@@ -42,8 +45,9 @@ type Options struct {
 
 // Provider answers turns from the Anthropic Messages API.
 type Provider struct {
-	client sdk.Client
-	retry  Policy
+	client    sdk.Client
+	maxTokens int64
+	retry     Policy
 }
 
 var _ providers.Provider = (*Provider)(nil)
@@ -65,9 +69,14 @@ func New(o Options) (*Provider, error) {
 		opts = append(opts, option.WithBaseURL(o.BaseURL))
 	}
 
+	maxTokens := o.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = DefaultMaxTokens
+	}
 	return &Provider{
-		client: sdk.NewClient(opts...),
-		retry:  o.Retry.orDefault(),
+		client:    sdk.NewClient(opts...),
+		maxTokens: maxTokens,
+		retry:     o.Retry.orDefault(),
 	}, nil
 }
 
@@ -84,7 +93,7 @@ func (p *Provider) Stream(ctx context.Context, call providers.Call) (providers.S
 		return nil, err
 	}
 
-	params, err := request(call)
+	params, err := request(call, p.maxTokens)
 	if err != nil {
 		return nil, err
 	}
@@ -97,14 +106,14 @@ func (p *Provider) Stream(ctx context.Context, call providers.Call) (providers.S
 // retires in favour of Author; the mapping between them lives here and nowhere
 // else. A system Message is not a turn in the conversation, so it becomes the
 // system prompt rather than a message with a third role.
-func request(call providers.Call) (sdk.MessageNewParams, error) {
+func request(call providers.Call, maxTokens int64) (sdk.MessageNewParams, error) {
 	if call.Model == "" {
 		return sdk.MessageNewParams{}, errors.New("anthropic: the turn names no model")
 	}
 
 	params := sdk.MessageNewParams{
 		Model:     sdk.Model(call.Model),
-		MaxTokens: MaxTokens,
+		MaxTokens: maxTokens,
 	}
 
 	for _, m := range call.Messages {
