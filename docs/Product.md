@@ -1,5 +1,9 @@
 # Eva
 
+**Status: draft.** This document describes what Eva will be, not what it is. No code exists yet and stage 0 has not started. Verification basis: none — there is no implementation to verify against. The first stage to ship sets this to its commit.
+
+**Stage 0's event schema is settled and is no longer a draft.** It was resolved in a design session on 2026-08-08 and now lives in `docs/adr/0001`–`0008`, which own the reasoning. Part 2 below carries the resulting shape only. Where the two ever disagree, the ADRs win.
+
 One document. It goes from a single model call to an autonomous, multi-tenant software factory. It gives the frame, the primitive, the target architecture, the production platform, and the staged build path that connects them.
 
 **Implementation language: Go.** Use interfaces, not inheritance. Use one `go.work` workspace. Keep imports between layers one-way. All code sketches below are Go.
@@ -67,7 +71,9 @@ These are cheap on day one. They are very expensive to add on day four hundred.
 7. **Tenant and actor are on the primitive from commit one.** See Part 1.
 8. **One event schema, everywhere.** Every observable thing is an instance of one versioned, typed event schema: a model chunk, a tool call, a retry, an approval, a diff, or an escalation. Stage 0 defines this schema. The trace is the persisted event stream. Every UI is a fold over the stream. Adapters normalize their output into the schema. Hooks subscribe to the stream. There is no second vocabulary. 
 
-**The schema must be complete at stage 0**, because a field added later breaks every registered adapter and every stored trace. Completeness means: retries are events (they spend money and wall clock but emit no tool call), every event carries parent linkage for subagent attribution, and usage accounts for reasoning tokens and cached input tokens separately — not folded into output. A schema missing these silently corrupts the cost numbers the business is sold on (Part 3).
+**The schema must be complete at stage 0**, because a field added later breaks every registered adapter and every stored trace. Completeness means: retries are events (they spend money and wall clock but emit no tool call), every event carries parent linkage for subagent attribution, and usage accounts separately for cache **writes** and cache **reads** — which are priced differently — as well as for reasoning tokens where a provider reports them at all. A schema missing these silently corrupts the cost numbers the business is sold on (Part 3).
+
+The schema is now settled: see `docs/adr/0001`–`0008` for the decisions and Part 2 for the shape. An unreported field is `nil`, never `0` — Anthropic bills thinking tokens inside output tokens and reports no reasoning figure, so a zero there would be a confident lie rather than a measurement.
 
 9. **Every mutation is idempotent.** Every mutating call carries a request key: task creation, trigger admission, and enrollment. An exact replay returns the original record. A reuse of the key with different input is a visible conflict. Machine-generated work uses deterministic keys in a reserved namespace. A crash or a lost response can never produce zero records or two records.
 
@@ -121,7 +127,8 @@ type Outcome struct {
     Evidence *Evidence // Done, Failed
     Reason   string    // Failed
     Question string    // NeedsHuman
-    Resume   SessionID // NeedsHuman
+    Resume   Cursor    // NeedsHuman — the position the answer re-enters at,
+                       // not the session it belongs to (ADR 0008)
     Spent    Meter     // Exhausted
 }
 ```
@@ -265,32 +272,62 @@ type Job struct {
 // Event is THE platform event schema (invariant 8) — the same type Eva's own
 // loop emits from stage 0. Adapters normalize foreign output into it;
 // there is no adapter-only vocabulary.
+//
+// SETTLED. The reasoning for every line below is in docs/adr/0001-0008.
+// This block is the shape; the ADRs are the argument. Do not re-derive it here.
+const SchemaVersion = 1     // additive changes keep it; removals, retypes,
+                            // renames, enum narrowings increment it (ADR 0006)
+
 type Event struct {
-    Seq      uint64      // per-stream cursor, monotonic (see Protocols)
-    Kind     EventKind   // mandatory kinds below; unknown extras dropped
-    ParentID *RunID      // the tool call that spawned this unit; nil on the main
-                         // conversation. Without it a nested subagent's events
-                         // cannot be attributed in the fold and the dashboard
-                         // cannot attribute cost per task.
-    // Started    { Run RunID }
-    // ToolCall   { Name string, Args json.RawMessage, Redacted bool }
-    // ToolResult { Name string, OK bool, Bytes int }
-    // Text       { Chunk string }
-    // Usage      { Input, Output, Reasoning, CachedInput uint64, USD *float64 }
-    //              reasoning tokens are a material share of cost on thinking models;
-    //              cache-hit rate is the largest single lever on cost per task —
-    //              stage 11 cannot compute either without its own field
-    // Retry      { Attempt, Max int, DelayMS int, ErrorClass string }
-    //              a retry spends money and wall clock but produces no ToolCall;
-    //              ErrorClass from a fixed set: rate_limit | overloaded |
-    //              auth_failed | server_error | other
-    // Edit       { Path string, Hunks int }
-    // NeedsHuman { Question string, Resume SessionID }  // may fire mid-tool-call (§ Escalation)
-    // Finished   { Claim Claim }   // a claim, not a verdict
-    // Degraded   { Missing []string }  // optional; presence IS the degraded flag —
-    //              e.g. plugin/mcp start errors. Absent when clean, so a CI gate
-    //              fails on a non-empty array without a separate boolean (rule 8).
+    // Envelope: everything a projection needs to FOLD or FILTER (ADR 0001).
+    ID      EventID
+    Seq     uint64     // per-Session, assigned BY THE SINK at commit  (ADR 0008)
+    WireSeq uint64     // per-connection, assigned by the producer     (ADR 0008)
+    At      Timestamp  // monotonic + wall clock; stage 6 needs latency per step
+    Version uint32     // the SchemaVersion this record was written under
+    Kind    Kind       // closed set; an unrecognized kind arrives as Unknown
+                       // and marks the run Degraded — never dropped (ADR 0002)
+    Tenant  TenantID   // populated from commit one, before tenant two exists
+    Actor   Identity
+    Run     RunID
+    Session SessionID
+    Parent  *RunID     // the tool call that spawned this unit; nil on the main
+                       // conversation. Without it a nested subagent's events
+                       // cannot be attributed in the fold and the dashboard
+                       // cannot attribute cost per task.
+
+    // Payload: display-only detail. Sealed interface, so the closed kind set is
+    // enforced by the compiler rather than by review (ADR 0005).
+    Payload Payload
 }
+
+type Payload interface{ isPayload() }
+
+// Started    { Capabilities Capabilities }   // per-run, and the per-run value wins
+// Text       { Block int, Chunk string }     // coalesced by the sink (ADR 0004)
+// ToolCall   { Name string, Args json.RawMessage, Redacted bool }
+// ToolResult { Name string, Disposition Disposition, Bytes int }
+//              Disposition from a closed set (ADR 0007): ok | denied | failed |
+//              skipped | cancelled | unknown_tool | budget_denied. Each implies a
+//              different recovery, so one boolean would make the model guess.
+// Usage      { InputTokens, OutputTokens, CacheWriteTokens, CacheReadTokens uint64
+//              ReasoningTokens, ServerToolTokens *uint64, USD *float64 }
+//              cache WRITE and READ are priced differently, so one field cannot
+//              compute cost. nil != 0: nil means the provider did not report it,
+//              0 means none were used. USD is never an estimate. (ADR 0003)
+// Retry      { Attempt, Max int, DelayMS int, ErrorClass string }
+//              a retry spends money and wall clock but produces no ToolCall;
+//              ErrorClass from a fixed set: rate_limit | overloaded |
+//              auth_failed | server_error | other
+// Edit       { Path string, Hunks int }
+// NeedsHuman { Question string, Resume Cursor }  // may fire mid-tool-call
+//              (§ Escalation). Resume is the position the answer re-enters at,
+//              not the session it belongs to.
+// Finished   { Claim Claim }   // a claim, not a verdict
+// Degraded   { Missing []string }  // optional; presence IS the degraded flag —
+//              e.g. plugin/mcp start errors. Absent when clean, so a CI gate
+//              fails on a non-empty array without a separate boolean (rule 8).
+// Unknown    { Kind string, Raw json.RawMessage }   // ADR 0002
 ```
 
 ### Capability matrix
@@ -456,7 +493,9 @@ The `.eva/` directory of a cloned repo is untrusted content. It is in the same c
 
 **Control plane ↔ daemon — one bidirectional stream.** Use gRPC bidirectional streaming or WebSocket. Leases go down. Events go up. The worker connects outbound only.
 
-The stream is **cursor-addressed**. Every event carries a monotonic per-stream sequence number (`Event.Seq`). Consumers acknowledge by cursor. A side that reconnects resumes from its last committed cursor, and the peer replays. The cursor advances only after a durable commit. Thus a dropped connection can never lose trace events. Lost events poison the eval suite (risk #3).
+The stream is **cursor-addressed**. Every event carries a monotonic per-connection sequence number (`Event.WireSeq`). Consumers acknowledge by cursor. A side that reconnects resumes from its last committed cursor, and the peer replays. The cursor advances only after a durable commit. Thus a dropped connection can never lose trace events. Lost events poison the eval suite (risk #3).
+
+**`WireSeq` is not `Seq`** (ADR 0008). `WireSeq` is wire position, assigned by the producer. `Seq` is trace position, assigned by the sink at commit, per Session. They diverge by construction, because the sink coalesces many wire chunks into one trace event and appends an assistant message together with all of its tool results as one atomic write. The two meet at exactly one point: the sink's successful append, which is the only thing that may advance a cursor.
 
 **Unit ↔ unit — the task graph mediates, not direct chat.** Unit A emits an artifact and evidence. The control plane routes them as input to the spec of Unit B. Every hop is budgeted, traced, replayable, and verified. Direct messaging exists only between a parent harness and its own subagents. It stays inside one budget and one trace.
 
@@ -691,12 +730,24 @@ Each stage also declares its **in/out contract**. The contract shows what a user
 A model client with a good terminal.
 
 ```
-events/       THE event schema: typed, versioned, cursor-numbered (invariant 8)
+events/       THE event schema: typed, versioned, cursor-numbered (invariant 8).
+              SETTLED — see docs/adr/0001-0008. Sealed payload interface, closed
+              kind set, Unknown preserved, envelope carries the fold keys.
+trace/        the TraceSink interface + a JSONL implementation. Ships HERE, not at
+              stage 6, because invariant 1 admits no quick paths and because the
+              sink is what OWNS Seq: it assigns trace position at commit and
+              appends an assistant message with all of its tool results as one
+              atomic write. Stage 6 adds replay, the public-contract version
+              freeze, and sink-side redaction — it does not add the sink.
 provider/     Provider interface + anthropic impl, streaming, retry w/ backoff,
-              token accounting (openai-compatible impl at stage 1 — local models,
-              cheap eval runs)
+              token accounting — usage arrives split across message_start (input)
+              and message_delta (output), so a Usage event accumulates before it
+              emits (openai-compatible impl at stage 1 — local models, cheap
+              eval runs; it is also the only provider that reports reasoning
+              tokens, which is why the field is nullable)
 config/       ~/.eva/config.toml, profiles, key resolution, model selection
-session/      in-memory transcript, turn structure
+session/      turn structure over the durable transcript; the Session is what
+              resume, branch, and rewind later act on (see CONTEXT.md)
 render/       streaming markdown to TTY, syntax highlight, spinner, cost line
               — a pure consumer of events/; the core never renders
 cli/          repl, one-shot mode, print/JSON mode, slash command dispatch
@@ -714,10 +765,17 @@ eva > /model  /cost  /clear  /help
 
 **In:** prompt text, piped stdin, config, and an API key. **Out:** answers and typed events. There is no file access and there are no tools yet.
 
-Define the `Unit` interface, the event schema, and the trace invariant here, before the model client. Include `Tenant` and `Actor` on `Spec`. If you add tenancy later, you touch every table, query, cache key, object path, and trace record.
+Define the `Unit` interface, the event schema, and the trace invariant here, before the model client. Include `Tenant` and `Actor` on `Spec` — and on the `Event` envelope, for the same reason. If you add tenancy later, you touch every table, query, cache key, object path, and trace record.
 
 **Primitive:** context assembly and budget accounting.
 **Exit test:** a multi-turn conversation keeps the correct history, streams the output, and shows the per-turn cost and the cumulative cost. Ctrl-C cancels in mid-stream and does not corrupt the session. `eva -p --json` emits the identical turn as typed events, with no TTY rendering in the output path. The base system prompt has a byte budget, and CI enforces it as a gate (owainlewis/neo's bar is ≤ 2 KiB). Thus context spend is a reviewed, versioned artifact from the first commit.
+
+Four assertions come from the settled schema, and each one fails loudly if the sink is wrong:
+
+- A `Usage` event on a cached turn reports cache **write** and cache **read** as separate non-zero figures, and `ReasoningTokens` is **absent** rather than `0` on an Anthropic turn.
+- A synthetic unknown event kind survives a round-trip through the JSONL sink with its bytes intact, and the run carries `Degraded`.
+- `kill -9` in mid-stream leaves no assistant message persisted without its tool results, and no partial turn group.
+- Trace `Seq` is dense and gapless per Session after a run that streamed thousands of text chunks — proving the sink assigned it and coalesced, rather than passing `WireSeq` through.
 
 ### Stage 1: Workflow
 
@@ -914,7 +972,8 @@ eva verify --spec task.yaml --workspace .
 ### Stage 6: Memory and trace
 
 ```
-trace/        JSONL trajectories, replayable, cost + latency + tokens per step
+trace/        the sink itself shipped at stage 0. This stage adds replay, the
+              cost + latency + tokens fold per step, and sink-side redaction
 memory/
   session/     compaction artifacts
   project/     learned facts: conventions, gotchas, where things live.
@@ -936,7 +995,7 @@ eva > (a task similar to last week's)
 
 **In:** past runs. **Out:** replay, and a second run that costs less than the first.
 
-The trace is the persisted event stream from stage 0. This stage does not invent a schema. It **makes the existing schema a versioned public contract**, because adapters and extensions will emit into it. Redaction occurs at the sink, inline.
+The trace is the persisted event stream from stage 0, written by the sink that stage 0 already built. This stage invents neither a schema nor a sink. It **makes the existing schema a versioned public contract**, because adapters and extensions will emit into it — which is the point at which `SchemaVersion` stops being ours to change freely (ADR 0006). Redaction occurs at the sink, inline; there is nothing to redact before stage 2 brings tools and stage 4 brings secrets, which is why it lands here rather than at stage 0.
 
 **Exit test:** the second run of a similar task is measurably cheaper and faster. Compaction achieves a measured compression ratio on the fixture set (pigo's bar is 128k → 12k), and it loses no goal. If it does not, your memory is decoration.
 
