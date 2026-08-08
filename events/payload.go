@@ -52,7 +52,16 @@ type Capabilities struct {
 }
 
 // Started opens a Run.
+//
+// It carries the Spec's intent because the Trace is the single source of
+// truth, and a transcript whose first message is missing is one a Trace cannot
+// reconstruct. Without this field the prompt exists only in the process that
+// answered it, and resume, branch, and rewind have nothing to resume from.
 type Started struct {
+	// Intent is what the Spec asked for: the first message of the transcript.
+	// It is absent on a Run opened by something other than a Spec, which is
+	// why it is omitempty rather than always present.
+	Intent       string       `json:"intent,omitempty"`
 	Capabilities Capabilities `json:"capabilities"`
 }
 

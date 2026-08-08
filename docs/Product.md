@@ -305,7 +305,11 @@ type Event struct {
 
 type Payload interface{ isPayload() }
 
-// Started    { Capabilities Capabilities }   // per-run, and the per-run value wins
+// Started    { Intent string, Capabilities Capabilities }
+//              capabilities are per-run, and the per-run value wins. Intent is
+//              the Spec's, and it is what puts the prompt in the Trace: the
+//              transcript is a fold over the stream, so a first message that
+//              is not a record is a transcript no resume can rebuild.
 // Text       { Block int, Chunk string }     // coalesced by the sink (ADR 0004)
 // ToolCall   { Name string, Args json.RawMessage, Redacted bool }
 // ToolResult { Name string, Disposition Disposition, Bytes int }
