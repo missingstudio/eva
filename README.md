@@ -10,7 +10,13 @@
 
 An autonomous, multi-tenant, AI-native software factory. It builds, tests, improves, and maintains software with minimal human intervention.
 
-**Status:** stage 0 in progress. The workspace, the layer boundaries, and CI are in; no behaviour yet.
+**Status:** stage 0 in progress. The spine runs: a prompt goes in, typed Events come out, and a Trace lands on disk. There is no terminal UI and no live provider yet.
+
+```
+eva -p "what is this project" --json
+```
+
+Configuration is a file, not a pile of flags. `eva help` prints the command surface; `~/.eva/config.toml` holds the rest, and an API key is read from the environment and never from that file.
 
 ## Documents
 
