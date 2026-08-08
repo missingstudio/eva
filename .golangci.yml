@@ -143,6 +143,14 @@ linters:
             - charm.land/bubbles
             - charm.land/lipgloss
             - charm.land/glamour
+            # colorprofile, for the console. An interactive program renders
+            # its own view against what the terminal can show, and puts what
+            # it is handed above that view exactly as it was handed it — so a
+            # turn going there is reduced before the hand-over, and this is
+            # what knows how. It is on this list and not on render's: the
+            # frontend owns the terminal, and the renderer is not allowed to
+            # know there is one.
+            - github.com/charmbracelet/colorprofile
 
         # render is a pure consumer of Events. It sits inside the frontend and
         # is held to less than the frontend is: the Event schema and the

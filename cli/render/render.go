@@ -25,6 +25,21 @@ import (
 	"github.com/missingstudio/eva/events"
 )
 
+// Screen is where a finished turn goes.
+//
+// A Renderer folds Events into a turn and hands the whole of it over; what
+// happens to it then belongs to whoever owns the destination. The one-shot
+// path owns a byte stream and reduces the turn's colour on the way out. The
+// interactive program owns the terminal and puts the turn above its own view,
+// which it does with the bytes exactly as it was handed them — so it reduces
+// the colour first, and it can only do that if the turn arrives whole rather
+// than in pieces.
+type Screen interface {
+	// Show displays one finished turn: the answer, the caveat if the Run
+	// carried one, and the cost line.
+	Show(turn string) error
+}
+
 // Renderer shows committed Events to a person.
 //
 // It is a Subscriber, which is what makes it a fold over the Trace rather than
@@ -33,7 +48,7 @@ import (
 // package does not import core to say so — an assertion at the one place a
 // Renderer is built is enough, and the shorter import list is worth more.
 type Renderer struct {
-	out      io.Writer
+	screen   Screen
 	markdown *glamour.TermRenderer
 	// costStyle dims the cost line. It is subordinate to the answer: a
 	// developer reads it at the end of a turn, not during one.
@@ -56,7 +71,8 @@ type Renderer struct {
 	missing []string
 }
 
-// New builds a Renderer that writes to out.
+// New builds a Renderer that writes each finished turn to out, with its colour
+// reduced to what out can show.
 //
 // dark says whether the terminal has a dark background. It is a parameter
 // rather than something this package detects, because detecting it means
@@ -64,6 +80,33 @@ type Renderer struct {
 // owns the outside world asks, and hands in the answer. There is no
 // configuration key: a style nobody chose is the only style there is.
 func New(out io.Writer, dark bool) (*Renderer, error) {
+	return NewOn(stream{out: out}, dark)
+}
+
+// NewOn builds a Renderer that shows each finished turn on screen, with its
+// colour as it was chosen rather than as the destination can show it.
+//
+// It is for the caller that owns the terminal and adapts the colour itself.
+// A Renderer that adapted first would have nothing left to adapt: a screen is
+// not a byte stream, so there is nothing to ask what it can show, and the
+// honest answer for something that is not a terminal is no colour at all.
+func NewOn(screen Screen, dark bool) (*Renderer, error) {
+	r := &Renderer{screen: screen}
+	if err := r.Background(dark); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// Background tells the Renderer what colour the terminal is.
+//
+// It exists for the caller that learns the answer after the Renderer is built,
+// which is the caller that asks the terminal properly: the answer comes back
+// as a message, some time after the interface is already up.
+//
+// What the Session has spent is not disturbed. A terminal that answered late
+// must not also reset what the conversation has cost.
+func (r *Renderer) Background(dark bool) error {
 	// The markdown renderer no longer detects a background for itself and
 	// defaults to dark, so the style is named here rather than left to it.
 	style := styles.LightStyle
@@ -72,14 +115,27 @@ func New(out io.Writer, dark bool) (*Renderer, error) {
 	}
 	markdown, err := glamour.NewTermRenderer(glamour.WithStandardStyle(style))
 	if err != nil {
-		return nil, fmt.Errorf("render: build the markdown renderer: %w", err)
+		return fmt.Errorf("render: build the markdown renderer: %w", err)
 	}
 
-	return &Renderer{
-		out:       out,
-		markdown:  markdown,
-		costStyle: lipgloss.NewStyle().Faint(true).Foreground(lipgloss.LightDark(dark)(costOnLight, costOnDark)),
-	}, nil
+	r.markdown = markdown
+	r.costStyle = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.LightDark(dark)(costOnLight, costOnDark))
+	return nil
+}
+
+// stream is the Screen a byte stream is: it writes the turn out, and that is
+// where the colour meets a destination that has a capability to be reduced to.
+type stream struct{ out io.Writer }
+
+// Show writes one finished turn.
+func (s stream) Show(turn string) error {
+	// Through lipgloss rather than to the writer directly: this is where
+	// colour is adapted to what the terminal can show, and where a terminal
+	// that shows none has the escapes removed rather than printed.
+	if _, err := lipgloss.Fprint(s.out, turn); err != nil {
+		return fmt.Errorf("render: write the turn: %w", err)
+	}
+	return nil
 }
 
 // The cost line's grey, one per background. Both are true colour, and neither
@@ -129,33 +185,34 @@ func (r *Renderer) reset() {
 	r.missing = nil
 }
 
-// show writes the turn: the answer, then what it cost.
+// show hands the turn to the screen: the answer, then what it cost.
+//
+// The whole turn goes over in one call. A turn handed over in three would be
+// three things to a screen that places what it is given, and the answer, the
+// caveat, and the figures are one thing a person reads.
 func (r *Renderer) show() error {
+	var turn strings.Builder
+
 	if answer := strings.TrimSpace(r.answer.String()); answer != "" {
 		styled, err := r.markdown.Render(answer)
 		if err != nil {
 			return fmt.Errorf("render: the answer: %w", err)
 		}
-		// Through lipgloss rather than to the writer directly: this is where
-		// colour is adapted to what the terminal can show, and where a
-		// terminal that shows none has the escapes removed rather than
-		// printed.
-		if _, err := lipgloss.Fprint(r.out, styled); err != nil {
-			return fmt.Errorf("render: write the answer: %w", err)
-		}
+		turn.WriteString(styled)
 	}
 
 	// The caveat comes before the cost line, because it qualifies it. A reader
 	// who has already taken the figures as whole has read them once too many.
 	if len(r.missing) > 0 {
-		caveat := "degraded: " + strings.Join(r.missing, ", ")
-		if _, err := lipgloss.Fprintln(r.out, r.costStyle.Render(caveat)); err != nil {
-			return fmt.Errorf("render: write the caveat: %w", err)
-		}
+		turn.WriteString(r.costStyle.Render("degraded: " + strings.Join(r.missing, ", ")))
+		turn.WriteString("\n")
 	}
 
-	if _, err := lipgloss.Fprintln(r.out, r.costStyle.Render(costLine(r.turn, r.session))); err != nil {
-		return fmt.Errorf("render: write the cost line: %w", err)
+	turn.WriteString(r.costStyle.Render(costLine(r.turn, r.session)))
+	turn.WriteString("\n")
+
+	if err := r.screen.Show(turn.String()); err != nil {
+		return err
 	}
 
 	r.reset()

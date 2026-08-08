@@ -264,6 +264,54 @@ func TestACaveatDoesNotSurviveIntoTheNextTurn(t *testing.T) {
 	}
 }
 
+// A terminal that says what colour it is after the Renderer was built — which
+// is every terminal asked properly, because the answer comes back as a message
+// — restyles what follows. What it must not do is reset what the Session has
+// spent.
+func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	var out bytes.Buffer
+	renderer, err := render.New(&out, true)
+	if err != nil {
+		t.Fatalf("build a Renderer: %v", err)
+	}
+
+	commit := func(payloads ...events.Payload) {
+		t.Helper()
+		for i, payload := range payloads {
+			e := events.Event{Seq: uint64(i + 1), Version: events.SchemaVersion, Payload: payload}
+			e.Kind, _ = events.KindOf(payload)
+			if err := renderer.Committed(context.Background(), e); err != nil {
+				t.Fatalf("commit %s: %v", e.Kind, err)
+			}
+		}
+	}
+
+	commit(answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340})...)
+	dark := out.String()
+
+	if err := renderer.Background(false); err != nil {
+		t.Fatalf("take the terminal's answer: %v", err)
+	}
+	out.Reset()
+	commit(answered("second", events.Usage{InputTokens: 800, OutputTokens: 60})...)
+	light := out.String()
+
+	_, session, _ := strings.Cut(costLines(t, plain(light))[0], "session")
+	for _, want := range []string{"2.0k in", "400 out"} {
+		if !strings.Contains(session, want) {
+			t.Errorf("the Session does not report %q — the answer reset what it had spent: %s", want, session)
+		}
+	}
+	if plain(dark) == dark || plain(light) == light {
+		t.Fatal("one of the turns carries no style at all, so the two cannot be compared")
+	}
+	if dark == light {
+		t.Error("the turn after the answer is styled for the terminal it was not")
+	}
+}
+
 // costLines picks the cost lines out of rendered output.
 func costLines(t *testing.T, out string) []string {
 	t.Helper()
