@@ -58,6 +58,13 @@ One typed, versioned, sequence-numbered record of something observable. There is
 The persisted Event stream of a Run. The single source of truth — every projection is a fold over it, and anything a Trace cannot reconstruct is a second source of truth and a bug.
 _Avoid_: Trajectory, log, history, audit trail
 
+**Recorder**:
+The one path an Event takes to the Trace. It stamps the envelope, commits a group, and publishes what was committed. A Unit says what happened; it does not decide how that is recorded, which is what stops a Unit recording one thing and reporting another.
+_Avoid_: Logger, writer, emitter (an emitter stamps, and stamping alone is not recording)
+
+**Subscriber**:
+A consumer of committed Events. It sees a record after the Trace holds it, never before, so what a Subscriber shows is the Trace rather than a claim about it. Every projection is one — the transcript, the machine-readable stream, the dashboard.
+
 **Evidence**:
 The output of a Verifier run against a Spec's acceptance criteria. Distinct from a Claim.
 
