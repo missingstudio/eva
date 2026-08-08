@@ -10,11 +10,14 @@
 
 An autonomous, multi-tenant, AI-native software factory. It builds, tests, improves, and maintains software with minimal human intervention.
 
-**Status:** stage 0 in progress. The spine runs: a prompt goes in, typed Events come out, and a Trace lands on disk. There is no terminal UI and no live provider yet.
+**Status:** stage 0 in progress. The spine runs: a prompt goes in, typed Events come out, and a Trace lands on disk. A one-shot turn renders as styled markdown and reports what it cost. There is no REPL yet.
 
 ```
-eva -p "what is this project" --json
+eva -p "what is this project"           # the answer, rendered, and what it cost
+eva -p "what is this project" --json    # the same turn as typed Events
 ```
+
+The style follows the terminal's background and the colour follows what the terminal can show — neither is configured. The machine-readable path builds no renderer at all, so what a script parses carries no terminal escapes.
 
 Configuration is a file, not a pile of flags. `eva help` prints the command surface; `~/.eva/config.toml` holds the rest, and an API key is read from the environment and never from that file.
 

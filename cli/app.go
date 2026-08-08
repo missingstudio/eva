@@ -8,8 +8,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
+	"charm.land/lipgloss/v2"
+	"github.com/missingstudio/eva/cli/render"
 	"github.com/missingstudio/eva/config"
 	"github.com/missingstudio/eva/core"
 	"github.com/missingstudio/eva/events"
@@ -35,6 +38,7 @@ const (
 const usage = `eva — a model client that leaves a complete record.
 
 USAGE:
+  eva -p <prompt>              One-shot: the answer, rendered, and what it cost
   eva -p <prompt> --json       One-shot: the turn as typed Events on stdout
   eva help                     Show this help
 
@@ -107,11 +111,8 @@ func parse(args []string) (options, error) {
 		return options{}, fmt.Errorf("unexpected argument %q", rest[0])
 	}
 
-	switch {
-	case opts.prompt == "":
-		return options{}, errors.New("interactive mode is not built yet; answer one prompt with -p <prompt> --json")
-	case !opts.json:
-		return options{}, errors.New("rendered output is not built yet; add --json")
+	if opts.prompt == "" {
+		return options{}, errors.New("interactive mode is not built yet; answer one prompt with -p <prompt>")
 	}
 	return opts, nil
 }
@@ -142,6 +143,11 @@ func run(ctx context.Context, opts options, stdout io.Writer) (code int, err err
 
 	session := core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor())
 
+	output, err := projection(opts, stdout)
+	if err != nil {
+		return ExitFailure, err
+	}
+
 	// The Session comes first, so the transcript is folded before the Event
 	// is printed. Both are projections of the same committed record; the order
 	// only decides which one is built first.
@@ -153,7 +159,7 @@ func run(ctx context.Context, opts options, stdout io.Writer) (code int, err err
 		Session:     session.ID,
 		Now:         now,
 		NewID:       func() events.EventID { return events.EventID(newID("evt")) },
-		Subscribers: []core.Subscriber{session, eventStream{out: stdout}},
+		Subscribers: []core.Subscriber{session, output},
 	})
 	if err != nil {
 		return ExitFailure, err
@@ -178,6 +184,38 @@ func run(ctx context.Context, opts options, stdout io.Writer) (code int, err err
 		return ExitFailure, fmt.Errorf("%s: %s", outcome.Result, outcome.Summary)
 	}
 	return ExitOK, nil
+}
+
+// projection builds what writes to stdout: typed Events, or the turn rendered
+// for a person. Both are folds over the same committed record, which is what
+// lets them be swapped here and still describe one turn.
+//
+// The two are exclusive, and the machine-readable one builds no Renderer at
+// all. Not built and suppressed — never built. Otherwise the terminal stack
+// would sit in the output path a script parses, and the render boundary would
+// stop being a property of the program and become a habit.
+func projection(opts options, stdout io.Writer) (core.Subscriber, error) {
+	if opts.json {
+		return eventStream{out: stdout}, nil
+	}
+	return render.New(stdout, darkBackground(stdout))
+}
+
+// darkBackground asks the terminal what colour it is.
+//
+// Nothing configures this. A style a user had to select is a style most users
+// never select, and the answer is one the terminal already knows.
+//
+// A destination that is not a terminal has nothing to ask, and gets dark —
+// which is what an unknown terminal is assumed to be, and what the markdown
+// renderer would have defaulted to anyway. Colour never reaches such a
+// destination in any case: it is removed on the way out.
+func darkBackground(stdout io.Writer) bool {
+	file, isFile := stdout.(*os.File)
+	if !isFile {
+		return true
+	}
+	return lipgloss.HasDarkBackground(os.Stdin, file)
 }
 
 // open builds the Provider configuration selects.

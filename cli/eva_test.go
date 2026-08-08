@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -139,6 +140,51 @@ func (w *world) answer(t *testing.T, prompt string) result {
 		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
 	}
 	return got
+}
+
+// render runs the one-shot turn as a person sees it.
+func (w *world) render(t *testing.T, prompt string) result {
+	t.Helper()
+	got := w.run(t, "-p", prompt)
+	if got.code != 0 {
+		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
+	}
+	return got
+}
+
+// escape matches an ANSI style sequence, so that a test can assert on the words
+// a person reads rather than on the bytes that colour them.
+var escape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func plain(s string) string { return escape.ReplaceAllString(s, "") }
+
+// recorded is the answer the checked-in recording replays, folded.
+const recorded = "Eva is an autonomous, multi-tenant, AI-native software factory."
+
+// costLine picks the cost line out of rendered output. It is the line that
+// reports both figures, so that a line of the answer beginning with the same
+// word cannot be mistaken for it.
+func costLine(t *testing.T, out string) string {
+	t.Helper()
+
+	for _, line := range strings.Split(plain(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "turn ") && strings.Contains(line, "session ") {
+			return line
+		}
+	}
+	t.Fatalf("the output holds no cost line:\n%s", out)
+	return ""
+}
+
+// figure is a token count as the cost line writes it. The rounding rule is
+// stated here rather than borrowed from the renderer, so that a test comparing
+// the two projections is comparing them rather than agreeing with one of them.
+func figure(n uint64) string {
+	if n < 1000 {
+		return strconv.FormatUint(n, 10)
+	}
+	return strconv.FormatFloat(float64(n)/1000, 'f', 1, 64) + "k"
 }
 
 func decodeStream(t *testing.T, s string) []events.Event {
@@ -339,6 +385,153 @@ func TestTheOutputPathRendersNothing(t *testing.T) {
 	}
 	if got.stderr != "" {
 		t.Errorf("stderr = %q, want nothing on a turn that worked", got.stderr)
+	}
+	// Every line is an Event and there is nothing else. A cost line here would
+	// mean the renderer had been built on the path a script parses.
+	for i, line := range strings.Split(strings.TrimSuffix(got.stdout, "\n"), "\n") {
+		if strings.HasPrefix(line, "turn ") {
+			t.Fatalf("line %d of the machine-readable stream is a cost line:\n%s", i+1, line)
+		}
+	}
+}
+
+// The turn a person sees: the answer as styled markdown, and what it cost.
+func TestARenderedTurnShowsTheAnswerAndWhatItCost(t *testing.T) {
+	w := newWorld(t, "")
+	got := w.render(t, "what is this project")
+
+	if !strings.Contains(plain(got.stdout), recorded) {
+		t.Errorf("the rendered turn does not hold the answer:\n%s", got.stdout)
+	}
+	if got.stderr != "" {
+		t.Errorf("stderr = %q, want nothing on a turn that worked", got.stderr)
+	}
+
+	// The recorded figures, per turn and cumulative, with cache writes and
+	// cache reads apart and no dollar figure the provider never reported.
+	line := costLine(t, got.stdout)
+	turn, session, found := strings.Cut(line, "session")
+	if !found {
+		t.Fatalf("the cost line reports no cumulative spend: %s", line)
+	}
+	for _, want := range []string{"1.2k in", "340 out", "96 write", "1.0k read", "cost unreported"} {
+		if !strings.Contains(turn, want) {
+			t.Errorf("the turn does not report %q: %s", want, turn)
+		}
+	}
+	for _, want := range []string{"1.2k in", "340 out", "cost unreported"} {
+		if !strings.Contains(session, want) {
+			t.Errorf("the Session does not report %q: %s", want, session)
+		}
+	}
+	if strings.Contains(line, "$") {
+		t.Errorf("the cost line shows a dollar figure the recording never reported: %s", line)
+	}
+}
+
+// The two output modes are two projections of one Trace, so they describe one
+// turn. A script that parses --json and a person reading the rendered turn
+// cannot be shown different answers or different figures.
+func TestTheRenderedTurnAndTheMachineReadableTurnDescribeTheSameTurn(t *testing.T) {
+	const prompt = "what is this project"
+
+	// One world, two runs: the recording holds one turn and a fresh process
+	// replays it from the start, so both runs answer the same turn.
+	w := newWorld(t, "")
+	rendered := w.render(t, prompt)
+	printed := decodeStream(t, w.answer(t, prompt).stdout)
+
+	if len(printed) != 4 {
+		t.Fatalf("the machine-readable turn is %d records of kinds %v, want the four of a plain turn",
+			len(printed), kinds(printed))
+	}
+
+	text, ok := printed[1].Payload.(events.Text)
+	if !ok {
+		t.Fatalf("payload = %#v, want Text", printed[1].Payload)
+	}
+	if !strings.Contains(plain(rendered.stdout), text.Chunk) {
+		t.Errorf("the rendered answer is not the Text the Trace holds:\nrendered: %s\ntrace: %q",
+			plain(rendered.stdout), text.Chunk)
+	}
+
+	usage, ok := printed[2].Payload.(events.Usage)
+	if !ok {
+		t.Fatalf("payload = %#v, want Usage", printed[2].Payload)
+	}
+	// Every figure the Usage Event carries, and not a subset of them: a cost
+	// line that reported three of four would still describe a different turn
+	// from the one on stdout.
+	line := costLine(t, rendered.stdout)
+	for _, want := range []string{
+		figure(usage.InputTokens) + " in",
+		figure(usage.OutputTokens) + " out",
+		figure(usage.CacheWriteTokens) + " write",
+		figure(usage.CacheReadTokens) + " read",
+	} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the cost line does not report %q, which the Usage Event holds: %s", want, line)
+		}
+	}
+	if usage.USD != nil {
+		t.Fatal("the recording reports a dollar figure, and the assertion below assumes it does not")
+	}
+	if !strings.Contains(line, "cost unreported") {
+		t.Errorf("the Usage Event carries no dollar figure and the cost line does not say so: %s", line)
+	}
+}
+
+// Colour is adapted to what the terminal can show rather than emitted as
+// written. A 16-colour terminal is sent 16 colours, a 256-colour terminal is
+// sent 256, and something that is not a terminal is sent none.
+func TestColourIsAdaptedToTheTerminalRatherThanEmittedRaw(t *testing.T) {
+	const (
+		indexed   = "38;5;"
+		trueColor = "38;2;"
+	)
+
+	for _, c := range []struct {
+		name     string
+		env      []string
+		styled   bool
+		rejected []string
+	}{
+		{
+			name:     "a terminal of sixteen colours",
+			env:      []string{"TERM=xterm", "CLICOLOR_FORCE=1"},
+			styled:   true,
+			rejected: []string{indexed, trueColor},
+		},
+		{
+			name:     "a terminal of 256 colours",
+			env:      []string{"TERM=xterm-256color", "CLICOLOR_FORCE=1"},
+			styled:   true,
+			rejected: []string{trueColor},
+		},
+		{
+			name:   "no terminal at all",
+			env:    nil,
+			styled: false,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, "")
+			w.env = append(w.env, c.env...)
+			got := w.render(t, "what is this project")
+
+			if styled := strings.ContainsRune(got.stdout, 0x1b); styled != c.styled {
+				t.Fatalf("styled = %v, want %v:\n%q", styled, c.styled, got.stdout)
+			}
+			for _, rejected := range c.rejected {
+				if strings.Contains(got.stdout, rejected) {
+					t.Errorf("the output carries a %q colour this terminal cannot show:\n%q", rejected, got.stdout)
+				}
+			}
+			// Whatever the colour, the words are the same words.
+			if !strings.Contains(plain(got.stdout), recorded) {
+				t.Errorf("the answer did not survive the colour adaptation:\n%q", got.stdout)
+			}
+		})
 	}
 }
 
@@ -675,7 +868,6 @@ func TestTheCommandLineFailsClosed(t *testing.T) {
 		args []string
 	}{
 		{"no arguments at all", nil},
-		{"a prompt with no output mode", []string{"-p", "hello"}},
 		{"a flag Eva does not have", []string{"-p", "hello", "--json", "--turbo"}},
 		{"an argument that is not a flag", []string{"-p", "hello", "--json", "extra"}},
 	} {

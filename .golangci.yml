@@ -124,6 +124,10 @@ linters:
           list-mode: strict
           files:
             - "**/cli/**"
+            # Rendering is governed by render below, which is narrower. Two
+            # rules matching one file both apply, so this one stands aside
+            # rather than the other one being widened to match it.
+            - "!**/cli/render/**"
           allow:
             - $gostd
             - github.com/missingstudio/eva/events
@@ -137,5 +141,27 @@ linters:
             - github.com/missingstudio/eva/cli
             - charm.land/bubbletea
             - charm.land/bubbles
+            - charm.land/lipgloss
+            - charm.land/glamour
+
+        # render is a pure consumer of Events. It sits inside the frontend and
+        # is held to less than the frontend is: the Event schema and the
+        # terminal libraries, and nothing else Eva has.
+        #
+        # The omissions are the rule. A renderer that could reach a provider, a
+        # Session, or the Trace could show a person a turn the record does not
+        # hold — and the machine-readable path, which builds no renderer, would
+        # stop describing the same turn. core is absent too, which costs a
+        # compile-time assertion that the Renderer satisfies Subscriber; the
+        # assertion happens where a Renderer is built instead.
+        render:
+          list-mode: strict
+          files:
+            - "**/cli/render/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/events
+            # See the events rule: this reaches the external test package only.
+            - github.com/missingstudio/eva/cli/render
             - charm.land/lipgloss
             - charm.land/glamour
