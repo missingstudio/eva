@@ -63,22 +63,69 @@ type world struct {
 	env    []string
 }
 
-// newWorld writes a configuration that answers from the checked-in recording,
-// and puts the Trace somewhere this test owns. extra is appended to the
-// provider table.
-func newWorld(t *testing.T, extra string) *world {
+// provider is what a world's [provider] table says, with the model and the
+// credential that belong beside it.
+//
+// It is the only thing that differs between the runs in this package. Where
+// the Trace goes, who the actor is, and that no developer's home directory is
+// in reach are the same whether a turn is answered from a recording or from an
+// API — so they are written once, below, and a test names only the part that
+// is about it.
+type provider struct {
+	model string
+	table string
+	// key is what reaches the process as $ANTHROPIC_API_KEY. It is empty for a
+	// run that must not need one.
+	key string
+}
+
+// fake answers from a recording on disk: no network, and no credential.
+func fake(script string) provider {
+	return provider{
+		model: "test-model",
+		table: fmt.Sprintf("[provider]\nname = \"fake\"\nscript = %q\n", script),
+	}
+}
+
+// live answers from an API at base.
+func live(base string) provider {
+	return provider{
+		model: "claude-test",
+		table: fmt.Sprintf("[provider]\nname = \"anthropic\"\nbase_url = %q\n", base),
+		key:   "sk-ant-test",
+	}
+}
+
+// unnamed answers from an API at base with no provider named, so that whatever
+// configuration defaults to is what runs.
+func unnamed(base string) provider {
+	return provider{
+		model: "claude-test",
+		table: fmt.Sprintf("[provider]\nbase_url = %q\n", base),
+		key:   "sk-ant-test",
+	}
+}
+
+// plus is this provider with one more line in its table.
+func (p provider) plus(line string) provider {
+	p.table += line + "\n"
+	return p
+}
+
+// checkedIn is the recording this package answers from when a test does not
+// generate one of its own.
+func checkedIn(t *testing.T) string {
 	t.Helper()
 
 	script, err := filepath.Abs(filepath.Join("testdata", "script.toml"))
 	if err != nil {
 		t.Fatalf("locate the recording: %v", err)
 	}
-	return worldWith(t, script, extra)
+	return script
 }
 
-// worldWith is newWorld against a named recording, for the runs whose
-// recording is generated rather than checked in.
-func worldWith(t *testing.T, script, extra string) *world {
+// newWorld writes a configuration and puts the Trace somewhere this test owns.
+func newWorld(t *testing.T, p provider) *world {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -89,27 +136,26 @@ func worldWith(t *testing.T, script, extra string) *world {
 	}
 	// The provider table comes last so that a test can add a line to it.
 	body := fmt.Sprintf(""+
-		"model = \"test-model\"\n\n"+
+		"model = %q\n\n"+
 		"[trace]\n"+
 		"path = %q\n\n"+
 		"[identity]\n"+
 		"tenant = \"tenant_test\"\n"+
 		"actor = \"seam-a\"\n"+
 		"actor_kind = \"agent\"\n\n"+
-		"[provider]\n"+
-		"name = \"fake\"\n"+
-		"script = %q\n%s",
-		w.trace, script, extra)
+		"%s",
+		p.model, w.trace, p.table)
 	if err := os.WriteFile(w.config, []byte(body), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
-	// No API key and no home directory of the developer's: a test must need
-	// neither network access nor a credential.
+	// No home directory of the developer's, and a credential only where the run
+	// is meant to have one: a test must need neither network access nor a key
+	// unless it is the thing being tested.
 	w.env = append(os.Environ(),
 		"EVA_HOME="+filepath.Join(dir, "home"),
 		"EVA_CONFIG="+w.config,
-		"ANTHROPIC_API_KEY=",
+		"ANTHROPIC_API_KEY="+p.key,
 	)
 	return w
 }
@@ -217,7 +263,7 @@ func kinds(es []events.Event) []events.Kind {
 }
 
 func TestHelpPrintsTheUsageBlock(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 
 	got := w.run(t, "help")
 	if got.code != 0 {
@@ -234,7 +280,7 @@ func TestHelpPrintsTheUsageBlock(t *testing.T) {
 // the sink folds them into one record at commit. A Trace record is a unit of
 // meaning, so three chunks are one Text.
 func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 
 	got := decodeStream(t, w.answer(t, "what is this project").stdout)
 
@@ -289,7 +335,7 @@ func TestAPlainTurnEmitsStartedTextUsageAndFinished(t *testing.T) {
 // one that is claimed and absent corrupts it. The Run that does claim it is the
 // interactive one, asserted in console_test.go.
 func TestTheOneShotRunDoesNotClaimThatItCanBeInterrupted(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	got := decodeStream(t, w.answer(t, "what is this project").stdout)
 
 	started, ok := got[0].Payload.(events.Started)
@@ -312,7 +358,7 @@ func TestTheOneShotRunDoesNotClaimThatItCanBeInterrupted(t *testing.T) {
 func TestThePromptReachesTheTrace(t *testing.T) {
 	const prompt = "what is this project"
 
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	got := decodeStream(t, w.answer(t, prompt).stdout)
 
 	started, ok := got[0].Payload.(events.Started)
@@ -333,7 +379,7 @@ func TestThePromptReachesTheTrace(t *testing.T) {
 }
 
 func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	out := w.answer(t, "what is this project").stdout
 
 	scan := bufio.NewScanner(strings.NewReader(out))
@@ -380,7 +426,7 @@ func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
 // reach the Trace, so the Trace sequence stays dense while the wire sequence
 // skips the chunks the fold absorbed.
 func TestTracePositionIsDenseAndIsNotTheWirePosition(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	got := decodeStream(t, w.answer(t, "what is this project").stdout)
 
 	var skipped bool
@@ -401,7 +447,7 @@ func TestTracePositionIsDenseAndIsNotTheWirePosition(t *testing.T) {
 }
 
 func TestTheOutputPathRendersNothing(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	got := w.answer(t, "what is this project")
 
 	if strings.ContainsRune(got.stdout, 0x1b) {
@@ -421,7 +467,7 @@ func TestTheOutputPathRendersNothing(t *testing.T) {
 
 // The turn a person sees: the answer as styled markdown, and what it cost.
 func TestARenderedTurnShowsTheAnswerAndWhatItCost(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	got := w.render(t, "what is this project")
 
 	if !strings.Contains(plain(got.stdout), recorded) {
@@ -461,7 +507,7 @@ func TestTheRenderedTurnAndTheMachineReadableTurnDescribeTheSameTurn(t *testing.
 
 	// One world, two runs: the recording holds one turn and a fresh process
 	// replays it from the start, so both runs answer the same turn.
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	rendered := w.render(t, prompt)
 	printed := decodeStream(t, w.answer(t, prompt).stdout)
 
@@ -539,7 +585,7 @@ func TestColourIsAdaptedToTheTerminalRatherThanEmittedRaw(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			w := newWorld(t, "")
+			w := newWorld(t, fake(checkedIn(t)))
 			w.env = append(w.env, c.env...)
 			got := w.render(t, "what is this project")
 
@@ -560,7 +606,7 @@ func TestColourIsAdaptedToTheTerminalRatherThanEmittedRaw(t *testing.T) {
 }
 
 func TestTheTurnIsAppendedToATraceThatParses(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	printed := decodeStream(t, w.answer(t, "what is this project").stdout)
 
 	body, err := os.ReadFile(w.trace)
@@ -585,7 +631,7 @@ func TestTheTurnIsAppendedToATraceThatParses(t *testing.T) {
 // A second turn appends rather than replacing, so the Trace is a record the
 // developer did not have to ask for.
 func TestASecondRunAppendsToTheSameTrace(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	first := decodeStream(t, w.answer(t, "one").stdout)
 
 	// The recording holds one turn, so the second run reports that it has run
@@ -655,7 +701,7 @@ func TestAChunkHeavyRunProducesOneRecordPerBlock(t *testing.T) {
 	)
 
 	script, folded := longRecording(t, blocks, chunks)
-	w := worldWith(t, script, "")
+	w := newWorld(t, fake(script))
 	printed := decodeStream(t, w.answer(t, "answer at length").stdout)
 
 	want := []events.Kind{events.KindStarted}
@@ -724,7 +770,7 @@ func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
 	const blocks = 2000
 
 	script, _ := longRecording(t, blocks, 3)
-	w := worldWith(t, script, "")
+	w := newWorld(t, fake(script))
 
 	cmd := exec.Command(binary, "-p", "answer at length", "--json")
 	cmd.Env = w.env
@@ -796,7 +842,7 @@ func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
 
 // A typo must not quietly disable the thing the user meant to set.
 func TestAnUnknownConfigKeyExitsNonZeroNamingTheKey(t *testing.T) {
-	w := newWorld(t, "nmae = \"anthropic\"\n")
+	w := newWorld(t, fake(checkedIn(t)).plus(`nmae = "anthropic"`))
 
 	got := w.run(t, "-p", "hello", "--json")
 	if got.code == 0 {
@@ -852,7 +898,7 @@ func TestAMissingAPIKeyExitsNonZeroSayingHowToSetOne(t *testing.T) {
 func TestTheAPIKeyNeverReachesTheTraceOrTheStream(t *testing.T) {
 	const key = "sk-ant-canary-do-not-store-me"
 
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	w.env = append(w.env, "ANTHROPIC_API_KEY="+key)
 
 	got := w.answer(t, "what is this project")
@@ -872,7 +918,7 @@ func TestTheAPIKeyNeverReachesTheTraceOrTheStream(t *testing.T) {
 // Configuration is a file, and the flag says which one. The environment names
 // a default; the flag overrides it.
 func TestTheConfigFlagChoosesTheFile(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 	w.env = append(w.env, "EVA_CONFIG="+filepath.Join(w.dir, "there-is-no-such-file.toml"))
 
 	got := w.run(t, "-p", "hello", "--json", "--config", w.config)
@@ -892,7 +938,7 @@ func TestTheConfigFlagChoosesTheFile(t *testing.T) {
 // not. The interface itself is exercised in chat_test.go, in this process,
 // where the keys and the Events can be told apart.
 func TestNoArgumentsOpensAnInteractiveChat(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 
 	cmd := exec.Command(binary)
 	cmd.Env = w.env
@@ -959,7 +1005,7 @@ func TestNoArgumentsOpensAnInteractiveChat(t *testing.T) {
 }
 
 func TestTheCommandLineFailsClosed(t *testing.T) {
-	w := newWorld(t, "")
+	w := newWorld(t, fake(checkedIn(t)))
 
 	for _, c := range []struct {
 		name string

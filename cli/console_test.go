@@ -167,9 +167,8 @@ func begin(t *testing.T, script ...recording) *dialogue {
 	e := &eva{
 		provider: provider,
 		sink:     sink,
-		session: core.NewSession("sess_test", "tenant_test",
-			events.Identity{ID: "seam-a", Kind: events.ActorAgent}),
-		model: "test-model",
+		session:  newTestSession(),
+		model:    "test-model",
 	}
 
 	out := &heard{}
@@ -469,6 +468,42 @@ func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
 	if !started.Capabilities.Interrupt {
 		t.Error("the interactive Run does not claim that it can be interrupted")
 	}
+}
+
+// A turn that broke says so in the words the Trace holds.
+//
+// The console reads the claim that closed the Run rather than working the
+// reason out again from the error it was handed. The two are the same fact,
+// and a console that classified it a second time could put a sentence on
+// screen that no record supports — which is the one failure a person reading
+// the screen has no way to detect.
+func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
+	// No recording at all, so the Provider refuses the call.
+	d := begin(t)
+
+	d.say("what is this project")
+	d.closed(t, 1)
+
+	closed := d.of(t, events.KindFinished)
+	finished, isFinished := closed[0].Payload.(events.Finished)
+	if !isFinished {
+		t.Fatalf("payload = %#v, want Finished", closed[0].Payload)
+	}
+	if finished.Claim.Result != events.ResultFailed {
+		t.Errorf("result = %q, want %q", finished.Claim.Result, events.ResultFailed)
+	}
+
+	const said = "the script records 0 turn(s)"
+	if !strings.Contains(finished.Claim.Summary, said) {
+		t.Fatalf("the claim is %q, want it to carry what the Provider said", finished.Claim.Summary)
+	}
+	d.settle(t, func() bool { return strings.Contains(d.read(), said) })
+
+	// And the prompt is back. A console that ended on the first provider
+	// failure would throw away a conversation over something the next prompt
+	// might not hit.
+	d.say("try again")
+	d.closed(t, 2)
 }
 
 // The two projections describe one turn here too. What a person read as the

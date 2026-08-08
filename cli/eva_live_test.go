@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -88,40 +87,6 @@ func api(t *testing.T, stream string, refusals ...refused) (base string, request
 	}
 }
 
-// liveWorld is a run configured against the real Provider and the local API.
-func liveWorld(t *testing.T, base string) *world {
-	t.Helper()
-
-	dir := t.TempDir()
-	w := &world{
-		dir:    dir,
-		config: filepath.Join(dir, "config.toml"),
-		trace:  filepath.Join(dir, "traces", "eva.jsonl"),
-	}
-	body := fmt.Sprintf(""+
-		"model = \"claude-test\"\n\n"+
-		"[trace]\n"+
-		"path = %q\n\n"+
-		"[identity]\n"+
-		"tenant = \"tenant_test\"\n"+
-		"actor = \"seam-a\"\n"+
-		"actor_kind = \"agent\"\n\n"+
-		"[provider]\n"+
-		"name = \"anthropic\"\n"+
-		"base_url = %q\n",
-		w.trace, base)
-	if err := os.WriteFile(w.config, []byte(body), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	w.env = append(os.Environ(),
-		"EVA_HOME="+filepath.Join(dir, "home"),
-		"EVA_CONFIG="+w.config,
-		"ANTHROPIC_API_KEY=sk-ant-test",
-	)
-	return w
-}
-
 // stored is what the Trace holds after a run.
 func stored(t *testing.T, w *world) []events.Event {
 	t.Helper()
@@ -154,7 +119,7 @@ func only[T events.Payload](t *testing.T, es []events.Event) T {
 // what it cost recorded honestly enough to bill from.
 func TestALiveTurnStreamsAnAnswerAndRecordsWhatItCost(t *testing.T) {
 	base, requests := api(t, answered)
-	w := liveWorld(t, base)
+	w := newWorld(t, live(base))
 
 	printed := decodeStream(t, w.answer(t, "what is this project").stdout)
 	if requests() != 1 {
@@ -213,7 +178,7 @@ func TestALiveTurnStreamsAnAnswerAndRecordsWhatItCost(t *testing.T) {
 // reach the Trace, the cost of retries would be invisible.
 func TestARetryReachesTheTraceThoughItProducesNoToolCall(t *testing.T) {
 	base, requests := api(t, answered, refused{http.StatusTooManyRequests, "rate_limit_error"})
-	w := liveWorld(t, base)
+	w := newWorld(t, live(base))
 
 	printed := decodeStream(t, w.answer(t, "what is this project").stdout)
 	if requests() != 2 {
@@ -257,7 +222,7 @@ func TestAProviderFailureReachesTheCallerAsData(t *testing.T) {
 		refused{529, "overloaded_error"},
 		refused{529, "overloaded_error"},
 	)
-	w := liveWorld(t, base)
+	w := newWorld(t, live(base))
 
 	got := w.run(t, "-p", "what is this project", "--json")
 	if got.code == 0 {
@@ -313,23 +278,8 @@ func TestAProviderFailureReachesTheCallerAsData(t *testing.T) {
 func TestTheDefaultProviderIsOneTheCommandCanOpen(t *testing.T) {
 	base, _ := api(t, answered)
 
-	dir := t.TempDir()
-	w := &world{
-		dir:    dir,
-		config: filepath.Join(dir, "config.toml"),
-		trace:  filepath.Join(dir, "traces", "eva.jsonl"),
-	}
-	// No provider name at all: whatever config defaults to is what runs.
-	body := fmt.Sprintf("model = \"claude-test\"\n\n[trace]\npath = %q\n\n[provider]\nbase_url = %q\n",
-		w.trace, base)
-	if err := os.WriteFile(w.config, []byte(body), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	w.env = append(os.Environ(),
-		"EVA_HOME="+filepath.Join(dir, "home"),
-		"EVA_CONFIG="+w.config,
-		"ANTHROPIC_API_KEY=sk-ant-test",
-	)
+	// No provider name at all: whatever configuration defaults to is what runs.
+	w := newWorld(t, unnamed(base))
 
 	got := w.run(t, "-p", "what is this project", "--json")
 	if got.code != 0 {
@@ -343,7 +293,7 @@ func TestALiveTurnKeepsTheCredentialOutOfTheTraceAndTheStream(t *testing.T) {
 	const key = "sk-ant-canary-do-not-store-me"
 
 	base, _ := api(t, answered)
-	w := liveWorld(t, base)
+	w := newWorld(t, live(base))
 	w.env = append(w.env, "ANTHROPIC_API_KEY="+key)
 
 	got := w.answer(t, "what is this project")
@@ -382,7 +332,7 @@ var unpriced = frames(
 // without the caveat it closes with a clean claim over half an answer.
 func TestATruncatedAnswerClosesTheRunWithACaveat(t *testing.T) {
 	base, _ := api(t, truncated)
-	w := liveWorld(t, base)
+	w := newWorld(t, live(base))
 
 	printed := decodeStream(t, w.answer(t, "answer at length").stdout)
 
@@ -417,7 +367,7 @@ func TestATruncatedAnswerClosesTheRunWithACaveat(t *testing.T) {
 // nobody looked at.
 func TestAnUnreportedCostClosesTheRunWithACaveat(t *testing.T) {
 	base, _ := api(t, unpriced)
-	w := liveWorld(t, base)
+	w := newWorld(t, live(base))
 
 	printed := decodeStream(t, w.answer(t, "what is this project").stdout)
 
@@ -446,7 +396,7 @@ func TestOneCaveatClosesTheRunHoweverManyThingsWereMissing(t *testing.T) {
 		`message_delta`, `{"type":"message_delta","delta":{"stop_reason":"max_tokens"}}`,
 		`message_stop`, `{"type":"message_stop"}`,
 	))
-	w := liveWorld(t, base)
+	w := newWorld(t, live(base))
 
 	printed := decodeStream(t, w.answer(t, "answer at length").stdout)
 	degraded := only[events.Degraded](t, printed)
@@ -465,7 +415,7 @@ func TestOneCaveatClosesTheRunHoweverManyThingsWereMissing(t *testing.T) {
 // every Run is a flag nothing reads.
 func TestACleanLiveTurnClosesWithNoCaveat(t *testing.T) {
 	base, _ := api(t, answered)
-	w := liveWorld(t, base)
+	w := newWorld(t, live(base))
 
 	for _, e := range decodeStream(t, w.answer(t, "what is this project").stdout) {
 		if e.Kind == events.KindDegraded {
@@ -486,12 +436,7 @@ func TestTheAnswerCapInTheFileReachesTheAPI(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	w := liveWorld(t, srv.URL)
-	if err := os.WriteFile(w.config, []byte(fmt.Sprintf(
-		"model = \"claude-test\"\n\n[trace]\npath = %q\n\n[provider]\nname = \"anthropic\"\nbase_url = %q\nmax_tokens = 4321\n",
-		w.trace, srv.URL)), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
+	w := newWorld(t, live(srv.URL).plus("max_tokens = 4321"))
 
 	w.answer(t, "what is this project")
 	if !strings.Contains(body, `"max_tokens":4321`) {

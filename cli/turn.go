@@ -66,6 +66,13 @@ var _ core.Unit = (*Turn)(nil)
 // Every step reaches the Trace before it reaches anyone: there are no quick
 // paths, and a turn that produced output nobody recorded would be the one
 // failure the project has no instrument to detect (invariant 1).
+//
+// What happened to the turn is the Outcome, and only the Outcome. A provider
+// that broke and a person who stopped the turn are both answered with a claim
+// of failure and the words to go with it, because that is what the Trace holds
+// and a caller reading something else would be reading a second account of one
+// turn. The error is what the Outcome cannot carry: the record itself failing,
+// where there is nothing in the Trace to read instead.
 func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error) {
 	// The intent rides on Started, which is what puts the prompt in the Trace
 	// and therefore in the Session. A transcript whose first message lives
@@ -101,8 +108,32 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	if err := t.Recorder.Finish(context.WithoutCancel(ctx), outcome.Claim()); err != nil {
 		return outcome, err
 	}
-	return outcome, streamErr
+
+	// The Trace now holds the turn's own account of how it went, and the
+	// Outcome above is that account. Returning the stream's error beside it
+	// would put the same fact in two shapes, and two callers reading one turn
+	// would each believe a different one — which is how a screen comes to say
+	// something the record does not. What is left to report is the record
+	// failing, because that is the fact no Trace holds.
+	var notWritten unrecorded
+	if errors.As(streamErr, &notWritten) {
+		return outcome, notWritten.err
+	}
+	return outcome, nil
 }
+
+// unrecorded marks a failure to write rather than a failure to work.
+//
+// The two are told apart because a Unit answers them differently. A provider
+// that broke is an Outcome: the turn ran, it failed, and the Trace says so in
+// the claim that closed the Run. A Trace that would not take the record is not
+// an account of the turn at all — it is the instrument failing, and a caller
+// has nothing in the Trace to read instead, so it is the one thing that
+// reaches them as an error.
+type unrecorded struct{ err error }
+
+func (u unrecorded) Error() string { return u.err.Error() }
+func (u unrecorded) Unwrap() error { return u.err }
 
 // stream replays the provider's turn into the Trace.
 //
@@ -124,13 +155,13 @@ func (t *Turn) stream(ctx context.Context) error {
 	// happened.
 	defer func() { _ = stream.Close() }()
 
-	var block blockGroup
+	block := newBlocks(t.Recorder)
 	for {
 		payload, err := stream.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			// Whatever is still pending is part of the answer, so it is
 			// committed before the turn is called complete.
-			return block.flush(ctx, t.Recorder)
+			return block.close(ctx)
 		}
 		if err != nil {
 			// A failed stream still produced whatever came before it, and the
@@ -139,7 +170,7 @@ func (t *Turn) stream(ctx context.Context) error {
 			// reach of the cancellation for the same reason, because the
 			// commonest way for a stream to end early is somebody stopping
 			// it, and that is not a reason to lose what had arrived.
-			if ferr := block.flush(context.WithoutCancel(ctx), t.Recorder); ferr != nil {
+			if ferr := block.close(context.WithoutCancel(ctx)); ferr != nil {
 				return ferr
 			}
 			return fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
@@ -163,46 +194,74 @@ func (t *Turn) stream(ctx context.Context) error {
 			continue
 		}
 
-		if err := block.add(ctx, t.Recorder, payload); err != nil {
+		if err := block.add(ctx, payload); err != nil {
 			return err
 		}
 	}
 }
 
-// blockGroup accumulates the chunks of one content block so that they commit
-// as one group. Anything that is not a chunk closes the block and commits on
-// its own.
-type blockGroup struct {
+// blocks accumulates the chunks of one content block so that they commit as
+// one group. Anything that is not a chunk closes the block and commits on its
+// own.
+//
+// It holds the Recorder rather than being handed one on each call. Where a
+// group ends and where it goes are one decision: a caller free to name a
+// different Recorder for the chunk and for the flush could split one content
+// block across two Runs, and the sink's fold — which is why the group is the
+// unit at all — would have nothing left to fold within.
+//
+// This is the other half of the sink's fold, and the half that decides what it
+// can do. The sink merges consecutive chunks of one block within a group; this
+// is what puts them in one group. A version of this that committed a chunk at
+// a time would leave every fold in trace correct and every one of them idle.
+type blocks struct {
+	rec *core.Recorder
+
 	pending []events.Payload
 	block   int
 }
 
-func (g *blockGroup) add(ctx context.Context, rec *core.Recorder, payload events.Payload) error {
+func newBlocks(rec *core.Recorder) *blocks { return &blocks{rec: rec} }
+
+// add takes one payload: a chunk joins the open block, and anything else
+// closes the block and commits on its own.
+func (b *blocks) add(ctx context.Context, payload events.Payload) error {
 	text, isText := payload.(events.Text)
 	if !isText {
-		if err := g.flush(ctx, rec); err != nil {
+		if err := b.close(ctx); err != nil {
 			return err
 		}
-		return rec.Record(ctx, payload)
+		return b.commit(ctx, payload)
 	}
 
-	if len(g.pending) > 0 && text.Block != g.block {
-		if err := g.flush(ctx, rec); err != nil {
+	if len(b.pending) > 0 && text.Block != b.block {
+		if err := b.close(ctx); err != nil {
 			return err
 		}
 	}
-	g.block = text.Block
-	g.pending = append(g.pending, text)
+	b.block = text.Block
+	b.pending = append(b.pending, text)
 	return nil
 }
 
-func (g *blockGroup) flush(ctx context.Context, rec *core.Recorder) error {
-	if len(g.pending) == 0 {
+// close commits what the open block has accumulated, and does nothing when
+// there is none.
+func (b *blocks) close(ctx context.Context) error {
+	if len(b.pending) == 0 {
 		return nil
 	}
-	group := g.pending
-	g.pending = nil
-	return rec.Record(ctx, group...)
+	group := b.pending
+	b.pending = nil
+	return b.commit(ctx, group...)
+}
+
+// commit is the one place a group reaches the Recorder, and the one place a
+// refusal is marked as the record failing rather than the turn failing.
+func (b *blocks) commit(ctx context.Context, payloads ...events.Payload) error {
+	if err := b.rec.Record(ctx, payloads...); err != nil {
+		return unrecorded{err: err}
+	}
+	return nil
 }
 
 // capabilities is what a Run can do in this build.

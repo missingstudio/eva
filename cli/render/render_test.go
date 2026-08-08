@@ -37,7 +37,7 @@ func show(t *testing.T, dark bool, payloads ...events.Payload) string {
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := render.New(&out, dark)
+	renderer, err := render.New(render.Stream(&out), dark)
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
 	var out bytes.Buffer
-	renderer, err := render.New(&out, true)
+	renderer, err := render.New(render.Stream(&out), true)
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}

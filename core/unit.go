@@ -19,8 +19,8 @@ type Spec struct {
 	Intent string
 }
 
-// Outcome is what a Unit returns. Escalation to a human is an Outcome, not an
-// error.
+// Outcome is what a Unit returns.
+// Escalation to a human is an Outcome, not an error.
 type Outcome struct {
 	Result  events.Result
 	Summary string
@@ -36,6 +36,19 @@ func (o Outcome) Claim() events.Claim {
 // workflow, an agent, a harness, a factory, and a company are all Units at
 // different timescales, which is why this interface says nothing about which
 // one it is.
+//
+// Every way the work can end is an Outcome. Failed, NeedsHuman and Exhausted
+// are Results rather than errors, and so is the summary that says which
+// provider broke or that a person stopped the turn. A Unit that returned that
+// same fact as an error too would be answering one turn twice in two shapes,
+// and two callers would each act on a different one — which is how an
+// interface comes to show something the Trace does not hold.
+//
+// The error is reserved for what no Outcome can carry: the record itself
+// failing. A Recorder that could not stamp, a sink that would not take the
+// group, a Trace that closed under the Run. Those leave the caller with
+// nothing in the Trace to read instead, so they are the one thing that has to
+// reach it directly.
 type Unit interface {
 	Execute(ctx context.Context, spec Spec) (Outcome, error)
 }

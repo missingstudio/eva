@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/missingstudio/eva/core"
@@ -43,9 +44,149 @@ func transcript(s *core.Session) string {
 	return out
 }
 
+// session is a Session for the fold tests, which drive Committed directly and
+// open no Run. Its Origin is empty because these tests are about what a
+// transcript is folded from, and a Session with no way to open a Run can still
+// fold every Event a Trace holds — including one another process recorded.
 func session() *core.Session {
-	return core.NewSession("sess_1", "tenant_1", events.Identity{ID: "agent", Kind: events.ActorAgent})
+	return core.NewSession("sess_1", "tenant_1",
+		events.Identity{ID: "agent", Kind: events.ActorAgent}, core.Origin{})
 }
+
+// opened is a Session that can open a Run, on a clock that does not move.
+func opened(t *testing.T) *core.Session {
+	t.Helper()
+
+	var runs, records uint64
+	return core.NewSession("sess_1", "tenant_1",
+		events.Identity{ID: "agent", Kind: events.ActorAgent},
+		core.Origin{
+			Now: func() events.Timestamp { return events.Timestamp{} },
+			RunID: func() events.RunID {
+				runs++
+				return events.RunID(fmt.Sprintf("run_%d", runs))
+			},
+			EventID: func() events.EventID {
+				records++
+				return events.EventID(fmt.Sprintf("evt_%d", records))
+			},
+		})
+}
+
+// A Session opens its own Runs, and stamps them with what it already holds. A
+// caller that restated the tenant, the actor, or the Session would be a caller
+// free to restate one of them wrongly.
+func TestASessionOpensARunStampedWithWhatItAlreadyHolds(t *testing.T) {
+	s := opened(t)
+	sink := &collected{}
+
+	rec, err := s.Open(sink)
+	if err != nil {
+		t.Fatalf("open a Run: %v", err)
+	}
+	if err := rec.Record(context.Background(), events.Started{Intent: "what is this project"}); err != nil {
+		t.Fatalf("record the opening: %v", err)
+	}
+
+	if len(sink.events) != 1 {
+		t.Fatalf("the sink took %d events, want 1", len(sink.events))
+	}
+	switch e := sink.events[0]; {
+	case e.Session != s.ID:
+		t.Errorf("session = %q, want %q", e.Session, s.ID)
+	case e.Tenant != s.Tenant:
+		t.Errorf("tenant = %q, want %q", e.Tenant, s.Tenant)
+	case e.Actor != s.Actor:
+		t.Errorf("actor = %+v, want %+v", e.Actor, s.Actor)
+	case e.Run != "run_1":
+		t.Errorf("run = %q, want the one the Session minted", e.Run)
+	}
+
+	// And the transcript folded, because the Session subscribes to every Run
+	// it opens rather than waiting to be added to one.
+	if got := transcript(s); got != "user:what is this project|" {
+		t.Errorf("transcript = %q — the Session did not subscribe to its own Run", got)
+	}
+}
+
+// A second Run of one Session is a second Run, and the transcript folds across
+// both. This is what makes the second prompt answered in the light of the
+// first.
+func TestASessionOpensManyRunsAndFoldsAcrossThem(t *testing.T) {
+	s := opened(t)
+	sink := &collected{}
+
+	for _, intent := range []string{"first", "second"} {
+		rec, err := s.Open(sink)
+		if err != nil {
+			t.Fatalf("open a Run: %v", err)
+		}
+		if err := rec.Record(context.Background(), events.Started{Intent: intent}); err != nil {
+			t.Fatalf("record the opening: %v", err)
+		}
+	}
+
+	if sink.events[0].Run == sink.events[1].Run {
+		t.Errorf("both Runs are %q, want two", sink.events[0].Run)
+	}
+	if got := transcript(s); got != "user:first|user:second|" {
+		t.Errorf("transcript = %q, want both prompts", got)
+	}
+}
+
+// A Session with no outside world says which part of it is missing, rather
+// than panicking on the first Run it is asked for.
+func TestASessionWithNoOriginReportsWhatItCannotOpenARunWithout(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		origin core.Origin
+		want   string
+	}{
+		{"nothing at all", core.Origin{}, "Run identifiers"},
+		{
+			name:   "no clock",
+			origin: core.Origin{RunID: func() events.RunID { return "run_1" }, EventID: func() events.EventID { return "evt_1" }},
+			want:   "clock",
+		},
+		{
+			name:   "no identifiers for its records",
+			origin: core.Origin{RunID: func() events.RunID { return "run_1" }, Now: func() events.Timestamp { return events.Timestamp{} }},
+			want:   "identifier",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := core.NewSession("sess_1", "tenant_1",
+				events.Identity{ID: "agent", Kind: events.ActorAgent}, c.origin)
+
+			rec, err := s.Open(&collected{})
+			if err == nil {
+				t.Fatalf("opened a Run with %+v and got %v", c.origin, rec)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("err = %v, want it to name %q", err, c.want)
+			}
+		})
+	}
+}
+
+// collected is a TraceSink that keeps what it was appended.
+type collected struct {
+	events []events.Event
+	seq    uint64
+}
+
+func (c *collected) Append(_ context.Context, group []events.Event) ([]events.Event, error) {
+	out := make([]events.Event, len(group))
+	for i, e := range group {
+		c.seq++
+		e.Seq = c.seq
+		out[i] = e
+	}
+	c.events = append(c.events, out...)
+	return out, nil
+}
+
+func (c *collected) Close() error { return nil }
 
 // The prompt rides on Started, so the transcript opens with it.
 func TestTheIntentOnStartedOpensTheTranscript(t *testing.T) {
