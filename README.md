@@ -22,5 +22,5 @@ Configuration is a file, not a pile of flags. `eva help` prints the command surf
 
 - [docs/Product.md](docs/Product.md) — the plan: twenty stages, a failable exit test each. Draft.
 - [CONTEXT.md](CONTEXT.md) — the glossary. One concept, one name.
-- [docs/adr/](docs/adr/) — decisions and their reasons. `0001`–`0008` settle the stage 0 event schema; `0009` fixes config as TOML; `0010` fixes the module layout.
+- [docs/adr/](docs/adr/) — decisions and their reasons. `0001`–`0008` settle the stage 0 event schema; `0009` fixes config as TOML; `0010` fixes the module layout; `0011` makes the Recorder the only path to the Trace.
 - [AGENTS.md](AGENTS.md) — how to work in this repo. `CLAUDE.md` points at it.

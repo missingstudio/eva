@@ -140,15 +140,29 @@ func run(ctx context.Context, opts options, stdout io.Writer) (code int, err err
 	}()
 
 	session := core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor())
+
+	// The Session comes first, so the transcript is folded before the Event
+	// is printed. Both are projections of the same committed record; the order
+	// only decides which one is built first.
+	recorder, err := core.NewRecorder(core.RecorderOptions{
+		Sink:        sink,
+		Tenant:      cfg.Tenant(),
+		Actor:       cfg.Actor(),
+		Run:         events.RunID(newID("run")),
+		Session:     session.ID,
+		Now:         now,
+		NewID:       func() events.EventID { return events.EventID(newID("evt")) },
+		Subscribers: []core.Subscriber{session, eventStream{out: stdout}},
+	})
+	if err != nil {
+		return ExitFailure, err
+	}
+
 	turn := &Turn{
 		Provider: provider,
-		Sink:     sink,
+		Recorder: recorder,
 		Session:  session,
-		Run:      events.RunID(newID("run")),
 		Model:    cfg.Model,
-		Out:      stdout,
-		Now:      now,
-		NewID:    func() events.EventID { return events.EventID(newID("evt")) },
 	}
 
 	outcome, err := turn.Execute(ctx, core.Spec{

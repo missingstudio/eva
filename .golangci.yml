@@ -39,12 +39,39 @@ linters:
           list-mode: strict
           files:
             - "**/core/**"
+            # Test files are governed by core-tests below. Two rules matching
+            # one file both apply, so this one has to stand aside rather than
+            # the other one being made more permissive.
+            - "!**/core/**_test.go"
           allow:
             - github.com/missingstudio/eva/events
             # context, for the TraceSink interface: a durable append is
             # cancellable, and an interface that cannot carry cancellation
             # forces every implementation to invent its own.
             - context
+            # sync, for the Recorder. It owns the wire position and it is the
+            # one path an Event takes to the Trace, and stage 2 runs parallel
+            # tool groups against one Recorder. A counter that is only safe by
+            # convention is a data race waiting for its second goroutine.
+            - sync
+            # errors and fmt, for the Recorder's own failures. A Recorder
+            # built without a clock, and a payload this schema does not know,
+            # are both reported rather than written.
+            - errors
+            - fmt
+
+        # core's tests get the standard library, and nothing else core does not
+        # already have. The rule is separate so that core's own allow list stays
+        # the short, deliberate list ADR 0010 describes — a test needing a
+        # package must not be the reason production code may import it.
+        core-tests:
+          list-mode: strict
+          files:
+            - "**/core/**_test.go"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/events
+            - github.com/missingstudio/eva/core
 
         # config reads files, so it sits outside core.
         config:
