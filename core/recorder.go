@@ -93,6 +93,10 @@ type Recorder struct {
 	// compared for repeats is the kind and not its wording. Finish is what
 	// turns it into the Run's Degraded record.
 	unknownKinds []string
+	// toldMissing names what the Recorder could not have seen for itself, in the
+	// order it was told. These are already sentences, because whoever knew
+	// the thing is the only one who can say what sort of thing it was.
+	toldMissing []string
 }
 
 // NewRecorder builds a Recorder, or reports what the options are missing.
@@ -158,6 +162,45 @@ func (r *Recorder) Record(ctx context.Context, payloads ...events.Payload) error
 	return r.commit(ctx, payloads...)
 }
 
+// Degrade says that something about this Run is incomplete, estimated, or
+// unreported, for the caveat Finish commits with the claim.
+//
+// A Recorder raises what it can see for itself, which is every record that
+// reached the Trace and nothing else. A cost the provider never reported and
+// an answer the model cut off are both real degradations that leave no trace
+// of themselves in the stream — nothing about the Events committed says a
+// figure was expected, or that more answer was coming. Whoever knew says so
+// here.
+//
+// This is being told, not composing. The Recorder still decides what the
+// caveat says and when it commits, which is what stops a Unit writing a clean
+// claim over a Trace that deserved a qualified one.
+//
+// Each entry is a sentence naming what sort of thing is missing, because the
+// list is read by someone working out why a Run was excluded from scoring. A
+// repeat is one entry: the caveat says what was missing, not how many times
+// something noticed. Nothing said leaves the Run clean, and anything said
+// after Finish has closed the Run reaches no Trace: Finish is what commits the
+// caveat, so there is nothing left to commit it with.
+//
+// It writes nothing, so it takes no context and cannot fail. A degradation
+// that could be lost by a cancelled call would be one the Trace is missing at
+// exactly the moment it mattered.
+//
+// A Subscriber may not call this, for the reason it may not call Record: this
+// takes the same lock that is held while committed Events are published, so a
+// Subscriber that called it would wait on itself.
+func (r *Recorder) Degrade(missing ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, entry := range missing {
+		if entry != "" {
+			r.toldMissing = appendOnce(r.toldMissing, entry)
+		}
+	}
+}
+
 // Finish closes the Run: the claim it makes about itself, and the caveat on
 // that claim, as one group.
 //
@@ -180,21 +223,28 @@ func (r *Recorder) Finish(ctx context.Context, claim events.Claim) error {
 	defer r.mu.Unlock()
 
 	finished := events.Finished{Claim: claim}
-	if len(r.unknownKinds) == 0 {
+	if len(r.toldMissing) == 0 && len(r.unknownKinds) == 0 {
 		return r.commit(ctx, finished)
 	}
 
-	// The caveat is first in the group, because Finished is what closes the
-	// Run and a record behind it would be one the close does not cover.
+	// One caveat closes a Run, whatever it was assembled from. Two Degraded
+	// records would make a reader ask which of them qualified the claim.
+	//
+	// What the Recorder was told comes first, because it was known before the
+	// close and the kinds are what the close itself worked out.
 	//
 	// An entry says what sort of thing was not understood, rather than naming
 	// the kind alone: this list is read by someone working out why a Run was
 	// excluded, and "quantum_flux" on its own does not say whether a record or
 	// a figure is meant.
-	missing := make([]string, len(r.unknownKinds))
-	for i, kind := range r.unknownKinds {
-		missing[i] = fmt.Sprintf("unknown event kind %q", kind)
+	missing := make([]string, 0, len(r.toldMissing)+len(r.unknownKinds))
+	missing = append(missing, r.toldMissing...)
+	for _, kind := range r.unknownKinds {
+		missing = append(missing, fmt.Sprintf("unknown event kind %q", kind))
 	}
+
+	// The caveat is first in the group, because Finished is what closes the
+	// Run and a record behind it would be one the close does not cover.
 	return r.commit(ctx, events.Degraded{Missing: missing}, finished)
 }
 
@@ -245,14 +295,21 @@ func (r *Recorder) commit(ctx context.Context, payloads ...events.Payload) error
 // many records of it arrive: the list says what was not understood, not how
 // often.
 func (r *Recorder) noteUnknown(e events.Event) {
-	unknown, ok := e.Payload.(events.Unknown)
-	if !ok {
-		return
+	if unknown, ok := e.Payload.(events.Unknown); ok {
+		r.unknownKinds = appendOnce(r.unknownKinds, unknown.Kind)
 	}
-	for _, already := range r.unknownKinds {
-		if already == unknown.Kind {
-			return
+}
+
+// appendOnce adds an entry unless the list already holds it.
+//
+// Both lists a Run's caveat is assembled from are sets: each says what was
+// missing, and neither says how often something noticed. The order is the
+// order things were met, which is why this is a list rather than a map.
+func appendOnce(list []string, entry string) []string {
+	for _, already := range list {
+		if already == entry {
+			return list
 		}
 	}
-	r.unknownKinds = append(r.unknownKinds, unknown.Kind)
+	return append(list, entry)
 }

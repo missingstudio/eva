@@ -527,3 +527,102 @@ func TestConcurrentRecordsTakeDistinctWirePositions(t *testing.T) {
 		t.Fatalf("%d distinct wire positions, want %d", len(seen), writers)
 	}
 }
+
+// A Recorder can only raise what it sees for itself. A cost the provider never
+// reported, or an answer the model cut off, is a degradation nothing about the
+// committed stream reveals — so the Recorder is told, and it still composes the
+// one caveat that commits with the claim.
+func TestARecorderCanBeToldWhatItCannotSeeForItself(t *testing.T) {
+	s := &sink{}
+	rec := recorder(t, options(s))
+	ctx := context.Background()
+
+	if err := rec.Record(ctx, events.Text{Chunk: "half an answer"}); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	rec.Degrade("the usage figures for this turn")
+	if err := rec.Finish(ctx, events.Claim{Result: events.ResultDone, Summary: "answered"}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	closing := s.groups[len(s.groups)-1]
+	want := []events.Kind{events.KindDegraded, events.KindFinished}
+	if fmt.Sprint(kinds(closing)) != fmt.Sprint(want) {
+		t.Fatalf("the Run closed with %v, want %v", kinds(closing), want)
+	}
+
+	degraded, ok := closing[0].Payload.(events.Degraded)
+	if !ok {
+		t.Fatalf("payload = %#v, want events.Degraded", closing[0].Payload)
+	}
+	if fmt.Sprint(degraded.Missing) != fmt.Sprint([]string{"the usage figures for this turn"}) {
+		t.Errorf("Missing = %v, want what the Recorder was told", degraded.Missing)
+	}
+
+	// Being told does not change what the Run claimed.
+	if claim := closing[1].Payload.(events.Finished).Claim; claim.Result != events.ResultDone {
+		t.Errorf("claim = %+v, want the Run's own", claim)
+	}
+}
+
+// One caveat closes a Run, whether its entries were seen or supplied. Two
+// Degraded records would make a reader ask which one qualified the claim.
+func TestWhatTheRecorderWasToldJoinsWhatItSaw(t *testing.T) {
+	s := &sink{}
+	rec := recorder(t, options(s))
+	ctx := context.Background()
+
+	rec.Degrade("the usage figures for this turn")
+	if err := rec.Record(ctx, unknown("quantum_flux")); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if err := rec.Finish(ctx, events.Claim{Result: events.ResultDone}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	closing := s.groups[len(s.groups)-1]
+	if len(closing) != 2 {
+		t.Fatalf("the Run closed with %d records, want the caveat and the claim", len(closing))
+	}
+	degraded := closing[0].Payload.(events.Degraded)
+	want := []string{"the usage figures for this turn", `unknown event kind "quantum_flux"`}
+	if fmt.Sprint(degraded.Missing) != fmt.Sprint(want) {
+		t.Errorf("Missing = %v, want %v", degraded.Missing, want)
+	}
+}
+
+// The same entry twice is one entry. A caveat says what was missing, not how
+// many times something noticed.
+func TestTheSameDegradationIsNamedOnce(t *testing.T) {
+	s := &sink{}
+	rec := recorder(t, options(s))
+
+	rec.Degrade("the usage figures for this turn")
+	rec.Degrade("the usage figures for this turn", "the answer, cut off at the model's token cap")
+	if err := rec.Finish(context.Background(), events.Claim{Result: events.ResultDone}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	degraded := s.groups[len(s.groups)-1][0].Payload.(events.Degraded)
+	want := []string{"the usage figures for this turn", "the answer, cut off at the model's token cap"}
+	if fmt.Sprint(degraded.Missing) != fmt.Sprint(want) {
+		t.Errorf("Missing = %v, want %v", degraded.Missing, want)
+	}
+}
+
+// Nothing said is a clean Run. An empty call must not be the thing that puts a
+// caveat on a Trace that has nothing to caveat.
+func TestBeingToldNothingLeavesTheRunClean(t *testing.T) {
+	s := &sink{}
+	rec := recorder(t, options(s))
+
+	rec.Degrade()
+	rec.Degrade("")
+	if err := rec.Finish(context.Background(), events.Claim{Result: events.ResultDone}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	if got := kinds(s.committed()); fmt.Sprint(got) != fmt.Sprint([]events.Kind{events.KindFinished}) {
+		t.Fatalf("the Run holds %v, want only the claim", got)
+	}
+}
