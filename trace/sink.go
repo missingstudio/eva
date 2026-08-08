@@ -20,10 +20,9 @@ import (
 // file, and a Trace written by a process that was killed still parses.
 //
 // Consecutive text chunks of one content block fold into a single record at
-// commit (docs/adr/0004), so a Trace record is a unit of meaning rather than a
-// token. The fold is lossy and the loss is permanent: inter-token timing is
-// gone, and a Trace cannot be used to debug streaming latency. That trade is
-// the ADR's, and its falsifier is recorded there.
+// commit, so a Trace record is a unit of meaning rather than a token. The fold
+// is lossy and the loss is permanent: inter-token timing is gone, and a Trace
+// cannot be used to debug streaming latency. That trade is deliberate.
 type Sink struct {
 	// mu serialises commits. Trace position is assigned under it, so two
 	// goroutines cannot be handed the same one.
@@ -122,7 +121,7 @@ func (s *Sink) Append(ctx context.Context, group []events.Event) ([]events.Event
 }
 
 // fold merges consecutive chunks of one content block into a single Text
-// record (docs/adr/0004).
+// record.
 //
 // Consecutive is the whole rule: a run of chunks ends at the first Event that
 // is not a Text of the same block, the same Run, and the same Session. So the

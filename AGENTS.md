@@ -77,3 +77,5 @@ Read the stage you are working in before you write code in it. Work the lowest s
 ### Domain docs
 
 **Domain vocabulary** lives in `CONTEXT.md` and `docs/adr/` at the repo root — the glossary and the recorded decisions. `docs/agents/domain.md` gives the rules for reading them, for naming a domain concept in output, and for flagging an ADR you contradict.
+
+**Source cites no doc path.** A comment states the decision in its own words and references no document. Name the glossary or the decision, never the file that holds it.
