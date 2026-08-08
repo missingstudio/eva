@@ -119,6 +119,22 @@ func (s *Session) Open(sink TraceSink, subs ...Subscriber) (*Recorder, error) {
 	})
 }
 
+// Fresh opens a new Session under the same identity, against the same outside
+// world.
+//
+// It is what emptying a transcript is. A Session that deleted its own messages
+// would be a transcript the Trace cannot reconstruct: the Trace would still
+// hold every one of them, the fold would not, and the two accounts of one
+// conversation would disagree from that moment on — which is the second source
+// of truth this type is written to prevent.
+//
+// A new identifier diverges from nothing. The Trace holds both Sessions, each
+// fold takes only the Events stamped with its own, and replaying the file gives
+// back exactly the transcripts the process had.
+func (s *Session) Fresh(id events.SessionID) *Session {
+	return NewSession(id, s.Tenant, s.Actor, s.origin)
+}
+
 // Session satisfies Subscriber, which is how it is fed.
 var _ Subscriber = (*Session)(nil)
 

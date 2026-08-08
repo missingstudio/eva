@@ -32,6 +32,9 @@ type console struct {
 	// could do with a Provider or a sink is something it must not do.
 	ask func(ctx context.Context, prompt string) (core.Outcome, error)
 
+	// control is what a command may change about the turns that follow.
+	control control
+
 	// renderer is the projection a person reads. It is the same fold over
 	// committed Events the one-shot path uses, showing on this model instead
 	// of writing to a stream.
@@ -180,6 +183,7 @@ func newConsole(ctx context.Context, e *eva, in io.Reader, out io.Writer) (*tea.
 
 	c := &console{
 		ask:     e.answer,
+		control: e,
 		ctx:     ctx,
 		input:   input,
 		profile: colorprofile.Detect(out, os.Environ()),
@@ -220,7 +224,7 @@ func (c *console) Init() tea.Cmd {
 	return tea.Batch(
 		c.input.Focus(),
 		tea.RequestBackgroundColor,
-		tea.Println(c.styles.hint.Render("eva — enter to send, ctrl+c to interrupt a turn, ctrl+d to leave")),
+		tea.Println(c.styles.hint.Render("eva — enter to send, /help for the commands, ctrl+c to interrupt a turn, ctrl+d to leave")),
 	)
 }
 
@@ -369,6 +373,14 @@ func (c *console) key(k tea.KeyPressMsg) tea.Cmd {
 		}
 		c.input.Reset()
 		c.put(c.styles.said.Render("› " + prompt))
+
+		// A slash is a person addressing eva rather than the model, and what it
+		// asks for happens here: no Run opens, nothing is committed, and the
+		// Trace holds no record of a turn that never ran.
+		if strings.HasPrefix(prompt, "/") {
+			c.put(c.obey(prompt))
+			return c.print()
+		}
 		return tea.Sequence(c.print(), c.start(prompt))
 	}
 

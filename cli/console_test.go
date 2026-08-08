@@ -41,13 +41,16 @@ type driven struct {
 	mu     sync.Mutex
 	script []recording
 	turn   int
-	calls  [][]core.Message
+	calls  []providers.Call
 }
 
 // recording is one turn this Provider replays.
 type recording struct {
 	// chunks is the answer, split the way a stream would deliver it.
 	chunks []string
+	// degraded is what this turn's Provider could not tell Eva, and is empty
+	// for a turn that was whole.
+	degraded []string
 	// gate, when it is not nil, is where the turn stops once its last chunk
 	// is out — so that a test can look at a stream while it is still in
 	// flight. The turn goes on when the gate is closed, and it ends early if
@@ -68,7 +71,7 @@ func (d *driven) Stream(_ context.Context, call providers.Call) (providers.Strea
 	}
 	rec := d.script[d.turn]
 	d.turn++
-	d.calls = append(d.calls, call.Messages)
+	d.calls = append(d.calls, call)
 
 	return &drivenStream{rec: rec}, nil
 }
@@ -79,15 +82,30 @@ func (d *driven) transcripts() [][]core.Message {
 	defer d.mu.Unlock()
 
 	out := make([][]core.Message, len(d.calls))
-	copy(out, d.calls)
+	for i, call := range d.calls {
+		out[i] = call.Messages
+	}
+	return out
+}
+
+// models is the model of every call so far.
+func (d *driven) models() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	out := make([]string, len(d.calls))
+	for i, call := range d.calls {
+		out[i] = call.Model
+	}
 	return out
 }
 
 type drivenStream struct {
-	rec    recording
-	at     int
-	waited bool
-	priced bool
+	rec      recording
+	at       int
+	waited   bool
+	priced   bool
+	caveated bool
 }
 
 func (s *drivenStream) Next(ctx context.Context) (events.Payload, error) {
@@ -110,6 +128,10 @@ func (s *drivenStream) Next(ctx context.Context) (events.Payload, error) {
 	if !s.priced {
 		s.priced = true
 		return events.Usage{InputTokens: 10, OutputTokens: 20}, nil
+	}
+	if len(s.rec.degraded) > 0 && !s.caveated {
+		s.caveated = true
+		return events.Degraded{Missing: s.rec.degraded}, nil
 	}
 	return nil, io.EOF
 }

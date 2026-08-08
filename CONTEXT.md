@@ -73,6 +73,10 @@ _Avoid_: REPL (read-eval-print names a loop over expressions, and this is a conv
 The part of an interface that shows a turn while it is still happening, from the stream rather than from the Trace. It is erased when the Run closes and replaced by the fold over what was committed, so nothing a person keeps came from anywhere but the record.
 _Avoid_: Preview, buffer, transcript (a transcript is the Session, and it is a fold)
 
+**Command**:
+A line a person types at a Console that the Console answers itself, written with a leading slash. It opens no Run, reaches no Provider, and leaves no record — it steers the Session rather than adding to it. What a process is started with is a flag, not a Command.
+_Avoid_: Builtin, directive, macro
+
 **Evidence**:
 The output of a Verifier run against a Spec's acceptance criteria. Distinct from a Claim.
 

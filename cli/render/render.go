@@ -191,12 +191,44 @@ func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 	return nil
 }
 
-// reset clears what belongs to one turn. The Session's spend is not part of
-// that: it outlives every turn it is a sum of.
+// reset clears what belongs to one turn. A turn opening is what ends the last
+// one's claim on the figures, so this is where they go.
+//
+// The Session's spend is not part of that: it outlives every turn it is a sum
+// of. Neither is what has been written out — see show.
 func (r *Renderer) reset() {
 	r.answer.Reset()
 	r.turn = spend{}
 	r.missing = nil
+}
+
+// Cost is what the last turn cost and what the Session has cost so far, for a
+// caller that is asking rather than finishing a turn.
+//
+// It is the same line the end of a turn writes, folded from the same Usage
+// records and carrying the same caveat. Two figures assembled twice could
+// disagree, and a person reading one of them would have no way to tell which.
+func (r *Renderer) Cost() string { return r.costStyle.Render(r.spent()) }
+
+// spent is the caveat and the cost line, which are one thing a person reads:
+// figures known to be incomplete, printed with nothing to say so, are figures
+// that read as a measurement.
+func (r *Renderer) spent() string {
+	if len(r.missing) == 0 {
+		return costLine(r.turn, r.session)
+	}
+	return "degraded: " + strings.Join(r.missing, ", ") + "\n" + costLine(r.turn, r.session)
+}
+
+// Cleared starts the accounting over, for a console that has emptied its
+// transcript and opened a new Session.
+//
+// The cumulative figure says what a Session has cost, so it belongs to the
+// Session that spent it. What was spent is not lost by starting over: the Trace
+// holds every Usage record either way.
+func (r *Renderer) Cleared() {
+	r.reset()
+	r.session = spend{}
 }
 
 // show hands the turn to the screen: the answer, then what it cost.
@@ -216,20 +248,20 @@ func (r *Renderer) show() error {
 	}
 
 	// The caveat comes before the cost line, because it qualifies it. A reader
-	// who has already taken the figures as whole has read them once too many.
-	if len(r.missing) > 0 {
-		turn.WriteString(r.costStyle.Render("degraded: " + strings.Join(r.missing, ", ")))
-		turn.WriteString("\n")
-	}
-
-	turn.WriteString(r.costStyle.Render(costLine(r.turn, r.session)))
+	// who has already taken the figures as whole has read them once too many —
+	// which is why the two are assembled together, here and on demand.
+	turn.WriteString(r.costStyle.Render(r.spent()))
 	turn.WriteString("\n")
 
 	if err := r.screen.Show(turn.String()); err != nil {
 		return err
 	}
 
-	r.reset()
+	// The answer is cleared as it is written, so a close with no open between
+	// could not write it twice. What the turn cost and what it did not
+	// understand stay: they are what Cost answers with until the next turn
+	// opens.
+	r.answer.Reset()
 	return nil
 }
 
