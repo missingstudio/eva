@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/missingstudio/eva/core"
+	"github.com/missingstudio/eva/core/prompt"
 	"github.com/missingstudio/eva/events"
 )
 
@@ -113,6 +114,19 @@ func newTestSession() *core.Session {
 		})
 }
 
+// opened is a Recorder for one Run of a Session, so that what the Run commits
+// folds into the transcript the next Provider call is conditioned on. It is
+// what the frontend does; recorder below is for the tests that need no fold.
+func opened(t *testing.T, session *core.Session, sink core.TraceSink) *core.Recorder {
+	t.Helper()
+
+	rec, err := session.Open(sink)
+	if err != nil {
+		t.Fatalf("open a Run: %v", err)
+	}
+	return rec
+}
+
 // recorder builds a Recorder over a sink, with a fixed clock and identifiers a
 // failure can name.
 func recorder(t *testing.T, sink core.TraceSink) *core.Recorder {
@@ -197,6 +211,68 @@ func TestAContentBlockCommitsAsOneGroup(t *testing.T) {
 				t.Errorf("the sink was appended %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+// The base system prompt is what a turn is conditioned on before it is
+// conditioned on anything anybody said, and it is not part of the transcript.
+// Turn.conditioning has why the two are separate.
+func TestTheBaseSystemPromptHeadsTheTurnAndIsNotInTheTranscript(t *testing.T) {
+	provider := &driven{script: []recording{{chunks: []string{"answered."}}}}
+	session := newTestSession()
+	turn := &Turn{
+		Provider: provider,
+		// The Session opens its own Run, so the prompt folds into the
+		// transcript as it is committed — which is what the Provider is then
+		// conditioned on.
+		Recorder:     opened(t, session, &grouped{}),
+		Session:      session,
+		Model:        "test-model",
+		SystemPrompt: prompt.Base(),
+	}
+
+	if _, err := turn.Execute(context.Background(), core.Spec{Intent: "what is this project"}); err != nil {
+		t.Fatalf("answer a turn: %v", err)
+	}
+
+	sent := provider.transcripts()[0]
+	if len(sent) != 2 {
+		t.Fatalf("the Provider was sent %+v, want the base system prompt and the prompt", sent)
+	}
+	if sent[0].Author != core.AuthorSystem || sent[0].Text != prompt.Base() {
+		t.Errorf("the turn opened on %+v, want the base system prompt as a system Message", sent[0])
+	}
+	if sent[1] != (core.Message{Author: core.AuthorUser, Text: "what is this project"}) {
+		t.Errorf("the prompt reached the Provider as %+v", sent[1])
+	}
+
+	for _, m := range session.Messages() {
+		if m.Author == core.AuthorSystem {
+			t.Errorf("the transcript holds %+v, and a fold over the Trace would not give it back", m)
+		}
+	}
+}
+
+// A Turn told no system prompt sends none, rather than sending an empty one.
+// An empty Message says nothing an answer can be conditioned on, and the API
+// rejects an empty content block.
+func TestATurnWithNoSystemPromptSendsNoSystemMessage(t *testing.T) {
+	provider := &driven{script: []recording{{chunks: []string{"answered."}}}}
+	session := newTestSession()
+	turn := &Turn{
+		Provider: provider,
+		Recorder: opened(t, session, &grouped{}),
+		Session:  session,
+		Model:    "test-model",
+	}
+
+	if _, err := turn.Execute(context.Background(), core.Spec{Intent: "what is this project"}); err != nil {
+		t.Fatalf("answer a turn: %v", err)
+	}
+
+	sent := provider.transcripts()[0]
+	if len(sent) != 1 || sent[0].Author != core.AuthorUser {
+		t.Errorf("the Provider was sent %+v, want the prompt alone", sent)
 	}
 }
 

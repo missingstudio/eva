@@ -179,8 +179,8 @@ func TestModelSwitchesInTheMiddleOfASessionAndKeepsTheContext(t *testing.T) {
 		{Author: core.AuthorUser, Text: "and what else"},
 	}
 	calls := d.provider.transcripts()
-	if fmt.Sprint(calls[1]) != fmt.Sprint(want) {
-		t.Errorf("the turn after /model was conditioned on\n%+v\nwant\n%+v", calls[1], want)
+	if after := conversation(t, calls[1]); fmt.Sprint(after) != fmt.Sprint(want) {
+		t.Errorf("the turn after /model was conditioned on\n%+v\nwant\n%+v", after, want)
 	}
 }
 
@@ -224,8 +224,8 @@ func TestClearEmptiesTheTranscriptWithoutEndingTheProcess(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("the Provider was called %d time(s), want 2 — the process did not survive /clear", len(calls))
 	}
-	if len(calls[1]) != 1 || calls[1][0].Text != "what did I just ask" {
-		t.Errorf("the turn after /clear was conditioned on\n%+v\nwant the new prompt alone", calls[1])
+	if after := conversation(t, calls[1]); len(after) != 1 || after[0].Text != "what did I just ask" {
+		t.Errorf("the turn after /clear was conditioned on\n%+v\nwant the new prompt alone", after)
 	}
 }
 

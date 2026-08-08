@@ -15,6 +15,7 @@ import (
 	"github.com/missingstudio/eva/cli/render"
 	"github.com/missingstudio/eva/config"
 	"github.com/missingstudio/eva/core"
+	"github.com/missingstudio/eva/core/prompt"
 	"github.com/missingstudio/eva/events"
 	"github.com/missingstudio/eva/providers"
 	"github.com/missingstudio/eva/providers/anthropic"
@@ -279,25 +280,33 @@ func (e *eva) watch(sub core.Subscriber, arriving func(chunk string)) {
 // What is assembled here is only what changes between turns. Who is running,
 // under which tenant, on whose clock — the Session holds all of it and opens
 // the Run with it, so this asks for a Run rather than restating one.
-func (e *eva) answer(ctx context.Context, prompt string) (core.Outcome, error) {
+//
+// The argument is the Spec's intent, which is what a person typed at a prompt.
+// The word "prompt" is spent on the package that holds the base system one, so
+// the glossary's word is used here for the other thing.
+func (e *eva) answer(ctx context.Context, intent string) (core.Outcome, error) {
 	recorder, err := e.session.Open(e.sink, e.subs...)
 	if err != nil {
 		return core.Outcome{}, err
 	}
 
 	turn := &Turn{
-		Provider:  e.provider,
-		Recorder:  recorder,
-		Session:   e.session,
-		Model:     e.model,
-		Interrupt: e.interrupt,
-		Arriving:  e.arriving,
+		Provider: e.provider,
+		Recorder: recorder,
+		Session:  e.session,
+		Model:    e.model,
+		// The base system prompt is the same for every turn of this build, and
+		// its size is gated in CI, so what every Run of Eva spends before the
+		// first word of the transcript is a figure the repository states.
+		SystemPrompt: prompt.Base(),
+		Interrupt:    e.interrupt,
+		Arriving:     e.arriving,
 	}
 
 	return turn.Execute(ctx, core.Spec{
 		Tenant: e.session.Tenant,
 		Actor:  e.session.Actor,
-		Intent: prompt,
+		Intent: intent,
 	})
 }
 

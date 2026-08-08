@@ -59,6 +59,11 @@ linters:
             # are both reported rather than written.
             - errors
             - fmt
+            # embed, for the base system prompt. The prompt is prose, so it is
+            # written in a file and reviewed as prose — and embed is a
+            # compile-time read: the bytes land in the binary and nothing
+            # reaches the filesystem while a Run is going. core stays pure.
+            - embed
 
         # core's tests get the standard library, and nothing else core does not
         # already have. The rule is separate so that core's own allow list stays
