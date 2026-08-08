@@ -1,4 +1,3 @@
-// Command eva is a model client that leaves a complete record.
 package main
 
 import (
