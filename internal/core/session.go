@@ -20,10 +20,80 @@ const (
 	AuthorAssistant Author = "assistant"
 )
 
-// Message is one entry in the transcript.
+// Block is one piece of what a Message says.
+//
+// The single method is unexported, so the set is closed by the compiler for the
+// reason the Event schema's payloads are: a transcript is what the next request
+// is built from, and a block a wire has never heard of is a request no provider
+// accepts. Adding one is a decision taken here, beside the wires that have to
+// send it.
+//
+// A Message is a list of these rather than a string because a turn that calls a
+// tool says two things at once — words, and the call — and the answer to that
+// call has to arrive back in the same entry it was asked from. A transcript of
+// strings can hold what was said and not what was done, so a fold over a Trace
+// holding tool records could rebuild that something happened and could not
+// rebuild the conversation.
+type Block interface{ isBlock() }
+
+// Text is words, and is what an ordinary answer is made of.
+type Text struct{ Text string }
+
+func (Text) isBlock() {}
+
+// ToolCall is the assistant asking for a tool to run.
+//
+// ID is the provider's own identifier for the call, and Args are the arguments
+// as the provider stated them. Both cross unread: core does not parse a tool's
+// arguments, because the schema they satisfy is the tool's rather than the
+// domain's, and a domain that opened them would be a domain with an opinion
+// about what tools exist.
+type ToolCall struct {
+	ID   string
+	Name string
+	Args string
+}
+
+func (ToolCall) isBlock() {}
+
+// ToolResult is how a call ended, in the entry that answers it.
+//
+// Call names the ToolCall it answers. Every call has one whatever happened to
+// it — a refusal and a crash are both results the model can act on — so a
+// transcript never carries a call the next request cannot pair.
+type ToolResult struct {
+	Call        string
+	Name        string
+	Disposition events.Disposition
+	Content     string
+}
+
+func (ToolResult) isBlock() {}
+
+// Message is one entry in the transcript: who said it, and what they said.
 type Message struct {
 	Author Author
-	Text   string
+	Blocks []Block
+}
+
+// Say is an entry that is nothing but words, which is what most of them are.
+func Say(author Author, text string) Message {
+	return Message{Author: author, Blocks: []Block{Text{Text: text}}}
+}
+
+// Said is everything this entry said in words, with the rest left out.
+//
+// It is for a caller that wants what was said and not what was done. A caller
+// that has to send this entry somewhere reads Blocks instead, because leaving a
+// tool call out of a request is how a transcript stops being valid.
+func (m Message) Said() string {
+	var out string
+	for _, block := range m.Blocks {
+		if text, isText := block.(Text); isText {
+			out += text.Text
+		}
+	}
+	return out
 }
 
 // Session is the durable, resumable transcript. It is what survives kill -9,
@@ -42,6 +112,17 @@ type Message struct {
 // own: the live turn, resume replaying a stored Trace, and any projection that
 // needs the transcript. Anything a Trace cannot reconstruct is a bug, and this
 // is the code that does the reconstructing.
+//
+// # What it costs to rebuild
+//
+// Rebuilding a Session costs one pass over its records, and every turn hands
+// back a copy of the whole transcript. Both are linear in the Session, which is
+// nothing at the length a person types and something at the length an
+// unattended Run reaches — and the fix is not a cache beside the fold, which
+// would be the second source of truth this type exists to prevent. It is a
+// checkpoint the fold resumes from, keyed by the Cursor that already names a
+// position a consumer durably reached. The trigger is resume over a Trace long
+// enough to measure; until then this is a known cost rather than a bug.
 type Session struct {
 	ID     events.SessionID
 	Tenant events.TenantID
@@ -58,15 +139,21 @@ type Session struct {
 	mu       sync.Mutex
 	messages []Message
 
-	// openRun is the Run whose assistant Message is still being appended to,
-	// and runIsOpen says whether there is one. Text records of a single Run
-	// fold into a single Message, because a Run is one execution of a Unit and
-	// a transcript entry is one thing said.
+	// openRun is the Run whose Message is still being appended to, and
+	// runIsOpen says whether there is one. Records of a single Run fold into as
+	// few Messages as the conversation allows, because a Run is one execution of
+	// a Unit and a transcript entry is one thing said.
 	//
 	// The flag is not redundant with an empty openRun: a Run identifier is a
 	// string, and "no Run is open" must not be a value a Run could hold.
 	openRun   events.RunID
 	runIsOpen bool
+
+	// openAuthor is who the open Message belongs to, and is empty when the next
+	// block starts a new one. A Run says two things in turn once it calls a
+	// tool — the assistant asks, and the results come back as the next entry —
+	// so which entry is open is not answered by the Run alone.
+	openAuthor Author
 }
 
 // Origin is the outside world a Session needs in order to open a Run: a clock,
@@ -152,11 +239,18 @@ var _ Subscriber = (*Session)(nil)
 
 // Committed folds one committed Event into the transcript.
 //
-// Only the kinds that say something fold: Started carries the Spec's intent
-// and opens the transcript with it, and Text is what the assistant said. Every
-// other kind is real and recorded and simply is not a Message — usage is a
-// cost, a retry is an attempt, and neither belongs in what the next provider
-// call is conditioned on.
+// Only the kinds the next request is built from fold: Started carries the
+// Spec's intent and opens the transcript with it, Text is what the assistant
+// said, and a tool call and its result are what it did. Every other kind is
+// real and recorded and simply is not a Message — usage is a cost, a retry is
+// an attempt, and neither belongs in what the next provider call is conditioned
+// on.
+//
+// A call and its result are committed as one group, so this sees both or
+// neither. That is what makes "no tool_use without its tool_result" a property
+// of the fold as well as of the writer: a transcript rebuilt from a Trace that
+// was cut between the two would carry a call nothing answers, and every
+// provider rejects that request rather than the turn that produced it.
 //
 // An Event for another Session is ignored rather than rejected, so that one
 // Subscriber can sit on a Trace that carries more than one.
@@ -172,16 +266,30 @@ func (s *Session) Committed(_ context.Context, e events.Event) error {
 	case events.Started:
 		s.closeRun()
 		if payload.Intent != "" {
-			s.messages = append(s.messages, Message{Author: AuthorUser, Text: payload.Intent})
+			s.messages = append(s.messages, Message{Author: AuthorUser, Blocks: []Block{Text{Text: payload.Intent}}})
 		}
 
 	case events.Text:
-		if s.runIsOpen && s.openRun == e.Run && len(s.messages) > 0 {
-			s.messages[len(s.messages)-1].Text += payload.Chunk
-			return nil
-		}
-		s.messages = append(s.messages, Message{Author: AuthorAssistant, Text: payload.Chunk})
-		s.openRun, s.runIsOpen = e.Run, true
+		s.say(e.Run, AuthorAssistant, Text{Text: payload.Chunk})
+
+	case events.ToolCall:
+		s.say(e.Run, AuthorAssistant, ToolCall{
+			ID:   payload.ID,
+			Name: payload.Name,
+			Args: string(payload.Args),
+		})
+
+	// A result is the person's turn to speak, whoever ran the tool: every API
+	// that takes these takes them in the entry that answers the assistant, so
+	// the fold puts them there rather than inventing a third Author the wires
+	// would each have to map back.
+	case events.ToolResult:
+		s.say(e.Run, AuthorUser, ToolResult{
+			Call:        payload.Call,
+			Name:        payload.Name,
+			Disposition: payload.Disposition,
+			Content:     payload.Content,
+		})
 
 	case events.Finished:
 		s.closeRun()
@@ -189,21 +297,54 @@ func (s *Session) Committed(_ context.Context, e events.Event) error {
 	return nil
 }
 
-// closeRun ends the assistant Message a Run was appending to, so that the next
-// Text starts a new entry rather than extending an entry from a Run that is
-// over.
+// say appends one block to the open Message, or opens one.
+//
+// A Message stays open while the Run and the Author both hold, which is what
+// puts an answer and the calls it made in one entry and the results of those
+// calls in the next. Consecutive words join the block in front of them, for the
+// reason the sink folds chunks: a transcript entry is what was said, not how
+// many pieces it arrived in.
+func (s *Session) say(run events.RunID, author Author, block Block) {
+	if s.runIsOpen && s.openRun == run && s.openAuthor == author && len(s.messages) > 0 {
+		open := &s.messages[len(s.messages)-1]
+		text, isText := block.(Text)
+		if isText && len(open.Blocks) > 0 {
+			if last, lastIsText := open.Blocks[len(open.Blocks)-1].(Text); lastIsText {
+				open.Blocks[len(open.Blocks)-1] = Text{Text: last.Text + text.Text}
+				return
+			}
+		}
+		open.Blocks = append(open.Blocks, block)
+		return
+	}
+
+	s.messages = append(s.messages, Message{Author: author, Blocks: []Block{block}})
+	s.openRun, s.runIsOpen, s.openAuthor = run, true, author
+}
+
+// closeRun ends the Message a Run was appending to, so that the next record
+// starts a new entry rather than extending an entry from a Run that is over.
 func (s *Session) closeRun() {
-	s.openRun, s.runIsOpen = "", false
+	s.openRun, s.runIsOpen, s.openAuthor = "", false, ""
 }
 
 // Messages returns the transcript. The copy is deliberate: a caller that
 // mutated the slice would be editing history, which is what branch and rewind
 // exist to do properly.
+//
+// Each entry's blocks are copied too. A Message holds a slice, so copying the
+// outer one alone would hand back entries sharing the fold's own memory — and
+// the next chunk appended to an open entry would reach through a transcript a
+// caller was already reading.
 func (s *Session) Messages() []Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	out := make([]Message, len(s.messages))
-	copy(out, s.messages)
+	for i, m := range s.messages {
+		blocks := make([]Block, len(m.Blocks))
+		copy(blocks, m.Blocks)
+		out[i] = Message{Author: m.Author, Blocks: blocks}
+	}
 	return out
 }

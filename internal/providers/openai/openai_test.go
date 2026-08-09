@@ -129,8 +129,8 @@ func turn() providers.Call {
 	return providers.Call{
 		Model: "gpt-test",
 		Messages: []core.Message{
-			{Author: core.AuthorSystem, Text: "Answer briefly."},
-			{Author: core.AuthorUser, Text: "Say hello."},
+			core.Say(core.AuthorSystem, "Answer briefly."),
+			core.Say(core.AuthorUser, "Say hello."),
 		},
 	}
 }

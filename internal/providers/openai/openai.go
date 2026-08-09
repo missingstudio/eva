@@ -106,22 +106,40 @@ func request(call providers.Call, maxTokens int64, fallback string) ([]byte, err
 
 	var system []string
 	for _, m := range call.Messages {
-		if m.Text == "" {
-			// An empty Message says nothing the answer can be conditioned on.
+		// The system prompt is one instructions string on this API rather than
+		// an input item, so it is gathered rather than appended.
+		if m.Author == core.AuthorSystem {
+			if words := m.Said(); words != "" {
+				system = append(system, words)
+			}
 			continue
 		}
+
+		// A block this Provider cannot send fails the turn rather than being
+		// left out: a transcript with a tool call dropped from it asks the model
+		// to continue without knowing what it did. The tool blocks are the ones
+		// no wire sends today, because nothing yet calls a tool — the mapping
+		// lands with the tool registry that produces them.
+		words, err := sendable(m.Blocks)
+		if err != nil {
+			return nil, err
+		}
+		if words == "" {
+			// An entry that says nothing is nothing the answer can be
+			// conditioned on.
+			continue
+		}
+
 		switch m.Author {
-		case core.AuthorSystem:
-			system = append(system, m.Text)
 		case core.AuthorUser:
 			req.Input = append(req.Input, wireItem{
 				Type: "message", Role: "user",
-				Content: []wirePart{{Type: "input_text", Text: m.Text}},
+				Content: []wirePart{{Type: "input_text", Text: words}},
 			})
 		case core.AuthorAssistant:
 			req.Input = append(req.Input, wireItem{
 				Type: "message", Role: "assistant",
-				Content: []wirePart{{Type: "output_text", Text: m.Text}},
+				Content: []wirePart{{Type: "output_text", Text: words}},
 			})
 		default:
 			return nil, fmt.Errorf("openai: %q is not an Author this Provider can send", m.Author)
@@ -138,6 +156,23 @@ func request(call providers.Call, maxTokens int64, fallback string) ([]byte, err
 		return nil, errors.New("openai: the turn has no transcript to answer")
 	}
 	return json.Marshal(req)
+}
+
+// sendable is one entry's words, or the block that stopped it being sent.
+//
+// This API takes a message's content as parts, so words are gathered into one
+// rather than mapped block for block. A block that is not words has no part to
+// become and is reported instead.
+func sendable(blocks []core.Block) (string, error) {
+	var words string
+	for _, block := range blocks {
+		text, isText := block.(core.Text)
+		if !isText {
+			return "", fmt.Errorf("openai: this Provider cannot send a %T", block)
+		}
+		words += text.Text
+	}
+	return words, nil
 }
 
 // The wire types, shaped by the API rather than by the domain: input items
