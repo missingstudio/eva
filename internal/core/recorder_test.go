@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -108,6 +109,33 @@ func options(s core.TraceSink, subs ...core.Subscriber) core.RecorderOptions {
 	}
 }
 
+// origin is a clock and identifier source safe to open Runs from concurrently.
+// The counters in options above close over a plain int, which is all a test
+// driving one Recorder needs and is a data race the moment two Runs open at
+// once.
+func origin() core.Origin {
+	var n atomic.Int64
+	return core.Origin{
+		Now: func() events.Timestamp {
+			at := n.Add(1)
+			return events.Timestamp{Wall: time.Unix(at, 0).UTC(), Mono: at}
+		},
+		RunID:   func() events.RunID { return events.RunID(fmt.Sprintf("run_%d", n.Add(1))) },
+		EventID: func() events.EventID { return events.EventID(fmt.Sprintf("evt_%d", n.Add(1))) },
+	}
+}
+
+// payloadOf finds the one payload of a kind among committed Events.
+func payloadOf[T events.Payload](es []events.Event) (T, bool) {
+	var found T
+	for _, e := range es {
+		if p, ok := e.Payload.(T); ok {
+			return p, true
+		}
+	}
+	return found, false
+}
+
 func recorder(t *testing.T, o core.RecorderOptions) *core.Recorder {
 	t.Helper()
 	rec, err := core.NewRecorder(o)
@@ -159,7 +187,7 @@ func TestEveryRecordedEventCarriesTheWholeEnvelope(t *testing.T) {
 	s := &sink{}
 	rec := recorder(t, options(s))
 
-	if err := rec.Record(context.Background(), events.Started{Intent: "go"}, events.Usage{InputTokens: 3}); err != nil {
+	if err := rec.Record(context.Background(), events.Started{Intent: "go"}, events.Usage{InputTokens: events.Tokens(3)}); err != nil {
 		t.Fatalf("record: %v", err)
 	}
 
@@ -624,5 +652,97 @@ func TestBeingToldNothingLeavesTheRunClean(t *testing.T) {
 
 	if got := kinds(s.committed()); fmt.Sprint(got) != fmt.Sprint([]events.Kind{events.KindFinished}) {
 		t.Fatalf("the Run holds %v, want only the claim", got)
+	}
+}
+
+// A projection that breaks takes itself out of the fan-out. It does not take
+// the projections registered behind it.
+//
+// Publishing used to stop at the first Subscriber that returned an error, so a
+// working projection sitting behind a broken one stopped receiving a Trace that
+// was still being written — with nothing on screen, in the file, or in the
+// error to say it had gone blind.
+func TestABrokenSubscriberDoesNotStarveTheOnesBehindIt(t *testing.T) {
+	s := &sink{}
+	broken := errors.New("the pipe is closed")
+
+	var seenByBroken, seenByWorking int
+	failing := core.SubscriberFunc(func(context.Context, events.Event) error {
+		seenByBroken++
+		return broken
+	})
+	working := core.SubscriberFunc(func(context.Context, events.Event) error {
+		seenByWorking++
+		return nil
+	})
+
+	rec := recorder(t, options(s, failing, working))
+
+	if err := rec.Record(context.Background(), events.Started{Intent: "first"}); err == nil {
+		t.Fatal("the record reports no failure, want the one the Subscriber returned")
+	} else if !errors.Is(err, broken) {
+		t.Errorf("the failure is %v, and it does not carry what the Subscriber said", err)
+	}
+	if err := rec.Record(context.Background(), events.Text{Block: 0, Chunk: "second"}); err != nil {
+		t.Errorf("the second record failed: %v — a Subscriber that already broke must not fail it again", err)
+	}
+
+	if seenByWorking != 2 {
+		t.Errorf("the working Subscriber saw %d of 2 Events — a broken projection ahead of it stopped its feed", seenByWorking)
+	}
+	if seenByBroken != 1 {
+		t.Errorf("the broken Subscriber saw %d Events, want 1: it missed a record and cannot be made whole by the ones after it", seenByBroken)
+	}
+}
+
+// A Run one of whose projections stopped following says so when it closes. The
+// screen that went blank cannot report its own absence, so the Trace does.
+func TestARunWhoseProjectionStoppedFollowingIsDegraded(t *testing.T) {
+	s := &sink{}
+	failing := core.SubscriberFunc(func(context.Context, events.Event) error {
+		return errors.New("the pipe is closed")
+	})
+	rec := recorder(t, options(s, failing))
+
+	_ = rec.Record(context.Background(), events.Started{Intent: "watched by nobody"})
+	if err := rec.Finish(context.Background(), events.Claim{Result: events.ResultDone}); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	degraded, ok := payloadOf[events.Degraded](s.committed())
+	if !ok {
+		t.Fatal("the Run closed clean, and one of its projections had stopped following")
+	}
+	if len(degraded.Missing) != 1 || !strings.Contains(degraded.Missing[0], "projection") {
+		t.Errorf("the caveat is %q, and it does not say a projection stopped following", degraded.Missing)
+	}
+}
+
+// Two Runs of one Session commit at once, which is what a Session that opens a
+// Recorder per Run invites. The transcript is the one thing they both touch.
+func TestTwoRunsOfOneSessionFoldTogether(t *testing.T) {
+	session := core.NewSession("sess_1", "tenant", events.Identity{ID: "actor", Kind: events.ActorAgent}, origin())
+
+	var runs sync.WaitGroup
+	for i := range 2 {
+		rec, err := session.Open(&sink{})
+		if err != nil {
+			t.Fatalf("open run %d: %v", i, err)
+		}
+		runs.Add(1)
+		go func() {
+			defer runs.Done()
+			_ = rec.Record(context.Background(), events.Started{Intent: fmt.Sprintf("run %d", i)})
+			_ = rec.Record(context.Background(), events.Text{Block: 0, Chunk: "answering"})
+			_ = session.Messages()
+			_ = rec.Finish(context.Background(), events.Claim{Result: events.ResultDone})
+		}()
+	}
+	runs.Wait()
+
+	// Both Runs said something and both were folded. What order they interleaved
+	// in is not this test's business — that they did not race is.
+	if got := len(session.Messages()); got != 4 {
+		t.Errorf("the transcript holds %d messages, want the 2 prompts and 2 answers both Runs committed", got)
 	}
 }

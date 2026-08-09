@@ -127,8 +127,8 @@ func TestTheStyleFollowsTheTerminalBackground(t *testing.T) {
 // changing, and it is the one worth asking for.
 func TestTheCostReportsTheWholeSessionRatherThanTheLastTurn(t *testing.T) {
 	var payloads []events.Payload
-	payloads = append(payloads, answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340})...)
-	payloads = append(payloads, answered("second", events.Usage{InputTokens: 800, OutputTokens: 60})...)
+	payloads = append(payloads, answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)})...)
+	payloads = append(payloads, answered("second", events.Usage{InputTokens: events.Tokens(800), OutputTokens: events.Tokens(60)})...)
 
 	lines := costs(t, payloads...)
 	if len(lines) != 2 {
@@ -159,7 +159,7 @@ func TestTheCostReportsTheWholeSessionRatherThanTheLastTurn(t *testing.T) {
 // largest single lever on what a turn costs. One number cannot carry them.
 func TestTheCostLineSeparatesCacheWritesFromCacheReads(t *testing.T) {
 	line := costs(t, answered("cached",
-		events.Usage{InputTokens: 1200, OutputTokens: 340, CacheWriteTokens: 96, CacheReadTokens: 1024})...)[0]
+		events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340), CacheWriteTokens: events.Tokens(96), CacheReadTokens: events.Tokens(1024)})...)[0]
 
 	for _, want := range []string{"96 write", "1.0k read"} {
 		if !strings.Contains(line, want) {
@@ -172,7 +172,7 @@ func TestTheCostLineSeparatesCacheWritesFromCacheReads(t *testing.T) {
 // printed here would become the number a bill is argued from.
 func TestAnUnreportedDollarFigureIsNamedRatherThanEstimated(t *testing.T) {
 	line := costs(t, answered("free?",
-		events.Usage{InputTokens: 1200, OutputTokens: 340})...)[0]
+		events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)})...)[0]
 
 	if strings.Contains(line, "$") {
 		t.Errorf("the cost line shows a dollar figure the provider never reported: %s", line)
@@ -185,8 +185,8 @@ func TestAnUnreportedDollarFigureIsNamedRatherThanEstimated(t *testing.T) {
 // And when the provider does report one, it is shown and it is summed.
 func TestAReportedDollarFigureIsShownAndAccumulated(t *testing.T) {
 	var payloads []events.Payload
-	payloads = append(payloads, answered("first", events.Usage{InputTokens: 100, USD: usd(0.0030)})...)
-	payloads = append(payloads, answered("second", events.Usage{InputTokens: 100, USD: usd(0.0062)})...)
+	payloads = append(payloads, answered("first", events.Usage{InputTokens: events.Tokens(100), USD: usd(0.0030)})...)
+	payloads = append(payloads, answered("second", events.Usage{InputTokens: events.Tokens(100), USD: usd(0.0062)})...)
 
 	lines := costs(t, payloads...)
 	if want := "$0.0030"; !strings.Contains(lines[0], want) {
@@ -204,8 +204,8 @@ func TestAReportedDollarFigureIsShownAndAccumulated(t *testing.T) {
 // complete and is short by an unknown amount.
 func TestASessionThatIsPartlyPricedReportsNoDollarFigure(t *testing.T) {
 	var payloads []events.Payload
-	payloads = append(payloads, answered("priced", events.Usage{InputTokens: 100, USD: usd(0.0030)})...)
-	payloads = append(payloads, answered("unpriced", events.Usage{InputTokens: 100})...)
+	payloads = append(payloads, answered("priced", events.Usage{InputTokens: events.Tokens(100), USD: usd(0.0030)})...)
+	payloads = append(payloads, answered("unpriced", events.Usage{InputTokens: events.Tokens(100)})...)
 
 	session := costs(t, payloads...)[1]
 	if strings.Contains(session, "$") {
@@ -227,7 +227,7 @@ func TestACaveatIsShownAndNotOnlyRecorded(t *testing.T) {
 	got := plain(show(t, true,
 		events.Started{Intent: "what is this project"},
 		events.Text{Chunk: "an answer"},
-		events.Usage{InputTokens: 1200, OutputTokens: 340},
+		events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)},
 		events.Degraded{Missing: []string{"usage: output tokens", `unknown event kind "quantum_flux"`}},
 		events.Finished{Claim: events.Claim{Result: events.ResultDone}},
 	))
@@ -253,7 +253,7 @@ func TestACaveatIsShownAndNotOnlyRecorded(t *testing.T) {
 	line := costs(t,
 		events.Started{Intent: "what is this project"},
 		events.Text{Chunk: "an answer"},
-		events.Usage{InputTokens: 1200, OutputTokens: 340},
+		events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)},
 		events.Degraded{Missing: []string{"usage: output tokens"}},
 		events.Finished{Claim: events.Claim{Result: events.ResultDone}},
 	)[0]
@@ -269,11 +269,11 @@ func TestACaveatDoesNotSurviveIntoTheNextTurn(t *testing.T) {
 	payloads = append(payloads,
 		events.Started{Intent: "first"},
 		events.Text{Chunk: "an answer"},
-		events.Usage{InputTokens: 100},
+		events.Usage{InputTokens: events.Tokens(100)},
 		events.Degraded{Missing: []string{"usage: output tokens"}},
 		events.Finished{Claim: events.Claim{Result: events.ResultDone}},
 	)
-	payloads = append(payloads, answered("second", events.Usage{InputTokens: 100})...)
+	payloads = append(payloads, answered("second", events.Usage{InputTokens: events.Tokens(100)})...)
 
 	got := plain(show(t, true, payloads...))
 	if strings.Count(got, "degraded") != 1 {
@@ -315,14 +315,14 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 		}
 	}
 
-	commit(answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340})...)
+	commit(answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)})...)
 	dark := out.String()
 
 	if err := renderer.Background(false); err != nil {
 		t.Fatalf("take the terminal's answer: %v", err)
 	}
 	out.Reset()
-	commit(answered("second", events.Usage{InputTokens: 800, OutputTokens: 60})...)
+	commit(answered("second", events.Usage{InputTokens: events.Tokens(800), OutputTokens: events.Tokens(60)})...)
 	light := out.String()
 
 	session := plain(renderer.Cost())
@@ -386,8 +386,8 @@ func costs(t *testing.T, payloads ...events.Payload) []string {
 func TestTheCostIsAnsweredOnDemandAfterTheTurnIsOver(t *testing.T) {
 	renderer, _ := fold(t, true,
 		append(
-			answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340}),
-			answered("second", events.Usage{InputTokens: 800, OutputTokens: 60})...,
+			answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)}),
+			answered("second", events.Usage{InputTokens: events.Tokens(800), OutputTokens: events.Tokens(60)})...,
 		)...,
 	)
 
@@ -403,7 +403,7 @@ func TestTheCostIsAnsweredOnDemandAfterTheTurnIsOver(t *testing.T) {
 // figure that outlived the Session it names would be two conversations summed
 // and reported as one.
 func TestClearingStartsTheAccountingOver(t *testing.T) {
-	renderer, _ := fold(t, true, answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340})...)
+	renderer, _ := fold(t, true, answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)})...)
 
 	renderer.Cleared()
 
@@ -421,7 +421,7 @@ func TestTheCostAnsweredOnDemandCarriesTheCaveat(t *testing.T) {
 	renderer, _ := fold(t, true,
 		events.Started{Intent: "what is this project"},
 		events.Text{Chunk: "partly"},
-		events.Usage{InputTokens: 1200, OutputTokens: 340},
+		events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)},
 		events.Degraded{Missing: []string{"the provider reported no cost"}},
 		events.Finished{Claim: events.Claim{Result: events.ResultDone}},
 	)
@@ -442,8 +442,8 @@ func TestTheCostAnsweredOnDemandCarriesTheCaveat(t *testing.T) {
 // Session — which is the only reason it is worth having a second way to ask.
 func TestTheSessionSpendIsTheSumOfEveryTurn(t *testing.T) {
 	var payloads []events.Payload
-	payloads = append(payloads, answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340, USD: usd(0.0030)})...)
-	payloads = append(payloads, answered("second", events.Usage{InputTokens: 800, OutputTokens: 60, USD: usd(0.0062)})...)
+	payloads = append(payloads, answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340), USD: usd(0.0030)})...)
+	payloads = append(payloads, answered("second", events.Usage{InputTokens: events.Tokens(800), OutputTokens: events.Tokens(60), USD: usd(0.0062)})...)
 
 	renderer, _ := fold(t, true, payloads...)
 
@@ -480,7 +480,7 @@ func TestADegradedSessionSaysSoInTheFooterFigures(t *testing.T) {
 	renderer, _ := fold(t, true,
 		events.Started{Intent: "first"},
 		events.Text{Chunk: "an answer"},
-		events.Usage{InputTokens: 100},
+		events.Usage{InputTokens: events.Tokens(100)},
 		events.Degraded{Missing: []string{"usage: output tokens"}},
 		events.Finished{Claim: events.Claim{Result: events.ResultDone}},
 	)
@@ -505,5 +505,36 @@ func TestATurnWithNothingToShowShowsNothing(t *testing.T) {
 
 	if got != "" {
 		t.Errorf("a turn that produced nothing was drawn as %q", got)
+	}
+}
+
+// A turn whose token counts the provider never reported has no figure to
+// state. Naming one anyway would put a number a person budgets against beside
+// a caveat they have to notice, and the number would win.
+func TestASessionWhoseCountersWereNotReportedStatesNoFigure(t *testing.T) {
+	session := costs(t, answered("unmeasured", events.Usage{USD: usd(0.0030)})...)[0]
+
+	if strings.Contains(session, " in / ") {
+		t.Errorf("the Session states token counts over a turn that reported none: %s", session)
+	}
+	if !strings.Contains(session, "no usage reported") {
+		t.Errorf("the Session does not say the counts are missing: %s", session)
+	}
+}
+
+// The same rule the dollar figure lives under, applied to the counters: a sum
+// over a set one turn was silent about looks whole and is short by an unknown
+// amount.
+func TestASessionOnlyPartlyCountedStatesNoTokenFigure(t *testing.T) {
+	var payloads []events.Payload
+	payloads = append(payloads, answered("counted", events.Usage{InputTokens: events.Tokens(100), OutputTokens: events.Tokens(20)})...)
+	payloads = append(payloads, answered("silent", events.Usage{})...)
+
+	session := costs(t, payloads...)[1]
+	if strings.Contains(session, "100 in") {
+		t.Errorf("the Session sums counters over a turn that reported none: %s", session)
+	}
+	if !strings.Contains(session, "no usage reported") {
+		t.Errorf("the Session does not say the counts are incomplete: %s", session)
 	}
 }

@@ -102,7 +102,8 @@ func TestARecordedTurnStreamsItsBlocksInFileOrder(t *testing.T) {
 	if !ok {
 		t.Fatalf("the last payload is %#v, want Usage", got[len(got)-1])
 	}
-	if usage.InputTokens != 12 || usage.OutputTokens != 34 {
+	if usage.InputTokens == nil || *usage.InputTokens != 12 ||
+		usage.OutputTokens == nil || *usage.OutputTokens != 34 {
 		t.Errorf("usage = %+v, want the recorded figures", usage)
 	}
 	// A figure the file leaves out is absent, not zero.

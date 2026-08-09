@@ -175,6 +175,17 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 	return ExitOK, nil
 }
 
+// The fold a person reads a turn in is a projection of what was committed, and
+// this is where the compiler is told so.
+//
+// ui does not import core, deliberately: a fold that could reach a Session or
+// the Trace could show a turn the record does not hold. That costs the
+// assertion a package usually makes about itself, so the layer that builds a
+// Renderer makes it instead. Without this line the guarantee rests on whichever
+// call site happens to pass one as a Subscriber, and a refactor of that call
+// site takes the guarantee with it and says nothing.
+var _ core.Subscriber = (*ui.Renderer)(nil)
+
 // once answers one prompt onto a byte stream and returns the code that says how
 // it went.
 //

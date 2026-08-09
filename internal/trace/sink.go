@@ -1,10 +1,14 @@
 package trace
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -33,10 +37,11 @@ type Sink struct {
 	// Zero on an Event means "not committed", so the sequence cannot start
 	// there.
 	//
-	// This is the high-water mark for this process. Resuming a Session in a
-	// new process needs the mark recovered by reading the Trace back, which
-	// arrives with resume; until then a Session belongs to one process and
-	// the counter is complete.
+	// Open recovers it from the file, so it is the high-water mark of the Trace
+	// rather than of this process. A counter that started at 1 in every process
+	// gave a Session resumed in a second process the positions the first one had
+	// already used — one file, two records at Seq 4, and every fold that reads
+	// position as identity quietly wrong.
 	next map[events.SessionID]uint64
 }
 
@@ -45,18 +50,69 @@ type Sink struct {
 var _ core.TraceSink = (*Sink)(nil)
 
 // Open opens the Trace at path for appending, creating it and its directory if
-// they do not exist.
+// they do not exist, and recovers the position each Session in it reached.
 func Open(path string) (*Sink, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("trace: make %s: %w", filepath.Dir(path), err)
 	}
+
+	next, err := reached(path)
+	if err != nil {
+		return nil, err
+	}
+
 	// O_APPEND so every write lands at the end of the file as it is at that
 	// moment, rather than at an offset this process remembered.
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("trace: open %s: %w", path, err)
 	}
-	return &Sink{file: file, next: map[events.SessionID]uint64{}}, nil
+	return &Sink{file: file, next: next}, nil
+}
+
+// reached reads a Trace back for the position each Session in it got to.
+//
+// It decodes the two envelope fields it needs rather than whole Events: a
+// payload this build does not recognise is preserved on read, and reviving one
+// here to throw it away costs the read of every Trace the process ever opens.
+//
+// A line that does not parse is passed over rather than failing the open. That
+// is the format's own property — a reader takes whole lines, so a process
+// killed mid-write costs the last record rather than the file — and refusing to
+// open a Trace with a torn tail would make a crash cost the Session as well.
+func reached(path string) (map[events.SessionID]uint64, error) {
+	next := map[events.SessionID]uint64{}
+
+	file, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return next, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("trace: read %s: %w", path, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// A folded content block is one line and has no bound, so the reader grows
+	// to the line rather than the line having to fit a buffer.
+	lines := bufio.NewReader(file)
+	for {
+		line, readErr := lines.ReadString('\n')
+		if len(line) > 0 {
+			var mark struct {
+				Seq     uint64           `json:"seq"`
+				Session events.SessionID `json:"session"`
+			}
+			if json.Unmarshal([]byte(line), &mark) == nil && mark.Session != "" && mark.Seq >= next[mark.Session] {
+				next[mark.Session] = mark.Seq + 1
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return next, nil
+			}
+			return nil, fmt.Errorf("trace: read %s: %w", path, readErr)
+		}
+	}
 }
 
 // Append commits a group as one unit.

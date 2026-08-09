@@ -487,7 +487,7 @@ func segments(parts ...string) string {
 // an unknown amount, and a cost report that is confidently wrong is worse than
 // one that says it does not know.
 type spend struct {
-	in, out, cacheWrite, cacheRead uint64
+	in, out, cacheWrite, cacheRead tally
 
 	usd float64
 	// records is how many Usage records this is a sum of, and priced is how
@@ -497,10 +497,10 @@ type spend struct {
 }
 
 func (s *spend) add(u events.Usage) {
-	s.in += u.InputTokens
-	s.out += u.OutputTokens
-	s.cacheWrite += u.CacheWriteTokens
-	s.cacheRead += u.CacheReadTokens
+	s.in.add(u.InputTokens)
+	s.out.add(u.OutputTokens)
+	s.cacheWrite.add(u.CacheWriteTokens)
+	s.cacheRead.add(u.CacheReadTokens)
 
 	s.records++
 	if u.USD != nil {
@@ -509,23 +509,53 @@ func (s *spend) add(u events.Usage) {
 	}
 }
 
-// tokens is what went in and what came out.
+// tally sums one counter across a set of Usage records, and counts how many of
+// them carried it.
+//
+// The count is what keeps a partial sum from reading as a whole one. A set
+// where one record reported nothing sums to a figure that looks complete and is
+// short by an unknown amount, which is the same confidently-wrong report the
+// nullable counter exists to prevent — the absence has to survive the addition.
+type tally struct {
+	sum      uint64
+	reported int
+}
+
+func (t *tally) add(n *uint64) {
+	if n == nil {
+		return
+	}
+	t.sum += *n
+	t.reported++
+}
+
+// whole says the figure covers every record it is a sum of.
+func (t tally) whole(records int) bool { return records > 0 && t.reported == records }
+
+// tokens is what went in and what came out, when every turn said. A set that
+// one turn was silent about has no total to state: naming the figure anyway
+// would put a number a person budgets against next to a caveat they have to
+// notice, and the number would win.
 func (s spend) tokens() string {
-	if s.records == 0 {
+	if !s.in.whole(s.records) || !s.out.whole(s.records) {
 		return "no usage reported"
 	}
-	return count(s.in) + " in / " + count(s.out) + " out"
+	return count(s.in.sum) + " in / " + count(s.out.sum) + " out"
 }
 
 // cache is the write and the read, apart. A cache write costs more than base
 // input and a cache read costs far less, so one figure could not compute a
 // cost — and the ratio of the two is the largest single lever on what a
-// conversation costs. It is absent from the line when nothing used a cache.
+// conversation costs. It is absent from the line when nothing used a cache, and
+// when a turn did not say what it used.
 func (s spend) cache() string {
-	if s.cacheWrite+s.cacheRead == 0 {
+	if !s.cacheWrite.whole(s.records) || !s.cacheRead.whole(s.records) {
 		return ""
 	}
-	return "cache " + count(s.cacheWrite) + " write / " + count(s.cacheRead) + " read"
+	if s.cacheWrite.sum+s.cacheRead.sum == 0 {
+		return ""
+	}
+	return "cache " + count(s.cacheWrite.sum) + " write / " + count(s.cacheRead.sum) + " read"
 }
 
 // money is the dollar figure, or the statement that there is none. It is never

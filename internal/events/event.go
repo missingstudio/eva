@@ -8,7 +8,14 @@ import "time"
 // Removing a field, retyping one, renaming one, or narrowing an enum
 // increments it. Readers migrate old records on read; stored Traces are never
 // rewritten.
-const SchemaVersion uint32 = 1
+//
+// Version 2 made Usage's four counters nullable. Version 1 could not say "the
+// provider did not report this" about the figures a cost report is built from,
+// so a silence and a zero were one value. A version 1 record still decodes: a
+// figure it carries becomes a figure, and the zero it may have meant either way
+// reads as none used, which is the most a record written without the
+// distinction can be asked to say.
+const SchemaVersion uint32 = 2
 
 type (
 	// EventID identifies one Event.

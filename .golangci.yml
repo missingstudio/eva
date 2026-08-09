@@ -43,6 +43,10 @@ linters:
             # one file both apply, so this one has to stand aside rather than
             # the other one being made more permissive.
             - "!**/internal/core/**_test.go"
+            # The base system prompt is governed by core-prompt below, which is
+            # what lets embed be granted to the one package that reads a file
+            # rather than to the whole of the domain.
+            - "!**/internal/core/prompt/**"
           allow:
             - github.com/missingstudio/eva/internal/events
             # context, for the TraceSink interface: a durable append is
@@ -59,11 +63,6 @@ linters:
             # are both reported rather than written.
             - errors
             - fmt
-            # embed, for the base system prompt. The prompt is prose, so it is
-            # written in a file and reviewed as prose — and embed is a
-            # compile-time read: the bytes land in the binary and nothing
-            # reaches the filesystem while a Run is going. core stays pure.
-            - embed
 
         # core's tests get the standard library, and nothing else core does not
         # already have. The rule is separate so that core's own allow list stays
@@ -78,6 +77,35 @@ linters:
             - github.com/missingstudio/eva/internal/events
             - github.com/missingstudio/eva/internal/core
 
+        # core/prompt holds the base system prompt and the gate on its size. It
+        # is the one package under core that reads a file, and it reads it at
+        # compile time: embed puts the bytes in the binary, so nothing reaches
+        # the filesystem while a Run is going and core stays pure.
+        #
+        # It is a rule of its own so that embed is granted to the package that
+        # needs it instead of to the whole domain. The two cannot import each
+        # other — neither list names the other, and both are strict — which is
+        # what keeps the prose a turn is conditioned on from growing a
+        # dependency on the domain it conditions.
+        core-prompt:
+          list-mode: strict
+          files:
+            - "**/internal/core/prompt/**"
+            - "!**/internal/core/prompt/**_test.go"
+          allow:
+            - embed
+            - fmt
+
+        # The gate on the prompt's size is a test, so it gets what a test needs
+        # and core/prompt keeps the two-package list above.
+        core-prompt-tests:
+          list-mode: strict
+          files:
+            - "**/internal/core/prompt/**_test.go"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/core/prompt
+
         # config reads files, so it sits outside core.
         config:
           list-mode: strict
@@ -86,28 +114,66 @@ linters:
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
-            - github.com/missingstudio/eva/internal/core
             - github.com/BurntSushi/toml
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/config
 
-        # providers talk to the network, so they sit outside core.
+        # providers holds the contract: the Provider and Stream interfaces, and
+        # the Call a turn is asked with. It talks to nothing — the packages
+        # under it do — so it gets no vendor's SDK and no file format.
+        #
+        # Each implementation has a rule of its own below. One rule over the
+        # whole subtree would grant every dependency to every implementation,
+        # so the fake would be allowed the Anthropic SDK and the Anthropic
+        # Provider would be allowed to read files. Both lists said what they
+        # were for and neither could enforce it.
         providers:
           list-mode: strict
           files:
             - "**/internal/providers/**"
+            - "!**/internal/providers/anthropic/**"
+            - "!**/internal/providers/fake/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            # core, for the Message a Call carries. It is the transcript a turn
+            # is conditioned on, and it is the whole of what this layer needs
+            # from the domain.
+            - github.com/missingstudio/eva/internal/core
+            # See the events rule: this reaches the external test package only.
+            - github.com/missingstudio/eva/internal/providers
+
+        # The Anthropic Provider: the vendor's SDK, and the contract it
+        # satisfies. It does not read files.
+        providers-anthropic:
+          list-mode: strict
+          files:
+            - "**/internal/providers/anthropic/**"
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
             - github.com/missingstudio/eva/internal/core
-            - github.com/anthropics/anthropic-sdk-go
-            # Each implementation is its own package under providers/ and
-            # imports the interface it satisfies. See the events rule for the
-            # same line serving external test packages.
             - github.com/missingstudio/eva/internal/providers
-            # toml, for the fake Provider's recorded output. It reads the
-            # recording itself rather than being handed one, because the layer
-            # that reads files is config, and config may not import providers.
+            - github.com/missingstudio/eva/internal/providers/anthropic
+            - github.com/anthropics/anthropic-sdk-go
+
+        # The fake Provider replays a recorded turn, so it reads one: toml, and
+        # no vendor's SDK. It reads its own recording rather than being handed
+        # one because the layer that reads files is config, and config may not
+        # import providers.
+        #
+        # core is absent. A recording answers from a file and is conditioned on
+        # nothing, so the one type this layer takes from the domain is one the
+        # fake never touches.
+        providers-fake:
+          list-mode: strict
+          files:
+            - "**/internal/providers/fake/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/providers
+            - github.com/missingstudio/eva/internal/providers/fake
             - github.com/BurntSushi/toml
 
         # trace writes files. core declares the TraceSink interface; this

@@ -183,7 +183,7 @@ func TestAContentBlockCommitsAsOneGroup(t *testing.T) {
 			name: "what is not a chunk closes the block and commits on its own",
 			payloads: []events.Payload{
 				events.Text{Block: 0, Chunk: "answer"},
-				events.Usage{InputTokens: 1},
+				events.Usage{InputTokens: events.Tokens(1)},
 				events.Text{Block: 1, Chunk: "more"},
 			},
 			want: []string{"answer", string(events.KindUsage), "more"},
@@ -283,7 +283,7 @@ func TestATurnWithNoSystemPromptSendsNoSystemMessage(t *testing.T) {
 func TestAGroupTheTraceRefusesIsMarkedAsTheRecordFailing(t *testing.T) {
 	block := newBlocks(recorder(t, &refusing{}))
 
-	err := block.add(context.Background(), events.Usage{InputTokens: 1})
+	err := block.add(context.Background(), events.Usage{InputTokens: events.Tokens(1)})
 
 	var notWritten unrecorded
 	if !errors.As(err, &notWritten) {

@@ -181,7 +181,7 @@ func (s *stream) pump() {
 // single caveat ends up reading is composed at the close, by the one thing that
 // sees every degradation rather than only this Provider's.
 func (s *stream) end(whole bool) {
-	if s.spent.reported {
+	if s.spent.reported() {
 		s.queue = append(s.queue, s.spent.usage())
 		return
 	}
@@ -210,8 +210,14 @@ func (s *stream) end(whole bool) {
 // and left alone by a frame that did not. Adding them instead would double the
 // input tokens of every turn.
 type spend struct {
-	reported                             bool
-	input, output, cacheWrite, cacheRead uint64
+	input, output, cacheWrite, cacheRead *uint64
+}
+
+// reported says whether the API stated any figure at all. A turn it said
+// nothing about emits no Usage record, because a record of four absences says
+// the same thing at more cost to whoever reads it.
+func (s *spend) reported() bool {
+	return s.input != nil || s.output != nil || s.cacheWrite != nil || s.cacheRead != nil
 }
 
 func (s *spend) opened(u sdk.Usage) {
@@ -228,21 +234,20 @@ func (s *spend) closed(u sdk.MessageDeltaUsage) {
 	s.take(u.JSON.CacheReadInputTokens.Valid(), u.CacheReadInputTokens, &s.cacheRead)
 }
 
-// take records one figure, and remembers that the API reported something.
+// take records one figure.
 //
-// A frame that carried no figure at all leaves reported false, which is what
-// keeps a turn the API said nothing about from emitting a Usage of zeros. The
-// API types these signed and a negative count is not a thing that exists, so
-// one is read as none rather than as an enormous unsigned number.
-func (s *spend) take(reported bool, n int64, into *uint64) {
+// A frame that carried no figure leaves the counter absent, which is what keeps
+// a turn the API said nothing about from reporting zeros. The API types these
+// signed and a negative count is not a thing that exists, so one is read as
+// none rather than as an enormous unsigned number.
+func (s *spend) take(reported bool, n int64, into **uint64) {
 	if !reported {
 		return
 	}
-	s.reported = true
 	if n < 0 {
 		n = 0
 	}
-	*into = uint64(n)
+	*into = events.Tokens(uint64(n))
 }
 
 // usage is the normalized payload.

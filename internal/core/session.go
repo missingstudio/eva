@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/missingstudio/eva/internal/events"
 )
@@ -48,6 +49,13 @@ type Session struct {
 
 	origin Origin
 
+	// mu covers the fold. A Session opens a Recorder per Run and outlives all
+	// of them, so two Runs of one Session fold into this transcript from two
+	// goroutines — each holding its own Recorder's lock, neither holding a lock
+	// the other can see. A frontend that answers one turn at a time is what
+	// keeps that from happening today, and a frontend is not a place to keep an
+	// invariant the type can hold itself.
+	mu       sync.Mutex
 	messages []Message
 
 	// openRun is the Run whose assistant Message is still being appended to,
@@ -99,6 +107,10 @@ func NewSession(id events.SessionID, tenant events.TenantID, actor events.Identi
 // The Session is always the first Subscriber, so the transcript is folded
 // before the Event reaches anyone else. Every Subscriber is a projection of the
 // same committed record; the order only decides which is built first.
+//
+// A Session may hold several open Runs at once, and its fold is safe under
+// them: each Recorder publishes under its own lock, so the Session is the one
+// thing two Runs of it touch together.
 func (s *Session) Open(sink TraceSink, subs ...Subscriber) (*Recorder, error) {
 	// The other two are checked by NewRecorder, in the words a caller of that
 	// would have read. This one is checked here because it is called rather
@@ -153,6 +165,9 @@ func (s *Session) Committed(_ context.Context, e events.Event) error {
 		return nil
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	switch payload := e.Payload.(type) {
 	case events.Started:
 		s.closeRun()
@@ -185,6 +200,9 @@ func (s *Session) closeRun() {
 // mutated the slice would be editing history, which is what branch and rewind
 // exist to do properly.
 func (s *Session) Messages() []Message {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	out := make([]Message, len(s.messages))
 	copy(out, s.messages)
 	return out
