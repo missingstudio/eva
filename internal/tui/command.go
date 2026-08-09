@@ -70,7 +70,7 @@ func commands() []command {
 		},
 		{
 			name:  "cost",
-			about: "what the last turn cost, and the Session so far",
+			about: "what this Session has cost so far",
 			run:   (*Console).cost,
 		},
 		{
@@ -120,20 +120,92 @@ func (c *Console) model(name string) string {
 	return c.styles.hint.Render("model " + was + " → " + name)
 }
 
-// cost is what the last turn cost and what the Session has cost so far.
+// cost is what the Session has cost so far.
 //
 // The figures come from the Renderer rather than from a count kept beside it.
-// Both are folds over the Usage records the Trace holds, and a second count
-// could disagree with the line printed at the end of a turn — leaving a person
-// two figures for one Session and no way to tell which is the record.
+// It is a fold over the Usage records the Trace holds, and the same fold the
+// footer shows — a second count could disagree with it, leaving a person two
+// figures for one Session and no way to tell which is the record.
+//
+// It is the Session and not the last turn. A per-turn figure was reported here
+// too, and it was the one that aged fastest: true for a turn, restated on the
+// next, and never the number anybody is deciding on.
 func (c *Console) cost(string) string { return c.renderer.Cost() }
 
 // clear empties the transcript, and the spend with it, because both belong to
 // the Session that is being left behind. Session.Fresh has the argument.
+//
+// The pane is emptied too. It was not, while what a person had read sat in the
+// terminal's own scrollback and no program could reach it; now the console holds
+// it, and a command whose whole job is to empty a transcript that leaves the
+// transcript on screen is a command that has to be explained every time it is
+// used.
+//
+// It says nothing when it is done. An empty screen is what was asked for and it
+// is its own evidence — a line reporting the emptiness would be the only thing
+// on screen, which is to say the command would not have emptied it. This is the
+// one command with nothing to answer.
+//
+// Nothing is destroyed by this. The Trace holds every Event of the Session being
+// left, and holds them after this returns exactly as it held them before —
+// emptying a pane closes a window on evidence rather than touching it.
 func (c *Console) clear(string) string {
 	c.control.Clear()
 	c.renderer.Cleared()
-	return c.styles.hint.Render("transcript cleared — the turns that follow are a new Session")
+
+	// Back to the top before the content goes, so that a person who had
+	// scrolled up is not left at an offset into a transcript that no longer
+	// reaches that far.
+	c.transcript = nil
+	c.pane.GotoTop()
+	c.refresh()
+
+	return ""
+}
+
+// complete fills in a command name from however much of it has been typed, and
+// offers the next match each time it is asked again.
+//
+// It reads the same table /help reads, so a command cannot be completable and
+// undocumented, or documented and not completable. That is the whole reason the
+// table is a table.
+//
+// Cycling rather than listing: there are four commands, and a list would have to
+// go somewhere — the transcript, which is for what was answered, or the status
+// line, which is for what a turn is doing. Pressing tab twice is cheaper than
+// either, and it is what a person does anyway to see the next one.
+func (c *Console) complete() {
+	if c.completing == "" {
+		typed := c.input.Value()
+		// A slash and nothing but a name so far. Once there is a space the
+		// person is writing an argument, and no table here knows what a model
+		// is called.
+		if !strings.HasPrefix(typed, "/") || strings.ContainsAny(typed, " \n") {
+			return
+		}
+		c.completing = typed
+		c.completed = -1
+	}
+
+	matches := matching(strings.TrimPrefix(c.completing, "/"))
+	if len(matches) == 0 {
+		c.completing = ""
+		return
+	}
+
+	c.completed = (c.completed + 1) % len(matches)
+	c.input.SetValue("/" + matches[c.completed] + " ")
+}
+
+// matching is every command whose name starts with what has been typed.
+func matching(prefix string) []string {
+	var out []string
+	for _, cmd := range commands() {
+		if strings.HasPrefix(cmd.name, prefix) {
+			out = append(out, cmd.name)
+		}
+	}
+	return out
 }
 
 // obey answers what was typed at the console rather than sending it to the

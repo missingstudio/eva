@@ -46,9 +46,10 @@ type Renderer struct {
 	// block are each only meaningful once they are complete.
 	answer strings.Builder
 
-	// turn is this Run's spend and session is the Session's. Both are folded
-	// from the same Usage records, so they cannot disagree.
-	turn    spend
+	// session is what the whole conversation has cost, folded from the Usage
+	// records the Trace holds. There is no per-turn counter beside it: nothing
+	// reports one, and a second sum kept for no reader is a second sum to keep
+	// right.
 	session spend
 
 	// missing is what the Run did not understand, from the caveat that closes
@@ -56,6 +57,11 @@ type Renderer struct {
 	// line over data known to be incomplete, printed with nothing to say so, is
 	// a figure that reads as a measurement.
 	missing []string
+
+	// kept is every turn this Session has answered, in the form it can be drawn
+	// again from. It is what lets a window that changed size take the turns
+	// already on screen with it; see Kept.
+	kept []turn
 
 	// dark and width are what the markdown renderer is built against. They are
 	// held because either can change after a Renderer exists — a terminal
@@ -131,12 +137,21 @@ func (r *Renderer) Width(cols int) error {
 func (r *Renderer) rebuild() error {
 	// The markdown renderer no longer detects a background for itself and
 	// defaults to dark, so the style is named here rather than left to it.
-	style := styles.LightStyle
+	style := styles.LightStyleConfig
 	if r.dark {
-		style = styles.DarkStyle
+		style = styles.DarkStyleConfig
 	}
 
-	options := []glamour.TermRendererOption{glamour.WithStandardStyle(style)}
+	// No margin of its own. The standard styles indent a document by two
+	// columns, which is an indent the frontend cannot see, cannot match while an
+	// answer is still arriving, and cannot count when it wraps a line to a
+	// window. What a turn is inset by is one decision, and it belongs to
+	// whoever draws the rest of the screen — so this hands back text at column
+	// zero and leaves the inset to them.
+	none := uint(0)
+	style.Document.Margin = &none
+
+	options := []glamour.TermRendererOption{glamour.WithStyles(style)}
 	if r.width > 0 {
 		options = append(options, glamour.WithWordWrap(r.width))
 	}
@@ -205,7 +220,6 @@ func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 		r.answer.WriteString(payload.Chunk)
 
 	case events.Usage:
-		r.turn.add(payload)
 		r.session.add(payload)
 
 	case events.Degraded:
@@ -224,26 +238,87 @@ func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 // of. Neither is what has been written out — see show.
 func (r *Renderer) reset() {
 	r.answer.Reset()
-	r.turn = spend{}
 	r.missing = nil
 }
 
 // Cost is what the last turn cost and what the Session has cost so far, for a
 // caller that is asking rather than finishing a turn.
 //
-// It is the same line the end of a turn writes, folded from the same Usage
-// records and carrying the same caveat. Two figures assembled twice could
-// disagree, and a person reading one of them would have no way to tell which.
-func (r *Renderer) Cost() string { return r.costStyle.Render(r.spent()) }
-
-// spent is the caveat and the cost line, which are one thing a person reads:
-// figures known to be incomplete, printed with nothing to say so, are figures
-// that read as a measurement.
-func (r *Renderer) spent() string {
-	if len(r.missing) == 0 {
-		return costLine(r.turn, r.session)
+// It is the same fold the footer shows, so the two cannot disagree about one
+// Session. What it adds is the caveat in full: a footer has one line and shares
+// it with the model, and a person who asks about cost is owed the whole of what
+// the figures do not cover.
+func (r *Renderer) Cost() string {
+	line := "session " + r.spent()
+	if caveat := r.caveat(); caveat != "" {
+		// Before the figures, because it qualifies them. A reader who has
+		// already taken them as whole has read them once too many.
+		line = caveat + "\n" + line
 	}
-	return "degraded: " + strings.Join(r.missing, ", ") + "\n" + costLine(r.turn, r.session)
+	return r.cost().Render(line)
+}
+
+// cost is the style the figures are written in, folded to the window when there
+// is one to fold to. The line names two spends and a caveat, which in a narrow
+// window is wider than the window.
+func (r *Renderer) cost() lipgloss.Style {
+	if r.width <= 0 {
+		return r.costStyle
+	}
+	return r.costStyle.Width(r.width)
+}
+
+// spent is what the Session has cost, as figures.
+//
+// The Session and not the turn. A per-turn figure was reported beside it, and it
+// was the figure that aged fastest: true for one turn, restated on the next, and
+// never the number a person is actually deciding on. What a conversation has
+// cost is one number that keeps changing, and it is the one worth asking for.
+//
+// The cache figures ride here now. They were held to the turn to keep the line
+// to one line, and there is room for them once the turn is not on it — which
+// matters, because the ratio of cache written to cache read is the largest
+// single lever on what a conversation costs.
+func (r *Renderer) spent() string {
+	return segments(r.session.tokens(), r.session.cache(), r.session.money())
+}
+
+// caveat is what the Run did not understand, and is empty for a Run that was
+// whole.
+//
+// It is separate from the figures because it outlives them on screen. The
+// figures a turn cost are no longer written under the turn — a person reads an
+// answer, not an invoice, and what a Session has spent is on the footer where it
+// is true continuously rather than restated after every answer. What the Run
+// could not account for still goes under the answer it belongs to, because it
+// qualifies that turn and no other.
+func (r *Renderer) caveat() string {
+	if len(r.missing) == 0 {
+		return ""
+	}
+	return "degraded: " + strings.Join(r.missing, ", ")
+}
+
+// Session is what this Session has cost so far, for a frontend that shows it
+// continuously.
+//
+// It is the same fold over the same Usage records /cost answers with, so the
+// footer and the command cannot disagree about one Session.
+func (r *Renderer) Session() string {
+	// Nothing spent is nothing to say. A Session that has not run a turn would
+	// otherwise open with "no usage reported · cost unreported", which is a
+	// footer telling a person about the absence of something they have not
+	// asked for yet.
+	if r.session.records == 0 {
+		return ""
+	}
+	if caveat := r.caveat(); caveat != "" {
+		// Not the whole caveat, which names what was missed and is a sentence.
+		// A footer has one line and shares it with the model, so what it can
+		// carry is that the figure beside it is short by an unknown amount.
+		return r.spent() + " · degraded"
+	}
+	return r.spent()
 }
 
 // Cleared starts the accounting over, for a console that has emptied its
@@ -255,6 +330,9 @@ func (r *Renderer) spent() string {
 func (r *Renderer) Cleared() {
 	r.reset()
 	r.session = spend{}
+	// The turns go with the Session that answered them. What was cleared is in
+	// the Trace, which is the only place it was ever the account of anything.
+	r.kept = nil
 }
 
 // show hands the turn to the screen: the answer, then what it cost.
@@ -263,23 +341,32 @@ func (r *Renderer) Cleared() {
 // three things to a screen that places what it is given, and the answer, the
 // caveat, and the figures are one thing a person reads.
 func (r *Renderer) show() error {
-	var turn strings.Builder
-
-	if answer := strings.TrimSpace(r.answer.String()); answer != "" {
-		styled, err := r.markdown.Render(answer)
-		if err != nil {
-			return fmt.Errorf("ui: the answer: %w", err)
-		}
-		turn.WriteString(styled)
+	kept := turn{
+		answer: strings.TrimSpace(r.answer.String()),
+		// Frozen here rather than re-read later: it is what this Run failed to
+		// account for, and a turn redrawn at another width must still carry its
+		// own caveat rather than whichever one is current.
+		caveat: r.caveat(),
 	}
+	// A Run that produced neither an answer nor a caveat has nothing to show,
+	// and showing nothing is not the same as showing an empty thing: a frontend
+	// that marks each turn down its left-hand side would draw a mark against no
+	// text at all. It is not kept either, because what is not drawn cannot be
+	// redrawn at another width.
+	//
+	// This is the turn that broke before a word arrived, and what happened to it
+	// is the frontend's to say. The record of why is already committed.
+	if kept.answer == "" && kept.caveat == "" {
+		r.answer.Reset()
+		return nil
+	}
+	r.kept = append(r.kept, kept)
 
-	// The caveat comes before the cost line, because it qualifies it. A reader
-	// who has already taken the figures as whole has read them once too many —
-	// which is why the two are assembled together, here and on demand.
-	turn.WriteString(r.costStyle.Render(r.spent()))
-	turn.WriteString("\n")
-
-	if err := r.screen.Show(turn.String()); err != nil {
+	drawn, err := r.draw(kept)
+	if err != nil {
+		return err
+	}
+	if err := r.screen.Show(drawn); err != nil {
 		return err
 	}
 
@@ -291,15 +378,95 @@ func (r *Renderer) show() error {
 	return nil
 }
 
-// costLine is what a turn cost and what the Session has cost so far.
+// turn is a finished turn in the form it can be drawn again from.
 //
-// Both, on every turn: per-turn spend is what a developer reacts to, and
-// cumulative spend is what tells them a conversation has become expensive
-// before it ends. The cache figures ride with the turn only, so that the line
-// stays one line.
-func costLine(turn, session spend) string {
-	return "turn " + segments(turn.tokens(), turn.cache(), turn.money()) +
-		" │ session " + segments(session.tokens(), session.money())
+// The markdown is kept rather than only the bytes it rendered to, because those
+// bytes are wrapped to the window that was there at the time. A window is
+// resized, and a paragraph wrapped to the old one is either overrunning the new
+// one or standing in a column in the middle of it.
+type turn struct {
+	answer string
+	caveat string
+}
+
+// draw is one finished turn at the current width: the answer, the caveat if the
+// Run carried one, and the cost line.
+//
+// The whole turn goes over in one call. A turn handed over in three would be
+// three things to a screen that places what it is given, and the answer, the
+// caveat, and the figures are one thing a person reads.
+func (r *Renderer) draw(t turn) (string, error) {
+	var out strings.Builder
+
+	if t.answer != "" {
+		styled, err := r.markdown.Render(t.answer)
+		if err != nil {
+			return "", fmt.Errorf("ui: the answer: %w", err)
+		}
+		out.WriteString(styled)
+	}
+
+	// No figures under the answer. What a turn cost was written here on every
+	// turn, which made a conversation read as a run of receipts — and the
+	// number a person actually watches is the cumulative one, which a per-turn
+	// line states and then immediately makes stale. It lives on the footer now,
+	// where it is true continuously, and /cost still breaks it down on demand.
+	//
+	// The caveat stays. Figures known to be incomplete are one problem; a turn
+	// that could not account for itself, with nothing on screen to say so, is a
+	// worse one. It is wrapped to the answer's width because unwrapped it would
+	// be the one thing on a narrow screen that runs off the edge.
+	if t.caveat != "" {
+		out.WriteString(r.cost().Render(t.caveat))
+		out.WriteString("\n")
+	}
+	return out.String(), nil
+}
+
+// Arriving renders an answer that is still coming, for the live area.
+//
+// It is the same renderer, at the same width, as the turn that will replace it.
+// That is the whole of why it exists: a person watching an answer arrive and
+// then watching it be replaced should not see it change shape. Raw markdown
+// while it streams and a rendered document a moment later are two different
+// pictures of one answer, and the switch between them is the most visible thing
+// on the screen at the moment it happens.
+//
+// This renders text; it does not fold Events, and nothing it returns is kept.
+// The caller holds the chunks for exactly as long as the Run lasts and throws
+// them away — what a person keeps still comes only from the record, and this
+// makes no claim about what was committed. Markdown that is half-written
+// renders as what it is so far, which is the honest picture of an answer that
+// is half-written.
+func (r *Renderer) Arriving(text string) (string, error) {
+	styled, err := r.markdown.Render(text)
+	if err != nil {
+		return "", fmt.Errorf("ui: the arriving answer: %w", err)
+	}
+	return styled, nil
+}
+
+// Kept is every turn this Session has answered, drawn at the current width.
+//
+// It is for the frontend that holds what it has drawn and has just been told the
+// window is a different size. The markdown is re-rendered rather than the old
+// bytes re-flowed, because re-flowing styled output means guessing where a
+// heading ended and a fenced block began — and the source that answers both is
+// already here.
+//
+// The order is the order they were answered in. A caller interleaving them with
+// its own lines can rely on that and on nothing else: this says nothing about
+// what a console put between two turns.
+func (r *Renderer) Kept() ([]string, error) {
+	out := make([]string, 0, len(r.kept))
+	for _, t := range r.kept {
+		drawn, err := r.draw(t)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, drawn)
+	}
+	return out, nil
 }
 
 // segments joins the parts that have something to say.
@@ -352,8 +519,8 @@ func (s spend) tokens() string {
 
 // cache is the write and the read, apart. A cache write costs more than base
 // input and a cache read costs far less, so one figure could not compute a
-// cost — and the ratio of the two is the largest single lever on what a turn
-// costs. It is absent from the line when the turn used no cache.
+// cost — and the ratio of the two is the largest single lever on what a
+// conversation costs. It is absent from the line when nothing used a cache.
 func (s spend) cache() string {
 	if s.cacheWrite+s.cacheRead == 0 {
 		return ""

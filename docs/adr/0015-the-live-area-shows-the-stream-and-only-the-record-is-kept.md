@@ -1,8 +1,16 @@
 ---
-status: accepted
+status: accepted, placement superseded by 0023
 ---
 
 # The live area shows the stream, and only the record is kept
+
+> ADR 0023 moved where a kept turn goes: the console draws on the alternate
+> screen and holds the transcript in a pane of its own, rather than putting each
+> finished turn above its view into the terminal's scrollback. Read "put above
+> the interface's own view, in the terminal's scrollback" below as "put into the
+> pane". What this document decides — that a live area is erased, and that
+> nothing a person keeps came from anywhere but the record — is what 0023 leaves
+> standing.
 
 A Trace record is a unit of meaning. ADR 0004 made that true by folding consecutive text chunks of one content block into one record, and `cli.Turn` holds a block's chunks until the block is whole so that the sink has something to fold.
 

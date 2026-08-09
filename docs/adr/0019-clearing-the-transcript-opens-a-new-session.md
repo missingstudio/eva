@@ -1,8 +1,13 @@
 ---
-status: accepted
+status: accepted, the screen clause superseded by 0023
 ---
 
 # Clearing the transcript opens a new Session
+
+> ADR 0023 made the transcript a pane the console owns, so `/clear` now empties
+> the screen as well as the Session. Read the consequence below that says it does
+> not as no longer true. Everything else here stands, and one clause of it
+> especially: the Trace still grows with what was cleared.
 
 `/clear` empties the transcript without ending the process. The obvious implementation is one line:
 

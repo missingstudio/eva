@@ -119,39 +119,38 @@ func TestTheStyleFollowsTheTerminalBackground(t *testing.T) {
 	}
 }
 
-// Both figures, on every turn. Per-turn spend is what a developer reacts to;
-// cumulative spend is what tells them a conversation has become expensive
-// before it ends.
-func TestTheCostLineReportsThisTurnAndTheSessionSoFar(t *testing.T) {
+// The figure reported is the Session's, and it is the sum of every turn.
+//
+// A per-turn figure was reported beside it and is gone: it was the figure that
+// aged fastest — true for one turn, restated on the next, and never the number a
+// person is deciding on. What a conversation has cost is one number that keeps
+// changing, and it is the one worth asking for.
+func TestTheCostReportsTheWholeSessionRatherThanTheLastTurn(t *testing.T) {
 	var payloads []events.Payload
 	payloads = append(payloads, answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340})...)
 	payloads = append(payloads, answered("second", events.Usage{InputTokens: 800, OutputTokens: 60})...)
 
-	lines := costLines(t, plain(show(t, true, payloads...)))
+	lines := costs(t, payloads...)
 	if len(lines) != 2 {
-		t.Fatalf("%d cost lines, want one per turn:\n%s", len(lines), strings.Join(lines, "\n"))
+		t.Fatalf("%d cost reports, want one per turn:\n%s", len(lines), strings.Join(lines, "\n"))
 	}
 
-	turn, session, _ := strings.Cut(lines[0], "session")
+	// After one turn, the Session is that turn.
 	for _, want := range []string{"1.2k in", "340 out"} {
-		if !strings.Contains(turn, want) {
-			t.Errorf("the first turn does not report %q: %s", want, turn)
-		}
-		if !strings.Contains(session, want) {
-			t.Errorf("the Session after one turn does not report %q: %s", want, session)
+		if !strings.Contains(lines[0], want) {
+			t.Errorf("the Session after one turn does not report %q: %s", want, lines[0])
 		}
 	}
 
-	turn, session, _ = strings.Cut(lines[1], "session")
-	for _, want := range []string{"800 in", "60 out"} {
-		if !strings.Contains(turn, want) {
-			t.Errorf("the second turn does not report %q: %s", want, turn)
+	// 1200 + 800 and 340 + 60: the sum of both turns, not the last one.
+	for _, want := range []string{"2.0k in", "400 out"} {
+		if !strings.Contains(lines[1], want) {
+			t.Errorf("the Session does not report %q — it is not summing the turns: %s", want, lines[1])
 		}
 	}
-	// 1200 + 800 and 340 + 60: the Session is the sum, not the last turn.
-	for _, want := range []string{"2.0k in", "400 out"} {
-		if !strings.Contains(session, want) {
-			t.Errorf("the Session does not report %q — it is not summing the turns: %s", want, session)
+	for _, gone := range []string{"800 in", "60 out"} {
+		if strings.Contains(lines[1], gone) {
+			t.Errorf("the report still carries the last turn's %q on its own: %s", gone, lines[1])
 		}
 	}
 }
@@ -159,8 +158,8 @@ func TestTheCostLineReportsThisTurnAndTheSessionSoFar(t *testing.T) {
 // Cache writes and cache reads are priced differently, and their ratio is the
 // largest single lever on what a turn costs. One number cannot carry them.
 func TestTheCostLineSeparatesCacheWritesFromCacheReads(t *testing.T) {
-	line := costLines(t, plain(show(t, true, answered("cached",
-		events.Usage{InputTokens: 1200, OutputTokens: 340, CacheWriteTokens: 96, CacheReadTokens: 1024})...)))[0]
+	line := costs(t, answered("cached",
+		events.Usage{InputTokens: 1200, OutputTokens: 340, CacheWriteTokens: 96, CacheReadTokens: 1024})...)[0]
 
 	for _, want := range []string{"96 write", "1.0k read"} {
 		if !strings.Contains(line, want) {
@@ -172,8 +171,8 @@ func TestTheCostLineSeparatesCacheWritesFromCacheReads(t *testing.T) {
 // A dollar figure the provider did not report is named as absent. An estimate
 // printed here would become the number a bill is argued from.
 func TestAnUnreportedDollarFigureIsNamedRatherThanEstimated(t *testing.T) {
-	line := costLines(t, plain(show(t, true, answered("free?",
-		events.Usage{InputTokens: 1200, OutputTokens: 340})...)))[0]
+	line := costs(t, answered("free?",
+		events.Usage{InputTokens: 1200, OutputTokens: 340})...)[0]
 
 	if strings.Contains(line, "$") {
 		t.Errorf("the cost line shows a dollar figure the provider never reported: %s", line)
@@ -189,7 +188,7 @@ func TestAReportedDollarFigureIsShownAndAccumulated(t *testing.T) {
 	payloads = append(payloads, answered("first", events.Usage{InputTokens: 100, USD: usd(0.0030)})...)
 	payloads = append(payloads, answered("second", events.Usage{InputTokens: 100, USD: usd(0.0062)})...)
 
-	lines := costLines(t, plain(show(t, true, payloads...)))
+	lines := costs(t, payloads...)
 	if want := "$0.0030"; !strings.Contains(lines[0], want) {
 		t.Errorf("the first turn does not report %q: %s", want, lines[0])
 	}
@@ -208,7 +207,7 @@ func TestASessionThatIsPartlyPricedReportsNoDollarFigure(t *testing.T) {
 	payloads = append(payloads, answered("priced", events.Usage{InputTokens: 100, USD: usd(0.0030)})...)
 	payloads = append(payloads, answered("unpriced", events.Usage{InputTokens: 100})...)
 
-	_, session, _ := strings.Cut(costLines(t, plain(show(t, true, payloads...)))[1], "session")
+	session := costs(t, payloads...)[1]
 	if strings.Contains(session, "$") {
 		t.Errorf("the Session shows a dollar figure over turns that did not all report one: %s", session)
 	}
@@ -242,9 +241,24 @@ func TestACaveatIsShownAndNotOnlyRecorded(t *testing.T) {
 			t.Errorf("the caveat does not name %q:\n%s", want, got)
 		}
 	}
-	// Before the cost line, so that the figures are read as qualified.
-	if figures := strings.Index(got, "turn 1.2k"); figures < 0 || caveat > figures {
-		t.Errorf("the caveat does not come before the figures it qualifies:\n%s", got)
+	// The figures are not under the turn any more, and the caveat still is:
+	// what a Run could not account for qualifies that turn and no other, while
+	// what a Session has spent is one figure a frontend shows continuously.
+	if strings.Contains(got, "1.2k") {
+		t.Errorf("the rendered turn carries the figures, which belong to the footer:\n%s", got)
+	}
+
+	// And where the figures are reported, the caveat still comes first, so that
+	// they are read as qualified.
+	line := costs(t,
+		events.Started{Intent: "what is this project"},
+		events.Text{Chunk: "an answer"},
+		events.Usage{InputTokens: 1200, OutputTokens: 340},
+		events.Degraded{Missing: []string{"usage: output tokens"}},
+		events.Finished{Claim: events.Claim{Result: events.ResultDone}},
+	)[0]
+	if qualifier, figures := strings.Index(line, "degraded"), strings.Index(line, "session 1.2k"); qualifier < 0 || figures < 0 || qualifier > figures {
+		t.Errorf("the caveat does not come before the figures it qualifies:\n%s", line)
 	}
 }
 
@@ -262,15 +276,18 @@ func TestACaveatDoesNotSurviveIntoTheNextTurn(t *testing.T) {
 	payloads = append(payloads, answered("second", events.Usage{InputTokens: 100})...)
 
 	got := plain(show(t, true, payloads...))
-	if lines := costLines(t, got); len(lines) != 2 {
-		t.Fatalf("%d cost lines, want one per turn:\n%s", len(lines), got)
-	}
-	if second := got[strings.LastIndex(got, "turn "):]; strings.Contains(second, "degraded") {
-		t.Errorf("a clean turn inherited the caveat of the turn before it:\n%s", second)
-	}
 	if strings.Count(got, "degraded") != 1 {
 		t.Errorf("the caveat is shown %d times, want once — on the Run that carried it:\n%s",
 			strings.Count(got, "degraded"), got)
+	}
+
+	// And the figures reported after the clean turn carry no caveat either.
+	lines := costs(t, payloads...)
+	if len(lines) != 2 {
+		t.Fatalf("%d cost reports, want one per turn:\n%s", len(lines), strings.Join(lines, "\n"))
+	}
+	if strings.Contains(lines[1], "degraded") {
+		t.Errorf("a clean turn inherited the caveat of the turn before it:\n%s", lines[1])
 	}
 }
 
@@ -308,7 +325,7 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	commit(answered("second", events.Usage{InputTokens: 800, OutputTokens: 60})...)
 	light := out.String()
 
-	_, session, _ := strings.Cut(costLines(t, plain(light))[0], "session")
+	session := plain(renderer.Cost())
 	for _, want := range []string{"2.0k in", "400 out"} {
 		if !strings.Contains(session, want) {
 			t.Errorf("the Session does not report %q — the answer reset what it had spent: %s", want, session)
@@ -322,18 +339,41 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	}
 }
 
-// costLines picks the cost lines out of rendered output.
-func costLines(t *testing.T, out string) []string {
+// costs folds the payloads and returns what Cost reported after each turn.
+//
+// The figures used to be scraped out of the rendered turns, which is where a
+// Renderer wrote them. They are not written there any more — a turn is an
+// answer, and what a Session has spent belongs to a frontend that can show it
+// continuously — so the same fold is asked for them directly. What is being
+// tested is unchanged: these are the same records added the same way.
+func costs(t *testing.T, payloads ...events.Payload) []string {
 	t.Helper()
 
+	var out bytes.Buffer
+	renderer, err := ui.New(ui.Stream(&out), true)
+	if err != nil {
+		t.Fatalf("build a Renderer: %v", err)
+	}
+
 	var lines []string
-	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "turn ") {
-			lines = append(lines, strings.TrimSpace(line))
+	for i, payload := range payloads {
+		e := events.Event{
+			Seq:     uint64(i + 1),
+			Version: events.SchemaVersion,
+			Run:     "run_test",
+			Session: "sess_test",
+			Payload: payload,
+		}
+		e.Kind, _ = events.KindOf(payload)
+		if err := renderer.Committed(context.Background(), e); err != nil {
+			t.Fatalf("commit event %d: %v", i+1, err)
+		}
+		if _, closed := payload.(events.Finished); closed {
+			lines = append(lines, plain(renderer.Cost()))
 		}
 	}
 	if len(lines) == 0 {
-		t.Fatalf("the output holds no cost line:\n%s", out)
+		t.Fatalf("no turn closed, so nothing reported a cost:\n%s", out.String())
 	}
 	return lines
 }
@@ -351,18 +391,10 @@ func TestTheCostIsAnsweredOnDemandAfterTheTurnIsOver(t *testing.T) {
 		)...,
 	)
 
-	turn, session, split := strings.Cut(plain(renderer.Cost()), "session")
-	if !split {
-		t.Fatalf("the cost answers with one figure, want the turn and the Session: %s", turn)
-	}
-	for _, want := range []string{"800 in", "60 out"} {
-		if !strings.Contains(turn, want) {
-			t.Errorf("the turn does not report %q, and the last turn is what it is: %s", want, turn)
-		}
-	}
+	session := plain(renderer.Cost())
 	for _, want := range []string{"2.0k in", "400 out"} {
 		if !strings.Contains(session, want) {
-			t.Errorf("the Session does not report %q, which is both turns: %s", want, session)
+			t.Errorf("the cost does not report %q, which is both turns: %s", want, session)
 		}
 	}
 }
@@ -376,7 +408,7 @@ func TestClearingStartsTheAccountingOver(t *testing.T) {
 	renderer.Cleared()
 
 	line := plain(renderer.Cost())
-	if strings.Count(line, "no usage reported") != 2 {
+	if !strings.Contains(line, "no usage reported") {
 		t.Errorf("a cleared Renderer still reports a spend: %s", line)
 	}
 }
@@ -400,5 +432,78 @@ func TestTheCostAnsweredOnDemandCarriesTheCaveat(t *testing.T) {
 	}
 	if !strings.Contains(said, "1.2k in") {
 		t.Errorf("the cost does not report what the turn cost:\n%s", said)
+	}
+}
+
+// Session is what the whole conversation has cost, for a frontend that shows it
+// continuously rather than restating it under every answer.
+//
+// It is the same fold as the cost line, so the two cannot disagree about one
+// Session — which is the only reason it is worth having a second way to ask.
+func TestTheSessionSpendIsTheSumOfEveryTurn(t *testing.T) {
+	var payloads []events.Payload
+	payloads = append(payloads, answered("first", events.Usage{InputTokens: 1200, OutputTokens: 340, USD: usd(0.0030)})...)
+	payloads = append(payloads, answered("second", events.Usage{InputTokens: 800, OutputTokens: 60, USD: usd(0.0062)})...)
+
+	renderer, _ := fold(t, true, payloads...)
+
+	spent := plain(renderer.Session())
+	for _, want := range []string{"2.0k in", "400 out", "$0.0092"} {
+		if !strings.Contains(spent, want) {
+			t.Errorf("the Session spend does not report %q: %s", want, spent)
+		}
+	}
+	// It is the Session's, so it names no turn.
+	if strings.Contains(spent, "turn ") {
+		t.Errorf("the Session spend carries a per-turn figure: %s", spent)
+	}
+	// And it agrees with the line /cost answers with.
+	if session := plain(renderer.Cost()); !strings.Contains(session, "$0.0092") {
+		t.Errorf("the two ways of asking disagree:\n%s\n%s", spent, plain(renderer.Cost()))
+	}
+}
+
+// A Session that has spent nothing says nothing. A footer opening with "no
+// usage reported · cost unreported" tells a person about the absence of
+// something they have not asked for yet.
+func TestASessionThatHasSpentNothingReportsNothing(t *testing.T) {
+	renderer, _ := fold(t, true)
+
+	if spent := renderer.Session(); spent != "" {
+		t.Errorf("a Session with no turns reports %q, want nothing", spent)
+	}
+}
+
+// A degraded Session says so beside its figures, in the one word a footer has
+// room for. The full caveat names what was missed and goes under the turn.
+func TestADegradedSessionSaysSoInTheFooterFigures(t *testing.T) {
+	renderer, _ := fold(t, true,
+		events.Started{Intent: "first"},
+		events.Text{Chunk: "an answer"},
+		events.Usage{InputTokens: 100},
+		events.Degraded{Missing: []string{"usage: output tokens"}},
+		events.Finished{Claim: events.Claim{Result: events.ResultDone}},
+	)
+
+	if spent := plain(renderer.Session()); !strings.Contains(spent, "degraded") {
+		t.Errorf("the Session spend does not say it is short by an unknown amount: %s", spent)
+	}
+}
+
+// A Run that produced neither an answer nor a caveat shows nothing.
+//
+// Showing nothing is not the same as showing an empty thing. A frontend that
+// marks each turn down its left-hand side would otherwise draw a mark against no
+// text — a band on the screen standing for a turn that said nothing. What
+// happened to that turn is the frontend's to report, and the record of why is
+// committed either way.
+func TestATurnWithNothingToShowShowsNothing(t *testing.T) {
+	got := show(t, true,
+		events.Started{Intent: "what is this project"},
+		events.Finished{Claim: events.Claim{Result: events.ResultFailed, Summary: "the provider refused"}},
+	)
+
+	if got != "" {
+		t.Errorf("a turn that produced nothing was drawn as %q", got)
 	}
 }

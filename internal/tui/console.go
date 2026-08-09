@@ -5,12 +5,13 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
-	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -47,7 +48,7 @@ type Console struct {
 	// is a cancellable child of it, which is what Ctrl-C ends.
 	ctx context.Context
 
-	input textinput.Model
+	input textarea.Model
 
 	// arriving is the open Run's answer as it streams, and it is what the
 	// live area shows. The rendered turn that replaces it comes from the
@@ -56,9 +57,14 @@ type Console struct {
 	arriving strings.Builder
 
 	// transcript is what has been kept: every rendered turn, every prompt
-	// echoed back, and every command answered. It holds no arriving text — see
-	// refresh — so nothing in it came from anywhere but a committed record.
-	transcript strings.Builder
+	// echoed back, and every command answered, in the order they happened. It
+	// holds no arriving text — see refresh — so nothing in it came from
+	// anywhere but a committed record or a person's own keystroke.
+	//
+	// Blocks rather than one string, because a window that changes size has to
+	// be able to replace the turns without disturbing what a person typed
+	// between them. See rewrap.
+	transcript []block
 
 	// pane is the window onto the transcript. It scrolls, so the transcript is
 	// not truncated to fit; what a person sees is a position in it.
@@ -81,10 +87,13 @@ type Console struct {
 	// instrument to detect.
 	running sync.WaitGroup
 
-	// width is the window's, and is zero until the program reports one. It is
-	// what the footer puts the model at the far end of, and what the answer is
-	// wrapped to.
-	width int
+	// width and height are the window's, and are zero until the program reports
+	// them. The width is what the footer puts the model at the far end of and
+	// what the answer is wrapped to; the height is kept because the pane's own
+	// height is the remainder after the chrome, and the chrome does not have one
+	// fixed size — see fit.
+	width  int
+	height int
 
 	// spin turns while a Run is in flight. It is the answer to the one question
 	// a live area cannot otherwise answer: an answer that has not started
@@ -95,6 +104,49 @@ type Console struct {
 	// counts up from. A person deciding whether to wait or to interrupt is
 	// deciding on elapsed time, so it is on screen rather than guessed at.
 	since time.Time
+
+	// caption is the phrase beside the spinner, and captioned is when it was
+	// chosen. See caption.go for what they are and why they change on a clock of
+	// their own rather than with the spinner's frame.
+	caption   string
+	captioned time.Time
+
+	// pick chooses one of n. It is a field so that a test can fix what a person
+	// sees; nothing else has a reason to replace it, and the console never seeds
+	// or shares a source of its own.
+	pick func(n int) int
+
+	// queued is the prompt typed while a turn was still running, and is sent
+	// when that turn closes. Only one is held: a person who types a second has
+	// changed their mind about the first, and a console that ran both would be
+	// answering a question nobody has read the answer to yet.
+	//
+	// It is written under the same lock as the two fields beside it, because it
+	// is read from outside the update loop for the same reason: see Queued.
+	queued string
+
+	// leaving is whether an idle ctrl+c has already asked. One key should not
+	// end a Session that took an hour to build, and the second press is the
+	// answer to the question the first one puts on screen.
+	leaving bool
+
+	// pending is whether chunks have arrived that the pane has not been given
+	// yet. See the chunk case in Update for why they wait.
+	pending bool
+
+	// interrupted is whether this console stopped the Run in flight. It is the
+	// console's own act rather than a reading of the claim that closed the Run,
+	// which is why it is remembered rather than worked out: a person who pressed
+	// ctrl+c is owed the word for what they did, and every other way a turn ends
+	// without an answer is owed the same short line as the rest.
+	interrupted bool
+
+	// completing is what had been typed before tab began filling it in, and
+	// completed is how far through the matches that is. Both are held because
+	// a second tab has to offer the next match rather than start again from
+	// what the first one wrote. See complete.
+	completing string
+	completed  int
 
 	// dark is what the terminal answered when it was asked what colour it is.
 	// It starts at the assumption and is corrected by the answer.
@@ -124,6 +176,30 @@ type styles struct {
 	// be the most emphatic thing in an interface whose subject is the answer
 	// above them.
 	box lipgloss.Style
+
+	// person and eva are the marks down the left of the transcript, and they
+	// are the one place in this interface where a second colour earns what it
+	// costs. Everything else here is grey on purpose, because the answer is
+	// what a person came for. The gutter is the exception: scrolling back is
+	// looking for a boundary rather than reading, and a hue is what the eye
+	// finds without reading.
+	person lipgloss.Style
+	eva    lipgloss.Style
+}
+
+// inputStyles are the prompt's own: the library's, with the band of colour it
+// paints behind the line the cursor is on taken out.
+//
+// A cursor-line highlight belongs to an editor, where it marks your place on a
+// page of many lines. The prompt is one band across the bottom of the screen and
+// there is nowhere else the cursor could be, so the highlight marks nothing —
+// what it does instead is put a dark block under the one part of the screen a
+// person is looking at while they type, and hold it there the whole time.
+func inputStyles(dark bool) textarea.Styles {
+	s := textarea.DefaultStyles(dark)
+	s.Focused.CursorLine = s.Focused.CursorLine.UnsetBackground()
+	s.Blurred.CursorLine = s.Blurred.CursorLine.UnsetBackground()
+	return s
 }
 
 func newStyles(dark bool) styles {
@@ -138,8 +214,67 @@ func newStyles(dark bool) styles {
 		box: lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), true, false, true, false).
 			BorderForeground(subdued.GetForeground()),
+
+		// The person's mark carries the colour and Eva's does not, because
+		// there is far more of Eva on the screen. A hue down the side of every
+		// answer would be a hue nobody sees; a hue down the side of the four
+		// things a person said is a landmark.
+		person: lipgloss.NewStyle().Foreground(lipgloss.LightDark(dark)(personOnLight, personOnDark)),
+		eva:    subdued,
 	}
 }
+
+// The person's mark, one per background. Chosen to sit beside the greys rather
+// than compete with them: it has to be findable at a glance down a column two
+// characters wide, and nothing more is asked of it.
+var (
+	personOnLight = lipgloss.Color("#2F6FB2")
+	personOnDark  = lipgloss.Color("#7AA6DC")
+)
+
+// block is one thing in the transcript, and whose it is.
+//
+// A turn can be drawn again at another width, because the fold still holds the
+// markdown it came from. Everything else — a prompt echoed back, a command's
+// answer, a failure in the interface's own voice — is a line or two of text that
+// was never wrapped to anything, so there is nothing to redo.
+type block struct {
+	text  string
+	voice voice
+}
+
+// voice is whose a block is, which is what the gutter beside it says.
+type voice int
+
+const (
+	// evaVoice is a turn: what the fold made of committed records, and the text
+	// arriving that is about to become one.
+	evaVoice voice = iota
+	// personVoice is a prompt echoed back.
+	personVoice
+	// asideVoice is the interface talking about itself — a command's answer, a
+	// failure it has to report. It carries no mark, because it is not part of
+	// the conversation and a mark would say that it was.
+	asideVoice
+)
+
+// The gutter every block in the transcript is written past: a mark saying whose
+// the block is, and a space.
+//
+// Two columns for everything, and that is the whole point of it. Someone
+// scrolling back through a conversation is looking for where their own questions
+// were, and what makes that easy is one straight edge down the left with the
+// colour of the mark changing against it. An answer inset by one amount and a
+// prompt by another gives them two ragged edges and no colour worth reading.
+//
+// It is also why the fold no longer indents a document for itself. Two owners of
+// one inset is how an answer ends up in a different column from the text that
+// arrived a moment earlier as the same answer.
+const gutterWidth = 2
+
+// mark is what stands in the gutter, and is a left half block rather than a
+// pipe: at one column it has to read as a band rather than as punctuation.
+const mark = "▌"
 
 // committed carries one committed Event into the update loop from outside it.
 type committed struct{ event events.Event }
@@ -252,9 +387,36 @@ func pollable(file *os.File) bool {
 // input, and the one that is not the program wins the keystrokes it should not
 // have seen.
 func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Writer) (*tea.Program, *Console, error) {
-	input := textinput.New()
-	input.Prompt = "› "
+	// A prompt of several lines rather than one.
+	//
+	// A person writing to a model writes paragraphs, pastes a stack trace, and
+	// sketches a list. A single-line field takes all of that and scrolls it
+	// sideways past a fixed window, so what they are about to send is the one
+	// thing they cannot read. This grows instead, to a bound: past ten rows the
+	// prompt would be eating the answer it is about to ask about, and from there
+	// it scrolls within itself.
+	input := textarea.New()
 	input.Placeholder = "ask something"
+	// The mark goes on the first line only, and the rest are indented under it.
+	// Repeated down the side it stops meaning "here is the prompt" and starts
+	// meaning "here is another one" — five lines of one thought would read as
+	// five things about to be sent.
+	input.SetPromptFunc(promptMark, func(line textarea.PromptInfo) string {
+		if line.LineNumber == 0 {
+			return "› "
+		}
+		return "  "
+	})
+	input.DynamicHeight = true
+	input.MinHeight = 1
+	input.MaxHeight = promptRows
+	// Line numbers belong to an editor. This is a prompt.
+	input.ShowLineNumbers = false
+	// Enter sends, so the newline is on the chord — see key. Terminals that
+	// cannot report shift+enter report alt+enter, and the ones that can report
+	// both.
+	input.KeyMap.InsertNewline.SetKeys("shift+enter", "alt+enter")
+	input.SetStyles(inputStyles(true))
 
 	c := &Console{
 		ask:     backend.Answer,
@@ -263,9 +425,23 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		input:   input,
 		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 		pane:    viewport.New(),
+		pick:    randomPick,
 		dark:    true,
 		styles:  newStyles(true),
 	}
+
+	// The pane is given no bindings of its own. Its defaults are a pager's — j,
+	// k, space, f, b, u, d — and every one of them is a character somebody types
+	// into a prompt. What scrolls this pane is the set in scroll, and holding
+	// none here is what keeps that the whole set.
+	c.pane.KeyMap = viewport.KeyMap{}
+	// The pane does not wrap for itself, and refresh wraps what needs it before
+	// handing it over. Asking the pane costs a pass over the whole transcript
+	// on every frame, because a soft-wrapped pane cannot know which line an
+	// offset lands on without measuring every line above it — and a turn that
+	// streams in six thousand chunks redraws six thousand times. That is the
+	// difference between a long answer arriving in ten seconds and in thirty.
+	c.pane.SoftWrap = false
 
 	renderer, err := ui.New(c, c.dark)
 	if err != nil {
@@ -331,6 +507,18 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !c.busy() {
 			return c, nil
 		}
+		// What arrived since the last frame is composed here, once, however
+		// many chunks that was. See the chunk case.
+		if c.pending {
+			c.pending = false
+			c.refresh()
+		}
+		// The caption rides on this tick rather than on a timer of its own. It
+		// changes on a clock a hundred times slower, so all this costs is the
+		// comparison — and it costs no second reason to wake the interface.
+		if c.captionDue() {
+			c.recaption()
+		}
 		var cmd tea.Cmd
 		c.spin, cmd = c.spin.Update(msg)
 		return c, cmd
@@ -342,8 +530,15 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return c, c.key(msg)
 
 	case chunk:
+		// Kept, not drawn. A chunk is a few tokens and they arrive in their
+		// thousands, while a screen is redrawn tens of times a second at most —
+		// so composing the pane on every one is work thrown away between
+		// frames, and it is work proportional to the whole transcript each
+		// time. The tick below draws what has piled up. Nothing can be lost by
+		// waiting: a chunk only ever arrives while a Run is open, which is
+		// exactly when that tick is running.
 		c.arriving.WriteString(msg.text)
-		c.refresh()
+		c.pending = true
 		return c, nil
 
 	case committed:
@@ -358,15 +553,18 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return c, cmd
 }
 
-// View is the live area: what is arriving while a turn runs, the prompt when
-// none does, and under both the footer that says which model is answering.
+// View is the whole window: the transcript in a pane, the line that says
+// whether a turn is running, the prompt under it, and the footer.
 //
-// The turns already answered are not here. They are above the view, put there
-// as each Run closed, which is what leaves them in the terminal's own
-// scrollback rather than in a buffer this program has to hold and redraw. This
-// is why the view is three lines rather than a pane: a frontend that held the
-// transcript itself would be a second copy of what the Trace already holds, and
-// the two would disagree the first time a turn failed halfway.
+// The turns already answered are in the pane rather than in the terminal's
+// scrollback. What a transcript this program holds risks becoming is a second
+// account of the conversation, and what prevents that is not where the bytes are
+// drawn but who is allowed to write them: the pane has three writers — a fold
+// over committed records, a prompt echoed back, and a command answering — and
+// none of the three can invent a turn. What it buys is the three things a block
+// handed to the terminal can never be again — re-wrapped when the window
+// changes, scrolled to under the program's own control, and taken away when a
+// person empties the transcript.
 func (c *Console) View() tea.View {
 	// Until a window has said how big it is there is no box to draw, and
 	// guessing one means drawing it twice at two sizes.
@@ -375,13 +573,7 @@ func (c *Console) View() tea.View {
 	}
 
 	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left,
-		c.pane.View(),
-		c.status(),
-		// With no side borders the frame and the content are the same width, so
-		// the rules run the whole window.
-		c.styles.box.Width(c.width).Render(c.input.View()),
-		c.footer(),
-	))
+		append([]string{c.pane.View()}, c.chrome()...)...))
 	view.AltScreen = true
 	// Cell motion is the least that carries a wheel, which is the only mouse
 	// event this uses. Anything more would take click and drag away from the
@@ -390,12 +582,26 @@ func (c *Console) View() tea.View {
 	return view
 }
 
-// The rows the chrome takes from the window: the status line, the prompt with
-// a border above and below it, and the footer.
-const (
-	borderColumns = 2
-	chromeRows    = 1 + 3 + 1
-)
+// How far the queued line is indented past the word that labels it, so that a
+// prompt waiting behind a turn is cut to a width that leaves room for the label.
+const queuedLabel = "queued: "
+
+// promptRows is how tall the prompt may grow before it scrolls within itself.
+//
+// It is a bound rather than a limit on what may be written. Ten rows is a long
+// paragraph or a short stack trace, and past it the prompt would be taking the
+// screen from the answer a person is asking about.
+const promptRows = 10
+
+// promptMark is how many columns the mark down the left of the prompt takes.
+const promptMark = 2
+
+// noResponse is what a turn that did not answer leaves behind.
+//
+// One line for every way a turn can fail, because the difference between them
+// is a matter for whoever reads the Trace rather than for whoever asked the
+// question. See close, where what this costs is set out.
+const noResponse = "no response"
 
 // The size a console is built at, before a window has said what the real one
 // is.
@@ -421,41 +627,203 @@ func (c *Console) layout(width, height int) {
 	if width <= 0 {
 		return
 	}
+	was := c.width
 	c.width = width
-	c.input.SetWidth(width - borderColumns)
+	c.height = height
 
-	rows := height - chromeRows
-	if rows < 1 {
-		rows = 1
-	}
+	c.input.SetWidth(width - c.styles.box.GetHorizontalFrameSize())
 	c.pane.SetWidth(width)
-	c.pane.SetHeight(rows)
+	c.fit()
 
-	if err := c.renderer.Width(width); err != nil {
+	if err := c.renderer.Width(width - gutterWidth); err != nil {
 		c.blame(err)
+	}
+	// Only when the width actually moved. A window dragged taller reports a new
+	// size on every row it passes through, and re-rendering every turn's
+	// markdown on each of those is work for a wrapping that did not change.
+	if was != width {
+		c.rewrap()
 	}
 	c.refresh()
 }
 
-// status is what the line above the prompt says: that Eva is waiting for a
-// person, or that a turn is running and for how long.
+// fit gives the pane the rows the chrome does not take.
 //
-// It is always a line, whether or not a turn is running, so that the prompt
-// does not move when one starts. The elapsed figure is rounded to the second
-// because it is read, not measured, and it comes free with the spinner's own
-// frame rate — nothing else has to wake the interface up to keep it true.
+// The chrome is measured rather than counted, because it does not have one
+// height. The status line grows a row when a prompt is waiting behind the turn
+// in flight, and the footer is a row a window can be too narrow to have. A
+// constant would be right in one of those cases and wrong in the others, and
+// wrong here means either a row of the answer scrolled off the top or a view
+// drawn past the bottom of the window — the first of which is close to
+// invisible, which is what makes it worth measuring.
+//
+// The three pieces measured are the three the view joins. They cannot disagree
+// unless one of them is changed on its own, and that is the only way this stays
+// true as the chrome grows.
+func (c *Console) fit() {
+	if c.width <= 0 || c.height <= 0 {
+		return
+	}
+
+	left := c.height - rows(c.chrome())
+	if left < 1 {
+		// A window with no room for a transcript still gets one row of it. A
+		// pane of no height draws nothing at all, which leaves a person a
+		// prompt and no evidence that anything was ever answered — worse than a
+		// view that overruns a window nobody can read anyway.
+		left = 1
+	}
+
+	// A pane that was showing the end goes on showing it. Growing the prompt
+	// under a person who is typing must not scroll the answer they are typing
+	// about off the top.
+	follow := c.pane.AtBottom()
+	c.pane.SetHeight(left)
+	if follow {
+		c.pane.GotoBottom()
+		return
+	}
+	// Setting the height does not move the offset, so a pane that shrank can be
+	// left scrolled past the end of what it holds. Re-offering the offset is
+	// what clamps it.
+	c.pane.SetYOffset(c.pane.YOffset())
+}
+
+// live is the answer as it arrives, drawn the way the kept turn will be.
+//
+// It goes through the same fold at the same width, so that the moment the Run
+// closes and the record replaces the stream, nothing on screen changes shape. It
+// used to be the raw bytes: a heading arrived as two hashes and a word, a list
+// as hyphens, and all of it re-set itself the instant the turn was over — which
+// is the most visible event on the screen happening at the moment a person has
+// finally got what they were waiting for.
+//
+// Half-written markdown renders as what it is so far, which is what an answer
+// that is half-written is. If the fold cannot make anything of it, the bytes are
+// shown wrapped: a live area is worth having even when it is plain.
+func (c *Console) live(text string) string {
+	drawn, err := c.renderer.Arriving(text)
+	if err != nil {
+		return c.wrap(text)
+	}
+	return trimBlank(drawn)
+}
+
+// wrap folds text to the window, for the one thing on screen that arrives
+// unwrapped.
+//
+// A kept turn was wrapped by the fold that rendered it, to this same width. What
+// is arriving was not: it is the provider's own bytes, and a paragraph of them
+// is one line however wide the window is. Left alone the pane would cut it at
+// the right-hand edge, and a person would watch an answer stream past a margin
+// with most of each line behind it.
+//
+// It is here rather than asked of the pane because the pane would charge for it
+// on the whole transcript rather than on the part that needs it. See where
+// SoftWrap is set.
+func (c *Console) wrap(text string) string {
+	room := c.width - gutterWidth
+	if room <= 0 {
+		return text
+	}
+	return lipgloss.NewStyle().Width(room).Render(text)
+}
+
+// chrome is everything the view holds but the pane, in the order it is drawn.
+//
+// It sheds from the outside in as the window shrinks, and the order it sheds in
+// is an order of need. The footer goes first: the model's name is a convenience,
+// and a person who wants it can ask. The status line goes second, which costs
+// the spinner and the elapsed figure and is the reason it is not first. What
+// never goes is the prompt, because a console a person cannot type into is not
+// a console.
+//
+// A window under four rows has no room even for that, and keeps the prompt
+// anyway. There is nothing better to do with three rows, and a terminal that
+// small is one somebody is in the middle of resizing.
+func (c *Console) chrome() []string {
+	pieces := []string{c.status(), c.prompt(), c.footer()}
+
+	// One row is kept back for the pane throughout: a view with no transcript
+	// at all is a view that cannot show what it just answered.
+	for len(pieces) > 1 && c.height > 0 && rows(pieces)+1 > c.height {
+		if len(pieces) == 3 {
+			pieces = pieces[:2]
+			continue
+		}
+		pieces = pieces[1:]
+	}
+	return pieces
+}
+
+// rows is how tall a set of drawn pieces is once they are stacked.
+func rows(pieces []string) int {
+	total := 0
+	for _, piece := range pieces {
+		total += lipgloss.Height(piece)
+	}
+	return total
+}
+
+// prompt is what a person types into, between its two rules.
+func (c *Console) prompt() string {
+	return c.styles.box.Width(c.width - c.styles.box.GetHorizontalFrameSize()).Render(c.input.View())
+}
+
+// status is what the line above the prompt says: that Eva is waiting for a
+// person, that it is about to be left, or that a turn is running and for how
+// long.
+//
+// It is always at least a line, whether or not a turn is running, so that the
+// prompt does not move when one starts. The elapsed figure is rounded to the
+// second because it is read, not measured, and it comes free with the spinner's
+// own frame rate — nothing else has to wake the interface up to keep it true.
+//
+// The caption beside the spinner claims nothing and is not kept; see caption.go.
+// What carries the meaning is the figure next to it.
 func (c *Console) status() string {
+	if c.leaving {
+		return c.styles.hint.Render("press ctrl+c again to leave — any other key stays")
+	}
 	if !c.busy() {
 		return c.styles.hint.Render("ready")
 	}
-	return c.styles.spin.Render(c.spin.View()) + " " +
-		c.styles.hint.Render("answering "+time.Since(c.since).Round(time.Second).String()+" — ctrl+c to interrupt")
+
+	line := c.styles.spin.Render(c.spin.View()) + " " +
+		c.styles.hint.Render(c.caption+" "+time.Since(c.since).Round(time.Second).String()+" — ctrl+c to interrupt")
+	if c.queued == "" {
+		return line
+	}
+
+	// The prompt waiting behind this turn, shown because a person who cannot
+	// see it has no way to tell it was taken from one that was dropped.
+	return line + "\n" + c.styles.hint.Render(queuedLabel+oneLine(c.queued, c.width-len(queuedLabel)))
+}
+
+// oneLine is a prompt as a single row: its line breaks and runs of spaces
+// collapsed, and the whole cut to what there is room for.
+//
+// A queued prompt is shown in a place that has one row for it. A multi-line one
+// left as it was written would push the prompt down the screen by however many
+// lines a person happened to type, which is the interface moving under someone
+// who is still typing into it.
+func oneLine(s string, room int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if room < 1 {
+		return ""
+	}
+
+	runes := []rune(s)
+	if len(runes) <= room {
+		return s
+	}
+	return string(runes[:room-1]) + "…"
 }
 
 // refresh puts the transcript, and the turn currently arriving, into the pane.
 //
 // The two are concatenated rather than stored together, and that is the whole
-// of ADR 0015 in one function: what is kept is the transcript, which holds only
+// of the rule in one function: what is kept is the transcript, which holds only
 // what the Renderer folded from committed records. Arriving text exists here
 // for exactly as long as the Run does. When the Run closes, the chunks are
 // dropped and the rendered turn takes their place — so a process killed
@@ -466,11 +834,15 @@ func (c *Console) status() string {
 // interface that yanked them to the bottom on the next chunk would be an
 // interface they cannot read at all.
 func (c *Console) refresh() {
-	content := c.transcript.String()
-	if arriving := strings.TrimRight(c.arriving.String(), "\n"); arriving != "" {
-		content += arriving + "\n"
+	// The turn still arriving is composed as a block like any other, so that it
+	// is spaced off the prompt above it exactly as the kept turn that replaces
+	// it will be. Composed rather than appended: a person watching one become
+	// the other should see nothing move, and the gap is part of that.
+	blocks := c.transcript
+	if arriving := trimBlank(c.arriving.String()); arriving != "" {
+		blocks = append(blocks[:len(blocks):len(blocks)], block{text: c.live(arriving), voice: evaVoice})
 	}
-	content = strings.TrimRight(content, "\n")
+	content := strings.TrimRight(c.compose(blocks), "\n")
 
 	follow := c.pane.AtBottom()
 	c.pane.SetContent(content)
@@ -506,10 +878,13 @@ func (c *Console) Screen() string {
 // window.
 //
 // It is there because /model can change it and a person who has changed it
-// should not have to ask what it is now. It holds nothing else. A working
-// directory and a branch would say Eva acts on a repository, and at this stage
-// Eva has no tools and acts on nothing — a footer that implied otherwise would
-// be the interface making a claim the program cannot keep.
+// should not have to ask what it is now. At the near end, and only while a
+// person has scrolled away from it, is how much transcript is below them.
+//
+// It holds nothing else. A working directory and a branch would say Eva acts on
+// a repository, and at this stage Eva has no tools and acts on nothing — a
+// footer that implied otherwise would be the interface making a claim the
+// program cannot keep.
 //
 // It is empty until the window has said how wide it is, because there is
 // nowhere to put a right-hand end without one.
@@ -518,7 +893,51 @@ func (c *Console) footer() string {
 	if c.width <= 0 || lipgloss.Width(model) >= c.width {
 		return ""
 	}
-	return c.styles.hint.Render(strings.Repeat(" ", c.width-lipgloss.Width(model)) + model)
+
+	// What the Session has cost, at the far end beside the model.
+	//
+	// It is here rather than under each answer because it is one figure that
+	// keeps changing rather than a series of figures each true for a moment. A
+	// line printed after every turn made a conversation read as a run of
+	// receipts, and stated a cumulative total that the next turn immediately
+	// made stale. On the footer it is simply what the Session has spent, now.
+	right := model
+	if spent := c.renderer.Session(); spent != "" {
+		right = spent + " · " + model
+	}
+
+	behind := c.behind()
+	gap := c.width - lipgloss.Width(right) - lipgloss.Width(behind)
+	if gap < 1 {
+		// Not enough window for all of it. The figures go before the count of
+		// what is below, and both go before the model — a person can ask for a
+		// cost and cannot ask what is answering without changing it.
+		right, gap = model, c.width-lipgloss.Width(model)-lipgloss.Width(behind)
+	}
+	if gap < 1 {
+		behind, gap = "", c.width-lipgloss.Width(model)
+	}
+	return c.styles.hint.Render(behind + strings.Repeat(" ", gap) + right)
+}
+
+// behind is how much of the transcript is below what a person is looking at.
+//
+// It is empty whenever they are at the end, which is almost always — a line that
+// is there the whole time is a line nobody reads.
+//
+// What it is for is the case a scrolling pane creates and a scrollback never
+// did: a person who has scrolled up while a turn is streaming sees a screen that
+// does not change, and nothing else on it distinguishes that from a program
+// that has stopped. The count moving is the evidence.
+func (c *Console) behind() string {
+	if c.pane.AtBottom() {
+		return ""
+	}
+	rows := c.pane.TotalLineCount() - c.pane.YOffset() - c.pane.Height()
+	if rows < 1 {
+		return ""
+	}
+	return "↓ " + strconv.Itoa(rows) + " more · ctrl+end to follow"
 }
 
 // busy reports whether a Run is in flight.
@@ -539,6 +958,34 @@ func (c *Console) Busy() bool {
 	c.shown.Lock()
 	defer c.shown.Unlock()
 	return c.answering
+}
+
+// Queued is the prompt waiting behind the turn in flight, and is empty when
+// there is none.
+//
+// It is the third thing about the current frame a driver has to be able to read,
+// and it is here for the reason the other two are: what a person sees of it is
+// the status line, and a screen drawn in place cannot be read off its own bytes.
+// A driver that could not see a queued prompt would have to guess whether the
+// keys it typed had landed.
+func (c *Console) Queued() string {
+	c.shown.Lock()
+	defer c.shown.Unlock()
+	return c.queued
+}
+
+// queue takes the prompt that will be sent when the turn in flight closes, and
+// hands back the one that was waiting.
+//
+// One function for both because they are the same field under the same lock, and
+// a caller that only ever swaps cannot leave the two out of step.
+func (c *Console) queue(next string) string {
+	c.shown.Lock()
+	defer c.shown.Unlock()
+
+	was := c.queued
+	c.queued = next
+	return was
 }
 
 // Wait returns once no Run is still committing.
@@ -576,11 +1023,7 @@ func (c *Console) background(dark bool) tea.Cmd {
 	c.dark = dark
 	c.styles = newStyles(dark)
 
-	if dark {
-		c.input.SetStyles(textinput.DefaultDarkStyles())
-	} else {
-		c.input.SetStyles(textinput.DefaultLightStyles())
-	}
+	c.input.SetStyles(inputStyles(dark))
 
 	if err := c.renderer.Background(dark); err != nil {
 		c.blame(err)
@@ -591,7 +1034,35 @@ func (c *Console) background(dark bool) tea.Cmd {
 
 // key acts on a key press.
 func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
-	switch k.String() {
+	pressed := k.String()
+
+	// The prompt is as tall as what it holds, so any key can change how many
+	// rows the chrome takes: a newline grows it, a backspace gives a row back,
+	// sending empties it. The pane is refitted on the way out rather than at
+	// each of the places below that might have caused it, because the one that
+	// gets forgotten is the one where the prompt grows past the bottom of the
+	// window and takes the line being typed with it.
+	defer c.fit()
+
+	// Anything but a second ctrl+c withdraws the question the first one asked.
+	// A person who went on typing has answered it.
+	if c.leaving && pressed != "ctrl+c" {
+		c.leaving = false
+	}
+
+	// Tab offers the next command; any other key means the person is writing
+	// again rather than choosing, so the next tab starts from what is there.
+	if pressed == "tab" {
+		c.complete()
+		return nil
+	}
+	c.completing = ""
+
+	if c.scroll(pressed) {
+		return nil
+	}
+
+	switch pressed {
 	case "ctrl+c":
 		// During a turn this cancels it and gives the prompt back, rather
 		// than ending the Session. A long wrong answer should cost seconds,
@@ -599,7 +1070,17 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		// the answer that did arrive is part of the transcript, and the next
 		// turn is conditioned on it.
 		if c.busy() {
+			c.interrupted = true
 			c.cancel()
+			return nil
+		}
+
+		// Idle, it asks first. A Session is an hour of somebody's work by the
+		// time it is worth keeping, and one key next to the one that interrupts
+		// a turn should not be able to end it. ctrl+d stays a single press,
+		// because nobody types it by accident.
+		if !c.leaving {
+			c.leaving = true
 			return nil
 		}
 		return tea.Quit
@@ -609,33 +1090,74 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		return tea.Quit
 
 	case "enter":
-		if c.busy() {
-			return nil
-		}
 		prompt := strings.TrimSpace(c.input.Value())
 		if prompt == "" {
 			return nil
 		}
 		c.input.Reset()
-		c.put(c.styles.said.Render("› " + prompt))
 
-		// A slash is a person addressing eva rather than the model, and what it
-		// asks for happens here: no Run opens, nothing is committed, and the
-		// Trace holds no record of a turn that never ran.
-		if strings.HasPrefix(prompt, "/") {
-			c.put(c.obey(prompt))
+		// A turn is already running, so this one waits rather than being lost.
+		// It is echoed when it is sent rather than now, so that the transcript
+		// reads in the order the turns happened.
+		if c.busy() {
+			c.queue(prompt)
 			return nil
 		}
-		return c.start(prompt)
-	}
-
-	if c.busy() {
-		return nil
+		return c.send(prompt)
 	}
 
 	var cmd tea.Cmd
 	c.input, cmd = c.input.Update(k)
 	return cmd
+}
+
+// send echoes a prompt and either answers it here or opens a Run for it.
+func (c *Console) send(prompt string) tea.Cmd {
+	c.keep(block{text: c.styles.said.Render(prompt), voice: personVoice})
+
+	// A slash is a person addressing eva rather than the model, and what it
+	// asks for happens here: no Run opens, nothing is committed, and the
+	// Trace holds no record of a turn that never ran.
+	if strings.HasPrefix(prompt, "/") {
+		// A command with nothing to say puts nothing. /clear is the one, and
+		// an empty block would be a blank line sitting where it had just
+		// finished taking every other line away.
+		if said := c.obey(prompt); said != "" {
+			c.put(said)
+		}
+		return nil
+	}
+	return c.start(prompt)
+}
+
+// scroll moves the pane, and reports whether the key was one of its own.
+//
+// The bindings are written here rather than taken from the pane's own defaults.
+// Those bind j, k, space, f, b, u and d — every one of them a character a person
+// types into a prompt — and ctrl+d, which is how this console is left. A pane
+// holding those would make the prompt unusable and would do it silently, so the
+// pane is given no bindings at all and these are the whole set.
+//
+// Every one of them is a chord or a named key, for that reason: a binding that
+// is also a character is a binding that steals it.
+func (c *Console) scroll(pressed string) bool {
+	switch pressed {
+	case "pgup":
+		c.pane.PageUp()
+	case "pgdown":
+		c.pane.PageDown()
+	case "shift+up":
+		c.pane.ScrollUp(1)
+	case "shift+down":
+		c.pane.ScrollDown(1)
+	case "ctrl+home":
+		c.pane.GotoTop()
+	case "ctrl+end":
+		c.pane.GotoBottom()
+	default:
+		return false
+	}
+	return true
 }
 
 // start opens a Run for the prompt.
@@ -648,6 +1170,8 @@ func (c *Console) start(prompt string) tea.Cmd {
 	c.cancel = cancel
 	c.arriving.Reset()
 	c.since = time.Now()
+	c.interrupted = false
+	c.recaption()
 	c.running.Add(1)
 
 	c.shown.Lock()
@@ -695,18 +1219,34 @@ func (c *Console) close(a answered) tea.Cmd {
 	c.arriving.Reset()
 	c.refresh()
 
-	// A turn that did not answer says why in its own claim, and that claim is
-	// the one the Trace holds. The interface reads it rather than working the
-	// reason out a second time from the error: "interrupted" for a turn
-	// somebody stopped, the provider's own words for one that broke. A
-	// classification made here could disagree with the record, and a person
-	// reading the screen would have no way to know which of the two was true.
+	// A turn that did not answer says so in one line, and it is the same line
+	// however the turn went wrong.
+	//
+	// It used to be the claim's own summary, which for a broken turn is the
+	// provider's words. Those are written for whoever is debugging the provider
+	// rather than for whoever asked the question — a person who typed a prompt
+	// and got back a sentence about how many turns a recording holds has been
+	// handed the program's internals in place of an answer.
+	//
+	// What saying less gives up is real and is worth naming: two failures that
+	// need different things from a person — a credential to fix, a network to
+	// wait out — now read identically. The reason is not lost, because the claim
+	// is committed before this runs and the Trace holds the provider's words
+	// verbatim. It is one step further away than it was.
+	//
+	// Interruption keeps its own word. It is not a failure a person needs to be
+	// told about; it is the thing they just did, and the console knows it did it
+	// rather than reading it back out of a claim.
 	//
 	// A turn that broke leaves the Session standing either way. A console that
 	// ended on the first provider failure would throw away a conversation over
 	// something the next prompt might not hit.
-	if a.outcome.Result != events.ResultDone && a.outcome.Summary != "" {
-		c.put(c.styles.hint.Render(a.outcome.Summary))
+	if a.outcome.Result != events.ResultDone {
+		said := noResponse
+		if c.interrupted {
+			said = "interrupted"
+		}
+		c.put(c.styles.hint.Render(said))
 	}
 
 	// An error is not an Outcome. It is the record failing, which is the one
@@ -715,7 +1255,16 @@ func (c *Console) close(a answered) tea.Cmd {
 		c.blame(a.err)
 	}
 
-	return c.input.Focus()
+	// The status line has lost the turn it was reporting, and with it the row
+	// that was holding a queued prompt. The pane takes back what they were using
+	// before either is drawn again.
+	next := c.queue("")
+	c.fit()
+
+	if next == "" {
+		return c.input.Focus()
+	}
+	return tea.Batch(c.input.Focus(), c.send(next))
 }
 
 // put adds a block to the transcript, which is what a person keeps.
@@ -724,10 +1273,117 @@ func (c *Console) close(a answered) tea.Cmd {
 // program's own view, and a program renders its view against what the terminal
 // can show — so the reduction that used to happen on the way to the scrollback
 // now happens where every other styled byte's does.
-func (c *Console) put(block string) {
-	c.transcript.WriteString(strings.TrimRight(block, "\n"))
-	c.transcript.WriteString("\n")
+func (c *Console) put(text string) {
+	c.keep(block{text: text, voice: asideVoice})
+}
+
+// keep adds a block and redraws.
+func (c *Console) keep(b block) {
+	b.text = trimBlank(b.text)
+	c.transcript = append(c.transcript, b)
 	c.refresh()
+}
+
+// trimBlank drops the empty lines at either end of a block.
+//
+// A rendered document arrives with blank lines above and below it, which was the
+// fold's way of holding one turn off the next. Spacing is the transcript's to
+// decide now, and a block that brought its own would start every answer with a
+// marked empty line and would space nothing evenly.
+func trimBlank(text string) string {
+	lines := strings.Split(text, "\n")
+	// Measured rather than compared to the empty string: a line the fold left
+	// behind can be a reset escape and nothing else, which reads as blank and
+	// is not.
+	for len(lines) > 0 && lipgloss.Width(lines[0]) == 0 {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && lipgloss.Width(lines[len(lines)-1]) == 0 {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// kept is the transcript as one piece of text, each block past its own mark.
+//
+// The gutter is applied here rather than when a block is added, so that a block
+// holds what it says and nothing about how it is placed. That is what lets a
+// resize replace a turn's text without having to know what was drawn beside it.
+func (c *Console) kept() string { return c.compose(c.transcript) }
+
+// compose draws a set of blocks as one piece of text: each past the mark that
+// says whose it is, with a blank line between them.
+//
+// The blank line between blocks carries no mark. What separates two things must
+// not look like part of either — a marked gap would run the band from a prompt
+// straight into the answer beneath it and the two would read as one block.
+// Inside a block the blanks do keep the mark, which is the same argument the
+// other way round: a paragraph break in one answer is not a boundary between
+// two.
+func (c *Console) compose(blocks []block) string {
+	drawn := make([]string, 0, len(blocks))
+	for _, b := range blocks {
+		drawn = append(drawn, c.gutter(b.text, b.voice))
+	}
+	return strings.Join(drawn, "\n\n")
+}
+
+// gutter writes a block past the mark that says whose it is.
+//
+// Every line takes the mark, not only the first. A prompt of five lines and an
+// answer of fifty are each one thing, and a mark on the first line alone would
+// make everything under it look like something else — which is exactly what a
+// multi-line prompt looked like before there was a gutter at all.
+func (c *Console) gutter(text string, v voice) string {
+	edge := strings.Repeat(" ", gutterWidth)
+	switch v {
+	case personVoice:
+		edge = c.styles.person.Render(mark) + " "
+	case evaVoice:
+		edge = c.styles.eva.Render(mark) + " "
+	case asideVoice:
+	}
+
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = edge + line
+	}
+	return strings.Join(lines, "\n")
+}
+
+// rewrap draws the turns already answered at the width the window is now.
+//
+// A turn was wrapped by the fold that rendered it, to whatever the window was at
+// the time. Nothing about that survives a resize: narrow the window and every
+// answer on screen overruns it, widen it and they stay in a column with the rest
+// of the screen empty beside them. The fold still holds the markdown, so the
+// turns are rendered again rather than re-flowed — re-flowing styled output
+// means guessing where a heading ended and a fenced block began.
+//
+// What a person typed is left exactly as it was. It was never wrapped to
+// anything, and its place in the order is what makes the transcript readable.
+func (c *Console) rewrap() {
+	drawn, err := c.renderer.Kept()
+	if err != nil {
+		c.blame(err)
+		return
+	}
+
+	at := 0
+	for i, b := range c.transcript {
+		if b.voice != evaVoice {
+			continue
+		}
+		if at >= len(drawn) {
+			// The fold holds fewer turns than the transcript shows, which is
+			// what /clear leaves behind for exactly as long as it takes the
+			// pane to be emptied too. Nothing to redraw them from, so they
+			// stay as they are.
+			break
+		}
+		c.transcript[i].text = trimBlank(drawn[at])
+		at++
+	}
 }
 
 // blame queues a failure to go above the view, in the interface's own voice.
@@ -748,7 +1404,7 @@ func (c *Console) Show(turn string) error {
 	// after it, every frame after that — showing the answer twice: once as the
 	// chunks that arrived, and once as the turn that was kept.
 	c.arriving.Reset()
-	c.put(turn)
+	c.keep(block{text: turn, voice: evaVoice})
 	return nil
 }
 
