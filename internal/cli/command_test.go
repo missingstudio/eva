@@ -36,22 +36,17 @@ func (d *dialogue) answers(t *testing.T, typed string) string {
 	return said
 }
 
-// /help lists what a person can type.
+// /help answers, and answering is not a turn.
 //
-// It is asserted against the command table rather than against a list written
-// here, so a command added without a line in /help fails this rather than
-// shipping undiscoverable.
-func TestHelpListsTheCommands(t *testing.T) {
+// That /help lists every command is tui's to assert, because the command table
+// is tui's — see TestHelpListsEveryCommand there. What is asserted here is the
+// part that needs the whole assembly: a command is answered by the console, so
+// no Run opens and the Trace holds no record of a turn that never ran.
+func TestHelpAnswersWithoutOpeningARun(t *testing.T) {
 	d := begin(t)
 
-	said := d.answers(t, "/help")
-	for _, cmd := range commands() {
-		if !strings.Contains(said, "/"+cmd.name) {
-			t.Errorf("/help does not list /%s:\n%s", cmd.name, said)
-		}
-		if !strings.Contains(said, cmd.about) {
-			t.Errorf("/help lists /%s with nothing to say what it does:\n%s", cmd.name, said)
-		}
+	if said := d.answers(t, "/help"); !strings.Contains(said, "/help") {
+		t.Errorf("/help said nothing that lists a command:\n%s", said)
 	}
 	if opened := d.of(t, events.KindStarted); len(opened) != 0 {
 		t.Errorf("/help opened %d Run(s) — a command is not a turn", len(opened))

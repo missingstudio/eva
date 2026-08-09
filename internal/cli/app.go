@@ -18,6 +18,7 @@ import (
 	"github.com/missingstudio/eva/internal/providers/anthropic"
 	"github.com/missingstudio/eva/internal/providers/fake"
 	"github.com/missingstudio/eva/internal/trace"
+	"github.com/missingstudio/eva/internal/tui"
 )
 
 // Exit codes. They are part of the contract a script reads, so they are named
@@ -157,7 +158,10 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 	// The assembly is built once and handed to the frontend that drives it. It
 	// attaches through eva's own door, which is the only place a Run learns who
 	// is watching it and what it may claim.
-	return converse(ctx, e, stdin, stdout)
+	if err := tui.Run(ctx, e, stdin, stdout); err != nil {
+		return ExitFailure, err
+	}
+	return ExitOK, nil
 }
 
 // eva is one Session's worth of assembly: the Provider that answers, the sink
@@ -189,8 +193,9 @@ type eva struct {
 	arriving func(chunk string)
 }
 
-// eva is what a console drives.
-var _ Control = (*eva)(nil)
+// eva is what a console drives, and Control is the whole of what a console can
+// reach of it.
+var _ tui.Control = (*eva)(nil)
 
 // Model is which model the turns that follow will use.
 func (e *eva) Model() string { return e.model }
@@ -262,28 +267,6 @@ func (e *eva) Answer(ctx context.Context, intent string) (core.Outcome, error) {
 		Actor:  e.session.Actor,
 		Intent: intent,
 	})
-}
-
-// converse holds a conversation until the person leaves.
-func converse(ctx context.Context, e *eva, stdin io.Reader, stdout io.Writer) (int, error) {
-	program, c, err := newConsole(ctx, e, stdin, stdout)
-	if err != nil {
-		return ExitFailure, err
-	}
-
-	_, err = program.Run()
-
-	// Whatever ended the program — a key, a closed input, a signal — a Run may
-	// still be in flight. It is stopped first and waited for second: the wait
-	// is what keeps the sink from closing under a Run that is still
-	// committing, and the stop is what keeps the wait short.
-	c.stop()
-	c.running.Wait()
-
-	if err != nil {
-		return ExitFailure, err
-	}
-	return ExitOK, nil
 }
 
 // open builds the Provider configuration selects.
