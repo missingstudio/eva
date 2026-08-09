@@ -324,12 +324,16 @@ type Payload interface{ isPayload() }
 // Retry      { Attempt, Max int, DelayMS int, ErrorClass string }
 //              a retry spends money and wall clock but produces no ToolCall;
 //              ErrorClass from a fixed set: rate_limit | overloaded |
-//              auth_failed | server_error | other
+//              auth_failed | unreachable | server_error | no_such_model |
+//              billing | other. It also rides on the Claim a failed Run
+//              closes with, which is what a projection shows a person
+//              instead of the provider's own words (ADR 0038).
 // Edit       { Path string, Hunks int }
 // NeedsHuman { Question string, Resume Cursor }  // may fire mid-tool-call
 //              (§ Escalation). Resume is the position the answer re-enters at,
 //              not the session it belongs to.
-// Finished   { Claim Claim }   // a claim, not a verdict
+// Finished   { Claim Claim }   // a claim, not a verdict; a failed one
+//              carries the ErrorClass beside its prose summary
 // Degraded   { Missing []string }  // optional; presence IS the degraded flag —
 //              e.g. plugin/mcp start errors. Absent when clean, so a CI gate
 //              fails on a non-empty array without a separate boolean (rule 8).

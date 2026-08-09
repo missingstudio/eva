@@ -24,12 +24,26 @@ type Spec struct {
 type Outcome struct {
 	Result  events.Result
 	Summary string
+
+	// Class is why the work failed, in the schema's fixed set, and is empty on
+	// a Unit that succeeded or that has no opinion about its failure.
+	//
+	// It is here so that a caller can act on a failure without reading the
+	// Summary, which is prose and is written for whoever debugs the thing that
+	// broke. A caller that had only the Summary would either show it to a
+	// person — handing them the internals of something they did not ask about
+	// — or match on its words, which is the same fragility with an extra step.
+	Class events.ErrorClass
 }
 
 // Claim is the assertion this Outcome makes about itself. It is never
 // Evidence, however trustworthy its source.
+//
+// The class goes into the record with the summary. A Unit that reported a
+// reason it did not commit would let a screen say something the Trace cannot
+// account for, which is the one thing an Outcome exists to prevent.
 func (o Outcome) Claim() events.Claim {
-	return events.Claim{Result: o.Result, Summary: o.Summary}
+	return events.Claim{Result: o.Result, Summary: o.Summary, ErrorClass: o.Class}
 }
 
 // Unit is anything that takes a Spec and returns an Outcome. A model call, a

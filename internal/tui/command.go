@@ -176,6 +176,11 @@ func (c *Console) clear(string) string {
 	c.control.Clear()
 	c.renderer.Cleared()
 
+	// A new Session has not been told where the Trace is. The line that said so
+	// went with the transcript, and a person reading an empty pane has no way
+	// to know it was ever there.
+	c.located = false
+
 	// Back to the top before the content goes, so that a person who had
 	// scrolled up is not left at an offset into a transcript that no longer
 	// reaches that far.

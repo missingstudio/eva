@@ -141,6 +141,11 @@ type Console struct {
 	// without an answer is owed the same short line as the rest.
 	interrupted bool
 
+	// located is whether this Session has already been told where the Trace is.
+	// It is per Session rather than per process, because clearing opens a new
+	// one and a transcript that no longer holds the line has not said it.
+	located bool
+
 	// completing is what had been typed before tab began filling it in, and
 	// completed is how far through the matches that is. Both are held because
 	// a second tab has to offer the next match rather than start again from
@@ -615,13 +620,6 @@ const queuedLabel = "queued: "
 
 // promptMark is how many columns the mark down the left of the prompt takes.
 const promptMark = 2
-
-// noResponse is what a turn that did not answer leaves behind.
-//
-// One line for every way a turn can fail, because the difference between them
-// is a matter for whoever reads the Trace rather than for whoever asked the
-// question. See close, where what this costs is set out.
-const noResponse = "no response"
 
 // The size a console is built at, before a window has said what the real one
 // is.
@@ -1292,20 +1290,21 @@ func (c *Console) close(a answered) tea.Cmd {
 	c.arriving.Reset()
 	c.refresh()
 
-	// A turn that did not answer says so in one line, and it is the same line
-	// however the turn went wrong.
+	// A turn that did not answer says so in one line, and the line names the
+	// class of failure without quoting the thing that failed.
 	//
-	// It used to be the claim's own summary, which for a broken turn is the
+	// It was the claim's own summary once, which for a broken turn is the
 	// provider's words. Those are written for whoever is debugging the provider
 	// rather than for whoever asked the question — a person who typed a prompt
 	// and got back a sentence about how many turns a recording holds has been
 	// handed the program's internals in place of an answer.
 	//
-	// What saying less gives up is real and is worth naming: two failures that
-	// need different things from a person — a credential to fix, a network to
-	// wait out — now read identically. The reason is not lost, because the claim
-	// is committed before this runs and the Trace holds the provider's words
-	// verbatim. It is one step further away than it was.
+	// Then it was one line for every failure, which cost the other half: a
+	// credential to fix and a network to wait out read identically, and the only
+	// place to tell them apart was a Trace file. Both halves are available at
+	// once because the claim carries a class beside its prose, so the line is
+	// chosen from the class. Nothing on this path composes a message out of
+	// anything a provider said.
 	//
 	// Interruption keeps its own word. It is not a failure a person needs to be
 	// told about; it is the thing they just did, and the console knows it did it
@@ -1315,11 +1314,26 @@ func (c *Console) close(a answered) tea.Cmd {
 	// ended on the first provider failure would throw away a conversation over
 	// something the next prompt might not hit.
 	if a.outcome.Result != events.ResultDone {
-		said := noResponse
+		said := render.Unanswered(a.outcome.Class)
 		if c.interrupted {
 			said = "interrupted"
 		}
 		c.put(c.styles.hint.Render(said))
+
+		// And, once, where the rest of it went. The rule above keeps the
+		// provider's account off the screen; without this, that reads as the
+		// account having been destroyed rather than being one file away.
+		//
+		// Once per Session, because a line repeated after every failure is a
+		// line nobody finishes reading — and a person who has been told where
+		// the Trace is does not stop knowing between two turns. Interruption is
+		// not a failure and does not spend it.
+		if !c.interrupted && !c.located {
+			if where := render.Detail(c.about.Trace); where != "" {
+				c.located = true
+				c.put(c.styles.hint.Render(where))
+			}
+		}
 	}
 
 	// An error is not an Outcome. It is the record failing, which is the one

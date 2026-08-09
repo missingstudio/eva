@@ -93,7 +93,11 @@ _Avoid_: Builtin, directive, macro
 The output of a Verifier run against a Spec's acceptance criteria. Distinct from a Claim.
 
 **Claim**:
-An assertion of success by whatever did the work. A Claim is never Evidence, however trustworthy its source.
+An assertion of success by whatever did the work. A Claim is never Evidence, however trustworthy its source. A Claim of failure also carries an Error Class.
+
+**Error Class**:
+Why an attempt failed, from a fixed set — a rejected credential, a provider that could not be reached, a rate limit, an overloaded or failing provider, a model the provider does not serve, a turn it will not bill, or a failure something looked at and could not place. It rides on a Retry and on the Claim a failed Run closes with, so a reader tells two failures apart without reading the prose beside them. Absent means nobody classified the failure, which is not the same as placing it in "other". Two classes that decide the same thing about retrying are still two classes when they decide different things about what a person does next.
+_Avoid_: Error code, error type, reason string
 
 **Verifier**:
 The thing that turns acceptance criteria into Evidence. Every timescale needs its own; passing unit tests do not sum into a healthy company.

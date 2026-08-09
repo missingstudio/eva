@@ -68,7 +68,7 @@ func (w *wire) Pump(d *providers.Driver) {
 		// charged for, and a cost nobody recorded is a cost nobody can bill.
 		if err := w.sse.Err(); err != nil {
 			class, _ := classify(err)
-			d.Break(fmt.Errorf("anthropic: %s: %w", class, err))
+			d.Break(class, fmt.Errorf("anthropic: %s: %w", class, err))
 			return
 		}
 		d.Complete()

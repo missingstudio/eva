@@ -585,6 +585,13 @@ func TestARejectedCredentialIsNotRetried(t *testing.T) {
 	if !strings.Contains(err.Error(), string(events.ErrorAuthFailed)) {
 		t.Errorf("the failure is %q, and it does not name its class", err)
 	}
+	// And it carries the class as a value, not only in the sentence. A caller
+	// that has to decide what to tell a person cannot read the sentence — that
+	// sentence is the provider's own words, and showing them is the thing it is
+	// deciding not to do.
+	if class := providers.ClassOf(err); class != events.ErrorAuthFailed {
+		t.Errorf("the failure carries class %q, want %q", class, events.ErrorAuthFailed)
+	}
 }
 
 // Every attempt is reported, and then the failure reaches the caller as data
@@ -619,6 +626,15 @@ func TestExhaustedRetriesReportEveryAttemptAndThenFail(t *testing.T) {
 		if retry.ErrorClass != events.ErrorOverloaded {
 			t.Errorf("payload %d class = %q, want %q", i, retry.ErrorClass, events.ErrorOverloaded)
 		}
+	}
+
+	// The failure that ends the turn is the same class the attempts before it
+	// reported. Running out of attempts changes how many records a turn left
+	// behind; it does not change why the turn failed, and a caller that read
+	// only the last of the two would have to reconstruct the reason from the
+	// Retry records to say anything useful about it.
+	if class := providers.ClassOf(err); class != events.ErrorOverloaded {
+		t.Errorf("the failure carries class %q, want %q", class, events.ErrorOverloaded)
 	}
 }
 
@@ -847,6 +863,52 @@ func TestAnthropicKeepsTheProviderContract(t *testing.T) {
 			Messages: []core.Message{core.Say(core.AuthorUser, "hello")},
 		},
 	})
+}
+
+// A model this provider does not serve, and a balance that will not cover the
+// turn, are each their own class rather than "we could not place this".
+//
+// They decide the same thing about retrying, which is why they were one answer
+// once. They decide the opposite thing about what a person does next: one is a
+// name in a file they can change, and the other is an account they have to go
+// and settle. A class that answered only the first question left both arriving
+// on screen as the line reserved for failures nobody classified.
+func TestAFixableRefusalIsClassedApartFromOneNobodyCanPlace(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		status int
+		kind   string
+		want   events.ErrorClass
+	}{
+		{"a model that does not exist", http.StatusNotFound, "not_found_error", events.ErrorNoSuchModel},
+		{"a balance that will not cover it", http.StatusBadRequest, "billing_error", events.ErrorBilling},
+		{"a request the API would not accept", http.StatusBadRequest, "invalid_request_error", events.ErrorOther},
+		{"a 404 from a proxy with no error document", http.StatusNotFound, "", events.ErrorNoSuchModel},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			bad := fails(c.status, c.kind)
+			if c.kind == "" {
+				bad = reply{status: c.status, body: "<html>the proxy says no</html>"}
+			}
+			base, requests := serve(t, bad)
+
+			got, err := ask(t, open(t, base))
+			if err == nil {
+				t.Fatal("the turn succeeded against a refusal")
+			}
+			if class := providers.ClassOf(err); class != c.want {
+				t.Errorf("class = %q, want %q", class, c.want)
+			}
+			// None of the four improves on a second attempt, and each costs the
+			// same money to learn again.
+			if requests() != 1 {
+				t.Errorf("the server saw %d requests, want one", requests())
+			}
+			if len(got) != 0 {
+				t.Errorf("the turn produced %#v, want nothing", got)
+			}
+		})
+	}
 }
 
 // A block no wire can send fails the turn rather than being left out of it. A

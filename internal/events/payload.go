@@ -255,17 +255,70 @@ func (Usage) isPayload() {}
 // instead.
 func Tokens(n uint64) *uint64 { return &n }
 
-// ErrorClass is why a retry happened, from a fixed set, so that rate limits
-// can be told apart from server errors without parsing prose.
+// ErrorClass is why an attempt failed, from a fixed set, so that a rejected
+// credential can be told apart from a rate limit without parsing prose.
+//
+// It rides on a Retry, which is where it started, and on the Claim a failed Run
+// closes with. The two are the same question asked about different attempts —
+// why did this one not work — and answering it twice in two vocabularies would
+// leave a reader unable to compare an attempt that was retried with the one
+// that ended the turn.
+//
+// The empty class is a failure nobody classified, and is not a member of the
+// set. It is distinct from ErrorOther, which is a failure something looked at
+// and could not place: a reader that treated the two alike would report "we
+// examined this and it fits nowhere" for every failure that reached it from a
+// path with no opinion at all.
 type ErrorClass string
 
 const (
-	ErrorRateLimit   ErrorClass = "rate_limit"
-	ErrorOverloaded  ErrorClass = "overloaded"
-	ErrorAuthFailed  ErrorClass = "auth_failed"
+	ErrorRateLimit  ErrorClass = "rate_limit"
+	ErrorOverloaded ErrorClass = "overloaded"
+	ErrorAuthFailed ErrorClass = "auth_failed"
+	// ErrorUnreachable is no answer from the provider at all: a refused
+	// connection, a reset, a stream cut mid-frame. It is told apart from a
+	// server that answered badly because the two want opposite things from
+	// whoever is watching — one is a network to wait out, and the other is a
+	// vendor to wait out — and because only the first can be caused by the
+	// machine Eva is running on.
+	ErrorUnreachable ErrorClass = "unreachable"
 	ErrorServerError ErrorClass = "server_error"
-	ErrorOther       ErrorClass = "other"
+	// ErrorNoSuchModel is a model the provider does not serve. It is separate
+	// from ErrorOther despite deciding the same thing about retrying, because
+	// retrying is not the only question the class answers any more: this is the
+	// most fixable failure Eva can meet — the name came out of a file, and the
+	// person who wrote it can change it — and it arrived at a screen as the
+	// line reserved for failures nobody could place.
+	ErrorNoSuchModel ErrorClass = "no_such_model"
+	// ErrorBilling is a provider that will not bill the turn: no credit, a
+	// spend cap, a suspended account. Nothing about the request is wrong, so a
+	// person told only that it failed would go and look at the request.
+	ErrorBilling ErrorClass = "billing"
+	ErrorOther   ErrorClass = "other"
 )
+
+// ErrorClasses is the set, so that anything which has to answer for every
+// member can be checked against it rather than against a list somebody
+// remembered to update.
+//
+// It exists for the same reason Kinds does. A projection that turns a class
+// into a sentence for a person is exhaustive or it is silently not, and a class
+// added without one would ship showing nothing — which is the failure this
+// whole distinction was added to end.
+//
+// The empty class is not in it. It is the absence of a member, not a member.
+func ErrorClasses() []ErrorClass {
+	return []ErrorClass{
+		ErrorRateLimit,
+		ErrorOverloaded,
+		ErrorAuthFailed,
+		ErrorUnreachable,
+		ErrorServerError,
+		ErrorNoSuchModel,
+		ErrorBilling,
+		ErrorOther,
+	}
+}
 
 // KindRetry names an attempt that spent money and produced nothing.
 const KindRetry Kind = "retry"
@@ -319,8 +372,22 @@ const (
 // Claim is an assertion of success by whatever did the work. A Claim is never
 // Evidence, however trustworthy its source.
 type Claim struct {
-	Result  Result `json:"result"`
+	Result Result `json:"result"`
+	// Summary is what went wrong, in whatever words the thing that failed
+	// used. It is written for whoever is debugging the failure — a vendor's
+	// error document, a request identifier, a status line — and it is the
+	// reason ErrorClass exists beside it: a projection that has to show a
+	// person why their turn produced nothing cannot show them this.
 	Summary string `json:"summary,omitempty"`
+	// ErrorClass is why the work failed, in the fixed set, and is absent on a
+	// Claim nobody classified — a success, an interruption, a failure that
+	// arrived from a path with no opinion about it.
+	//
+	// It is what makes a failure legible without the Summary. Told apart here,
+	// a rejected credential and a network that dropped can be reported to a
+	// person as the two different things they are, and neither report has to
+	// quote the provider at them to do it.
+	ErrorClass ErrorClass `json:"error_class,omitempty"`
 }
 
 // KindFinished names the close of a Run.

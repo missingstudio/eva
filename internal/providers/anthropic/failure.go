@@ -32,11 +32,10 @@ func classify(err error) (events.ErrorClass, bool) {
 	var apiErr *sdk.Error
 	if !errors.As(err, &apiErr) {
 		// No response at all: a refused connection, a reset, a stream that
-		// stopped mid-frame. The fixed set has no member for a transport that
-		// never reached a server, and inventing one would make the set
-		// disagree with the schema — so it is Other, and it is worth another
-		// attempt, which is the part that matters.
-		return events.ErrorOther, true
+		// stopped mid-frame. It is worth another attempt, and it is now worth
+		// naming — a person told only that the turn failed cannot tell a
+		// network they can fix from a vendor they can only wait out.
+		return events.ErrorUnreachable, true
 	}
 
 	switch apiErr.Type() {
@@ -48,12 +47,23 @@ func classify(err error) (events.ErrorClass, bool) {
 		return events.ErrorAuthFailed, false
 	case sdk.ErrorTypeAPIError, sdk.ErrorTypeTimeoutError:
 		return events.ErrorServerError, true
-	case sdk.ErrorTypeInvalidRequestError, sdk.ErrorTypeNotFoundError, sdk.ErrorTypeBillingError:
-		// A request the API would not accept, a model that does not exist, and
-		// a balance that will not cover the turn are all the same shape: the
-		// next attempt fails the same way and costs the same money.
+	case sdk.ErrorTypeNotFoundError:
+		return events.ErrorNoSuchModel, false
+	case sdk.ErrorTypeBillingError:
+		return events.ErrorBilling, false
+	case sdk.ErrorTypeInvalidRequestError:
+		// A request the API would not accept. It is not retried, and there is
+		// nothing more specific to call it: what is wrong with the request is
+		// in the API's prose, and reading that prose to classify it is the
+		// parser this whole set exists to avoid.
 		return events.ErrorOther, false
 	}
+
+	// These three were one answer once — not retried, and called Other —
+	// because retrying is the only thing they decide alike. What a person is
+	// told is the other thing the class decides, and there a model that does
+	// not exist, a balance that will not cover the turn, and a request the API
+	// would not accept are three different mornings.
 
 	switch code := apiErr.StatusCode; {
 	case code == http.StatusTooManyRequests:
@@ -62,6 +72,8 @@ func classify(err error) (events.ErrorClass, bool) {
 		return events.ErrorOverloaded, true
 	case code == http.StatusUnauthorized, code == http.StatusForbidden:
 		return events.ErrorAuthFailed, false
+	case code == http.StatusNotFound:
+		return events.ErrorNoSuchModel, false
 	case code >= 500:
 		return events.ErrorServerError, true
 	default:

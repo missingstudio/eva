@@ -436,3 +436,76 @@ func TestTheAnswerCapInTheFileReachesTheAPI(t *testing.T) {
 		t.Errorf("the request does not carry the cap the file chose:\n%s", body)
 	}
 }
+
+// One turn from the command line says why it produced nothing, and where the
+// rest of the account went.
+//
+// It exited in silence before this — a non-zero code and not one word — which
+// is the worst of the three ways to report a failure. A script got a number
+// with no reason, and a person got their shell prompt back and nothing at all.
+//
+// The line goes to stderr, and the guardrail the console holds is held here
+// too: what a person reads is this project's own words, and the vendor's are in
+// the Trace that the second line names.
+func TestOneTurnFromTheCommandLineSaysWhyItFailed(t *testing.T) {
+	base, _ := api(t, "", refused{http.StatusUnauthorized, "authentication_error"})
+	w := newWorld(t, live(base))
+
+	got := w.run(t, "-p", "what is this project")
+
+	if got.code == 0 {
+		t.Fatalf("exit 0, want non-zero on a turn that failed\nstderr: %s", got.stderr)
+	}
+	if !strings.Contains(got.stderr, "the credential was refused") {
+		t.Errorf("stderr does not say why the turn produced nothing:\n%s", got.stderr)
+	}
+	if !strings.Contains(got.stderr, w.trace) {
+		t.Errorf("stderr does not say where the detail went:\n%s", got.stderr)
+	}
+
+	// stdout is the answer, and there was none. A failure written there would
+	// be a sentence about a credential arriving down a pipe as though it were
+	// the thing that was asked for.
+	if strings.TrimSpace(got.stdout) != "" {
+		t.Errorf("stdout carries something for a turn that produced nothing:\n%q", got.stdout)
+	}
+	// And the API's own account of it stays in the Trace.
+	for _, leaked := range []string{"401", "the test asked for this", "authentication_error"} {
+		if strings.Contains(got.stderr, leaked) {
+			t.Errorf("%q is on stderr:\n%s", leaked, got.stderr)
+		}
+	}
+}
+
+// A model the provider does not serve is its own failure, not the line kept for
+// failures nobody could place.
+//
+// It is the most fixable failure Eva can meet: the name came out of a file the
+// person who wrote it can open. Reported as "No response" it read as a fault
+// with no cause at all.
+func TestAModelTheProviderDoesNotServeSaysSo(t *testing.T) {
+	base, _ := api(t, "", refused{http.StatusNotFound, "not_found_error"})
+	w := newWorld(t, live(base))
+
+	got := w.run(t, "-p", "what is this project")
+
+	if got.code == 0 {
+		t.Fatal("exit 0, want non-zero on a turn that failed")
+	}
+	if !strings.Contains(got.stderr, "does not serve this model") {
+		t.Errorf("stderr does not name the model as the cause:\n%s", got.stderr)
+	}
+
+	// And the record says the same thing, in the class rather than the prose.
+	held := w.stored(t)
+	if len(held) == 0 {
+		t.Fatal("the Trace holds nothing about a turn that ran and failed")
+	}
+	finished, ok := held[len(held)-1].Payload.(events.Finished)
+	if !ok {
+		t.Fatalf("the Trace ends on %q, want %q", held[len(held)-1].Kind, events.KindFinished)
+	}
+	if finished.Claim.ErrorClass != events.ErrorNoSuchModel {
+		t.Errorf("class = %q, want %q", finished.Claim.ErrorClass, events.ErrorNoSuchModel)
+	}
+}

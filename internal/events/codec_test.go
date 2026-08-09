@@ -63,7 +63,7 @@ func samples() map[events.Kind]events.Payload {
 		events.KindRetry:      events.Retry{Attempt: 2, Max: 5, DelayMS: 750, ErrorClass: events.ErrorRateLimit},
 		events.KindEdit:       events.Edit{Path: "cli/main.go", Hunks: 3},
 		events.KindNeedsHuman: events.NeedsHuman{Question: "merge?", Resume: events.Cursor{Session: "sess_1", Seq: 7}},
-		events.KindFinished:   events.Finished{Claim: events.Claim{Result: events.ResultDone, Summary: "answered"}},
+		events.KindFinished:   events.Finished{Claim: events.Claim{Result: events.ResultFailed, Summary: "provider anthropic: auth_failed: 401", ErrorClass: events.ErrorAuthFailed}},
 		events.KindDegraded:   events.Degraded{Missing: []string{"usage"}},
 		events.KindUnknown:    events.Unknown{Kind: "quantum_flux", Raw: json.RawMessage(`{"a":1}`)},
 	}
@@ -329,5 +329,70 @@ func TestAnUnreportedCounterSurvivesTheRoundTrip(t *testing.T) {
 	}
 	if usage.OutputTokens == nil || *usage.OutputTokens != 340 {
 		t.Errorf("output tokens = %v, want the figure that was reported", usage.OutputTokens)
+	}
+}
+
+// A Claim nobody classified carries no class, and one that was classified
+// carries it as a field rather than inside its prose.
+//
+// The absence is the assertion that matters. A class defaulted to "other" on
+// the way to the Trace would say something was examined and could not be
+// placed, for every success, every interruption, and every failure that arrived
+// from a path with no opinion — and a reader counting unplaceable failures
+// would be counting all of them.
+func TestAClaimCarriesItsClassAndSaysNothingWhenThereIsNone(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		claim events.Claim
+		want  string
+	}{
+		{
+			name:  "a run that succeeded",
+			claim: events.Claim{Result: events.ResultDone, Summary: "answered"},
+			want:  `{"result":"done","summary":"answered"}`,
+		},
+		{
+			name:  "a failure nobody classified",
+			claim: events.Claim{Result: events.ResultFailed, Summary: "interrupted"},
+			want:  `{"result":"failed","summary":"interrupted"}`,
+		},
+		{
+			name:  "a credential the provider refused",
+			claim: events.Claim{Result: events.ResultFailed, Summary: "provider anthropic: 401", ErrorClass: events.ErrorAuthFailed},
+			want:  `{"result":"failed","summary":"provider anthropic: 401","error_class":"auth_failed"}`,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			b, err := json.Marshal(c.claim)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if string(b) != c.want {
+				t.Errorf("encoded %s, want %s", b, c.want)
+			}
+
+			var back events.Claim
+			if err := json.Unmarshal(b, &back); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if back != c.claim {
+				t.Errorf("round trip = %#v, want %#v", back, c.claim)
+			}
+		})
+	}
+}
+
+// A Trace written before the class existed still reads, and reads as a failure
+// nobody classified rather than as one placed in some default.
+func TestAClaimWrittenBeforeTheClassExistsStillDecodes(t *testing.T) {
+	var claim events.Claim
+	if err := json.Unmarshal([]byte(`{"result":"failed","summary":"provider anthropic: 401"}`), &claim); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if claim.Result != events.ResultFailed {
+		t.Errorf("result = %q, want %q", claim.Result, events.ResultFailed)
+	}
+	if claim.ErrorClass != "" {
+		t.Errorf("class = %q, want none — the record predates the field", claim.ErrorClass)
 	}
 }
