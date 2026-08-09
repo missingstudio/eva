@@ -14,6 +14,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/theme"
+	"github.com/missingstudio/eva/internal/tui/keymap"
 )
 
 // These tests draw the interface and read what it drew. Nothing here runs a
@@ -73,7 +75,7 @@ func TestTheFooterKeepsQuietWhenItHasNoRoom(t *testing.T) {
 		{name: "the model is wider than the window", width: 6},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			console := &Console{control: &fixed{model: "claude-sonnet-4-5"}, width: c.width, styles: newStyles(true)}
+			console := &Console{control: &fixed{model: "claude-sonnet-4-5"}, width: c.width, styles: newStyles(theme.Default(true))}
 			if got := console.footer(); got != "" {
 				t.Errorf("the footer drew %q, want nothing", got)
 			}
@@ -88,7 +90,7 @@ func TestTheFooterKeepsQuietWhenItHasNoRoom(t *testing.T) {
 // difference between the two is how long it has been.
 func TestTheStatusLineSaysHowLongTheTurnHasRun(t *testing.T) {
 	c := &Console{
-		styles: newStyles(true),
+		styles: newStyles(theme.Default(true)),
 		spin:   spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 		since:  time.Now().Add(-3 * time.Second),
 		// A Run in flight is one with something to cancel. See busy.
@@ -110,7 +112,7 @@ func TestTheStatusLineSaysHowLongTheTurnHasRun(t *testing.T) {
 // status line that came and went would move the prompt under a person's hands
 // every time a turn started.
 func TestTheStatusLineIsStillALineWhenNothingIsRunning(t *testing.T) {
-	c := &Console{styles: newStyles(true), spin: spinner.New()}
+	c := &Console{styles: newStyles(theme.Default(true)), spin: spinner.New()}
 
 	if got := plain(c.status()); got != "ready" {
 		t.Errorf("the status line reads %q, want %q", got, "ready")
@@ -633,5 +635,107 @@ func TestAnAnswerIsFormattedWhileItArrives(t *testing.T) {
 			t.Errorf("%q sits at column %d while arriving and %d once kept",
 				bullet, column(t, streaming, bullet), column(t, kept, bullet))
 		}
+	}
+}
+
+// What a person configured is what they see. Each of these is a value that
+// reaches the screen through a different part of the interface, so a Theme that
+// were held and not drawn with would fail here rather than in a person's
+// terminal.
+func TestAConfiguredThemeReachesTheScreen(t *testing.T) {
+	prompt, placeholder := "» ", "say the thing"
+	look, err := theme.Build(true, theme.Settings{
+		Prompt:      &prompt,
+		Placeholder: &placeholder,
+		Person:      "#ABCDEF",
+	})
+	if err != nil {
+		t.Fatalf("build the Theme: %v", err)
+	}
+
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+	c.layout(60, 20)
+
+	if got := plain(c.prompt()); !strings.Contains(got, prompt) {
+		t.Errorf("the prompt does not carry the chosen mark %q:\n%s", prompt, got)
+	}
+	if got := plain(c.prompt()); !strings.Contains(got, placeholder) {
+		t.Errorf("the prompt does not carry the chosen placeholder %q:\n%s", placeholder, got)
+	}
+
+	// The mark down the left of what a person said carries the chosen hue, so
+	// the styled bytes differ from the ones the default would have produced.
+	_, plainConsole, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("build the default interface: %v", err)
+	}
+	if c.styles.person.Render("x") == plainConsole.styles.person.Render("x") {
+		t.Error("a chosen colour draws the same bytes as the default one")
+	}
+}
+
+// A rebound key does what it was bound to, and the key it replaced does not.
+func TestAReboundKeyIsTheKeyThatWorks(t *testing.T) {
+	keys, err := keymap.Parse(map[string][]string{"follow": {"ctrl+g"}})
+	if err != nil {
+		t.Fatalf("parse the keymap: %v", err)
+	}
+
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithKeymap(keys))
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+	c.layout(40, 10)
+
+	// Enough transcript to have somewhere to scroll from.
+	for range 40 {
+		c.keep(block{text: "a line of transcript", voice: evaVoice})
+	}
+	c.refresh()
+
+	c.key(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	if !c.pane.AtBottom() {
+		t.Error("the rebound chord did not follow the transcript")
+	}
+
+	c.pane.GotoTop()
+	c.key(tea.KeyPressMsg{Code: tea.KeyEnd, Mod: tea.ModCtrl})
+	if c.pane.AtBottom() {
+		t.Error("the replaced chord still follows the transcript")
+	}
+}
+
+// The hint naming a key reads the binding, so help and behaviour cannot drift.
+//
+// A footer that said "ctrl+end to follow" while ctrl+end did nothing would be a
+// help text and a behaviour that had come apart, and the person reading it
+// would be the one to find out.
+func TestTheFollowHintNamesTheKeyThatFollows(t *testing.T) {
+	keys, err := keymap.Parse(map[string][]string{"follow": {"ctrl+g"}})
+	if err != nil {
+		t.Fatalf("parse the keymap: %v", err)
+	}
+
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithKeymap(keys))
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+	c.layout(80, 10)
+
+	for range 40 {
+		c.keep(block{text: "a line of transcript", voice: evaVoice})
+	}
+	c.refresh()
+	c.pane.GotoTop()
+
+	got := plain(c.footer())
+	if !strings.Contains(got, "ctrl+g") {
+		t.Errorf("the hint does not name the key that follows:\n%s", got)
+	}
+	if strings.Contains(got, "ctrl+end") {
+		t.Errorf("the hint still names the key that was replaced:\n%s", got)
 	}
 }

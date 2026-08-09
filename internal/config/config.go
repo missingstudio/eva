@@ -60,7 +60,13 @@ var projectSettable = map[string]bool{
 
 // projectSettableTables are whole tables a repository may set, named by their
 // prefix. Look and feel lives here.
-var projectSettableTables = map[string]bool{}
+var projectSettableTables = map[string]bool{
+	// Look and feel. A repository may say how Eva looks to whoever is working
+	// in it, which is the thing a team most wants to share and least wants to
+	// retype per clone.
+	"theme":  true,
+	"keymap": true,
+}
 
 // Config is Eva's configuration, resolved.
 //
@@ -79,6 +85,8 @@ type Config struct {
 	Provider ProviderConfig `toml:"provider"`
 	Trace    TraceConfig    `toml:"trace"`
 	Identity IdentityConfig `toml:"identity"`
+	Theme    ThemeConfig    `toml:"theme"`
+	Keys     KeysConfig     `toml:"keymap"`
 
 	// Path is where this configuration was read from, or the path that was
 	// looked for and not found. Error messages name it, because a message
@@ -105,6 +113,56 @@ type ProviderConfig struct {
 	MaxTokens int64 `toml:"max_tokens"`
 	// Script is the recorded output the fake provider replays.
 	Script string `toml:"script"`
+}
+
+// ThemeConfig is how the interface looks. Every field is optional and an empty
+// one keeps what Eva draws by default, so a file names the one thing it wants
+// changed rather than restating a whole appearance.
+//
+// It is a repository's to set. Nothing here can change what a run does — see
+// projectSettable.
+type ThemeConfig struct {
+	Colors  ColorsConfig  `toml:"colors"`
+	Symbols SymbolsConfig `toml:"symbols"`
+	Layout  LayoutConfig  `toml:"layout"`
+	// Border is the rule above and below the prompt: normal, rounded, thick,
+	// double, or none.
+	Border string `toml:"border"`
+}
+
+// ColorsConfig are hues, each written as #rgb or #rrggbb.
+type ColorsConfig struct {
+	Subdued string `toml:"subdued"`
+	Person  string `toml:"person"`
+	Eva     string `toml:"eva"`
+	Spinner string `toml:"spinner"`
+}
+
+// SymbolsConfig are the marks an interface writes that are not words.
+//
+// They are pointers because an empty string is a choice here: a person who
+// wants no mark before their prompt writes prompt = "", and a person who wants
+// the default leaves the line out.
+type SymbolsConfig struct {
+	Prompt      *string `toml:"prompt"`
+	Placeholder *string `toml:"placeholder"`
+	Truncation  *string `toml:"truncation"`
+	Spinner     string  `toml:"spinner"`
+}
+
+// LayoutConfig are the measurements.
+type LayoutConfig struct {
+	PromptRows     *int `toml:"prompt_rows"`
+	CaptionSeconds *int `toml:"caption_seconds"`
+}
+
+// KeysConfig is which chords ask for which action, by the action's name.
+//
+// It is a map rather than a field per action so that the set of actions lives
+// in one place — the frontend that has them — rather than being restated here
+// and going out of step with it. An action Eva does not have is refused by name.
+type KeysConfig struct {
+	Bind map[string][]string `toml:"bind"`
 }
 
 // TraceConfig says where the Trace is written.
@@ -244,6 +302,12 @@ func (c *Config) loadProject() error {
 
 	if md.IsDefined("model") {
 		c.Model = project.Model
+	}
+	if md.IsDefined("theme") {
+		c.Theme = project.Theme
+	}
+	if md.IsDefined("keymap") {
+		c.Keys = project.Keys
 	}
 	c.Project = path
 	return nil

@@ -18,8 +18,8 @@ import (
 // committing, and the stop is what keeps the wait short. A caller that had to
 // remember that ordering is a caller that will one day forget it, and the
 // failure it would cause is the one the project has no instrument to detect.
-func Run(ctx context.Context, backend Control, in io.Reader, out io.Writer) error {
-	program, c, err := NewConsole(ctx, backend, in, out)
+func Run(ctx context.Context, backend Control, in io.Reader, out io.Writer, opts ...Option) error {
+	program, c, err := NewConsole(ctx, backend, in, out, opts...)
 	if err != nil {
 		return err
 	}

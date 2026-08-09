@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/theme"
 	"github.com/missingstudio/eva/internal/ui"
 )
 
@@ -47,7 +48,7 @@ func fold(t *testing.T, dark bool, payloads ...events.Payload) (*ui.Renderer, *b
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := ui.New(ui.Stream(&out), dark)
+	renderer, err := ui.New(ui.Stream(&out), theme.Default(dark))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -299,7 +300,7 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
 	var out bytes.Buffer
-	renderer, err := ui.New(ui.Stream(&out), true)
+	renderer, err := ui.New(ui.Stream(&out), theme.Default(true))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -350,7 +351,7 @@ func costs(t *testing.T, payloads ...events.Payload) []string {
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := ui.New(ui.Stream(&out), true)
+	renderer, err := ui.New(ui.Stream(&out), theme.Default(true))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -591,7 +592,7 @@ func TestASilentKindPutsNothingOnTheScreen(t *testing.T) {
 		}
 		t.Run(string(kind), func(t *testing.T) {
 			var out bytes.Buffer
-			renderer, err := ui.New(ui.Stream(&out), true)
+			renderer, err := ui.New(ui.Stream(&out), theme.Default(true))
 			if err != nil {
 				t.Fatalf("build a Renderer: %v", err)
 			}

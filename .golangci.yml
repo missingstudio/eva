@@ -217,6 +217,8 @@ linters:
             - github.com/missingstudio/eva/internal/ui
             # tui, the interactive frontend this hands a built assembly to.
             - github.com/missingstudio/eva/internal/tui
+            # theme, which this maps a person's file onto before handing it in.
+            - github.com/missingstudio/eva/internal/theme
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/cli
 
@@ -238,6 +240,7 @@ linters:
             - github.com/missingstudio/eva/internal/trace
             - github.com/missingstudio/eva/internal/ui
             - github.com/missingstudio/eva/internal/tui
+            - github.com/missingstudio/eva/internal/theme
             - github.com/missingstudio/eva/internal/cli
             - charm.land/bubbletea
 
@@ -253,10 +256,46 @@ linters:
         #
         # glamour is absent too. Rendering an answer is what a fold does, and
         # the fold is ui.
+        # theme is every colour, glyph, and measurement an interface draws
+        # with. It is a layer of its own rather than a package under tui
+        # because two things draw: the console, and the fold a person reads a
+        # turn in. One grey named in two places is two greys that happen to
+        # agree today, and this is the package that makes it one.
+        #
+        # It gets lipgloss and nothing else Eva has. No events, so a Theme
+        # cannot decide what a person is shown as well as how; no config, so
+        # the layer that reads a file is still the only layer that reads a
+        # file. A Theme that grows an import beyond a colour has stopped
+        # describing an interface and become one.
+        theme:
+          list-mode: strict
+          files:
+            - "**/internal/theme/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/theme
+            - charm.land/lipgloss
+
+        # keymap is which keys do what. It sits under tui because only a
+        # console has keys, and it gets nothing but the standard library: the
+        # rule it exists to hold — that a binding must not take a character
+        # away from the prompt — is about the shape of a chord and needs no
+        # terminal to check.
+        tui-keymap:
+          list-mode: strict
+          files:
+            - "**/internal/tui/keymap/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/tui/keymap
+
         tui:
           list-mode: strict
           files:
             - "**/internal/tui/**"
+            # keymap is governed by its own rule above, which is narrower than
+            # this one rather than wider.
+            - "!**/internal/tui/keymap/**"
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
@@ -264,6 +303,7 @@ linters:
             - github.com/missingstudio/eva/internal/ui
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/tui
+            - github.com/missingstudio/eva/internal/theme
             - charm.land/bubbletea
             - charm.land/bubbles
             - charm.land/lipgloss
@@ -295,6 +335,9 @@ linters:
             - github.com/missingstudio/eva/internal/events
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/ui
+            # theme, for the greys and glyphs the console names too. One
+            # package so that "subdued" is one colour rather than two.
+            - github.com/missingstudio/eva/internal/theme
             - charm.land/lipgloss
             - charm.land/glamour
 
