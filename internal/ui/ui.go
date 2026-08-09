@@ -1,16 +1,4 @@
-// Package render is the projection that shows a turn to a person.
-//
-// It folds committed Events into a rendered answer and a cost line, and it
-// reads nothing else. What it may import is the contract, and it is a short
-// list: the Event schema, and the terminal libraries. No provider, no Session,
-// and no path to the Trace — a renderer that could reach any of those could
-// show a person a turn the record does not hold, and the screen would stop
-// being an account of what was committed.
-//
-// That list is an allow list in the linter rather than a promise in this
-// comment, because a boundary this layer only documents is a boundary the next
-// import quietly crosses.
-package render
+package ui
 
 import (
 	"context"
@@ -116,7 +104,7 @@ func (r *Renderer) Background(dark bool) error {
 	}
 	markdown, err := glamour.NewTermRenderer(glamour.WithStandardStyle(style))
 	if err != nil {
-		return fmt.Errorf("render: build the markdown renderer: %w", err)
+		return fmt.Errorf("ui: build the markdown renderer: %w", err)
 	}
 
 	r.markdown = markdown
@@ -146,7 +134,7 @@ func (s stream) Show(turn string) error {
 	// colour is adapted to what the terminal can show, and where a terminal
 	// that shows none has the escapes removed rather than printed.
 	if _, err := lipgloss.Fprint(s.out, turn); err != nil {
-		return fmt.Errorf("render: write the turn: %w", err)
+		return fmt.Errorf("ui: write the turn: %w", err)
 	}
 	return nil
 }
@@ -241,7 +229,7 @@ func (r *Renderer) show() error {
 	if answer := strings.TrimSpace(r.answer.String()); answer != "" {
 		styled, err := r.markdown.Render(answer)
 		if err != nil {
-			return fmt.Errorf("render: the answer: %w", err)
+			return fmt.Errorf("ui: the answer: %w", err)
 		}
 		turn.WriteString(styled)
 	}
