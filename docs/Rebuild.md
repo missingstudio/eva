@@ -1,6 +1,8 @@
 # Rebuild — the base the house stands on
 
-**Status: plan.** This document is the answer to one question: if Eva had to be rebuilt tomorrow, what shape would it take so the whole factory can stand on it without the base going weak? It is grounded in a full survey of the code as of 2026-08-09 and in the decisions `docs/adr/` already holds. Where it proposes to supersede a decision, it says so and names the ADR that must be written.
+**Status: built, stages R0–R5.** Every stage below has landed and its exit test passes; `make check` is green over all of it. The decisions each stage required are recorded in `docs/adr/0024`–`0030`. What follows is unchanged from the plan it was written as, except where a stage says how it actually turned out — the reasoning is the part worth keeping, and a plan rewritten to match its outcome is a plan that can never be wrong.
+
+This document is the answer to one question: if Eva had to be rebuilt tomorrow, what shape would it take so the whole factory can stand on it without the base going weak? It is grounded in a full survey of the code as of 2026-08-09 and in the decisions `docs/adr/` already holds. Where it proposes to supersede a decision, it says so and names the ADR that must be written.
 
 It does three things:
 
@@ -282,7 +284,10 @@ Applies the Part 1 comment test to every file; deletes the restatements; the `Co
 
 ### Stage R5 — Docs repair
 
-The docs drift a full survey found on 2026-08-09, held here as a work list. None of it is applied. Each item names its file and the repair, so the stage is executable without re-deriving the survey.
+The docs drift a full survey found on 2026-08-09. Applied: the README's `-p`
+claims and its hand-enumerated ADR index, ADR 0011's `--json` sentence, and the
+name drift in 0010 and 0021. The README also documents the repository-local
+settings file R2 added.
 
 **README.md — two claims went stale when `eva -p` landed (commit `f624521`):**
 
@@ -330,3 +335,21 @@ The plan is wrong, and should be revised rather than pushed through, if:
 - The registry pattern needs a third mechanism (init-order tricks, reflection) to work — the command table's simplicity is the bar; miss it and hardcoded wiring was cheaper.
 - Zero-config output changes in any release — the superseded policy was protecting exactly this, and losing it means the ADR failed.
 - A capability key ever takes effect from a repo-local file, in any code path — that is not a bug to fix but the trust design failing closed being violated; stop and redesign.
+
+---
+
+## Part 8 — What was built, and where it differs from the plan
+
+Three places where the work departed from what Part 4 to Part 6 proposed. Each was a decision made against the code rather than a slip, and each is recorded here so the difference is not mistaken for drift.
+
+**`theme` is a layer beside `ui`, not a package under `tui`.** The plan's tree put it at `tui/theme`. `ui` may not import anything under `tui`, so a Theme there would have left the fold with its own greys and kept `ui.Subdued` exported to bridge them — which is the duplication the package exists to remove. Two things draw, so the Theme is beside both. `keymap` stayed under `tui`, because only a console has keys. ADR 0030.
+
+**A broken Subscriber is dropped rather than told it is behind.** Part 5 asked for a desync mark delivered on the Subscriber's next call. `Committed(ctx, Event) error` has nowhere to put one, so that meant widening the one-method interface every projection implements, to carry a flag most would ignore — and a projection that ignored it would be the silent corruption the repair is for. The failure instead stops that Subscriber, leaves every other one fed, and marks the Run degraded so the Trace records that a projection went blind. ADR 0025.
+
+**`chrome()` is still composed twice per frame.** Part 4 listed it as a mechanical fix. The code's own comment argues the other way — `fit` measures the three pieces the view joins, and "they cannot disagree unless one of them is changed on its own" — and that invariant is worth more than one composition per resize. The per-call `lipgloss.NewStyle()` in `wrap` was hoisted, which was the allocation that ran per block per chunk of a streaming turn; this one runs per layout.
+
+Two things the plan asked for that were not built, and why:
+
+**No `-tests` depguard rules for the four layers missing them.** The tightening was to be justified by narrowing production lists, and there was nothing to narrow: every one of those layers' tests imports a subset of what its production code already has. Rules that changed no outcome would be four boundaries that moved for no stated reason, which is the thing `.golangci.yml`'s own preamble warns against.
+
+**The console is not under 700 lines.** It shed its styles, its key switches, and the `ask`/`busy` duplications, and it grew a Theme and a Keymap to hold. The god-type problem named in Part 3 is smaller and is not solved; splitting the update loop from the layout is the next move, and it is a stage of its own rather than a tail of this one.

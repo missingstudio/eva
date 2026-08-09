@@ -10,6 +10,14 @@ status: accepted, packaging superseded by 0021
 > `github.com/missingstudio/eva/internal/<layer>`. The layer graph, the purity
 > rule, and the enforcement are what this document decides, and 0021 changed
 > none of them.
+>
+> Names in the table below have moved since, without the graph moving with
+> them. Rendering left `cli` for a layer of its own, `ui`, with the console
+> beside it in `tui` — so read `cli/render` as `ui`, and "REPL" as the Console,
+> which is the word the glossary settled on. Machine-readable output left with
+> `--json`; the Trace file is that surface now. `theme` was added beside `ui`
+> because a console and a fold both draw (ADR 0030), and `providers`' one rule
+> became three so that each implementation gets only its own dependency.
 
 `core` holds the domain: Unit, Spec, Outcome, the loop, Session and turn logic, and the interfaces the outer layers implement. It imports `events` and nothing else from within Eva, and it never reaches the outside world — no filesystem, no network, no terminal, no subprocesses.
 

@@ -4,7 +4,7 @@ status: accepted
 
 # The repository is one module, and `internal` is where a package goes
 
-One `go.mod` at the root holds every package. The binary lives in `cmd/eva`. Every layer lives in `internal/`, and the layer graph ADR 0010 fixed is unchanged: `events` at the bottom, `core` pure above it, `config`, `providers` and `trace` beside it, `cli` on top, `render` narrower than `cli`.
+One `go.mod` at the root holds every package. The binary lives in `cmd/eva`. Every layer lives in `internal/`, and the layer graph ADR 0010 fixed is unchanged: `events` at the bottom, `core` pure above it, `config`, `providers` and `trace` beside it, `cli` on top, `render` narrower than `cli` (that layer is called `ui` now, with the console beside it in `tui` and `theme` beside both).
 
 This supersedes the packaging half of ADR 0010 — six modules tied by `go.work`, and no root module. It supersedes none of the graph.
 

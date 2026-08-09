@@ -134,7 +134,8 @@ func (Text) isPayload() {}
 // KindToolCall names a request to run a tool.
 const KindToolCall Kind = "tool_call"
 
-// ToolCall is a request to run a tool.
+// ToolCall is a request to run a tool. Args stay raw because a tool's schema is
+// the tool's, and Redacted says the arguments held something a Trace must not.
 type ToolCall struct {
 	Name     string          `json:"name"`
 	Args     json.RawMessage `json:"args"`
@@ -258,7 +259,9 @@ func (Retry) isPayload() {}
 // KindEdit names a change to a file.
 const KindEdit Kind = "edit"
 
-// Edit is a change to a file.
+// Edit is a change to a file. It carries the shape of the change rather than
+// its content: a Trace records that a file was edited and how much, and the
+// diff itself lives where diffs live.
 type Edit struct {
 	Path  string `json:"path"`
 	Hunks int    `json:"hunks"`
