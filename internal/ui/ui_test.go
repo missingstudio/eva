@@ -538,3 +538,94 @@ func TestASessionOnlyPartlyCountedStatesNoTokenFigure(t *testing.T) {
 		t.Errorf("the Session does not say the counts are incomplete: %s", session)
 	}
 }
+
+// Every kind the schema knows is either shown or deliberately silent.
+//
+// The schema is open: a kind can be added to events, and a fold that met a new
+// one by falling off the end of a type switch would show a person nothing and
+// tell nobody it had decided to. This is what makes that decision explicit —
+// adding a kind fails here until someone says which of the two it is.
+func TestEveryKindIsEitherShownOrDeliberatelySilent(t *testing.T) {
+	shown := map[events.Kind]bool{}
+	for _, kind := range ui.Shown() {
+		shown[kind] = true
+	}
+	silent := ui.Silent()
+
+	for _, kind := range events.Kinds() {
+		_, isSilent := silent[kind]
+		switch {
+		case shown[kind] && isSilent:
+			t.Errorf("%q is both shown and silent, so one of the two lists is wrong", kind)
+		case !shown[kind] && !isSilent:
+			t.Errorf("%q is in the schema and in neither list: say whether a person reads it, or why they do not", kind)
+		}
+	}
+
+	// The lists describe the schema rather than outliving it. A kind removed
+	// from events must not be left behind here claiming to be rendered.
+	known := map[events.Kind]bool{}
+	for _, kind := range events.Kinds() {
+		known[kind] = true
+	}
+	for kind := range shown {
+		if !known[kind] {
+			t.Errorf("%q is listed as shown and is not a kind this schema has", kind)
+		}
+	}
+	for kind := range silent {
+		if !known[kind] {
+			t.Errorf("%q is listed as silent and is not a kind this schema has", kind)
+		}
+	}
+}
+
+// A kind listed as silent shows nothing, which is the claim the list makes.
+func TestASilentKindPutsNothingOnTheScreen(t *testing.T) {
+	for kind := range ui.Silent() {
+		if kind == events.KindUnknown {
+			// Unknown carries raw bytes rather than a payload a test can build
+			// from its kind alone, and what it shows is covered where a Run is
+			// degraded.
+			continue
+		}
+		t.Run(string(kind), func(t *testing.T) {
+			var out bytes.Buffer
+			renderer, err := ui.New(ui.Stream(&out), true)
+			if err != nil {
+				t.Fatalf("build a Renderer: %v", err)
+			}
+			if err := renderer.Committed(context.Background(), events.Event{
+				Version: events.SchemaVersion, Run: "run_1", Session: "sess_1", Kind: kind,
+				Payload: payloadFor(t, kind),
+			}); err != nil {
+				t.Fatalf("fold a %q: %v", kind, err)
+			}
+			if out.Len() != 0 {
+				t.Errorf("%q wrote %q, and it is listed as showing nothing", kind, out.String())
+			}
+		})
+	}
+}
+
+// payloadFor builds an empty payload of a kind, for a test that cares which
+// kind it is and not what it holds.
+func payloadFor(t *testing.T, kind events.Kind) events.Payload {
+	t.Helper()
+
+	switch kind {
+	case events.KindToolCall:
+		return events.ToolCall{}
+	case events.KindToolResult:
+		return events.ToolResult{}
+	case events.KindEdit:
+		return events.Edit{}
+	case events.KindRetry:
+		return events.Retry{}
+	case events.KindNeedsHuman:
+		return events.NeedsHuman{}
+	default:
+		t.Fatalf("no payload is built for %q: add one beside the kind", kind)
+		return nil
+	}
+}

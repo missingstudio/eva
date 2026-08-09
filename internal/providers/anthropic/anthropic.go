@@ -14,6 +14,29 @@ import (
 // Name is what configuration selects this Provider by.
 const Name = "anthropic"
 
+// This Provider puts itself in the set configuration can select. The layer that
+// wires a run therefore names it once, as an import, rather than knowing how to
+// build it.
+//
+// The credential is resolved here and not before: this is the Provider that
+// needs one, so this is where failing for want of one is the right failure.
+func init() {
+	providers.Register(Name, func(o providers.Options) (providers.Provider, error) {
+		if o.Credential == nil {
+			return nil, errors.New("anthropic: no API key")
+		}
+		key, err := o.Credential()
+		if err != nil {
+			return nil, err
+		}
+		return New(Options{
+			APIKey:    key,
+			BaseURL:   o.BaseURL,
+			MaxTokens: o.MaxTokens,
+		})
+	})
+}
+
 // DefaultMaxTokens caps one answer when the caller chooses no cap of its own.
 // The API requires one and has no default, so a turn always runs under a
 // number — and a turn that ran under this one and hit it says so, rather than

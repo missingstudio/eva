@@ -15,8 +15,10 @@ import (
 	"github.com/missingstudio/eva/internal/core/prompt"
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/providers"
-	"github.com/missingstudio/eva/internal/providers/anthropic"
-	"github.com/missingstudio/eva/internal/providers/fake"
+
+	// The Providers a build can select, each registering itself as it loads.
+	_ "github.com/missingstudio/eva/internal/providers/anthropic"
+	_ "github.com/missingstudio/eva/internal/providers/fake"
 	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui"
 	"github.com/missingstudio/eva/internal/ui"
@@ -145,7 +147,7 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 		return ExitUsage, err
 	}
 
-	sink, err := trace.Open(cfg.Trace.Path)
+	sink, err := trace.New(cfg.Trace.Kind, trace.Options{Path: cfg.Trace.Path})
 	if err != nil {
 		return ExitFailure, err
 	}
@@ -215,7 +217,7 @@ func once(ctx context.Context, e *eva, prompt string, stdout io.Writer) (int, er
 	if err != nil {
 		return ExitFailure, err
 	}
-	e.show(renderer)
+	e.Attach(renderer)
 
 	outcome, err := e.Answer(ctx, prompt)
 	if err != nil {
@@ -290,22 +292,51 @@ func (e *eva) Clear() { e.session = e.session.Fresh(events.SessionID(newID("sess
 //
 // This is the only door. Everything a Run learns about who is watching it comes
 // through here, so the answer to "what does this Run claim, and who sees what it
-// commits?" is these five lines rather than a search.
+// commits?" is Attach and the options a caller passed it.
 func (e *eva) Watch(sub core.Subscriber, arriving func(chunk string)) {
-	e.subs = []core.Subscriber{sub}
-	e.arriving = arriving
-	e.interrupt = true
+	e.Attach(sub, WithArriving(arriving), WithInterrupt())
 }
 
-// show attaches a projection that only reads what was committed.
+// Attach adds a projection to the ones this assembly's Runs publish to.
 //
-// It is Watch without the two things a console brings: nothing is told what is
-// arriving, and no Interrupt capability is claimed. That is the whole difference
-// between a screen somebody is sitting at and a stream something is written to,
-// and it is a separate method rather than a flag on Watch because a capability
-// claimed and absent corrupts a Run, where a missing one only degrades it.
-func (e *eva) show(sub core.Subscriber) {
-	e.subs = []core.Subscriber{sub}
+// It appends. Attaching used to assign a slice of one, so a second projection
+// silently replaced the first and the Trace could be watched by exactly one
+// thing — no metrics tap beside a console, no second screen, no machine-readable
+// stream beside the one a person reads. A fan-out that admits one consumer is a
+// field, not a fan-out.
+//
+// What a projection is, and what the frontend holding it can do, are two facts
+// and this takes them separately. A console reads what was committed, is shown
+// what is arriving, and claims the Interrupt capability; a stream written to a
+// file does only the first. Bundling them made "attach a projection" and "claim
+// a capability" one indivisible act, which is how a projection that watched
+// nothing arrive would have claimed it could cancel cleanly.
+func (e *eva) Attach(sub core.Subscriber, opts ...WatchOption) {
+	if sub != nil {
+		e.subs = append(e.subs, sub)
+	}
+	for _, opt := range opts {
+		opt(e)
+	}
+}
+
+// WatchOption is what a frontend says about itself as it attaches.
+type WatchOption func(*eva)
+
+// WithArriving says the frontend shows a turn while it happens. See
+// Turn.Arriving for why that is a different thing from being a Subscriber.
+func WithArriving(arriving func(chunk string)) WatchOption {
+	return func(e *eva) { e.arriving = arriving }
+}
+
+// WithInterrupt claims that whoever is driving these turns listens for a
+// cancellation and closes the Run, rather than letting the process die under it.
+//
+// It is claimed rather than assumed, and it is separate from attaching, because
+// a capability claimed and absent corrupts a Run where a missing one only
+// degrades it.
+func WithInterrupt() WatchOption {
+	return func(e *eva) { e.interrupt = true }
 }
 
 // Answer runs one turn as one Run against the Session.
@@ -344,34 +375,37 @@ func (e *eva) Answer(ctx context.Context, intent string) (core.Outcome, error) {
 }
 
 // open builds the Provider configuration selects.
+//
+// What it knows about Providers is the name a person wrote and the settings
+// they wrote beside it. Which Providers exist is the registry's, and each of
+// them is in it because its own package put it there — so this reads the same
+// however many there are, and the error naming what a person may choose instead
+// is read from the registry rather than written out here where it would go
+// stale.
+//
+// The file a mistake belongs to is added here. The registry does not know there
+// is a file.
 func open(cfg config.Config) (providers.Provider, error) {
-	switch cfg.Provider.Name {
-	case fake.Name:
-		if cfg.Provider.Script == "" {
-			return nil, fmt.Errorf("provider %q needs a recording: set provider.script in %s", fake.Name, cfg.Path)
-		}
-		return fake.Load(cfg.Provider.Script)
-
-	case anthropic.Name:
-		// The credential is resolved before anything else, so that a missing
-		// key is reported as a missing key rather than as whatever the first
-		// call to fail happens to say.
-		key, err := cfg.RequireAPIKey()
-		if err != nil {
-			return nil, err
-		}
-		// Reveal is the one place the credential leaves the type that stops it
-		// printing itself, and it goes straight into the client.
-		return anthropic.New(anthropic.Options{
-			APIKey:    key.Reveal(),
-			BaseURL:   cfg.Provider.BaseURL,
-			MaxTokens: cfg.Provider.MaxTokens,
-		})
-
-	default:
-		return nil, fmt.Errorf("unknown provider %q in %s: want %q or %q",
-			cfg.Provider.Name, cfg.Path, anthropic.Name, fake.Name)
+	provider, err := providers.Open(cfg.Provider.Name, providers.Options{
+		// Resolving the credential is deferred to the Provider that needs one:
+		// a recording replayed from a file must not fail for want of an API key
+		// it never sends. Reveal is the one place the secret leaves the type
+		// that stops it printing itself, and it happens inside this call.
+		Credential: func() (string, error) {
+			key, err := cfg.RequireAPIKey()
+			if err != nil {
+				return "", err
+			}
+			return key.Reveal(), nil
+		},
+		BaseURL:   cfg.Provider.BaseURL,
+		MaxTokens: cfg.Provider.MaxTokens,
+		Recording: cfg.Provider.Script,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w (in %s)", err, cfg.Path)
 	}
+	return provider, nil
 }
 
 // origin is the outside world this process hands a Session: its clock, and its

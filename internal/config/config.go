@@ -82,6 +82,9 @@ type ProviderConfig struct {
 // TraceConfig says where the Trace is written.
 type TraceConfig struct {
 	Path string `toml:"path"`
+	// Kind selects which sink writes it. Empty is the append-only JSONL file,
+	// which is what a configuration that says nothing about its Trace gets.
+	Kind string `toml:"kind"`
 }
 
 // IdentityConfig is who a Run acts as.
