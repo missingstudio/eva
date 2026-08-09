@@ -735,3 +735,74 @@ func TestTheProviderIsNamedForWhatSelectsIt(t *testing.T) {
 		t.Errorf("name = %q, want %q", got, anthropic.Name)
 	}
 }
+
+// A stream that has ended goes on saying so.
+//
+// Next loops until it has something to return, so a state that neither queued a
+// payload nor set an ending would spin forever. Reading past the end is the
+// cheapest way to prove every terminal state is terminal.
+func TestReadingPastTheEndKeepsReturningEOF(t *testing.T) {
+	base, _ := serve(t, stream(
+		frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		frame("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}`),
+		frame("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`),
+		frame("message_stop", `{"type":"message_stop"}`),
+	))
+
+	provider := open(t, base)
+	s, err := provider.Stream(context.Background(), providers.Call{
+		Model:    "claude-test",
+		Messages: []core.Message{{Author: core.AuthorUser, Text: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("open the stream: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	// Drain it, with a bound: a stream that never ends must fail this test
+	// rather than hang the suite.
+	for i := 0; ; i++ {
+		if i > 100 {
+			t.Fatal("the stream yielded 100 payloads and never ended")
+		}
+		if _, err := s.Next(context.Background()); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatalf("the turn failed: %v", err)
+		}
+	}
+
+	for range 3 {
+		if _, err := s.Next(context.Background()); !errors.Is(err, io.EOF) {
+			t.Fatalf("reading past the end returned %v, want io.EOF every time", err)
+		}
+	}
+}
+
+// A cancelled stream stops, and stays stopped. The commonest way a turn ends
+// early is somebody pressing ctrl+c, and a Next that ignored a dead context
+// would go on dialling after the Run was over.
+func TestACancelledStreamStopsAndStaysStopped(t *testing.T) {
+	base, _ := serve(t, stream(
+		frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		frame("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}`),
+	))
+
+	provider := open(t, base)
+	ctx, cancel := context.WithCancel(context.Background())
+	s, err := provider.Stream(ctx, providers.Call{
+		Model:    "claude-test",
+		Messages: []core.Message{{Author: core.AuthorUser, Text: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("open the stream: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	cancel()
+	for range 3 {
+		if _, err := s.Next(ctx); !errors.Is(err, context.Canceled) {
+			t.Fatalf("a cancelled stream returned %v, want context.Canceled", err)
+		}
+	}
+}

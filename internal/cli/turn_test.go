@@ -421,3 +421,77 @@ func TestARunThatOpenedClosesEvenWhenOpeningItFailed(t *testing.T) {
 		t.Error("the Run opened and never closed: a reader cannot tell it from a Run still going")
 	}
 }
+
+// A turn whose blocks interleave commits each block whole, in the order the
+// provider sent them.
+//
+// The fold at the sink merges consecutive chunks of one block, so a block split
+// across two groups would reach the Trace as two records where a reader expects
+// one — and a block committed out of order would put a later part of the answer
+// above an earlier one.
+func TestBlocksThatInterleaveEachCommitWhole(t *testing.T) {
+	sink := &grouped{}
+	block := newBlocks(recorder(t, sink))
+	ctx := context.Background()
+
+	for _, payload := range []events.Payload{
+		events.Text{Block: 0, Chunk: "first "},
+		events.Text{Block: 0, Chunk: "block"},
+		events.Text{Block: 1, Chunk: "second "},
+		events.Text{Block: 1, Chunk: "block"},
+		events.Text{Block: 0, Chunk: "back to first"},
+	} {
+		if err := block.add(ctx, payload); err != nil {
+			t.Fatalf("add: %v", err)
+		}
+	}
+	if err := block.close(ctx); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	want := []string{"first |block", "second |block", "back to first"}
+	got := sink.shape()
+	if len(got) != len(want) {
+		t.Fatalf("the Trace holds %d groups %v, want %d: %v", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("group %d is %q, want %q — a block was split or reordered", i, got[i], want[i])
+		}
+	}
+}
+
+// A payload that is not a chunk closes the block before it.
+//
+// Usage committed inside an open block would put an accounting record in the
+// middle of an answer, and the sink's fold would stop at it — turning one block
+// into two records for a reason that has nothing to do with what was said.
+func TestANonChunkClosesTheBlockBeforeIt(t *testing.T) {
+	sink := &grouped{}
+	block := newBlocks(recorder(t, sink))
+	ctx := context.Background()
+
+	for _, payload := range []events.Payload{
+		events.Text{Block: 0, Chunk: "an answer"},
+		events.Usage{InputTokens: events.Tokens(1)},
+		events.Text{Block: 1, Chunk: "more"},
+	} {
+		if err := block.add(ctx, payload); err != nil {
+			t.Fatalf("add: %v", err)
+		}
+	}
+	if err := block.close(ctx); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	got := sink.shape()
+	want := []string{"an answer", "usage", "more"}
+	if len(got) != len(want) {
+		t.Fatalf("the Trace holds %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("group %d is %q, want %q", i, got[i], want[i])
+		}
+	}
+}
