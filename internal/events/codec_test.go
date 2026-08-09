@@ -59,7 +59,7 @@ func samples() map[events.Kind]events.Payload {
 		events.KindText:       events.Text{Block: 2, Chunk: "hello"},
 		events.KindToolCall:   events.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"go.mod"}`), Redacted: true},
 		events.KindToolResult: events.ToolResult{Name: "read", Disposition: events.DispositionBudgetDenied, Bytes: 12},
-		events.KindUsage:      events.Usage{InputTokens: 1200, OutputTokens: 340, ReasoningTokens: &reasoning, USD: &usd},
+		events.KindUsage:      events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340), ReasoningTokens: &reasoning, USD: &usd},
 		events.KindRetry:      events.Retry{Attempt: 2, Max: 5, DelayMS: 750, ErrorClass: events.ErrorRateLimit},
 		events.KindEdit:       events.Edit{Path: "cli/main.go", Hunks: 3},
 		events.KindNeedsHuman: events.NeedsHuman{Question: "merge?", Resume: events.Cursor{Session: "sess_1", Seq: 7}},
@@ -191,11 +191,11 @@ func TestUnrecognisedKindIsPreservedWithItsBytes(t *testing.T) {
 func TestUsageAbsenceIsDistinctFromZero(t *testing.T) {
 	zero := uint64(0)
 
-	unreported, err := json.Marshal(events.Usage{InputTokens: 10, OutputTokens: 20})
+	unreported, err := json.Marshal(events.Usage{InputTokens: events.Tokens(10), OutputTokens: events.Tokens(20)})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	none, err := json.Marshal(events.Usage{InputTokens: 10, OutputTokens: 20, ReasoningTokens: &zero})
+	none, err := json.Marshal(events.Usage{InputTokens: events.Tokens(10), OutputTokens: events.Tokens(20), ReasoningTokens: &zero})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestUsageAbsenceIsDistinctFromZero(t *testing.T) {
 // Cache write and cache read are priced differently, so one field cannot
 // compute cost.
 func TestUsageSeparatesCacheWritesFromCacheReads(t *testing.T) {
-	b, err := json.Marshal(events.Usage{CacheWriteTokens: 3, CacheReadTokens: 4})
+	b, err := json.Marshal(events.Usage{CacheWriteTokens: events.Tokens(3), CacheReadTokens: events.Tokens(4)})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -266,5 +266,68 @@ func TestKindOfNamesEveryPayload(t *testing.T) {
 	}
 	if _, ok := events.KindOf(nil); ok {
 		t.Error("KindOf(nil) reported a kind")
+	}
+}
+
+// A record written under version 1 still reads. The counters were plain
+// integers then, so a figure it carries is a figure; the zero it may have
+// written for either "none" or "we were not told" reads as none, which is all a
+// record made without the distinction can be asked to say.
+func TestAVersionOneUsageRecordStillDecodes(t *testing.T) {
+	const stored = `{"id":"evt_1","seq":4,"wire_seq":0,"at":{"wall":"2026-08-09T00:00:00Z","mono":1},` +
+		`"version":1,"kind":"usage","tenant":"t","actor":{"id":"a","kind":"human"},"run":"run_1",` +
+		`"session":"sess_1","parent":null,` +
+		`"payload":{"input_tokens":1200,"output_tokens":340,"cache_write_tokens":0,"cache_read_tokens":0,` +
+		`"reasoning_tokens":null,"server_tool_tokens":null,"usd":null}}`
+
+	var got events.Event
+	if err := json.Unmarshal([]byte(stored), &got); err != nil {
+		t.Fatalf("a version 1 record did not decode: %v", err)
+	}
+	if got.Version != 1 {
+		t.Errorf("version = %d, want the 1 the record was written under — a stored Trace is never rewritten", got.Version)
+	}
+
+	usage, ok := got.Payload.(events.Usage)
+	if !ok {
+		t.Fatalf("payload = %#v, want Usage", got.Payload)
+	}
+	if usage.InputTokens == nil || *usage.InputTokens != 1200 {
+		t.Errorf("input tokens = %v, want the 1200 the record carries", usage.InputTokens)
+	}
+	if usage.CacheWriteTokens == nil || *usage.CacheWriteTokens != 0 {
+		t.Errorf("cache writes = %v, want the zero the record states", usage.CacheWriteTokens)
+	}
+	if usage.ReasoningTokens != nil {
+		t.Errorf("reasoning tokens = %d, want absent — the record says null", *usage.ReasoningTokens)
+	}
+}
+
+// A counter the provider did not report is absent on the way out, and absent
+// again on the way back. A zero here would be a turn claiming it used none.
+func TestAnUnreportedCounterSurvivesTheRoundTrip(t *testing.T) {
+	out := events.Event{
+		ID: "evt_1", Version: events.SchemaVersion, Tenant: "t", Run: "run_1", Session: "sess_1",
+		Payload: events.Usage{OutputTokens: events.Tokens(340)},
+	}
+
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	var back events.Event
+	if err := json.Unmarshal(encoded, &back); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	usage, ok := back.Payload.(events.Usage)
+	if !ok {
+		t.Fatalf("payload = %#v, want Usage", back.Payload)
+	}
+	if usage.InputTokens != nil {
+		t.Errorf("input tokens = %d, want absent: the provider reported none and a zero would say it used none", *usage.InputTokens)
+	}
+	if usage.OutputTokens == nil || *usage.OutputTokens != 340 {
+		t.Errorf("output tokens = %v, want the figure that was reported", usage.OutputTokens)
 	}
 }

@@ -75,11 +75,24 @@ type RecorderOptions struct {
 // A Recorder belongs to one Run. It is safe for concurrent use, because stage
 // 2 runs parallel tool groups and a wire counter that is only safe by
 // convention is a data race waiting for its second goroutine.
+// listener is one Subscriber and whether it is still following.
+//
+// A Subscriber that returned an error missed the record it was given, and a
+// projection with a hole in it cannot be made whole by the records that come
+// after. So it stops being fed rather than being handed a stream it will
+// silently misread, and the Run carries a caveat saying a projection went
+// blind — which is the part a reader of the Trace needs, because the screen
+// that stopped updating cannot report its own absence.
+type listener struct {
+	sub    Subscriber
+	failed bool
+}
+
 type Recorder struct {
 	sink  TraceSink
 	now   func() events.Timestamp
 	newID func() events.EventID
-	subs  []Subscriber
+	subs  []listener
 
 	// mu covers the emitter's wire counter, the commit, the publish, and what
 	// the Run did not understand, so that two goroutines cannot interleave the
@@ -118,11 +131,16 @@ func NewRecorder(o RecorderOptions) (*Recorder, error) {
 		return nil, errors.New("core: a Recorder needs the Session it records")
 	}
 
+	subs := make([]listener, 0, len(o.Subscribers))
+	for _, sub := range o.Subscribers {
+		subs = append(subs, listener{sub: sub})
+	}
+
 	return &Recorder{
 		sink:  o.Sink,
 		now:   o.Now,
 		newID: o.NewID,
-		subs:  append([]Subscriber(nil), o.Subscribers...),
+		subs:  subs,
 		emt: emitter{
 			tenant:  o.Tenant,
 			actor:   o.Actor,
@@ -148,6 +166,12 @@ func NewRecorder(o RecorderOptions) (*Recorder, error) {
 // A Subscriber that fails does not un-commit the group. The error is returned
 // because a broken output stream is a real failure, but the Trace is the
 // source of truth and it already holds the record.
+//
+// It also does not stop the Subscribers behind it. It stops itself: it has
+// missed a record, so it is dropped from the fan-out and the Run gains the
+// caveat that says a projection is no longer following. Every other projection
+// keeps receiving the Trace in full.
+//
 // A Subscriber may not call Record: publishing happens under the same lock as
 // committing, because a Subscriber that saw group 3 before group 2 would be
 // reading the Trace out of the order the Trace holds.
@@ -277,15 +301,34 @@ func (r *Recorder) commit(ctx context.Context, payloads ...events.Payload) error
 		r.noteUnknown(e)
 	}
 
+	// Every Subscriber still following gets every committed Event, and a
+	// failure stops the Subscriber that returned it rather than the loop. One
+	// broken projection used to end the publishing where it stood, so a
+	// Subscriber registered behind a broken one silently stopped receiving a
+	// Trace that was being written the whole time — and nothing anywhere said
+	// so. Which projection broke is the caller's to report; that one did is the
+	// Run's, and it commits with the claim.
+	var failures []error
 	for _, e := range committed {
-		for _, sub := range r.subs {
-			if err := sub.Committed(ctx, e); err != nil {
-				return fmt.Errorf("core: publish %s event: %w", e.Kind, err)
+		for i := range r.subs {
+			if r.subs[i].failed {
+				continue
+			}
+			if err := r.subs[i].sub.Committed(ctx, e); err != nil {
+				r.subs[i].failed = true
+				r.toldMissing = appendOnce(r.toldMissing, projectionMissing)
+				failures = append(failures, fmt.Errorf("core: publish %s event: %w", e.Kind, err))
 			}
 		}
 	}
-	return nil
+	return errors.Join(failures...)
 }
+
+// projectionMissing is what a Run says about itself when a Subscriber stopped
+// following it. It names the sort of thing that is missing rather than which
+// Subscriber it was: the list is read by someone working out why a Run was set
+// aside, and the identity of a projection is not something the Trace holds.
+const projectionMissing = "a projection stopped following this Run, and is missing records the Trace holds"
 
 // noteUnknown collects the kind of a committed Event this build does not
 // recognise.

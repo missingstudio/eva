@@ -186,6 +186,18 @@ func text(payloads []events.Payload) string {
 	return b.String()
 }
 
+// reported is the figure a counter carries, and a failure when it carries none.
+// Asserting on a dereferenced absence would report a wrong number rather than a
+// figure that never arrived, and those are different bugs.
+func reported(t *testing.T, n *uint64) uint64 {
+	t.Helper()
+
+	if n == nil {
+		t.Fatal("the counter reports no figure, want one")
+	}
+	return *n
+}
+
 func only[T events.Payload](t *testing.T, payloads []events.Payload) T {
 	t.Helper()
 
@@ -226,11 +238,11 @@ func TestOneUsageAccumulatesTheStartAndTheDelta(t *testing.T) {
 	}
 
 	usage := only[events.Usage](t, got)
-	if usage.InputTokens != 1200 {
-		t.Errorf("input tokens = %d, want the 1200 message_start reported", usage.InputTokens)
+	if in := reported(t, usage.InputTokens); in != 1200 {
+		t.Errorf("input tokens = %d, want the 1200 message_start reported", in)
 	}
-	if usage.OutputTokens != 340 {
-		t.Errorf("output tokens = %d, want the 340 message_delta reported", usage.OutputTokens)
+	if out := reported(t, usage.OutputTokens); out != 340 {
+		t.Errorf("output tokens = %d, want the 340 message_delta reported", out)
 	}
 
 	// The Usage is the last thing the turn says. A cost reported before the
@@ -256,9 +268,9 @@ func TestCacheWritesAndCacheReadsAreSeparateFigures(t *testing.T) {
 	}
 
 	usage := only[events.Usage](t, got)
-	if usage.CacheWriteTokens != 400 || usage.CacheReadTokens != 900 {
-		t.Errorf("cache writes and reads = %d, %d, want 400 and 900 as separate figures",
-			usage.CacheWriteTokens, usage.CacheReadTokens)
+	write, read := reported(t, usage.CacheWriteTokens), reported(t, usage.CacheReadTokens)
+	if write != 400 || read != 900 {
+		t.Errorf("cache writes and reads = %d, %d, want 400 and 900 as separate figures", write, read)
 	}
 }
 
@@ -340,7 +352,7 @@ func TestAnAnswerCutOffAtTheCapSaysSo(t *testing.T) {
 	if want := "as much as would fit"; text(got) != want {
 		t.Errorf("the answer is %q, want %q", text(got), want)
 	}
-	if usage := only[events.Usage](t, got); usage.OutputTokens != 8192 {
+	if usage := only[events.Usage](t, got); reported(t, usage.OutputTokens) != 8192 {
 		t.Errorf("usage = %+v, want what the truncated turn cost", usage)
 	}
 
@@ -628,7 +640,7 @@ func TestAStreamThatBreaksReportsWhatWasBilledAndThenTheFailure(t *testing.T) {
 	}
 
 	usage := only[events.Usage](t, got)
-	if usage.InputTokens != 1200 || usage.CacheReadTokens != 900 {
+	if reported(t, usage.InputTokens) != 1200 || reported(t, usage.CacheReadTokens) != 900 {
 		t.Errorf("usage = %+v, want what message_start reported before the break", usage)
 	}
 	if !strings.Contains(err.Error(), string(events.ErrorOverloaded)) {

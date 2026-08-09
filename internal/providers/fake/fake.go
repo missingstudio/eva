@@ -66,12 +66,20 @@ type Block struct {
 	Chunks []string `toml:"chunks"`
 }
 
-// Usage mirrors the normalized Usage payload, with the same nullability.
+// Usage is the recorded cost of a turn, in the file's own encoding.
+//
+// It exists because a recording is TOML and the schema's payload is JSON, and
+// it mirrors that payload field for field so that the conversion in Stream is
+// what checks it: Go compares struct types by their fields and ignores the
+// tags, so a counter added to the schema and not to this one stops the build
+// here. A hand-written copy is what let the previous version of this type drop
+// a field silently, and the one Provider the tests depend on is the worst place
+// for a schema to be quietly out of date.
 type Usage struct {
-	InputTokens      uint64   `toml:"input_tokens"`
-	OutputTokens     uint64   `toml:"output_tokens"`
-	CacheWriteTokens uint64   `toml:"cache_write_tokens"`
-	CacheReadTokens  uint64   `toml:"cache_read_tokens"`
+	InputTokens      *uint64  `toml:"input_tokens"`
+	OutputTokens     *uint64  `toml:"output_tokens"`
+	CacheWriteTokens *uint64  `toml:"cache_write_tokens"`
+	CacheReadTokens  *uint64  `toml:"cache_read_tokens"`
 	ReasoningTokens  *uint64  `toml:"reasoning_tokens"`
 	ServerToolTokens *uint64  `toml:"server_tool_tokens"`
 	USD              *float64 `toml:"usd"`
@@ -147,15 +155,7 @@ func (p *Provider) Stream(ctx context.Context, _ providers.Call) (providers.Stre
 			paced = append(paced, true)
 		}
 	}
-	payloads = append(payloads, events.Usage{
-		InputTokens:      turn.Usage.InputTokens,
-		OutputTokens:     turn.Usage.OutputTokens,
-		CacheWriteTokens: turn.Usage.CacheWriteTokens,
-		CacheReadTokens:  turn.Usage.CacheReadTokens,
-		ReasoningTokens:  turn.Usage.ReasoningTokens,
-		ServerToolTokens: turn.Usage.ServerToolTokens,
-		USD:              turn.Usage.USD,
-	})
+	payloads = append(payloads, events.Usage(turn.Usage))
 	// The usage figure is not paced. It is an accounting record rather than
 	// something a person watches arrive, and a wait before it would only delay
 	// the cost line after the answer is already whole.

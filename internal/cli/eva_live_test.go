@@ -88,6 +88,18 @@ func api(t *testing.T, stream string, refusals ...refused) (base string, request
 	}
 }
 
+// reported is the figure a counter carries, and a failure when it carries none.
+// Asserting on a dereferenced absence would report a wrong number rather than a
+// figure that never arrived, and those are different bugs.
+func reported(t *testing.T, n *uint64) uint64 {
+	t.Helper()
+
+	if n == nil {
+		t.Fatal("the counter reports no figure, want one")
+	}
+	return *n
+}
+
 // only returns the one payload of a kind the run produced.
 func only[T events.Payload](t *testing.T, es []events.Event) T {
 	t.Helper()
@@ -134,12 +146,12 @@ func TestALiveTurnStreamsAnAnswerAndRecordsWhatItCost(t *testing.T) {
 	}
 
 	usage := only[events.Usage](t, printed)
-	if usage.InputTokens != 1200 || usage.OutputTokens != 340 {
+	if reported(t, usage.InputTokens) != 1200 || reported(t, usage.OutputTokens) != 340 {
 		t.Errorf("usage = %+v, want the input from message_start and the output from message_delta", usage)
 	}
-	if usage.CacheWriteTokens != 400 || usage.CacheReadTokens != 900 {
-		t.Errorf("cache writes and reads = %d, %d, want 400 and 900 as separate figures",
-			usage.CacheWriteTokens, usage.CacheReadTokens)
+	write, read := reported(t, usage.CacheWriteTokens), reported(t, usage.CacheReadTokens)
+	if write != 400 || read != 900 {
+		t.Errorf("cache writes and reads = %d, %d, want 400 and 900 as separate figures", write, read)
 	}
 	if usage.ReasoningTokens != nil {
 		t.Errorf("reasoning tokens = %d, want absent rather than zero on an Anthropic turn", *usage.ReasoningTokens)

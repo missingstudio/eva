@@ -192,14 +192,22 @@ const KindUsage Kind = "usage"
 // Nullability here is load-bearing, not stylistic: nil means the provider did
 // not tell us, and 0 means none were used. Collapsing the two is how a cost
 // report becomes confidently wrong.
+//
+// Every counter is nullable, including the four a turn almost always reports.
+// They were plain integers until the distinction they most needed was the one
+// they could not make: a provider that reported nothing produced a record of
+// zeros, which reads as a turn that cost nothing rather than a turn nobody
+// measured. One provider rebuilt the distinction beside the schema and the
+// next one to arrive would have had to know to. It is in the type now, so a
+// provider that says nothing cannot say zero by accident.
 type Usage struct {
-	InputTokens  uint64 `json:"input_tokens"`
-	OutputTokens uint64 `json:"output_tokens"`
+	InputTokens  *uint64 `json:"input_tokens"`
+	OutputTokens *uint64 `json:"output_tokens"`
 	// A cache write costs more than base input and a cache read costs far
 	// less, so one field cannot compute cost — and cache-hit rate is the
 	// largest single lever on cost per task.
-	CacheWriteTokens uint64 `json:"cache_write_tokens"`
-	CacheReadTokens  uint64 `json:"cache_read_tokens"`
+	CacheWriteTokens *uint64 `json:"cache_write_tokens"`
+	CacheReadTokens  *uint64 `json:"cache_read_tokens"`
 	// ReasoningTokens is unfillable on Anthropic, which bills thinking tokens
 	// inside OutputTokens and reports no separate figure. It is real and
 	// necessary for OpenAI-compatible providers.
@@ -212,6 +220,14 @@ type Usage struct {
 }
 
 func (Usage) isPayload() {}
+
+// Tokens is a reported counter, for the caller that has a figure to state.
+//
+// The absent counter is the zero value and needs no constructor. This exists so
+// that stating a figure is one expression rather than a local variable and its
+// address, which is the shape that makes a caller reach for a plain zero
+// instead.
+func Tokens(n uint64) *uint64 { return &n }
 
 // ErrorClass is why a retry happened, from a fixed set, so that rate limits
 // can be told apart from server errors without parsing prose.

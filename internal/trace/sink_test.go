@@ -217,7 +217,7 @@ func TestConsecutiveChunksOfOneBlockFoldIntoOneRecord(t *testing.T) {
 		wired("sess_1", 1, events.Text{Block: 0, Chunk: "Eva is "}),
 		wired("sess_1", 2, events.Text{Block: 0, Chunk: "a software "}),
 		wired("sess_1", 3, events.Text{Block: 0, Chunk: "factory."}),
-		wired("sess_1", 4, events.Usage{InputTokens: 10}),
+		wired("sess_1", 4, events.Usage{InputTokens: events.Tokens(10)}),
 	})
 	if err != nil {
 		t.Fatalf("append: %v", err)
@@ -777,5 +777,93 @@ func TestTheFoldDoesNotAbsorbAMalformedChunk(t *testing.T) {
 	}
 	if got := readTrace(t, path); len(got) != 0 {
 		t.Fatalf("the Trace holds %d records after a rejected group, want 0", len(got))
+	}
+}
+
+// A Session resumed in a second process continues where the Trace left off.
+//
+// The counter used to start at 1 in every process, so a second sink over one
+// file gave a Session positions it had already used. Nothing failed and nothing
+// said so: the file held two records at Seq 1, and every projection that reads
+// position as identity was quietly wrong from there on.
+func TestASecondSinkContinuesTheSeqTheTraceReached(t *testing.T) {
+	first, path := open(t)
+
+	if _, err := first.Append(context.Background(), []events.Event{
+		wired("sess_1", 0, events.Started{Intent: "before"}),
+		wired("sess_1", 1, events.Usage{InputTokens: events.Tokens(10)}),
+		wired("sess_2", 0, events.Started{Intent: "another Session"}),
+	}); err != nil {
+		t.Fatalf("the first sink's append failed: %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	second, err := trace.Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	t.Cleanup(func() { _ = second.Close() })
+
+	if _, err := second.Append(context.Background(), []events.Event{
+		wired("sess_1", 0, events.Finished{Claim: events.Claim{Result: events.ResultDone}}),
+		wired("sess_2", 1, events.Finished{Claim: events.Claim{Result: events.ResultDone}}),
+	}); err != nil {
+		t.Fatalf("the second sink's append failed: %v", err)
+	}
+
+	// Every Session in the file counts from 1 without a repeat and without a
+	// gap, across both processes that wrote it.
+	seen := map[events.SessionID][]uint64{}
+	for _, e := range readTrace(t, path) {
+		seen[e.Session] = append(seen[e.Session], e.Seq)
+	}
+	for session, got := range seen {
+		for i, seq := range got {
+			if seq != uint64(i+1) {
+				t.Errorf("Session %s holds Seq %v, want them dense and gapless from 1", session, got)
+				break
+			}
+		}
+	}
+}
+
+// A Trace whose last write was cut short still opens, and the Session it
+// belongs to still continues past the records that did survive.
+func TestATornTailDoesNotStopTheTraceBeingContinued(t *testing.T) {
+	sink, path := open(t)
+
+	if _, err := sink.Append(context.Background(), []events.Event{
+		wired("sess_1", 0, events.Started{Intent: "before the kill"}),
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	whole, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if err := os.WriteFile(path, append(whole, []byte(`{"seq":2,"session":"sess_1","kin`)...), 0o600); err != nil {
+		t.Fatalf("tear the tail: %v", err)
+	}
+
+	second, err := trace.Open(path)
+	if err != nil {
+		t.Fatalf("a Trace with a torn tail did not open: %v", err)
+	}
+	t.Cleanup(func() { _ = second.Close() })
+
+	got, err := second.Append(context.Background(), []events.Event{
+		wired("sess_1", 0, events.Finished{Claim: events.Claim{Result: events.ResultDone}}),
+	})
+	if err != nil {
+		t.Fatalf("append after a torn tail: %v", err)
+	}
+	if got[0].Seq != 2 {
+		t.Errorf("the record after a torn tail took Seq %d, want 2 — the position the whole records reached", got[0].Seq)
 	}
 }

@@ -426,12 +426,12 @@ func TestAPlainTurnRecordsStartedTextUsageAndFinished(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload = %#v, want Usage", got[2].Payload)
 	}
-	if usage.InputTokens != 1200 || usage.OutputTokens != 340 {
+	if reported(t, usage.InputTokens) != 1200 || reported(t, usage.OutputTokens) != 340 {
 		t.Errorf("usage = %+v, want the recorded figures", usage)
 	}
-	if usage.CacheWriteTokens == 0 || usage.CacheReadTokens == 0 {
-		t.Errorf("cache writes and reads = %d, %d — both should be non-zero on a cached turn",
-			usage.CacheWriteTokens, usage.CacheReadTokens)
+	write, read := reported(t, usage.CacheWriteTokens), reported(t, usage.CacheReadTokens)
+	if write == 0 || read == 0 {
+		t.Errorf("cache writes and reads = %d, %d — both should be non-zero on a cached turn", write, read)
 	}
 	if usage.ReasoningTokens != nil {
 		t.Errorf("ReasoningTokens = %d, want absent rather than zero", *usage.ReasoningTokens)

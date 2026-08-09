@@ -109,6 +109,18 @@ func (d *driven) models() []string {
 // a kilobyte of prose in order to say something about three messages. The
 // assertion stays here rather than being skipped: it is what proves the
 // frontend hands the prompt to every turn it opens.
+// reported is the figure a counter carries, and a failure when it carries none.
+// Asserting on a dereferenced absence would report a wrong number rather than a
+// figure that never arrived, and those are different bugs.
+func reported(t *testing.T, n *uint64) uint64 {
+	t.Helper()
+
+	if n == nil {
+		t.Fatal("the counter reports no figure, want one")
+	}
+	return *n
+}
+
 func conversation(t *testing.T, call []core.Message) []core.Message {
 	t.Helper()
 
@@ -145,7 +157,7 @@ func (s *drivenStream) Next(ctx context.Context) (events.Payload, error) {
 	}
 	if !s.priced {
 		s.priced = true
-		return events.Usage{InputTokens: 10, OutputTokens: 20}, nil
+		return events.Usage{InputTokens: events.Tokens(10), OutputTokens: events.Tokens(20)}, nil
 	}
 	if len(s.rec.degraded) > 0 && !s.caveated {
 		s.caveated = true
@@ -621,8 +633,8 @@ func TestWhatIsShownIsWhatTheTraceHolds(t *testing.T) {
 	// breakdown. It is the same fold either way, which is the point being made.
 	said := d.answers(t, "/cost")
 	for _, want := range []string{
-		fmt.Sprintf("%d in", usage.InputTokens),
-		fmt.Sprintf("%d out", usage.OutputTokens),
+		fmt.Sprintf("%d in", reported(t, usage.InputTokens)),
+		fmt.Sprintf("%d out", reported(t, usage.OutputTokens)),
 	} {
 		if !strings.Contains(said, want) {
 			t.Errorf("/cost does not report %q, which the Usage Event holds:\n%s", want, said)

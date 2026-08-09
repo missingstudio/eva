@@ -264,7 +264,7 @@ func TestKindsThatAreNotMessagesAddNoMessage(t *testing.T) {
 	s := session()
 	fold(t, s,
 		event("run_1", events.Started{Intent: "hello"}),
-		event("run_1", events.Usage{InputTokens: 10}),
+		event("run_1", events.Usage{InputTokens: events.Tokens(10)}),
 		event("run_1", events.Retry{Attempt: 1, Max: 3, ErrorClass: events.ErrorRateLimit}),
 		event("run_1", events.Degraded{Missing: []string{"usage"}}),
 		event("run_1", events.Text{Chunk: "answer"}),
@@ -281,7 +281,7 @@ func TestANonTextRecordDoesNotSplitTheAnswer(t *testing.T) {
 	s := session()
 	fold(t, s,
 		event("run_1", events.Text{Chunk: "Eva is "}),
-		event("run_1", events.Usage{InputTokens: 10}),
+		event("run_1", events.Usage{InputTokens: events.Tokens(10)}),
 		event("run_1", events.Text{Chunk: "a factory."}),
 	)
 
