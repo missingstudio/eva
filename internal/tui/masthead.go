@@ -66,7 +66,27 @@ func (c *Console) masthead() string {
 		lines = append(lines, c.styles.hint.Render(fmt.Sprintf("%-8s", fact[0]))+" "+fact[1])
 	}
 
-	return c.bar(lines)
+	// The hint sits under the bar rather than inside it. The bar says "this
+	// block is one thing"; where to go next is not part of that block, it is
+	// what to do once you have read it.
+	return c.bar(lines) + "\n\n" + c.styles.hint.Render(hint())
+}
+
+// hint is the one line that tells a person there is more than a prompt here.
+//
+// It names the command by reading the table the console dispatches on, so a
+// command that is renamed renames itself here too. A hint that named a command
+// Eva no longer answers to would be the first thing a person tried and the
+// first thing that failed them.
+func hint() string {
+	for _, c := range commands() {
+		if c.name == "help" {
+			return "type /" + c.name + " for slash commands"
+		}
+	}
+	// No help to point at is a console with nothing to say about itself, which
+	// is better said by saying nothing than by naming a command that is gone.
+	return ""
 }
 
 // name and tagline are what the console opens saying. They are constants
