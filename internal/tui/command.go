@@ -1,4 +1,4 @@
-package cli
+package tui
 
 import (
 	"context"
@@ -23,7 +23,7 @@ type command struct {
 	about string
 	// run does the thing and says what to show for it. It takes the console
 	// because every command acts on the Session behind one.
-	run func(c *console, argument string) string
+	run func(c *Console, argument string) string
 }
 
 // Control is the whole of what a console may reach of the assembly behind it.
@@ -66,23 +66,23 @@ func commands() []command {
 		{
 			name:  "help",
 			about: "list these commands",
-			run:   (*console).help,
+			run:   (*Console).help,
 		},
 		{
 			name:  "cost",
 			about: "what the last turn cost, and the Session so far",
-			run:   (*console).cost,
+			run:   (*Console).cost,
 		},
 		{
 			name:  "clear",
 			about: "empty the transcript",
-			run:   (*console).clear,
+			run:   (*Console).clear,
 		},
 		{
 			name:     "model",
 			argument: "[name]",
 			about:    "report which model answers, or switch to another",
-			run:      (*console).model,
+			run:      (*Console).model,
 		},
 	}
 }
@@ -91,7 +91,7 @@ func commands() []command {
 //
 // It reads the table rather than a list written beside it, so a command added
 // without a line here is impossible rather than merely undiscoverable.
-func (c *console) help(string) string {
+func (c *Console) help(string) string {
 	var listed strings.Builder
 	for _, cmd := range commands() {
 		typed := "/" + cmd.name
@@ -111,7 +111,7 @@ func (c *console) help(string) string {
 //
 // The Session is untouched either way: what a switch is for is answering the
 // same conversation with something else.
-func (c *console) model(name string) string {
+func (c *Console) model(name string) string {
 	if name == "" {
 		return c.styles.hint.Render("model " + c.control.Model())
 	}
@@ -126,11 +126,11 @@ func (c *console) model(name string) string {
 // Both are folds over the Usage records the Trace holds, and a second count
 // could disagree with the line printed at the end of a turn — leaving a person
 // two figures for one Session and no way to tell which is the record.
-func (c *console) cost(string) string { return c.renderer.Cost() }
+func (c *Console) cost(string) string { return c.renderer.Cost() }
 
 // clear empties the transcript, and the spend with it, because both belong to
 // the Session that is being left behind. Session.Fresh has the argument.
-func (c *console) clear(string) string {
+func (c *Console) clear(string) string {
 	c.control.Clear()
 	c.renderer.Cleared()
 	return c.styles.hint.Render("transcript cleared — the turns that follow are a new Session")
@@ -142,7 +142,7 @@ func (c *console) clear(string) string {
 // A leading slash is a person addressing eva rather than the model, so an
 // unknown one is answered here. A typo forwarded to a provider is a typo that
 // costs money and comes back as a guess at what was meant.
-func (c *console) obey(typed string) string {
+func (c *Console) obey(typed string) string {
 	name, argument, _ := strings.Cut(strings.TrimPrefix(typed, "/"), " ")
 	argument = strings.TrimSpace(argument)
 

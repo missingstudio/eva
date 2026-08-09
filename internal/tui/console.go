@@ -1,4 +1,4 @@
-package cli
+package tui
 
 import (
 	"context"
@@ -27,7 +27,7 @@ import (
 // the interface a consumer rather than the architecture — it holds no
 // Provider, no Recorder, and no way to reach the Trace, so it cannot show a
 // turn the record does not hold.
-type console struct {
+type Console struct {
 	// ask runs one turn and returns when the Run is closed. It is held as a
 	// function because that is the whole of what starting a turn is, and a
 	// command never needs it.
@@ -79,7 +79,7 @@ type console struct {
 	styles styles
 }
 
-var _ tea.Model = (*console)(nil)
+var _ tea.Model = (*Console)(nil)
 
 // styles are the interface's own, which are not the answer's. The answer is
 // styled by the Renderer, and everything here is subordinate to it: a prompt
@@ -210,12 +210,12 @@ func pollable(file *os.File) bool {
 // from the moment it starts. Asking beside it would mean two readers of one
 // input, and the one that is not the program wins the keystrokes it should not
 // have seen.
-func newConsole(ctx context.Context, backend Control, in io.Reader, out io.Writer) (*tea.Program, *console, error) {
+func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Writer) (*tea.Program, *Console, error) {
 	input := textinput.New()
 	input.Prompt = "› "
 	input.Placeholder = "ask something"
 
-	c := &console{
+	c := &Console{
 		ask:     backend.Answer,
 		control: backend,
 		ctx:     ctx,
@@ -259,7 +259,7 @@ func newConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 
 // Init focuses the prompt, asks the terminal what colour it is, and says how
 // to leave.
-func (c *console) Init() tea.Cmd {
+func (c *Console) Init() tea.Cmd {
 	return tea.Batch(
 		c.input.Focus(),
 		tea.RequestBackgroundColor,
@@ -268,7 +268,7 @@ func (c *console) Init() tea.Cmd {
 }
 
 // Update folds one message into the interface.
-func (c *console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		c.height = msg.Height
@@ -304,7 +304,7 @@ func (c *console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // The turns already answered are not here. They are above the view, put there
 // as each Run closed, which is what leaves them in the terminal's own
 // scrollback rather than in a buffer this program has to hold and redraw.
-func (c *console) View() tea.View {
+func (c *Console) View() tea.View {
 	if !c.busy() {
 		return tea.NewView(c.input.View())
 	}
@@ -329,7 +329,7 @@ const liveLines = 10
 // whole of a long answer would grow the view past the window, and the whole of
 // it is put above the view anyway once the Run closes — rendered, which is
 // what a person actually reads it as.
-func (c *console) tail(arriving string) string {
+func (c *Console) tail(arriving string) string {
 	room := liveLines
 	if c.height > 0 && c.height-2 < room {
 		room = c.height - 2
@@ -346,7 +346,15 @@ func (c *console) tail(arriving string) string {
 }
 
 // busy reports whether a Run is in flight.
-func (c *console) busy() bool { return c.cancel != nil }
+func (c *Console) busy() bool { return c.cancel != nil }
+
+// Wait returns once no Run is still committing.
+//
+// Run does this for a caller that only wants a conversation. It is exported for
+// the caller that drives the program itself — a test typing keys into it — for
+// which the wait is the same obligation: a Run that is still committing when
+// its Trace closes is the one failure the project has no instrument to detect.
+func (c *Console) Wait() { c.running.Wait() }
 
 // stop ends the Run in flight, if there is one.
 //
@@ -354,7 +362,7 @@ func (c *console) busy() bool { return c.cancel != nil }
 // for the reason it would not otherwise be: the update loop runs on the
 // goroutine that started the program, so by the time that call returns there
 // is nothing else touching this.
-func (c *console) stop() {
+func (c *Console) stop() {
 	if c.cancel != nil {
 		c.cancel()
 		c.cancel = nil
@@ -364,7 +372,7 @@ func (c *console) stop() {
 // background takes the terminal's answer about its own colour, and restyles
 // everything that follows from it. Nothing configures this: a style a person
 // had to select is a style most people never select.
-func (c *console) background(dark bool) tea.Cmd {
+func (c *Console) background(dark bool) tea.Cmd {
 	if dark == c.dark {
 		return nil
 	}
@@ -384,7 +392,7 @@ func (c *console) background(dark bool) tea.Cmd {
 }
 
 // key acts on a key press.
-func (c *console) key(k tea.KeyPressMsg) tea.Cmd {
+func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 	switch k.String() {
 	case "ctrl+c":
 		// During a turn this cancels it and gives the prompt back, rather
@@ -437,7 +445,7 @@ func (c *console) key(k tea.KeyPressMsg) tea.Cmd {
 // The Run is counted before the goroutine is made rather than inside it: this
 // happens in the update loop, which has ended by the time anything waits, so
 // there is no Run the wait can miss.
-func (c *console) start(prompt string) tea.Cmd {
+func (c *Console) start(prompt string) tea.Cmd {
 	ctx, cancel := context.WithCancel(c.ctx)
 	c.cancel = cancel
 	c.arriving.Reset()
@@ -460,7 +468,7 @@ func (c *console) start(prompt string) tea.Cmd {
 // The live area is not fed from here. A Text record is a whole content block,
 // which for an ordinary answer is the whole answer, and a person watching that
 // arrive would watch nothing until it was over.
-func (c *console) fold(e events.Event) tea.Cmd {
+func (c *Console) fold(e events.Event) tea.Cmd {
 	if err := c.renderer.Committed(c.ctx, e); err != nil {
 		c.blame(err)
 	}
@@ -468,7 +476,7 @@ func (c *console) fold(e events.Event) tea.Cmd {
 }
 
 // close ends the turn the interface was waiting on.
-func (c *console) close(a answered) tea.Cmd {
+func (c *Console) close(a answered) tea.Cmd {
 	c.stop()
 	c.arriving.Reset()
 
@@ -502,7 +510,7 @@ func (c *console) close(a answered) tea.Cmd {
 // own view against what the terminal can show, and puts what it is handed
 // above that view exactly as it was handed it — so a turn nobody reduced would
 // reach a sixteen-colour terminal in twenty-four-bit colour.
-func (c *console) put(block string) {
+func (c *Console) put(block string) {
 	var adapted strings.Builder
 	reduce := colorprofile.Writer{Forward: &adapted, Profile: c.profile}
 	// Neither a builder nor the reducer in front of it has anywhere to fail.
@@ -514,24 +522,24 @@ func (c *console) put(block string) {
 // blame queues a failure to go above the view, in the interface's own voice.
 // A console that swallowed one would leave a person waiting at a prompt for a
 // turn that is not coming.
-func (c *console) blame(err error) {
+func (c *Console) blame(err error) {
 	c.put(c.styles.hint.Render("eva: " + err.Error()))
 }
 
 // Show takes a finished turn from the Renderer. It is the Screen a Renderer
 // built by newConsole writes to.
-func (c *console) Show(turn string) error {
+func (c *Console) Show(turn string) error {
 	c.put(turn)
 	return nil
 }
 
-var _ ui.Screen = (*console)(nil)
+var _ ui.Screen = (*Console)(nil)
 
 // print asks the program to put what is queued above its view.
 //
 // In sequence rather than in a batch: a batch runs its commands at once, and
 // what a person reads is an order.
-func (c *console) print() tea.Cmd {
+func (c *Console) print() tea.Cmd {
 	if len(c.pending) == 0 {
 		return nil
 	}

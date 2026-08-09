@@ -123,12 +123,20 @@ linters:
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/trace
 
-        # cli is the frontend and the top of the graph. It may import everything
-        # below it, plus the terminal libraries — which nothing else may touch.
+        # cli assembles a run and is the top of the graph. It may import
+        # everything below it, and it holds no terminal: the console is tui's,
+        # and the fold a person reads a turn in is ui's. What is left here is
+        # the process surface and the wiring.
         cli:
           list-mode: strict
           files:
             - "**/internal/cli/**"
+            # Tests are governed by cli-tests below. The console lives in tui
+            # now, and the tests that drive it type keys into a program — so
+            # they need the terminal library that production cli no longer
+            # does. Two rules matching one file both apply, so this one stands
+            # aside rather than the frontend's list being widened for a test.
+            - "!**/internal/cli/**_test.go"
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
@@ -141,8 +149,55 @@ linters:
             # so the frontend consumes it and it consumes nothing of the
             # frontend's.
             - github.com/missingstudio/eva/internal/ui
+            # tui, the interactive frontend this hands a built assembly to.
+            - github.com/missingstudio/eva/internal/tui
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/cli
+
+        # cli's tests drive the console themselves: they build it, type keys
+        # into the program, and read what a person would have. So they get the
+        # terminal library, and production cli does not. The rule is separate
+        # for the reason core-tests is — a test needing a package must not be
+        # the reason production code may import it.
+        cli-tests:
+          list-mode: strict
+          files:
+            - "**/internal/cli/**_test.go"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
+            - github.com/missingstudio/eva/internal/config
+            - github.com/missingstudio/eva/internal/providers
+            - github.com/missingstudio/eva/internal/trace
+            - github.com/missingstudio/eva/internal/ui
+            - github.com/missingstudio/eva/internal/tui
+            - github.com/missingstudio/eva/internal/cli
+            - charm.land/bubbletea
+
+        # tui is the interactive frontend, and it owns the terminal. It is a
+        # consumer: core for the Subscriber it satisfies and the Outcome it
+        # reads, ui for what it shows.
+        #
+        # config, providers and trace are absent, and that absence is the whole
+        # reason this is a layer of its own rather than a file inside cli.
+        # Everything the interface could do with a Provider, a Recorder, or the
+        # Trace is something it must not do, and this is where that stops being
+        # a discipline and becomes a rule.
+        #
+        # glamour is absent too. Rendering an answer is what a fold does, and
+        # the fold is ui.
+        tui:
+          list-mode: strict
+          files:
+            - "**/internal/tui/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
+            - github.com/missingstudio/eva/internal/ui
+            # See the events rule: this reaches the external test package only.
+            - github.com/missingstudio/eva/internal/tui
             - charm.land/bubbletea
             - charm.land/bubbles
             - charm.land/lipgloss
