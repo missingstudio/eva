@@ -66,7 +66,7 @@ What that file may set is an allow list, and everything else is refused by name.
 ## Documents
 
 - [docs/Product.md](docs/Product.md) — the plan: twenty stages, a failable exit test each. Draft.
-- [docs/Rebuild.md](docs/Rebuild.md) — the base, examined: the rules it is built on, what holds, what was weak, and the staged path that repaired it.
+- [docs/agents/design-rules.md](docs/agents/design-rules.md) — the practices the code is built on, and which of them a linter holds.
 - [CONTEXT.md](CONTEXT.md) — the glossary. One concept, one name.
 - [docs/adr/](docs/adr/) — decisions and their reasons. Each file's name is its decision, so `ls docs/adr/` is the index and this line does not have to be one. A decision a later ADR overturned says so in its own status line, clause by clause; nothing is rewritten and nothing is deleted.
 - [AGENTS.md](AGENTS.md) — how to work in this repo. `CLAUDE.md` points at it.

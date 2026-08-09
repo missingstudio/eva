@@ -18,9 +18,9 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/render"
 	"github.com/missingstudio/eva/internal/theme"
 	"github.com/missingstudio/eva/internal/tui/keymap"
-	"github.com/missingstudio/eva/internal/ui"
 )
 
 // console is the interactive interface: what a person is typing, what is
@@ -41,7 +41,7 @@ type Console struct {
 
 	// renderer is the projection a person reads: a fold over committed Events,
 	// showing on this model rather than writing to a stream.
-	renderer *ui.Renderer
+	renderer *render.Renderer
 
 	// ctx is what a Run is started under. The one a turn actually runs under
 	// is a cancellable child of it, which is what Ctrl-C ends.
@@ -219,8 +219,8 @@ func newStyles(look theme.Theme) styles {
 	return styles{
 		said: lipgloss.NewStyle().Bold(true),
 		// The same grey the cost line is written in. Both are subordinate to
-		// the answer, so both are one decision rather than two that happen to
-		// agree — see ui.Subdued.
+		// the answer, and both read it off one Theme, so they cannot be two
+		// decisions that happen to agree.
 		hint: subdued,
 		spin: spinStyle(look),
 		box: lipgloss.NewStyle().
@@ -463,7 +463,7 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	// difference between a long answer arriving in ten seconds and in thirty.
 	c.pane.SoftWrap = false
 
-	renderer, err := ui.New(c, c.look)
+	renderer, err := render.New(c, c.look)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1465,7 +1465,7 @@ func (c *Console) Show(turn string) error {
 	return nil
 }
 
-var _ ui.Screen = (*Console)(nil)
+var _ render.Screen = (*Console)(nil)
 
 // Option is what a caller says about how this console looks and what its keys
 // do. A caller that says nothing gets the complete defaults.
