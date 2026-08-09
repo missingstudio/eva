@@ -382,9 +382,14 @@ func TestHelpPrintsTheUsageBlock(t *testing.T) {
 			t.Errorf("the usage block does not mention %q:\n%s", want, got.stdout)
 		}
 	}
-	// The command surface is the console. A usage block still advertising a
-	// prompt on the command line would be describing a program Eva is not.
-	for _, gone := range []string{"-p <prompt>", "--json", "--prompt"} {
+	// The one-shot is back, so it is advertised.
+	if !strings.Contains(got.stdout, "-p <prompt>") {
+		t.Errorf("the usage block does not offer the one-shot:\n%s", got.stdout)
+	}
+	// The machine-readable stream is not, and is not coming back. What a reader
+	// wanting data reads is the Trace. A usage block still advertising it would
+	// be describing a program Eva is not.
+	for _, gone := range []string{"--json", "--prompt"} {
 		if strings.Contains(got.stdout, gone) {
 			t.Errorf("the usage block still offers %q:\n%s", gone, got.stdout)
 		}
@@ -949,10 +954,9 @@ func TestTheCommandLineFailsClosed(t *testing.T) {
 		// rather than a mistake.
 		{"a flag Eva does not have", []string{"--turbo"}},
 		{"an argument that is not a flag", []string{"extra"}},
-		// The one-shot surface is gone, so what used to drive it is now a
-		// mistake like any other. A flag that was quietly ignored would leave a
-		// script believing it had asked for something.
-		{"a prompt on the command line", []string{"-p", "hello"}},
+		// -p is a flag again, so it is not here. --json is not, and a flag that
+		// was quietly ignored would leave a script believing it had asked for
+		// something.
 		{"the machine-readable stream", []string{"--json"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

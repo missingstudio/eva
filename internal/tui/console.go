@@ -114,8 +114,15 @@ type styles struct {
 	// spin is the one thing here that is not subdued. A faint spinner is a
 	// spinner nobody can see moving, and its whole job is to be seen moving.
 	spin lipgloss.Style
-	// box is the border around the prompt. It is drawn in the same grey as
-	// everything else here, because a border is the least of what is on screen.
+	// box is the rule above and below the prompt. It is drawn in the same grey
+	// as everything else here, because a border is the least of what is on
+	// screen.
+	//
+	// Two rules rather than four sides: the prompt is a band across the window,
+	// not an object sitting in it. Sides would draw a container around a line
+	// of text that already runs the width of the screen, and the corners would
+	// be the most emphatic thing in an interface whose subject is the answer
+	// above them.
 	box lipgloss.Style
 }
 
@@ -129,7 +136,7 @@ func newStyles(dark bool) styles {
 		hint: subdued,
 		spin: lipgloss.NewStyle(),
 		box: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder(), true, false, true, false).
 			BorderForeground(subdued.GetForeground()),
 	}
 }
@@ -367,8 +374,8 @@ func (c *Console) View() tea.View {
 	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left,
 		c.pane.View(),
 		c.status(),
-		// Width on a bordered style is the whole frame, border included, so the
-		// window's own width is what makes the box reach both edges.
+		// With no side borders the frame and the content are the same width, so
+		// the rules run the whole window.
 		c.styles.box.Width(c.width).Render(c.input.View()),
 		c.footer(),
 	))
