@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/missingstudio/eva/internal/events"
@@ -25,6 +26,18 @@ const Name = "fake"
 // Script is a recorded provider session: one entry per turn, replayed in
 // order.
 type Script struct {
+	// ChunkDelayMS is how long the replay waits before each chunk of an answer.
+	//
+	// It is zero by default, and zero is what every test wants: a recording
+	// that paced itself would spend its own runtime doing nothing. It is for
+	// the other reader of this file — a person watching Eva answer with no API
+	// key, for whom a turn that arrives all at once shows neither the answer
+	// streaming nor the spinner turning beside it.
+	//
+	// It paces chunks and not the turn, because a chunk is what a person sees
+	// arrive.
+	ChunkDelayMS int `toml:"chunk_delay_ms"`
+
 	Turns []Turn `toml:"turn"`
 }
 
@@ -99,6 +112,12 @@ func Load(path string) (*Provider, error) {
 	if len(script.Turns) == 0 {
 		return nil, fmt.Errorf("fake: %s records no turns", path)
 	}
+	// A negative pace is a mistake rather than an instruction, and a mistake
+	// that read as "no delay" would be a file quietly doing something other
+	// than what it says.
+	if script.ChunkDelayMS < 0 {
+		return nil, fmt.Errorf("fake: %s sets chunk_delay_ms to %d, which is not a length of time", path, script.ChunkDelayMS)
+	}
 	return &Provider{script: script}, nil
 }
 
@@ -121,9 +140,11 @@ func (p *Provider) Stream(ctx context.Context, _ providers.Call) (providers.Stre
 	p.turn++
 
 	var payloads []events.Payload
+	var paced []bool
 	for block, content := range turn.Blocks {
 		for _, chunk := range content.Chunks {
 			payloads = append(payloads, events.Text{Block: block, Chunk: chunk})
+			paced = append(paced, true)
 		}
 	}
 	payloads = append(payloads, events.Usage{
@@ -135,13 +156,23 @@ func (p *Provider) Stream(ctx context.Context, _ providers.Call) (providers.Stre
 		ServerToolTokens: turn.Usage.ServerToolTokens,
 		USD:              turn.Usage.USD,
 	})
+	// The usage figure is not paced. It is an accounting record rather than
+	// something a person watches arrive, and a wait before it would only delay
+	// the cost line after the answer is already whole.
+	paced = append(paced, false)
 
-	return &stream{payloads: payloads}, nil
+	return &stream{payloads: payloads, paced: paced, delay: time.Duration(p.script.ChunkDelayMS) * time.Millisecond}, nil
 }
 
 type stream struct {
 	payloads []events.Payload
-	at       int
+	// paced says, for each payload, whether the replay waits before yielding
+	// it. It is a parallel slice rather than a field on the payload because the
+	// payloads are the one Event schema, and pacing is this Provider's own
+	// business rather than something the schema should carry.
+	paced []bool
+	delay time.Duration
+	at    int
 }
 
 // Next returns the next recorded payload, or io.EOF at the end of the turn.
@@ -152,6 +183,19 @@ func (s *stream) Next(ctx context.Context) (events.Payload, error) {
 	if s.at >= len(s.payloads) {
 		return nil, io.EOF
 	}
+
+	// Cancellable, because a person who interrupts a paced replay is
+	// interrupting a turn and should not have to wait out its pacing first.
+	if s.delay > 0 && s.paced[s.at] {
+		timer := time.NewTimer(s.delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
 	p := s.payloads[s.at]
 	s.at++
 	return p, nil
