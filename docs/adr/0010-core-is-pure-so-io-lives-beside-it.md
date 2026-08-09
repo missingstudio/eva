@@ -12,10 +12,11 @@ status: accepted, packaging superseded by 0021
 > none of them.
 >
 > Names in the table below have moved since, without the graph moving with
-> them. Rendering left `cli` for a layer of its own, `ui`, with the console
-> beside it in `tui` — so read `cli/render` as `ui`, and "REPL" as the Console,
-> which is the word the glossary settled on. Machine-readable output left with
-> `--json`; the Trace file is that surface now. `theme` was added beside `ui`
+> them. Rendering left `cli` for a layer of its own — briefly called `ui`, and
+> now `render` — with the console beside it in `tui`. So read `cli/render` as
+> `render`, `ui` in any later ADR as the same package, and "REPL" as the
+> Console, which is the word the glossary settled on. Machine-readable output left with
+> `--json`; the Trace file is that surface now. `theme` was added beside `render`
 > because a console and a fold both draw (ADR 0030), and `providers`' one rule
 > became three so that each implementation gets only its own dependency.
 

@@ -20,10 +20,10 @@ import (
 	// The Providers a build can select, each registering itself as it loads.
 	_ "github.com/missingstudio/eva/internal/providers/anthropic"
 	_ "github.com/missingstudio/eva/internal/providers/fake"
+	"github.com/missingstudio/eva/internal/render"
 	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui"
 	"github.com/missingstudio/eva/internal/tui/keymap"
-	"github.com/missingstudio/eva/internal/ui"
 )
 
 // Exit codes. They are part of the contract a script reads, so they are named
@@ -256,13 +256,13 @@ func appearanceFile(cfg config.Config) string {
 // The fold a person reads a turn in is a projection of what was committed, and
 // this is where the compiler is told so.
 //
-// ui does not import core, deliberately: a fold that could reach a Session or
+// render does not import core, deliberately: a fold that could reach a Session or
 // the Trace could show a turn the record does not hold. That costs the
 // assertion a package usually makes about itself, so the layer that builds a
 // Renderer makes it instead. Without this line the guarantee rests on whichever
 // call site happens to pass one as a Subscriber, and a refactor of that call
 // site takes the guarantee with it and says nothing.
-var _ core.Subscriber = (*ui.Renderer)(nil)
+var _ core.Subscriber = (*render.Renderer)(nil)
 
 // once answers one prompt onto a byte stream and returns the code that says how
 // it went.
@@ -290,7 +290,7 @@ func once(ctx context.Context, e *eva, prompt string, stdout io.Writer, look the
 	// terminal and reading it back, and this path may have no terminal at all —
 	// where it does not, lipgloss removes the escapes on the way out and the
 	// assumption costs nothing.
-	renderer, err := ui.New(ui.Stream(stdout), look)
+	renderer, err := render.New(render.Stream(stdout), look)
 	if err != nil {
 		return ExitFailure, err
 	}

@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"context"
@@ -179,19 +179,6 @@ func (r *Renderer) rebuild() error {
 	r.costStyle = r.look.Subdued()
 	return nil
 }
-
-// Subdued is the style of what sits beside an answer rather than inside it:
-// the cost line here, and — in the frontend that has them — a prompt echoed
-// back and a status line. All of it is subordinate to the answer, which is a
-// person's reason for being here.
-//
-// It is exported because it was written twice. The frontend cannot import the
-// two greys without importing this package, and two packages naming one colour
-// is two places to change it and one place to forget.
-//
-// The colour itself is the Theme's now, so a person who chose one is obeyed
-// here as well as on the status line.
-func Subdued(dark bool) lipgloss.Style { return theme.Default(dark).Subdued() }
 
 // stream is the Screen a byte stream is: it writes the turn out, and that is
 // where the colour meets a destination that has a capability to be reduced to.

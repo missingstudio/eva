@@ -76,6 +76,8 @@ Read the stage you are working in before you write code in it. Work the lowest s
 
 **Layout** is one module, `cmd/` for binaries, `internal/` for layers. Read `docs/agents/project-structure.md` before you add a package, a layer, or a binary.
 
+**Design rules** are in `docs/agents/design-rules.md`: what a package is named for, how deep it should be, where an interface is declared, and what is a registry rather than a switch. Read it before you add a package or an extension point. It also says which rules a linter holds and which only review does.
+
 ### Domain docs
 
 **Domain vocabulary** lives in `CONTEXT.md` and `docs/adr/` at the repo root — the glossary and the recorded decisions. `docs/agents/domain.md` gives the rules for reading them, for naming a domain concept in output, and for flagging an ADR you contradict.

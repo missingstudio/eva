@@ -1,4 +1,4 @@
-package ui_test
+package render_test
 
 import (
 	"bytes"
@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/render"
 	"github.com/missingstudio/eva/internal/theme"
-	"github.com/missingstudio/eva/internal/ui"
 )
 
 // These tests feed committed Events to a Renderer and read what it wrote.
@@ -44,11 +44,11 @@ func show(t *testing.T, dark bool, payloads ...events.Payload) string {
 // fold folds the payloads into a Renderer and returns it, along with what it
 // wrote. It is what a test that asks a Renderer something uses, rather than one
 // that only reads the bytes.
-func fold(t *testing.T, dark bool, payloads ...events.Payload) (*ui.Renderer, *bytes.Buffer) {
+func fold(t *testing.T, dark bool, payloads ...events.Payload) (*render.Renderer, *bytes.Buffer) {
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := ui.New(ui.Stream(&out), theme.Default(dark))
+	renderer, err := render.New(render.Stream(&out), theme.Default(dark))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
 	var out bytes.Buffer
-	renderer, err := ui.New(ui.Stream(&out), theme.Default(true))
+	renderer, err := render.New(render.Stream(&out), theme.Default(true))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -351,7 +351,7 @@ func costs(t *testing.T, payloads ...events.Payload) []string {
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := ui.New(ui.Stream(&out), theme.Default(true))
+	renderer, err := render.New(render.Stream(&out), theme.Default(true))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -548,10 +548,10 @@ func TestASessionOnlyPartlyCountedStatesNoTokenFigure(t *testing.T) {
 // adding a kind fails here until someone says which of the two it is.
 func TestEveryKindIsEitherShownOrDeliberatelySilent(t *testing.T) {
 	shown := map[events.Kind]bool{}
-	for _, kind := range ui.Shown() {
+	for _, kind := range render.Shown() {
 		shown[kind] = true
 	}
-	silent := ui.Silent()
+	silent := render.Silent()
 
 	for _, kind := range events.Kinds() {
 		_, isSilent := silent[kind]
@@ -583,7 +583,7 @@ func TestEveryKindIsEitherShownOrDeliberatelySilent(t *testing.T) {
 
 // A kind listed as silent shows nothing, which is the claim the list makes.
 func TestASilentKindPutsNothingOnTheScreen(t *testing.T) {
-	for kind := range ui.Silent() {
+	for kind := range render.Silent() {
 		if kind == events.KindUnknown {
 			// Unknown carries raw bytes rather than a payload a test can build
 			// from its kind alone, and what it shows is covered where a Run is
@@ -592,7 +592,7 @@ func TestASilentKindPutsNothingOnTheScreen(t *testing.T) {
 		}
 		t.Run(string(kind), func(t *testing.T) {
 			var out bytes.Buffer
-			renderer, err := ui.New(ui.Stream(&out), theme.Default(true))
+			renderer, err := render.New(render.Stream(&out), theme.Default(true))
 			if err != nil {
 				t.Fatalf("build a Renderer: %v", err)
 			}
@@ -637,7 +637,7 @@ func payloadFor(t *testing.T, kind events.Kind) events.Payload {
 // The Renderer rebuilt from the compiled default here, so a configured grey
 // survived on the console's status line and vanished from the cost line the
 // moment the terminal answered — one colour named in two places, disagreeing,
-// which is the split ui.Subdued exists to prevent.
+// which is the split one shared Theme exists to prevent.
 func TestABackgroundAnsweringLateKeepsTheConfiguredColour(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
@@ -647,7 +647,7 @@ func TestABackgroundAnsweringLateKeepsTheConfiguredColour(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	renderer, err := ui.New(ui.Stream(&out), look)
+	renderer, err := render.New(render.Stream(&out), look)
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
