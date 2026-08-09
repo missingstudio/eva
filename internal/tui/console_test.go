@@ -33,6 +33,7 @@ func (f *fixed) Answer(context.Context, string) (core.Outcome, error) {
 	return core.Outcome{}, nil
 }
 func (f *fixed) Watch(core.Subscriber, func(string)) {}
+func (f *fixed) About() About                        { return About{} }
 func (f *fixed) Model() string                       { return f.model }
 func (f *fixed) UseModel(model string)               { f.model = model }
 func (f *fixed) Clear()                              {}
@@ -783,4 +784,77 @@ func TestAnInterruptedRunIsStillInHandUntilItCloses(t *testing.T) {
 		t.Errorf("the queued prompt is still %q after the Run it waited for closed", got)
 	}
 	c.stop()
+}
+
+// The console opens saying what it is and what it is talking to.
+func TestTheConsoleOpensWithItsMasthead(t *testing.T) {
+	c := drawn(t)
+	c.about = About{Version: "9.9.9", Branch: "some-branch", Dir: "~/somewhere"}
+	c.layout(80, 24)
+
+	got := plain(c.pane.View())
+	for _, want := range []string{"EVA", "9.9.9", "m", "some-branch", "~/somewhere"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the masthead does not carry %q:\n%s", want, got)
+		}
+	}
+}
+
+// A fact the run does not have draws no row. Eva outside a repository has no
+// branch, and a line reading "unknown" spends a row on the absence of one.
+func TestAMissingFactDrawsNoRow(t *testing.T) {
+	c := drawn(t)
+	c.about = About{Version: "9.9.9"}
+	c.layout(80, 24)
+
+	got := plain(c.pane.View())
+	if strings.Contains(got, "branch") {
+		t.Errorf("the masthead names a branch the run does not have:\n%s", got)
+	}
+	if !strings.Contains(got, "9.9.9") {
+		t.Errorf("the masthead lost the facts it does have:\n%s", got)
+	}
+}
+
+// The masthead says which model is answering now, so /model changes it. Two
+// places naming a model is two places to disagree, and the footer is the other.
+func TestTheMastheadFollowsTheModel(t *testing.T) {
+	c := drawn(t)
+	c.about = About{Version: "9.9.9"}
+	c.layout(80, 24)
+
+	c.control.UseModel("a-different-model")
+	c.refresh()
+
+	if got := plain(c.pane.View()); !strings.Contains(got, "a-different-model") {
+		t.Errorf("the masthead still names the old model:\n%s", got)
+	}
+}
+
+// The bar down the side is the accent a person chose, in shades of it.
+func TestTheMastheadBarIsTheChosenAccent(t *testing.T) {
+	look, err := theme.Build(true, theme.Settings{Person: "#FF00FF"})
+	if err != nil {
+		t.Fatalf("build the Theme: %v", err)
+	}
+
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+	c.about = About{Version: "9.9.9"}
+	c.layout(80, 24)
+
+	head := c.masthead()
+	if !strings.Contains(head, barMark) {
+		t.Fatal("the masthead draws no bar")
+	}
+	// Rendered against the chosen accent, the bar's bytes differ from the same
+	// bar drawn against the default one.
+	plainConsole := drawn(t)
+	plainConsole.about = About{Version: "9.9.9"}
+	plainConsole.layout(80, 24)
+	if head == plainConsole.masthead() {
+		t.Error("the bar draws the same bytes whichever accent was chosen")
+	}
 }

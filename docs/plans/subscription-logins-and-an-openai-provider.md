@@ -104,9 +104,10 @@ CLI surface (word dispatch beside `help` in `parse()`, `internal/cli/app.go:108-
 ```
 eva login              # logs in to OpenAI — the only subscription provider
 eva login openai       # explicit form (scriptable, testable)
-eva logout [provider]
-eva auth status        # per provider: configured mode + credential presence
+eva auth status        # shows the login credential: account, expiry, store path
 ```
+
+There is no `eva logout`. Logging out is deleting the auth store file — `eva auth status` prints its path, and running `eva login` again simply replaces the credential. A dedicated verb can be added later if it earns its place; the surface starts minimal.
 
 - **Picker: deferred.** With one subscription provider there is nothing to pick — bare `eva login` goes straight to the OpenAI device flow (neo does the same). The `eva login <provider>` argument form is the extension point: if a second subscription provider ever exists, bare `eva login` grows a select list and the argument form keeps scripts working unchanged.
 - **Device-code display** (copy modeled on `neo:cmd/neo/provider.go:97-103`):
@@ -122,7 +123,7 @@ eva auth status        # per provider: configured mode + credential presence
   ```
 
 - On success: print the store path and the exact `config.toml` lines to set (provider + auth mode) — neo does this and it removes a whole class of "logged in but still broken" confusion.
-- `eva auth status` reports, per provider, the configured `auth` mode and whether its credential is present (env var set for `api_key`; store entry and its expiry for `subscription`) — and flags a set-but-ignored env key so "I exported a key but Eva uses my login" is never a mystery.
+- `eva auth status` reports the **login credential info**: per provider, the configured `auth` mode; for `subscription`, the logged-in account (OpenAI: the `chatgpt_account_id` extracted at login), token expiry / needs-refresh state, and the auth store path; for `api_key`, whether the env var is set (name only). It also flags a set-but-ignored env key so "I exported a key but Eva uses my login" is never a mystery. Token material itself is never printed (§9).
 - The console gets a `/login` entry in the command table (`internal/tui/command.go:64-88`) that only prints "run `eva login` in a shell" — no `Control` method needed beyond what printing requires.
 
 ## 6. Workstream C — `internal/providers/openai` (new provider)
@@ -230,7 +231,7 @@ Per the four established styles:
 | Phase | Ships | Depends on |
 |---|---|---|
 | 0 | ADRs D1–D6, glossary entries | — |
-| 1 | `internal/auth`: store + token source + OpenAI device flow; `eva login` / `logout` / `auth status` | Phase 0 |
+| 1 | `internal/auth`: store + token source + OpenAI device flow; `eva login` / `eva auth status` | Phase 0 |
 | 2 | `internal/providers/openai`, both transports; config `name = "openai"` + `auth` mode | Phase 1 (subscription transport), else standalone for api_key |
 | 3 | Polish: model defaults per mode, `/login` console hint | any |
 | 4 | Retire the fake provider: migrate black-box fixtures to wire fakes, then delete `internal/providers/fake` + `script`/`chunk_delay_ms` config (§Workstream E) | Phase 2 stable for a release cycle |

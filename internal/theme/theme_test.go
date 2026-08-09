@@ -1,6 +1,7 @@
 package theme_test
 
 import (
+	"image/color"
 	"strings"
 	"testing"
 
@@ -161,4 +162,45 @@ func TestABackgroundArrivingLateKeepsWhatWasChosen(t *testing.T) {
 	if corrected.Colors.Subdued == built.Colors.Subdued {
 		t.Error("the subdued grey did not follow the background it adapts to")
 	}
+}
+
+// A gradient is the accent in n steps, so a person who chose a colour gets
+// their colour rather than a second one they never named.
+func TestShadesAreTheAccentLightenedTowardsTheTop(t *testing.T) {
+	base := theme.Default(true).Colors.Person
+	got := theme.Shades(base, 8)
+
+	if len(got) != 8 {
+		t.Fatalf("got %d shades, want 8", len(got))
+	}
+	// The last step is the accent itself: the bar ends where the colour is.
+	if got[len(got)-1] != rgba(base) {
+		t.Errorf("the last shade is %v, want the accent %v", got[len(got)-1], rgba(base))
+	}
+	// And every step above it is lighter than the one below.
+	for i := 1; i < len(got); i++ {
+		if luminance(got[i-1]) <= luminance(got[i]) {
+			t.Errorf("shade %d is not lighter than shade %d, so the bar has no direction", i-1, i)
+		}
+	}
+}
+
+// A caller with one step to draw gets the colour, not a division by zero.
+func TestOneShadeIsTheColourItself(t *testing.T) {
+	base := theme.Default(true).Colors.Person
+	for _, n := range []int{-1, 0, 1} {
+		if got := theme.Shades(base, n); len(got) != 1 {
+			t.Errorf("Shades(base, %d) gave %d colours, want 1", n, len(got))
+		}
+	}
+}
+
+func rgba(c color.Color) color.RGBA {
+	r, g, b, _ := c.RGBA()
+	return color.RGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0xFF}
+}
+
+func luminance(c color.Color) uint32 {
+	r, g, b, _ := c.RGBA()
+	return r + g + b
 }

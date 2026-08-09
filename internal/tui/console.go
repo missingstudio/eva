@@ -160,6 +160,11 @@ type Console struct {
 	look theme.Theme
 	keys keymap.Keymap
 
+	// about is what the masthead says of the run behind this console. It is
+	// told at build, because a frontend does not read a version or a
+	// repository for itself.
+	about About
+
 	// wrapStyle folds a block to the window. It is held rather than built per
 	// call because refresh wraps every block on every frame of a streaming
 	// turn, and it changes only when the window does.
@@ -449,6 +454,8 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		look:    look,
 		keys:    keys,
 	}
+
+	c.about = backend.About()
 
 	// The pane is given no bindings of its own. Its defaults are a pager's — j,
 	// k, space, f, b, u, d — and every one of them is a character somebody types
@@ -858,7 +865,16 @@ func (c *Console) refresh() {
 	if arriving := trimBlank(c.arriving.String()); arriving != "" {
 		blocks = append(blocks[:len(blocks):len(blocks)], block{text: c.live(arriving), voice: evaVoice})
 	}
+
+	// The masthead leads the transcript and scrolls away with it. It is
+	// composed here rather than kept as a block because it is not one: it is
+	// drawn from facts that do not change and a model name that can, so
+	// composing it per frame is what keeps it true after /model without a
+	// second thing to remember to update.
 	content := strings.TrimRight(c.compose(blocks), "\n")
+	if head := c.masthead(); head != "" {
+		content = head + "\n\n" + content
+	}
 
 	follow := c.pane.AtBottom()
 	c.pane.SetContent(content)

@@ -146,7 +146,10 @@ func TestClearEmptiesTheSpendWithTheTranscript(t *testing.T) {
 	d.settle(t, func() bool { return strings.Contains(d.read(), "Eva is a software factory.") })
 
 	d.say(t, "/clear")
-	d.settle(t, func() bool { return strings.TrimSpace(d.read()) == "" })
+	// The turn goes; the masthead does not. /clear opens a new Session, and a
+	// new Session opens the way the process did — what it clears is the
+	// transcript, not what the console says about itself.
+	d.settle(t, func() bool { return !strings.Contains(d.read(), "Eva is a software factory.") })
 
 	said := d.answers(t, "/cost")
 	if !strings.Contains(said, "session no usage reported") {
@@ -225,7 +228,7 @@ func TestClearEmptiesTheTranscriptWithoutEndingTheProcess(t *testing.T) {
 	d.closed(t, 1)
 
 	d.say(t, "/clear")
-	d.settle(t, func() bool { return strings.TrimSpace(d.read()) == "" })
+	d.settle(t, func() bool { return !strings.Contains(d.read(), "Eva is a software factory.") })
 
 	d.say(t, "what did I just ask")
 	d.closed(t, 2)
@@ -257,11 +260,16 @@ func TestClearEmptiesThePane(t *testing.T) {
 
 	d.say(t, "/clear")
 
-	// Empty, and empty of everything — including any word about having been
-	// emptied. An empty screen is what was asked for and it is its own
-	// evidence; a line reporting it would be the only thing left on screen,
-	// which is to say the command would not have done what it says.
-	d.settle(t, func() bool { return strings.TrimSpace(d.read()) == "" })
+	// The transcript goes, and nothing is said about its going. An emptied
+	// transcript is its own evidence; a line reporting it would be the loudest
+	// thing left on screen, which is to say the command would not have done
+	// what it says.
+	//
+	// What is left is the masthead, and that is not a report: /clear opens a
+	// new Session (ADR 0019), and a new Session opens the way the process did.
+	// A console that forgot which model was answering because a person cleared
+	// a conversation would have cleared more than they asked it to.
+	d.settle(t, func() bool { return !strings.Contains(d.read(), "software factory") })
 
 	shown := d.read()
 	for _, gone := range []string{"software factory", "what is this project", "/clear"} {
@@ -287,7 +295,7 @@ func TestAClearedTranscriptIsANewSession(t *testing.T) {
 	d.say(t, "what is this project")
 	d.closed(t, 1)
 	d.say(t, "/clear")
-	d.settle(t, func() bool { return strings.TrimSpace(d.read()) == "" })
+	d.settle(t, func() bool { return !strings.Contains(d.read(), "software factory") })
 	d.say(t, "what did I just ask")
 	d.closed(t, 2)
 
@@ -309,5 +317,23 @@ func TestAClearedTranscriptIsANewSession(t *testing.T) {
 	}
 	if !held {
 		t.Errorf("the Trace no longer holds what was said before /clear:\n%s", d.stored(t))
+	}
+}
+
+// /clear leaves the console saying what it is. What it empties is the
+// transcript, and the masthead was never part of one: a person who cleared a
+// conversation has not stopped needing to know which model is answering.
+func TestClearLeavesTheMastheadStanding(t *testing.T) {
+	d := begin(t, recording{chunks: []string{"Eva is a software factory."}})
+
+	d.say(t, "what is this project")
+	d.closed(t, 1)
+	d.settle(t, func() bool { return strings.Contains(d.read(), "Eva is a software factory.") })
+
+	d.say(t, "/clear")
+	d.settle(t, func() bool { return !strings.Contains(d.read(), "Eva is a software factory.") })
+
+	if got := d.read(); !strings.Contains(got, "EVA") {
+		t.Errorf("the console stopped saying what it is after /clear:\n%s", got)
 	}
 }
