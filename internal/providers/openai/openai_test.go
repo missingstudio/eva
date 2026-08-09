@@ -301,6 +301,12 @@ func TestARejectedCredentialIsNotRetried(t *testing.T) {
 	if !strings.Contains(err.Error(), string(events.ErrorAuthFailed)) {
 		t.Errorf("the failure does not name its class: %v", err)
 	}
+	// And as a value, which is what a caller deciding what to show a person
+	// reads. The sentence above is the provider's own words, and showing those
+	// is the thing such a caller is deciding not to do.
+	if class := providers.ClassOf(err); class != events.ErrorAuthFailed {
+		t.Errorf("the failure carries class %q, want %q", class, events.ErrorAuthFailed)
+	}
 	if len(seen()) != 1 {
 		t.Errorf("%d requests were made — a credential the API rejected once is rejected every time, at the same price", len(seen()))
 	}
@@ -371,12 +377,14 @@ func TestAStreamThatEndsMidTurnIsAFailureNotAnAnswer(t *testing.T) {
 	defer func() { _ = s.Close() }()
 
 	var sawText bool
+	var broke error
 	for {
 		payload, err := s.Next(context.Background())
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				t.Fatal("a stream that broke mid-turn ended as if the turn completed")
 			}
+			broke = err
 			break
 		}
 		if _, ok := payload.(events.Text); ok {
@@ -385,6 +393,12 @@ func TestAStreamThatEndsMidTurnIsAFailureNotAnAnswer(t *testing.T) {
 	}
 	if !sawText {
 		t.Error("the text that did arrive was withheld — a payload already produced is part of the turn")
+	}
+	// A body that stopped arriving is the connection failing, not the API
+	// answering badly. The two are told apart because they ask opposite things
+	// of whoever is watching, and this is the one a person can sometimes fix.
+	if class := providers.ClassOf(broke); class != events.ErrorUnreachable {
+		t.Errorf("the failure carries class %q, want %q", class, events.ErrorUnreachable)
 	}
 }
 
@@ -451,5 +465,110 @@ func TestOpenAIKeepsTheProviderContract(t *testing.T) {
 				Call: turn(),
 			})
 		})
+	}
+}
+
+// The error document names what happened; the status line only describes it.
+//
+// This API states a code and a type beside its prose, and the two disagree with
+// the status line in the case that matters most: `insufficient_quota` arrives
+// as a 429. Read as the rate limit it looks like, it spends the whole retry
+// policy to discover the account still has no credit — and then tells a person
+// to wait for something waiting will not fix.
+func TestTheErrorDocumentIsReadBeforeTheStatusLine(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		status int
+		body   string
+		want   events.ErrorClass
+		again  bool
+	}{
+		{
+			name:   "a model this API does not serve",
+			status: http.StatusNotFound,
+			body:   `{"error": {"message": "no such model", "type": "invalid_request_error", "code": "model_not_found"}}`,
+			want:   events.ErrorNoSuchModel,
+		},
+		{
+			name:   "an account with no credit, answered as a rate limit",
+			status: http.StatusTooManyRequests,
+			body:   `{"error": {"message": "you exceeded your current quota", "type": "insufficient_quota"}}`,
+			want:   events.ErrorBilling,
+		},
+		{
+			name:   "a rate limit that really is one",
+			status: http.StatusTooManyRequests,
+			body:   `{"error": {"message": "slow down", "type": "rate_limit_error"}}`,
+			want:   events.ErrorRateLimit,
+			again:  true,
+		},
+		{
+			name:   "a 404 from a proxy with no document to read",
+			status: http.StatusNotFound,
+			body:   `<html>the proxy says no</html>`,
+			want:   events.ErrorNoSuchModel,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// A refusal worth repeating is repeated until the policy gives up,
+			// so the server holds one reply for every attempt it will see.
+			refusal := reply{status: c.status, body: c.body}
+			replies := []reply{refusal}
+			if c.again {
+				replies = []reply{refusal, refusal, refusal, refusal}
+			}
+			base, seen := serve(t, replies...)
+			s := open(t, base, "sk-key", false).Stream(context.Background(), turn())
+			defer func() { _ = s.Close() }()
+
+			var err error
+			for err == nil {
+				_, err = s.Next(context.Background())
+			}
+			if errors.Is(err, io.EOF) {
+				t.Fatal("the turn succeeded against a refusal")
+			}
+			if class := providers.ClassOf(err); class != c.want {
+				t.Errorf("class = %q, want %q", class, c.want)
+			}
+			// The retry decision moves with the class, which is the other half
+			// of reading the document: a turn told to slow down comes back, and
+			// a turn refused for its model name does not.
+			if c.again && len(seen()) < 2 {
+				t.Error("the attempt was not retried")
+			}
+			if !c.again && len(seen()) != 1 {
+				t.Errorf("%d requests were made, want one — nothing about this improves on a retry", len(seen()))
+			}
+		})
+	}
+}
+
+// A block no wire can send fails the turn rather than being left out of it. A
+// transcript with a tool call dropped from it asks the model to continue
+// without knowing what it did, and nothing downstream could tell that from an
+// answer.
+func TestABlockThisProviderCannotSendFailsTheTurn(t *testing.T) {
+	base, seen := serve(t)
+
+	p := open(t, base, "key", false)
+	s := p.Stream(context.Background(), providers.Call{
+		Model: "gpt-test",
+		Messages: []core.Message{{
+			Author: core.AuthorAssistant,
+			Blocks: []core.Block{core.ToolCall{ID: "call_1", Name: "list_dir"}},
+		}},
+	})
+	defer func() { _ = s.Close() }()
+
+	_, err := s.Next(context.Background())
+	if err == nil {
+		t.Fatal("a turn carrying a block this Provider cannot send began")
+	}
+	if !strings.Contains(err.Error(), "ToolCall") {
+		t.Errorf("the refusal does not name the block that stopped it: %v", err)
+	}
+	if len(seen()) != 0 {
+		t.Errorf("the server saw %d requests, want none", len(seen()))
 	}
 }

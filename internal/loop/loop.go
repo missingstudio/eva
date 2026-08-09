@@ -126,7 +126,20 @@ func (l *Loop) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 		// say nothing the claim does not.
 		outcome = core.Outcome{Result: events.ResultFailed, Summary: "interrupted"}
 	case streamErr != nil:
-		outcome = core.Outcome{Result: events.ResultFailed, Summary: streamErr.Error()}
+		// The class travels beside the summary rather than being read back out
+		// of it. What the Provider knew about why the turn failed is a fact it
+		// stated, and a Loop that recovered it by matching on the message would
+		// be rebuilding that fact from its own prose — wrong the first time a
+		// sentence is reworded, and wrong silently.
+		//
+		// A failure nothing classified stays unclassified. There is no default
+		// here, because "we could not place this" and "nobody looked" are
+		// different things to report and only one of them is true.
+		outcome = core.Outcome{
+			Result:  events.ResultFailed,
+			Summary: streamErr.Error(),
+			Class:   providers.ClassOf(streamErr),
+		}
 	}
 
 	// The claim is committed whichever way the turn went, and under a context

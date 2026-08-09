@@ -58,7 +58,8 @@ USAGE:
 
 FLAGS:
   --config <path>        Configuration file
-  -p <prompt>            One turn, rendered to stdout; non-zero if it failed
+  -p <prompt>            One turn, rendered to stdout; non-zero if it failed,
+                         with why on stderr
 
 CONFIG (env):
   %-20s   required, unless a login authenticates instead
@@ -90,7 +91,7 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 
-	code, err := run(context.Background(), opts, stdin, stdout)
+	code, err := run(context.Background(), opts, stdin, stdout, stderr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "eva: %v\n", err)
 	}
@@ -178,7 +179,7 @@ func parse(args []string) (options, error) {
 // run is written with named results so that closing the Trace can report a
 // failure the turn itself did not see. A Trace that failed to flush is not a
 // successful run, whatever the turn claimed.
-func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (code int, err error) {
+func run(ctx context.Context, opts options, stdin io.Reader, stdout, stderr io.Writer) (code int, err error) {
 	// Before the configuration is read, because writing one is what a person
 	// does when they have none — and a starter run that first insisted on a
 	// valid file would be a command nobody could use for its own purpose.
@@ -229,6 +230,7 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 		sink:         sink,
 		session:      core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor(), origin()),
 		model:        cfg.Model,
+		trace:        cfg.Trace.Path,
 	}
 
 	// How it looks is resolved before either path is chosen, so that a file a
@@ -244,7 +246,7 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 	// attaches through eva's own door, which is the only place a Run learns who
 	// is watching it and what it may claim.
 	if opts.prompt != "" {
-		return once(ctx, e, opts.prompt, stdout, look)
+		return once(ctx, e, opts.prompt, stdout, stderr, look)
 	}
 
 	if err := tui.Run(ctx, e, stdin, stdout, tui.WithTheme(look), tui.WithKeymap(keys)); err != nil {
@@ -325,10 +327,20 @@ var _ core.Subscriber = (*render.Renderer)(nil)
 // which is what ADR 0015 already says of a run with no live area: there is
 // nothing to erase, so the answer is written when it is whole.
 //
-// A failed turn exits non-zero. The console has no exit code because it stays
-// open; this does not stay open, so the claim the Trace holds is also the
-// process's answer to whoever ran it.
-func once(ctx context.Context, e *eva, prompt string, stdout io.Writer, look theme.Theme) (int, error) {
+// A failed turn exits non-zero and says why. The console has no exit code
+// because it stays open; this does not stay open, so the claim the Trace holds
+// is also the process's answer to whoever ran it.
+//
+// The why goes to stderr, in the same words the console uses and for the same
+// reason: a person is owed the fact that changes what they do next, and is owed
+// none of the provider's account of it. It is stderr rather than stdout because
+// stdout is the answer, and a pipeline that captured a failure line as though
+// it were one would be a pipeline acting on a sentence about a credential.
+//
+// It exited in silence before this, which was the worst of the three: a script
+// got a code with no reason, and a person got a shell prompt back and nothing
+// at all.
+func once(ctx context.Context, e *eva, prompt string, stdout, stderr io.Writer, look theme.Theme) (int, error) {
 	// The Theme is the one a person configured, built for a dark terminal
 	// because this path does not ask. Asking means writing a query to a
 	// terminal and reading it back, and this path may have no terminal at all —
@@ -345,6 +357,13 @@ func once(ctx context.Context, e *eva, prompt string, stdout io.Writer, look the
 		return ExitFailure, err
 	}
 	if outcome.Result != events.ResultDone {
+		_, _ = fmt.Fprintln(stderr, render.Unanswered(outcome.Class))
+		// And where the rest of it is, every time rather than once: this
+		// process is one turn, so there is no second failure for a person to
+		// have remembered the path from.
+		if where := render.Detail(e.trace); where != "" {
+			_, _ = fmt.Fprintln(stderr, where)
+		}
 		return ExitFailure, nil
 	}
 	return ExitOK, nil
@@ -367,6 +386,12 @@ type eva struct {
 	sink         core.TraceSink
 	session      *core.Session
 	model        string
+
+	// trace is where the sink is writing, held as a path because a sink is a
+	// thing to write to and not a thing to name. It is what a failed turn tells
+	// a person, so that the provider's own account of it — which no screen
+	// shows — is findable rather than gone.
+	trace string
 
 	// interrupt says whether whoever is driving these turns listens for a
 	// cancellation and closes the Run, rather than letting the process die

@@ -398,6 +398,63 @@ func TestAProviderFailureIsAnOutcomeRatherThanAnError(t *testing.T) {
 	if finished.Claim.Summary != outcome.Summary {
 		t.Errorf("the Trace claims %q and the caller was told %q", finished.Claim.Summary, outcome.Summary)
 	}
+
+	// This Provider fails without saying why, so nothing claims to know. A
+	// default of "other" here would be this Loop classifying a failure it never
+	// looked at, and every caller downstream would read it as a judgement
+	// something made.
+	if outcome.Class != "" {
+		t.Errorf("class = %q, want none: nothing classified this failure", outcome.Class)
+	}
+	if finished.Claim.ErrorClass != "" {
+		t.Errorf("the Trace claims class %q, want none", finished.Claim.ErrorClass)
+	}
+}
+
+// A Provider that said why it failed is answered with a class, and the class
+// reaches the record with the summary.
+//
+// The class is what a projection spends instead of the summary, so a Loop that
+// dropped it would leave every interface with a choice between showing the
+// provider's own words and showing nothing at all. It travels as a value the
+// Provider stated rather than as something read back out of the message: a
+// Loop that matched on prose would be rebuilding a fact it was handed, and
+// would go wrong silently the first time a sentence was reworded.
+func TestAClassifiedFailureReachesTheCallerAndTheRecord(t *testing.T) {
+	sink := &grouped{}
+	unit := &Loop{
+		Provider:     &faulting{fault: &providers.Fault{Err: errors.New("anthropic: 401"), Class: events.ErrorAuthFailed}},
+		ProviderName: "anthropic",
+		Recorder:     recorder(t, sink),
+		Session:      newTestSession(),
+		Model:        "test-model",
+	}
+
+	outcome, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"})
+	if err != nil {
+		t.Fatalf("err = %v, want a turn that failed to be answered with an Outcome", err)
+	}
+	if outcome.Class != events.ErrorAuthFailed {
+		t.Errorf("class = %q, want %q", outcome.Class, events.ErrorAuthFailed)
+	}
+
+	closing := sink.groups[len(sink.groups)-1]
+	finished, isFinished := closing[len(closing)-1].(events.Finished)
+	if !isFinished {
+		t.Fatalf("the Run closed on %#v, want Finished", closing[len(closing)-1])
+	}
+	if finished.Claim.ErrorClass != outcome.Class {
+		t.Errorf("the Trace claims class %q and the caller was told %q", finished.Claim.ErrorClass, outcome.Class)
+	}
+}
+
+// faulting is a Provider whose every turn fails with one stated class.
+type faulting struct{ fault *providers.Fault }
+
+var _ providers.Provider = (*faulting)(nil)
+
+func (f *faulting) Stream(context.Context, providers.Call) providers.Stream {
+	return providers.Failed(f.fault)
 }
 
 // A Trace that will not take the record does reach the caller as an error. The

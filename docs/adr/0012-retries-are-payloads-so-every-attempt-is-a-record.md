@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, the transport failure class superseded by 0038
 ---
 
 # Retries are payloads, so every attempt is a record
@@ -18,7 +18,9 @@ Two smaller decisions follow from the same rule.
 
 `Retry.ErrorClass` is read from the `type` the API puts in its error body — `rate_limit_error`, `overloaded_error`, `authentication_error` — and only falls back to the HTTP status when there is no document to read, which is the proxy that answered a 502 with a page of HTML. The API saying what happened beats this client inferring it from a status line, and the fallback exists because a gateway between the two is not obliged to speak the API's language.
 
-Retryability is decided beside the class rather than derived from it. An auth failure and a malformed request are not retried, because the next attempt fails the same way and costs the same money. A transport failure that never reached a server is classified `other` and is retried: the fixed set has no member for "no response at all", and adding one would change the schema for a case the class does not decide.
+Retryability is decided beside the class rather than derived from it. An auth failure and a malformed request are not retried, because the next attempt fails the same way and costs the same money. A transport failure that never reached a server is retried whatever it is classified as.
+
+> **Amended by ADR 0038.** This said a transport failure was classified `other`, because the set had no member for "no response at all" and adding one would change the schema for a case the class does not decide. The class does decide something now: it is what a projection shows a person instead of the provider's words, and "your network" against "their servers" is the most useful distinction there is to draw. The member is `unreachable`, and the schema change was additive.
 
 A server that said `retry-after` raises the wait and never lowers it. It knows what it is recovering from and this client does not, so a longer ask is obeyed — and a shorter one, or the `0` a server sends when it is being polite, must not turn the retry into a second request with no pause in front of it. The floor stays the jittered backoff.
 
@@ -42,4 +44,4 @@ The API splits what a turn cost across two frames: `message_start` carries what 
 
 **Mid-stream failures are not retried.** The retry loop runs before the first frame. Resuming a half-delivered answer is not something the API offers, and re-requesting would bill the input twice and duplicate the text already recorded.
 
-**Falsifier:** if a second network Provider turns up whose failures do not fit the five classes — or which reports a dollar figure — then the fixed set is wrong rather than the mapping, and `events.ErrorClass` is where the change belongs.
+**Falsifier:** if a second network Provider turns up whose failures do not fit the fixed set — or which reports a dollar figure — then the set is wrong rather than the mapping, and `events.ErrorClass` is where the change belongs. It has grown twice on exactly that argument (ADR 0038), which is the mechanism working rather than an exception to it.

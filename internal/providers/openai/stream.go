@@ -49,19 +49,21 @@ func (w *wire) Dial(ctx context.Context) *providers.Refusal {
 	if err != nil {
 		// Not a refusal from the API but a credential that cannot be had —
 		// nothing about it improves on retry, and its message already names
-		// the fix.
-		return fatal(err)
+		// the fix. It is classed with the credentials the API rejects: a login
+		// that would not renew and a key the API refuses are one problem to
+		// whoever has to go and fix it, whichever side noticed.
+		return fatal(events.ErrorAuthFailed, err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.provider.transport.endpoint, bytes.NewReader(w.body))
 	if err != nil {
-		return fatal(err)
+		return fatal(events.ErrorOther, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+token)
 	if err := w.provider.transport.decorate(req.Header, token); err != nil {
-		return fatal(err)
+		return fatal(events.ErrorOther, err)
 	}
 
 	resp, err := w.provider.httpc.Do(req)
@@ -86,15 +88,15 @@ func (w *wire) Dial(ctx context.Context) *providers.Refusal {
 }
 
 // fatal is an attempt that failed for a reason no further attempt improves on.
-func fatal(err error) *providers.Refusal {
-	return &providers.Refusal{Err: err, Class: events.ErrorOther, Again: false}
+func fatal(class events.ErrorClass, err error) *providers.Refusal {
+	return &providers.Refusal{Err: err, Class: class, Again: false}
 }
 
 // refused names why the API turned an attempt away, and whether another one
 // could go differently. A zero status is an attempt that never reached a
 // server, which has no status line to report.
 func refused(status int, detail string, asked time.Duration) *providers.Refusal {
-	class, recoverable := classify(status)
+	class, recoverable := classify(status, detail)
 	err := fmt.Errorf("openai: %s: %s", class, detail)
 	if status != 0 {
 		err = fmt.Errorf("openai: %s: the API answered %d: %s", class, status, detail)
@@ -136,11 +138,13 @@ func (w *wire) Pump(d *providers.Driver) {
 	err := w.frames.Err()
 	_ = w.Close()
 
+	// Both endings are the connection failing rather than the API answering: one
+	// read error, one body that stopped arriving before the turn was over.
 	if err != nil {
-		d.Break(fmt.Errorf("openai: %s: %w", events.ErrorOther, err))
+		d.Break(events.ErrorUnreachable, fmt.Errorf("openai: %s: %w", events.ErrorUnreachable, err))
 		return
 	}
-	d.Break(fmt.Errorf("openai: the stream ended before the response completed"))
+	d.Break(events.ErrorUnreachable, fmt.Errorf("openai: the stream ended before the response completed"))
 }
 
 // Close releases the connection.
@@ -216,7 +220,11 @@ func (w *wire) frame(d *providers.Driver, frame wireFrame) {
 		if detail == "" {
 			detail = "the API failed the response and said nothing further"
 		}
-		d.Break(fmt.Errorf("openai: %s", detail))
+		// The API reached the end of a turn it had accepted and then failed it.
+		// What it says about why is prose, so there is nothing to place this
+		// more precisely with, and Other is the honest answer rather than a
+		// server error this client would be inferring.
+		d.Break(events.ErrorOther, fmt.Errorf("openai: %s", detail))
 	}
 }
 

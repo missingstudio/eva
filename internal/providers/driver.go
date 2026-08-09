@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -43,6 +44,40 @@ type Wire interface {
 	// Close releases whatever Dial opened. It is called once, and on a Wire
 	// that never dialled.
 	Close() error
+}
+
+// Fault is a failure that says which class it belongs to.
+//
+// It exists because the class was being computed and then thrown away. A
+// Refusal carried one as far as the Retry record and no further, so a turn that
+// ran out of attempts — or had none to make, as a rejected credential does —
+// reached its caller as prose, and everything downstream that needed to tell an
+// expired key from a dropped connection had to read that prose back. Anything
+// that reads a message to recover a fact the sender knew is a parser waiting to
+// be broken by a reworded sentence.
+//
+// The message is unchanged and stays the whole of the failure. This adds a
+// second way to ask about it, not a second failure.
+type Fault struct {
+	Err   error
+	Class events.ErrorClass
+}
+
+func (f *Fault) Error() string { return f.Err.Error() }
+func (f *Fault) Unwrap() error { return f.Err }
+
+// ClassOf is why a turn failed, or the empty class when nothing said.
+//
+// The empty answer is deliberate and is not ErrorOther. A caller that cannot
+// place a failure must be able to say so, and a function that guessed "other"
+// would hand it a classification it never made — which is the same untruth as
+// showing a person a reason nobody established.
+func ClassOf(err error) events.ErrorClass {
+	var fault *Fault
+	if !errors.As(err, &fault) {
+		return ""
+	}
+	return fault.Class
 }
 
 // Refusal is one attempt the API turned away.
@@ -173,10 +208,15 @@ func (d *Driver) Complete() {
 // A payload already produced is part of the turn, so whatever arrived before
 // the break is still handed over: a partial answer nobody recorded is the
 // failure this project has no instrument to detect.
-func (d *Driver) Break(err error) {
+//
+// The class is a parameter rather than something read back out of the error,
+// because the Wire is the only thing that knows it. A stream that stopped
+// mid-frame and a response the API failed on purpose arrive at this method
+// looking alike, and only the code that read the frames can say which is which.
+func (d *Driver) Break(class events.ErrorClass, err error) {
 	d.closeBooks(false)
 	d.connected = false
-	d.fatal = err
+	d.fatal = &Fault{Err: err, Class: class}
 }
 
 // Attempts is how many requests this turn has made, the current one included.
@@ -217,7 +257,11 @@ func (d *Driver) dial(ctx context.Context) {
 
 	wait, again := d.policy.Wait(d.attempts, refusal.After)
 	if !refusal.Again || !again {
-		d.fatal = refusal.Err
+		// The class the Retry record would have carried had there been another
+		// attempt is the same class the turn ends on. A refusal that exhausted
+		// the policy and one that was never worth repeating differ in how many
+		// records they left behind, not in why they failed.
+		d.fatal = &Fault{Err: refusal.Err, Class: refusal.Class}
 		return
 	}
 

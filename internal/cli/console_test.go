@@ -48,6 +48,13 @@ type driven struct {
 
 // recording is one turn this Provider replays.
 type recording struct {
+	// refusal, when it is not nil, is a turn that fails instead of answering,
+	// carrying the class a real Provider would have classified it as. It is a
+	// Fault rather than a plain error because the class is the thing under
+	// test: an error alone would exercise the path where nothing classified
+	// the failure, which is what the recording that runs out already covers.
+	refusal *providers.Fault
+
 	// chunks is the answer, split the way a stream would deliver it.
 	chunks []string
 	// degraded is what this turn's Provider could not tell Eva, and is empty
@@ -73,6 +80,9 @@ func (d *driven) Stream(_ context.Context, call providers.Call) providers.Stream
 	d.turn++
 	d.calls = append(d.calls, call)
 
+	if rec.refusal != nil {
+		return providers.Failed(rec.refusal)
+	}
 	return &drivenStream{rec: rec}
 }
 
@@ -249,6 +259,7 @@ func begin(t *testing.T, script ...recording) *dialogue {
 		sink:     sink,
 		session:  newTestSession(),
 		model:    "test-model",
+		trace:    path,
 	}
 
 	out := &heard{}
@@ -569,10 +580,7 @@ func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
 	}
 }
 
-// A turn that broke says so in the words the Trace holds.
-//
-// A turn that broke says so in one line, and the reason it broke is in the
-// Trace.
+// A turn nothing classified says only that nothing came back.
 //
 // The provider's words used to go on screen. They are written for whoever is
 // debugging the provider rather than for whoever asked the question, and a
@@ -584,6 +592,9 @@ func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
 // first safe: the screen says only that nothing came back, and the claim the
 // Trace holds still carries the provider's words verbatim. Losing the reason
 // rather than moving it is what this test exists to catch.
+//
+// This Provider fails without classifying why, which is the case that has
+// nothing more to say. The turn that does is the test below it.
 func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 	// No recording at all, so the Provider refuses the call.
 	d := begin(t)
@@ -605,7 +616,7 @@ func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 		t.Fatalf("the claim is %q, want it to carry what the Provider said", finished.Claim.Summary)
 	}
 
-	d.settle(t, func() bool { return strings.Contains(d.read(), "no response") })
+	d.settle(t, func() bool { return strings.Contains(d.read(), "No response") })
 	if shown := d.read(); strings.Contains(shown, said) {
 		t.Errorf("the provider's own words are on screen:\n%s", shown)
 	}
@@ -615,6 +626,61 @@ func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 	// might not hit.
 	d.say(t, "try again")
 	d.closed(t, 2)
+}
+
+// A turn that broke on something classified says which, and still quotes
+// nobody.
+//
+// The two halves are one test on purpose, because each one alone is a state
+// this console has already been in. Saying only that nothing came back made a
+// credential to fix and a network to wait out read identically. Fixing that by
+// printing the claim's summary would hand the vendor's account of it — a status
+// line, a request identifier — to somebody who asked a question about their own
+// work.
+//
+// What makes both possible at once is that the class is a field on the claim
+// rather than something to be recovered from its prose. So this asserts all
+// three: the record carries the class, the screen spends it, and the prose the
+// record also carries stays off the screen.
+func TestATurnThatBrokeNamesWhyWithoutQuotingTheProvider(t *testing.T) {
+	// A credential the API rejected, in the shape a real one arrives in: the
+	// class this Provider classified it as, and a message written for whoever
+	// is debugging the provider.
+	const said = "401 Unauthorized (Request-ID: req_011Cds): invalid x-api-key"
+	d := begin(t, recording{refusal: &providers.Fault{
+		Err:   fmt.Errorf("anthropic: %s: %s", events.ErrorAuthFailed, said),
+		Class: events.ErrorAuthFailed,
+	}})
+
+	d.say(t, "what is this project")
+	d.closed(t, 1)
+
+	closed := d.of(t, events.KindFinished)
+	finished, isFinished := closed[0].Payload.(events.Finished)
+	if !isFinished {
+		t.Fatalf("payload = %#v, want Finished", closed[0].Payload)
+	}
+	if finished.Claim.Result != events.ResultFailed {
+		t.Errorf("result = %q, want %q", finished.Claim.Result, events.ResultFailed)
+	}
+	if finished.Claim.ErrorClass != events.ErrorAuthFailed {
+		t.Errorf("class = %q, want %q", finished.Claim.ErrorClass, events.ErrorAuthFailed)
+	}
+	if !strings.Contains(finished.Claim.Summary, said) {
+		t.Errorf("the claim is %q, want it to carry what the Provider said", finished.Claim.Summary)
+	}
+
+	d.settle(t, func() bool { return strings.Contains(d.read(), "the credential was refused") })
+	if shown := d.read(); strings.Contains(shown, said) {
+		t.Errorf("the provider's own words are on screen:\n%s", shown)
+	}
+	// The status line and the identifier are the two pieces most likely to
+	// survive a careless rewording of the line above.
+	for _, leaked := range []string{"401", "req_011Cds", "x-api-key"} {
+		if strings.Contains(d.read(), leaked) {
+			t.Errorf("%q is on screen:\n%s", leaked, d.read())
+		}
+	}
 }
 
 // The two projections describe one turn here too. What a person read as the
@@ -795,3 +861,29 @@ func (c *collecting) Append(_ context.Context, group []events.Event) ([]events.E
 }
 
 func (c *collecting) Close() error { return nil }
+
+// The Trace is named once in a Session, not after every failure.
+//
+// A line repeated after every failure is a line nobody finishes reading, and a
+// person who has been told where the Trace is does not stop knowing between two
+// turns.
+func TestTheTraceIsNamedOncePerSession(t *testing.T) {
+	// Two refusals, so the second failure is the one that must not repeat it.
+	fail := recording{refusal: &providers.Fault{
+		Err:   fmt.Errorf("anthropic: %s: 401", events.ErrorAuthFailed),
+		Class: events.ErrorAuthFailed,
+	}}
+	d := begin(t, fail, fail)
+
+	d.say(t, "what is this project")
+	d.closed(t, 1)
+	d.settle(t, func() bool { return strings.Contains(d.read(), d.trace) })
+
+	d.say(t, "try again")
+	d.closed(t, 2)
+	d.settle(t, func() bool { return strings.Count(d.read(), "the credential was refused") == 2 })
+
+	if got := strings.Count(d.read(), d.trace); got != 1 {
+		t.Errorf("the Trace path is on screen %d times after two failures, want once:\n%s", got, d.read())
+	}
+}
