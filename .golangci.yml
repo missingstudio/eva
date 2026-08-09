@@ -129,10 +129,6 @@ linters:
           list-mode: strict
           files:
             - "**/internal/cli/**"
-            # Rendering is governed by render below, which is narrower. Two
-            # rules matching one file both apply, so this one stands aside
-            # rather than the other one being widened to match it.
-            - "!**/internal/cli/render/**"
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
@@ -140,21 +136,23 @@ linters:
             - github.com/missingstudio/eva/internal/config
             - github.com/missingstudio/eva/internal/providers
             - github.com/missingstudio/eva/internal/trace
-            # The console reaches the renderer, which is a package under this
-            # one. "Nothing imports a frontend" is about the layers below it,
-            # and none of them list this path.
+            # ui, for the fold a person reads a turn in. It is a layer beside
+            # core rather than a package under this one: it holds no terminal,
+            # so the frontend consumes it and it consumes nothing of the
+            # frontend's.
+            - github.com/missingstudio/eva/internal/ui
+            # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/cli
             - charm.land/bubbletea
             - charm.land/bubbles
             - charm.land/lipgloss
-            - charm.land/glamour
             # colorprofile, for the console. An interactive program renders
             # its own view against what the terminal can show, and puts what
             # it is handed above that view exactly as it was handed it — so a
             # turn going there is reduced before the hand-over, and this is
-            # what knows how. It is on this list and not on render's: the
-            # frontend owns the terminal, and the renderer is not allowed to
-            # know there is one.
+            # what knows how. It is on this list and not on ui's: the frontend
+            # owns the terminal, and the fold is not allowed to know there is
+            # one.
             - github.com/charmbracelet/colorprofile
             # x/term, for the console's own check of whether a descriptor is
             # one the terminal libraries can watch for readiness. It is the
@@ -163,25 +161,27 @@ linters:
             # instead of during it.
             - github.com/charmbracelet/x/term
 
-        # render is a pure consumer of Events. It sits inside the frontend and
-        # is held to less than the frontend is: the Event schema and the
-        # terminal libraries, and nothing else Eva has.
+        # ui folds committed Events into text. It is not a frontend: it holds no
+        # terminal, no input, and no way to reach a Provider, a Session, or the
+        # Trace, so it sits beside core rather than inside the layer that owns
+        # the screen. The Event schema and the terminal libraries, and nothing
+        # else Eva has.
         #
-        # The omissions are the rule. A renderer that could reach a provider, a
+        # The omissions are the rule. A fold that could reach a provider, a
         # Session, or the Trace could show a person a turn the record does not
         # hold, and the screen would stop being an account of what was
         # committed. core is absent too, which costs a compile-time assertion
         # that the Renderer satisfies Subscriber; the assertion happens where a
         # Renderer is built instead.
-        render:
+        ui:
           list-mode: strict
           files:
-            - "**/internal/cli/render/**"
+            - "**/internal/ui/**"
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
             # See the events rule: this reaches the external test package only.
-            - github.com/missingstudio/eva/internal/cli/render
+            - github.com/missingstudio/eva/internal/ui
             - charm.land/lipgloss
             - charm.land/glamour
 

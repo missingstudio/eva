@@ -1,4 +1,4 @@
-package render_test
+package ui_test
 
 import (
 	"bytes"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/missingstudio/eva/internal/cli/render"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/ui"
 )
 
 // These tests feed committed Events to a Renderer and read what it wrote.
@@ -43,11 +43,11 @@ func show(t *testing.T, dark bool, payloads ...events.Payload) string {
 // fold folds the payloads into a Renderer and returns it, along with what it
 // wrote. It is what a test that asks a Renderer something uses, rather than one
 // that only reads the bytes.
-func fold(t *testing.T, dark bool, payloads ...events.Payload) (*render.Renderer, *bytes.Buffer) {
+func fold(t *testing.T, dark bool, payloads ...events.Payload) (*ui.Renderer, *bytes.Buffer) {
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := render.New(render.Stream(&out), dark)
+	renderer, err := ui.New(ui.Stream(&out), dark)
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
 	var out bytes.Buffer
-	renderer, err := render.New(render.Stream(&out), true)
+	renderer, err := ui.New(ui.Stream(&out), true)
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}

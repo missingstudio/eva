@@ -13,9 +13,9 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/term"
-	"github.com/missingstudio/eva/internal/cli/render"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/ui"
 )
 
 // console is the interactive interface: what a person is typing, what is
@@ -38,7 +38,7 @@ type console struct {
 
 	// renderer is the projection a person reads: a fold over committed Events,
 	// showing on this model rather than writing to a stream.
-	renderer *render.Renderer
+	renderer *ui.Renderer
 
 	// ctx is what a Run is started under. The one a turn actually runs under
 	// is a cancellable child of it, which is what Ctrl-C ends.
@@ -94,8 +94,8 @@ func newStyles(dark bool) styles {
 		said: lipgloss.NewStyle().Bold(true),
 		// The same grey the cost line is written in. Both are subordinate to
 		// the answer, so both are one decision rather than two that happen to
-		// agree — see render.Subdued.
-		hint: render.Subdued(dark),
+		// agree — see ui.Subdued.
+		hint: ui.Subdued(dark),
 	}
 }
 
@@ -224,7 +224,7 @@ func newConsole(ctx context.Context, e *eva, in io.Reader, out io.Writer) (*tea.
 		styles:  newStyles(true),
 	}
 
-	renderer, err := render.New(c, c.dark)
+	renderer, err := ui.New(c, c.dark)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -524,7 +524,7 @@ func (c *console) Show(turn string) error {
 	return nil
 }
 
-var _ render.Screen = (*console)(nil)
+var _ ui.Screen = (*console)(nil)
 
 // print asks the program to put what is queued above its view.
 //
