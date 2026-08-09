@@ -34,7 +34,7 @@ New glossary entries (CONTEXT.md), to be pinned by ADRs before code:
 | D1 | A credential is a mode, not just a value: `provider.auth = "api_key" \| "subscription"` | Strict TOML (ADR 0009) forces the key into the schema; the mode drives model defaults, error text, and transport |
 | D2 | Login is a CLI verb; the console only points at it | Preserves ADR 0015/0023 and the Command definition |
 | D3 | Subscription credentials live in one auth store file owned by a new `internal/auth` layer | Config stays writer-free; secrets get one home with `0600`/atomic-write discipline |
-| D4 | An expired token is refreshed before a Run, never mid-stream; a 401 after refresh is `ErrorAuthFailed`, not a retry | Keeps `classify()` honest (`internal/providers/anthropic/retry.go:121-138`) and ADR 0012 intact (every paid attempt is a record) |
+| D4 | An expired token is refreshed before a Run, never mid-stream; a 401 after refresh is `ErrorAuthFailed`, not a retry | Keeps `classify()` honest (`internal/providers/anthropic/failure.go`) and ADR 0012 intact (every paid attempt is a record) |
 | D5 | Providers receive a token *source*, not a token string, when in subscription mode | A long console session outlives a ~1h access token; the provider pulls a fresh token per dial without importing config or auth (interface defined in `providers`, implemented in `cli`) |
 | D6 | The OpenAI provider hand-rolls its HTTP client (no SDK dependency) | The Responses API SSE surface is small; the Codex backend needs custom base URL + headers anyway; keeps the depguard allow list at `$gostd + events + core` |
 
