@@ -358,12 +358,14 @@ func TestHelpPrintsTheUsageBlock(t *testing.T) {
 		t.Fatalf("exit %d, want 0\nstderr: %s", got.code, got.stderr)
 	}
 	// The flags a process is started with, and the environment it reads. The
-	// names and the default come from config's own constants rather than from
-	// a copy written here, so a default that moved and a help text that did not
-	// fail this rather than passing it.
+	// names come from config's own constants rather than from a copy written
+	// here, so a variable that was renamed and a help text that was not fail
+	// this rather than passing it. The model is not among them: which model
+	// answers is the config file's business, and the usage block does not
+	// speak for it.
 	for _, want := range []string{
 		"USAGE:", "eva help", "--config", "CONFIG (env):",
-		config.DefaultAPIKeyEnv, config.EnvConfig, config.EnvHome, config.DefaultModel,
+		config.DefaultAPIKeyEnv, config.EnvConfig, config.EnvHome,
 	} {
 		if !strings.Contains(got.stdout, want) {
 			t.Errorf("the usage block does not mention %q:\n%s", want, got.stdout)
