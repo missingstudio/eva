@@ -970,3 +970,63 @@ func TestTheCommandLineFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+// A configuration a person got wrong is reported whichever way they ran Eva.
+//
+// How it looks used to be read only when the console opened, so a keymap that
+// would have eaten a letter and a colour that was not one both went unmentioned
+// on the one-shot path — and the same file was an error or not depending on how
+// the program was started.
+func TestALookAndFeelMistakeIsReportedOnEitherPath(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "a key that would be taken from the prompt",
+			body: "\n[keymap.bind]\nscroll_down = [\"j\"]\n",
+			want: "prompt",
+		},
+		{
+			name: "a colour that is not one",
+			body: "\n[theme.colors]\nperson = \"notacolour\"\n",
+			want: "not a colour",
+		},
+		{
+			name: "a spinner Eva does not draw",
+			body: "\n[theme.symbols]\nspinner = \"helix\"\n",
+			want: "helix",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, fake(recording(t)))
+
+			body, err := os.ReadFile(w.config)
+			if err != nil {
+				t.Fatalf("read the configuration: %v", err)
+			}
+			if err := os.WriteFile(w.config, append(body, []byte(c.body)...), 0o600); err != nil {
+				t.Fatalf("write the configuration: %v", err)
+			}
+
+			// Both paths: the console, and the one turn a script asks for.
+			for _, args := range [][]string{{}, {"-p", "anything"}} {
+				got := w.run(t, args...)
+				// 2 is what a configuration Eva would not act on exits with.
+				if got.code != 2 {
+					t.Errorf("eva %v exited %d, want 2 — the configuration is one Eva should not act on",
+						args, got.code)
+				}
+				if !strings.Contains(got.stderr, c.want) {
+					t.Errorf("eva %v does not say what is wrong (%q):\n%s", args, c.want, got.stderr)
+				}
+				if !strings.Contains(got.stderr, w.config) {
+					t.Errorf("eva %v does not name the file to edit:\n%s", args, got.stderr)
+				}
+			}
+		})
+	}
+}
