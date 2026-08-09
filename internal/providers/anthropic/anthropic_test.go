@@ -16,6 +16,7 @@ import (
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/providers"
 	"github.com/missingstudio/eva/internal/providers/anthropic"
+	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
 // These tests drive the Provider against a local server that speaks the real
@@ -139,7 +140,7 @@ func open(t *testing.T, base string) *anthropic.Provider {
 	p, err := anthropic.New(anthropic.Options{
 		APIKey:  "sk-ant-test",
 		BaseURL: base,
-		Retry:   anthropic.Policy{Attempts: 4, Base: 4 * time.Millisecond, Cap: 40 * time.Millisecond},
+		Retry:   retry.Policy{Attempts: 4, Base: 4 * time.Millisecond, Cap: 40 * time.Millisecond},
 	})
 	if err != nil {
 		t.Fatalf("open the Provider: %v", err)

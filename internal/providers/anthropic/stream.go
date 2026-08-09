@@ -10,6 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/providers"
+	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
 // stream is one turn in progress.
@@ -89,7 +90,7 @@ func (s *stream) dial(ctx context.Context) {
 	if s.owed > 0 {
 		wait := s.owed
 		s.owed = 0
-		if err := sleep(ctx, wait); err != nil {
+		if err := retry.Sleep(ctx, wait); err != nil {
 			s.fatal = err
 			return
 		}
@@ -110,7 +111,7 @@ func (s *stream) dial(ctx context.Context) {
 	}
 
 	class, recoverable := classify(err)
-	wait, again := s.provider.retry.wait(s.attempts, err)
+	wait, again := s.provider.retry.Wait(s.attempts, retryAfter(err))
 	if !recoverable || !again {
 		s.fatal = fmt.Errorf("anthropic: %s: %w", class, err)
 		return

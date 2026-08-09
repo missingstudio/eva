@@ -9,6 +9,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/providers"
+	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
 // Name is what configuration selects this Provider by.
@@ -61,16 +62,16 @@ type Options struct {
 	// MaxTokens caps one answer. Zero takes DefaultMaxTokens.
 	MaxTokens int64
 
-	// Retry is how a refused attempt is retried. The zero value takes
-	// DefaultPolicy.
-	Retry Policy
+	// Retry is how a refused attempt is retried. The zero value takes the
+	// shared default.
+	Retry retry.Policy
 }
 
 // Provider answers turns from the Anthropic Messages API.
 type Provider struct {
 	client    sdk.Client
 	maxTokens int64
-	retry     Policy
+	retry     retry.Policy
 }
 
 var _ providers.Provider = (*Provider)(nil)
@@ -99,7 +100,7 @@ func New(o Options) (*Provider, error) {
 	return &Provider{
 		client:    sdk.NewClient(opts...),
 		maxTokens: maxTokens,
-		retry:     o.Retry.orDefault(),
+		retry:     o.Retry.OrDefault(),
 	}, nil
 }
 
