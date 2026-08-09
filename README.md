@@ -35,9 +35,10 @@ A line that starts with a slash is a command the console answers itself — no R
 
 ```
 /help            list these commands
-/cost            what the last turn cost, and the Session so far
+/cost            what this Session has cost so far
 /clear           empty the transcript
 /model [name]    report which model answers, or switch to another
+/login           where to log in to a subscription, which is not here
 ```
 
 `/model` switches in the middle of a Session and leaves the transcript alone, so the next turn runs on the new model and is still answered in the light of the earlier ones. `/clear` empties the transcript by opening a new Session rather than by deleting messages from the one in hand — see [`0019`](docs/adr/0019-clearing-the-transcript-opens-a-new-session.md) — and the cumulative spend starts over with it. The Trace keeps everything either way.
@@ -69,5 +70,6 @@ What that file may set is an allow list, and everything else is refused by name.
 - [docs/agents/design-rules.md](docs/agents/design-rules.md) — the practices the code is built on, and which of them a linter holds.
 - [CONTEXT.md](CONTEXT.md) — the glossary. One concept, one name.
 - [docs/adr/](docs/adr/) — decisions and their reasons. Each file's name is its decision, so `ls docs/adr/` is the index and this line does not have to be one. A decision a later ADR overturned says so in its own status line, clause by clause; nothing is rewritten and nothing is deleted.
+- [docs/decisions.md](docs/decisions.md) — every decision in one view: the ledger above grouped by theme, a paragraph each, plus what supersedes what and which decisions are still open. Read it to orient; read the ADR it points at to argue.
 - [AGENTS.md](AGENTS.md) — how to work in this repo. `CLAUDE.md` points at it.
 - [docs/agents/project-structure.md](docs/agents/project-structure.md) — where a new package, layer, or binary goes.

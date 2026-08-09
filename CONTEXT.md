@@ -36,8 +36,8 @@ The durable, resumable transcript. It is what survives `kill -9`, and what resum
 _Avoid_: Conversation, thread, chat
 
 **Run**:
-One execution of a Unit against a Session. A Session that is resumed twice has one Session and multiple Runs.
-_Avoid_: Invocation, execution, turn
+One execution of a Unit against a Session. A Session that is resumed twice has one Session and multiple Runs. The Run a prompt opens is the answer's whole account: the intent rides on its opening record, the answer is its Text, and the claim closes it — "this Run answered that prompt" is a complete sentence, and there is no third name for the arc between them.
+_Avoid_: Invocation, execution, turn (a turn is one exchange with a Provider, and one Run may hold many)
 
 **Base system prompt**:
 What every turn is conditioned on before the transcript. It is compiled into the build, held to a byte budget that CI enforces, and it is not part of the Session — a fold over a Trace gives back what was said, not what the binary said first.
@@ -107,6 +107,10 @@ An attempt that spent money and wall clock and produced nothing. It is a record 
 _Avoid_: Backoff (that is the arithmetic, not the attempt), reattempt
 
 ### Answering a turn
+
+**Turn**:
+One exchange with a Provider: a request begun, a stream read to its end. It is the providers' word — a Provider begins one, a Wire carries one attempt at one, a Driver pulls one — and it is not a unit of record: what the Trace holds is a Run, and one Run holds many turns the day there are tools to call between them. What answers a prompt is the Run, not the turn the answer arrived on.
+_Avoid_: Turn as the prompt-to-answer arc (retired: that arc is a Run, and one concept gets one name), completion, round-trip
 
 **Provider**:
 A model behind one contract: one method, which begins a turn and yields payloads of the one Event schema. It knows what happened and not what becomes of it — no Run, no Session, no tenant — so it states each thing where it noticed it and states it once. What selects a Provider is its registry key, which is the only place its name lives.
