@@ -20,13 +20,13 @@ linters:
         events:
           list-mode: strict
           files:
-            - "**/events/**"
+            - "**/internal/events/**"
           allow:
             - $gostd
             # The external test package events_test sits in this directory and
             # imports the package it tests. A package cannot import itself, so
             # this line reaches test files and nothing else.
-            - github.com/missingstudio/eva/events
+            - github.com/missingstudio/eva/internal/events
 
         # core is pure. It holds the domain and the interfaces the outer layers
         # implement, and it never reaches the outside world.
@@ -38,13 +38,13 @@ linters:
         core:
           list-mode: strict
           files:
-            - "**/core/**"
+            - "**/internal/core/**"
             # Test files are governed by core-tests below. Two rules matching
             # one file both apply, so this one has to stand aside rather than
             # the other one being made more permissive.
-            - "!**/core/**_test.go"
+            - "!**/internal/core/**_test.go"
           allow:
-            - github.com/missingstudio/eva/events
+            - github.com/missingstudio/eva/internal/events
             # context, for the TraceSink interface: a durable append is
             # cancellable, and an interface that cannot carry cancellation
             # forces every implementation to invent its own.
@@ -72,39 +72,39 @@ linters:
         core-tests:
           list-mode: strict
           files:
-            - "**/core/**_test.go"
+            - "**/internal/core/**_test.go"
           allow:
             - $gostd
-            - github.com/missingstudio/eva/events
-            - github.com/missingstudio/eva/core
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
 
         # config reads files, so it sits outside core.
         config:
           list-mode: strict
           files:
-            - "**/config/**"
+            - "**/internal/config/**"
           allow:
             - $gostd
-            - github.com/missingstudio/eva/events
-            - github.com/missingstudio/eva/core
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
             - github.com/BurntSushi/toml
             # See the events rule: this reaches the external test package only.
-            - github.com/missingstudio/eva/config
+            - github.com/missingstudio/eva/internal/config
 
         # providers talk to the network, so they sit outside core.
         providers:
           list-mode: strict
           files:
-            - "**/providers/**"
+            - "**/internal/providers/**"
           allow:
             - $gostd
-            - github.com/missingstudio/eva/events
-            - github.com/missingstudio/eva/core
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
             - github.com/anthropics/anthropic-sdk-go
             # Each implementation is its own package under providers/ and
             # imports the interface it satisfies. See the events rule for the
             # same line serving external test packages.
-            - github.com/missingstudio/eva/providers
+            - github.com/missingstudio/eva/internal/providers
             # toml, for the fake Provider's recorded output. It reads the
             # recording itself rather than being handed one, because the layer
             # that reads files is config, and config may not import providers.
@@ -115,35 +115,35 @@ linters:
         trace:
           list-mode: strict
           files:
-            - "**/trace/**"
+            - "**/internal/trace/**"
           allow:
             - $gostd
-            - github.com/missingstudio/eva/events
-            - github.com/missingstudio/eva/core
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
             # See the events rule: this reaches the external test package only.
-            - github.com/missingstudio/eva/trace
+            - github.com/missingstudio/eva/internal/trace
 
         # cli is the frontend and the top of the graph. It may import everything
         # below it, plus the terminal libraries — which nothing else may touch.
         cli:
           list-mode: strict
           files:
-            - "**/cli/**"
+            - "**/internal/cli/**"
             # Rendering is governed by render below, which is narrower. Two
             # rules matching one file both apply, so this one stands aside
             # rather than the other one being widened to match it.
-            - "!**/cli/render/**"
+            - "!**/internal/cli/render/**"
           allow:
             - $gostd
-            - github.com/missingstudio/eva/events
-            - github.com/missingstudio/eva/core
-            - github.com/missingstudio/eva/config
-            - github.com/missingstudio/eva/providers
-            - github.com/missingstudio/eva/trace
-            # The eva command lives inside this module, so the frontend
-            # imports itself. "Nothing imports a frontend" is about the layers
-            # below it, and none of them list this path.
-            - github.com/missingstudio/eva/cli
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
+            - github.com/missingstudio/eva/internal/config
+            - github.com/missingstudio/eva/internal/providers
+            - github.com/missingstudio/eva/internal/trace
+            # The console reaches the renderer, which is a package under this
+            # one. "Nothing imports a frontend" is about the layers below it,
+            # and none of them list this path.
+            - github.com/missingstudio/eva/internal/cli
             - charm.land/bubbletea
             - charm.land/bubbles
             - charm.land/lipgloss
@@ -176,11 +176,28 @@ linters:
         render:
           list-mode: strict
           files:
-            - "**/cli/render/**"
+            - "**/internal/cli/render/**"
           allow:
             - $gostd
-            - github.com/missingstudio/eva/events
+            - github.com/missingstudio/eva/internal/events
             # See the events rule: this reaches the external test package only.
-            - github.com/missingstudio/eva/cli/render
+            - github.com/missingstudio/eva/internal/cli/render
             - charm.land/lipgloss
             - charm.land/glamour
+
+        # cmd holds the binaries, and a binary is the one place that is allowed
+        # to know how the program is assembled. It gets the frontend and the
+        # standard library, and nothing else: a main that could reach a
+        # provider or the Trace would be a second place where a run is wired,
+        # and the wiring would drift between them.
+        #
+        # Everything a command needs is therefore something the frontend
+        # already exposes. When a second binary arrives and needs more, the
+        # answer is a package it can share, not a wider list here.
+        cmd:
+          list-mode: strict
+          files:
+            - "**/cmd/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/cli

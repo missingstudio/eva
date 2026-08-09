@@ -5,15 +5,7 @@ GO ?= go
 GOLANGCI_VERSION ?= v2.12.2
 GOLANGCI = $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 
-# Every module in the workspace, by directory.
-#
-# This indirection is the point. `go build ./...` from the repository root
-# matches only the module it is run in, so a bare ./... reports success while
-# another module is broken. Iterating the workspace is what makes the check
-# honest. `:=` so `go list` runs once rather than once per target.
-MODULES := $(shell $(GO) list -m -f '{{.Dir}}')
-
-.PHONY: help check fmt build vet lint test tidy
+.PHONY: help check fmt build vet lint test tidy eva
 
 ## help: list the targets
 help:
@@ -28,36 +20,31 @@ fmt:
 	if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	@echo "fmt      ok"
 
-## build: compile every package in every module
+## build: compile every package
 build:
-	@for d in $(MODULES); do \
-		(cd $$d && $(GO) build ./...) || exit 1; \
-	done
+	@$(GO) build ./...
 	@echo "build    ok"
 
-## vet: Go's built-in analysis, every module
+## vet: Go's built-in analysis
 vet:
-	@for d in $(MODULES); do \
-		(cd $$d && $(GO) vet ./...) || exit 1; \
-	done
+	@$(GO) vet ./...
 	@echo "vet      ok"
 
 ## lint: golangci-lint, which is where the layer boundaries are enforced
 lint:
-	@for d in $(MODULES); do \
-		(cd $$d && $(GOLANGCI) run --config $(CURDIR)/.golangci.yml ./...) || exit 1; \
-	done
+	@$(GOLANGCI) run ./...
 	@echo "lint     ok"
 
-## test: every module
+## test: every package
 test:
-	@for d in $(MODULES); do \
-		(cd $$d && $(GO) test ./...) || exit 1; \
-	done
+	@$(GO) test ./...
 	@echo "test     ok"
 
-## tidy: reconcile every module's dependencies
+## tidy: reconcile the module's dependencies
 tidy:
-	@for d in $(MODULES); do \
-		(cd $$d && $(GO) mod tidy) || exit 1; \
-	done
+	@$(GO) mod tidy
+
+## eva: build the command into the repository root
+eva:
+	@$(GO) build -o eva ./cmd/eva
+	@echo "eva      ok"

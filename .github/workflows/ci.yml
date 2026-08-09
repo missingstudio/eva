@@ -18,19 +18,22 @@ jobs:
           go-version: "1.26"
           cache: true
 
-      # A workspace-wide check that quietly covered nothing would look identical
-      # to one that passed. This step gates on that rather than only printing it:
-      # every module must resolve at least one package.
-      - name: Assert the workspace is fully covered
+      # A check that quietly covered nothing would look identical to one that
+      # passed. One module makes ./... honest, and this step gates on it staying
+      # that way: a go.mod anywhere below the root would cut its whole subtree
+      # out of ./... and every target would still report success.
+      - name: Assert the check covers the repository
         run: |
           set -eu
-          modules=$(go list -m -f '{{.Dir}}')
-          [ -n "$modules" ] || { echo "go list -m found no modules"; exit 1; }
-          for d in $modules; do
-            n=$(cd "$d" && go list ./... | wc -l | tr -d ' ')
-            echo "$(basename "$d"): $n package(s)"
-            [ "$n" -gt 0 ] || { echo "module $d resolves no packages"; exit 1; }
-          done
+          n=$(go list ./... | wc -l | tr -d ' ')
+          echo "$n package(s)"
+          [ "$n" -gt 0 ] || { echo "go list ./... resolves no packages"; exit 1; }
+          nested=$(find . -mindepth 2 -name go.mod -not -path './.git/*')
+          [ -z "$nested" ] || {
+            echo "a go.mod below the root hides packages from ./...:"
+            echo "$nested"
+            exit 1
+          }
 
       - name: Check
         run: make check

@@ -4,11 +4,11 @@
 
 **Stage 0's event schema is settled and is no longer a draft.** It was resolved in a design session on 2026-08-08 and now lives in `docs/adr/0001`–`0008`, which own the reasoning. Part 2 below carries the resulting shape only. Where the two ever disagree, the ADRs win.
 
-Three later decisions also override this document: `docs/adr/0009` fixes config and profiles as TOML, `docs/adr/0010` fixes the module layout, which differs from the tree in the final-repo-shape section below, and `docs/adr/0021` removes the one-shot and machine-readable command surfaces.
+Four later decisions also override this document: `docs/adr/0009` fixes config and profiles as TOML, `docs/adr/0010` fixes the layer graph, which differs from the tree in the final-repo-shape section below, `docs/adr/0021` makes the repository one module with those layers under `internal/`, and `docs/adr/0022` makes the console the whole command surface, so the one-shot and machine-readable modes this document describes are gone.
 
 One document. It goes from a single model call to an autonomous, multi-tenant software factory. It gives the frame, the primitive, the target architecture, the production platform, and the staged build path that connects them.
 
-**Implementation language: Go.** Use interfaces, not inheritance. Use one `go.work` workspace. Keep imports between layers one-way. All code sketches below are Go.
+**Implementation language: Go.** Use interfaces, not inheritance. Use one module, with the layers under `internal/`. Keep imports between layers one-way. All code sketches below are Go.
 
 **Name: Eva.** Decided on 2026-08-08. The other candidates collide with names in the same niche. **Tau** is twotimespi.dev's educational coding agent (`tau_ai`/`tau_agent`/`tau_coding`). **Neo** is owainlewis/neo, an MIT-licensed Go coding agent paired with owainlewis/factory. Eva has no collision with a coding agent or a factory. The nearest names are a voice-agent eval framework, a pentest agent, and an Emacs assistant. Eva also reads as eval and evidence, which fits a verifier-centric factory.
 
@@ -736,10 +736,10 @@ Each stage also declares its **in/out contract**. The contract shows what a user
 A model client with a good terminal.
 
 ```
-go.work       the workspace, plus the Makefile and .golangci.yml that gate it.
-              `make check` = fmt, build, vet, lint, test across every module.
+go.mod        the module, plus the Makefile and .golangci.yml that gate it.
+              `make check` = fmt, build, vet, lint, test across every package.
               Ships FIRST, as the prefactor: every later ticket then lands
-              against checks that already run. There is no root module.
+              against checks that already run. See docs/adr/0021.
 
 events/       MODULE. THE event schema: typed, versioned, sequence-numbered
               (invariant 8). SETTLED — see docs/adr/0001-0008. Sealed payload
@@ -1402,10 +1402,10 @@ eva halt
 
 ## Final repo shape
 
-Use a `go.work` workspace. There is one module for each layer. Imports point one way. This is tau's rule, and the whole lesson is the boundary. The stage-numbered packages live *inside* these modules. The build path does not change. Only the ownership structure above it becomes explicit.
+Use one module, with a directory under `internal/` for each layer. Imports point one way. This is tau's rule, and the whole lesson is the boundary. The stage-numbered packages live *inside* these layers. The build path does not change. Only the ownership structure above it becomes explicit.
 
 ```
-eva/                    # go.work
+eva/                    # go.mod; cmd/ for binaries, these layers under internal/
 ├── events/             # THE schema: events, trace records, versioning
 │                       #   imports: stdlib only, nothing internal  (stage 0)
 ├── core/               # Unit, Spec, Outcome, loop, budget, hooks (HookBus),
@@ -1457,9 +1457,9 @@ eva/                    # go.work
 
 There are two rules, and CI enforces them with an import linter. `core` never imports UI, provider specifics, or OS and path specifics. Nothing imports a frontend.
 
-**The rule decides the tree, not the other way round.** Anything that touches the filesystem, the network, or the terminal sits in a module *beside* `core`, never inside it — which is why `trace/` and `config/` are top-level above rather than children of `core/`. `core` declares the interface; the outer module implements it. There is no root module: `go.work` is the root. See `docs/adr/0010`, which is authoritative on the layout.
+**The rule decides the tree, not the other way round.** Anything that touches the filesystem, the network, or the terminal sits in a layer *beside* `core`, never inside it — which is why `trace/` and `config/` are siblings above rather than children of `core/`. `core` declares the interface; the outer layer implements it. See `docs/adr/0010` for the graph and `docs/adr/0021` for the packaging; together they are authoritative on the layout.
 
-The linter is `depguard`, configured in `.golangci.yml` and run by `make lint`. Every rule is an **allow list in strict mode**, so the boundaries fail closed: an import nobody enumerated is rejected rather than quietly permitted. A new module needs an entry in `go.work` and a rule in `.golangci.yml`; a module with no rule falls through to a standard-library-only default, so a forgotten rule fails loudly.
+The linter is `depguard`, configured in `.golangci.yml` and run by `make lint`. Every rule is an **allow list in strict mode**, so the boundaries fail closed: an import nobody enumerated is rejected rather than quietly permitted. A new layer needs a rule in `.golangci.yml`; a layer with no rule falls through to a standard-library-only default, so a forgotten rule fails loudly.
 
 ---
 
