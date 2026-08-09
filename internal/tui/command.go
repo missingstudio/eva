@@ -47,6 +47,10 @@ type Control interface {
 	// what is arriving, and the Interrupt capability that listening claims.
 	Watch(sub core.Subscriber, arriving func(chunk string))
 
+	// About is what this console can say about the run behind it before anyone
+	// has asked anything: the build, the branch, the directory.
+	About() About
+
 	// Model is which model the turns that follow will use.
 	Model() string
 	// UseModel switches it, from the next turn on.

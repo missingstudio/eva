@@ -329,3 +329,44 @@ func known(set []string, want string) bool {
 	}
 	return false
 }
+
+// Shades is a colour in n steps, lightest first.
+//
+// It is for a mark that has to read as one object with a direction — a bar down
+// the side of a masthead — rather than as n things. Each step is the base blended
+// towards white, most at the top and not at all at the bottom, so the run stays
+// recognisably one hue however the base was chosen. A person who set the accent
+// gets their accent; nobody has to name a second colour to get a gradient.
+//
+// n below two is one step, because a gradient of one is the colour itself and
+// asking for none is a caller with nothing to draw.
+func Shades(base color.Color, n int) []color.Color {
+	if n < 2 {
+		return []color.Color{base}
+	}
+
+	r, g, b, _ := base.RGBA()
+	out := make([]color.Color, n)
+	for i := range out {
+		// The top is lifted most. Two thirds rather than the whole way: a bar
+		// that reached white would stop being the accent at the end where the
+		// eye lands first.
+		lift := twoThirds * float64(n-1-i) / float64(n-1)
+		out[i] = color.RGBA{
+			R: blend(r, lift),
+			G: blend(g, lift),
+			B: blend(b, lift),
+			A: 0xFF,
+		}
+	}
+	return out
+}
+
+const twoThirds = 2.0 / 3.0
+
+// blend lifts one 16-bit channel towards white and returns it as 8-bit, which
+// is what a terminal is told.
+func blend(channel uint32, towards float64) uint8 {
+	eight := float64(channel >> 8)
+	return uint8(eight + (0xFF-eight)*towards)
+}

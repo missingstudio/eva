@@ -60,4 +60,14 @@ A third was paid already and is worth naming beside them: a screen drawn in plac
 
 **The pane is bounded by the process.** It holds one Session's turns in memory for as long as the process lives. That is the same order of bytes the terminal was holding in its own buffer a moment ago, and it is small next to the Trace.
 
-**Falsifier:** this holds while the pane's content has exactly three writers and each of them is downstream of a commit or of a person's own keystroke. The first writer that puts something else there — a provider's raw stream, a speculative answer, a summary the console composed — makes the pane a second account, and at that point either the writer goes or the pane does.
+**Falsifier:** this holds while every writer to the pane is either downstream of a commit and a person's own keystroke, or incapable of mentioning a turn at all. The first writer that puts something else there — a provider's raw stream, a speculative answer, a summary the console composed of what was said — makes the pane a second account, and at that point either the writer goes or the pane does.
+
+## A fourth writer, and why the count was the wrong test
+
+The masthead is drawn at the top of the pane: what Eva is, and the build, model, branch, and directory a person checks before they trust an answer.
+
+That is a fourth writer, and the falsifier above originally said there were exactly three. The number was standing in for the property, and the property is what matters — a writer is safe here if it cannot claim a turn the Trace does not hold. The masthead is composed from a version string, a branch name, a directory, and a model name. There is no arrangement of those that says anything about a turn, so it cannot invent one: it has nothing to invent one *with*. The falsifier is restated above to test that rather than to count.
+
+A summary of the conversation would still be forbidden, and that was always the writer the count was aimed at.
+
+**It follows that `/clear` no longer empties the screen.** It empties the transcript, which is what it says and what ADR 0019 decided; the masthead stays, because `/clear` opens a new Session and a new Session opens the way the process did. A console that forgot which model was answering because somebody cleared a conversation would have cleared more than they asked it to. Nothing is reported about the clearing — an emptied transcript is still its own evidence.
