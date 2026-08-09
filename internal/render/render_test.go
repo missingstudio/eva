@@ -660,3 +660,21 @@ func TestABackgroundAnsweringLateKeepsTheConfiguredColour(t *testing.T) {
 		t.Errorf("the cost line changed when the terminal answered:\nbefore %q\nafter  %q", before, after)
 	}
 }
+
+// The answer of one turn does not run into the next.
+func TestAnAnswerDoesNotLeakIntoTheNextTurn(t *testing.T) {
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	var payloads []events.Payload
+	payloads = append(payloads, answered("the first answer", events.Usage{})...)
+	payloads = append(payloads, answered("the second answer", events.Usage{})...)
+
+	renderer, _ := fold(t, true, payloads...)
+	kept, err := renderer.Kept()
+	if err != nil {
+		t.Fatalf("kept: %v", err)
+	}
+	if strings.Contains(plain(kept[1]), "the first answer") {
+		t.Errorf("the second turn carries the first turn's answer:\n%s", plain(kept[1]))
+	}
+}
