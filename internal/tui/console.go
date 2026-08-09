@@ -7,7 +7,9 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -70,8 +72,20 @@ type Console struct {
 	// before a turn is handed over, for the reason put sets out.
 	profile colorprofile.Profile
 
-	// height is the window's, and is zero until the program reports one.
+	// height and width are the window's, and are zero until the program reports
+	// them. The width is what the footer puts the model at the far end of.
 	height int
+	width  int
+
+	// spin turns while a Run is in flight. It is the answer to the one question
+	// a live area cannot otherwise answer: an answer that has not started
+	// arriving looks exactly like an interface that has stopped.
+	spin spinner.Model
+
+	// since is when the Run in flight opened, and is what the status line
+	// counts up from. A person deciding whether to wait or to interrupt is
+	// deciding on elapsed time, so it is on screen rather than guessed at.
+	since time.Time
 
 	// dark is what the terminal answered when it was asked what colour it is.
 	// It starts at the assumption and is corrected by the answer.
@@ -88,6 +102,9 @@ var _ tea.Model = (*Console)(nil)
 type styles struct {
 	said lipgloss.Style
 	hint lipgloss.Style
+	// spin is the one thing here that is not subdued. A faint spinner is a
+	// spinner nobody can see moving, and its whole job is to be seen moving.
+	spin lipgloss.Style
 }
 
 func newStyles(dark bool) styles {
@@ -97,6 +114,7 @@ func newStyles(dark bool) styles {
 		// the answer, so both are one decision rather than two that happen to
 		// agree — see ui.Subdued.
 		hint: ui.Subdued(dark),
+		spin: lipgloss.NewStyle(),
 	}
 }
 
@@ -220,6 +238,7 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		control: backend,
 		ctx:     ctx,
 		input:   input,
+		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 		profile: colorprofile.Detect(out, os.Environ()),
 		dark:    true,
 		styles:  newStyles(true),
@@ -273,8 +292,21 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		c.height = msg.Height
 		if msg.Width > 0 {
+			c.width = msg.Width
 			c.input.SetWidth(msg.Width)
 		}
+
+	case spinner.TickMsg:
+		// Only while a Run is in flight. The spinner schedules its own next
+		// tick from Update, so declining to forward one is what stops it — and
+		// an interface that keeps redrawing at twelve frames a second with
+		// nothing happening is one that never lets a terminal go idle.
+		if !c.busy() {
+			return c, nil
+		}
+		var cmd tea.Cmd
+		c.spin, cmd = c.spin.Update(msg)
+		return c, cmd
 
 	case tea.BackgroundColorMsg:
 		return c, c.background(msg.IsDark())
@@ -298,24 +330,63 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return c, cmd
 }
 
-// View is the live area: what is arriving while a turn runs, and the prompt
-// when none does.
+// View is the live area: what is arriving while a turn runs, the prompt when
+// none does, and under both the footer that says which model is answering.
 //
 // The turns already answered are not here. They are above the view, put there
 // as each Run closed, which is what leaves them in the terminal's own
-// scrollback rather than in a buffer this program has to hold and redraw.
+// scrollback rather than in a buffer this program has to hold and redraw. This
+// is why the view is three lines rather than a pane: a frontend that held the
+// transcript itself would be a second copy of what the Trace already holds, and
+// the two would disagree the first time a turn failed halfway.
 func (c *Console) View() tea.View {
-	if !c.busy() {
-		return tea.NewView(c.input.View())
+	var live strings.Builder
+
+	if c.busy() {
+		if arriving := strings.TrimRight(c.arriving.String(), "\n"); arriving != "" {
+			live.WriteString(c.tail(arriving))
+			live.WriteString("\n")
+		}
+		live.WriteString(c.status())
+	} else {
+		live.WriteString(c.input.View())
 	}
 
-	var live strings.Builder
-	if arriving := strings.TrimRight(c.arriving.String(), "\n"); arriving != "" {
-		live.WriteString(c.tail(arriving))
+	if footer := c.footer(); footer != "" {
 		live.WriteString("\n")
+		live.WriteString(footer)
 	}
-	live.WriteString(c.styles.hint.Render("answering — ctrl+c to interrupt"))
 	return tea.NewView(live.String())
+}
+
+// status is what a turn in flight shows in place of the prompt: that it is
+// running, and for how long.
+//
+// The elapsed figure is rounded to the second because it is read, not measured.
+// It comes free with the spinner's own frame rate, so nothing else has to wake
+// the interface up to keep it true.
+func (c *Console) status() string {
+	return c.styles.spin.Render(c.spin.View()) + " " +
+		c.styles.hint.Render("answering "+time.Since(c.since).Round(time.Second).String()+" — ctrl+c to interrupt")
+}
+
+// footer is the model the turns are running against, at the far end of the
+// window.
+//
+// It is there because /model can change it and a person who has changed it
+// should not have to ask what it is now. It holds nothing else. A working
+// directory and a branch would say Eva acts on a repository, and at this stage
+// Eva has no tools and acts on nothing — a footer that implied otherwise would
+// be the interface making a claim the program cannot keep.
+//
+// It is empty until the window has said how wide it is, because there is
+// nowhere to put a right-hand end without one.
+func (c *Console) footer() string {
+	model := c.control.Model()
+	if c.width <= 0 || lipgloss.Width(model) >= c.width {
+		return ""
+	}
+	return c.styles.hint.Render(strings.Repeat(" ", c.width-lipgloss.Width(model)) + model)
 }
 
 // liveLines is how many lines of an arriving answer the view shows when the
@@ -449,15 +520,21 @@ func (c *Console) start(prompt string) tea.Cmd {
 	ctx, cancel := context.WithCancel(c.ctx)
 	c.cancel = cancel
 	c.arriving.Reset()
+	c.since = time.Now()
 	c.running.Add(1)
 
-	return func() tea.Msg {
+	turn := func() tea.Msg {
 		defer c.running.Done()
 		defer cancel()
 
 		outcome, err := c.ask(ctx, prompt)
 		return answered{outcome: outcome, err: err}
 	}
+
+	// The spinner is started here rather than at Init, so that it turns only
+	// while there is something to wait for. It stops on its own: see the tick
+	// in Update.
+	return tea.Batch(turn, c.spin.Tick)
 }
 
 // fold takes one committed Event.
