@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/missingstudio/eva/internal/config"
@@ -20,6 +21,7 @@ import (
 	// The Providers a build can select, each registering itself as it loads.
 	_ "github.com/missingstudio/eva/internal/providers/anthropic"
 	_ "github.com/missingstudio/eva/internal/providers/fake"
+	_ "github.com/missingstudio/eva/internal/providers/openai"
 	"github.com/missingstudio/eva/internal/render"
 	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui"
@@ -49,6 +51,8 @@ var usage = fmt.Sprintf(`eva — an autonomous, multi-tenant, AI-native software
 USAGE:
   eva                    Interactive console
   eva -p <prompt>        Answer one prompt and leave
+  eva login              Log in to an OpenAI ChatGPT/Codex subscription
+  eva auth status        Show how each turn authenticates
   eva init               Write a starter configuration
   eva help               Show this help
 
@@ -57,7 +61,7 @@ FLAGS:
   -p <prompt>            One turn, rendered to stdout; non-zero if it failed
 
 CONFIG (env):
-  %-20s   required
+  %-20s   required, unless a login authenticates instead
   %-20s   default: ~/.eva/config.toml
   %-20s   default: the user's home directory
 
@@ -109,6 +113,15 @@ type options struct {
 	// a word rather than a flag for the reason help is: it is a thing to do, not
 	// a way of doing the thing.
 	initialise bool
+	// login says the run obtains a subscription Credential and leaves, and
+	// loginProvider is whose — empty means the one Provider that has a login.
+	// A word for the reason init is: a Login reaches the network, which is
+	// what a console Command must never do, so it lives on this surface.
+	login         bool
+	loginProvider string
+	// authStatus says the run reports how a turn would authenticate and
+	// leaves.
+	authStatus bool
 	// prompt is one turn asked from the command line. It is empty for the
 	// console, which is what eva is with nothing to answer.
 	prompt string
@@ -120,9 +133,27 @@ func parse(args []string) (options, error) {
 	}
 
 	var opts options
-	if len(args) > 0 && args[0] == "init" {
-		opts.initialise = true
-		args = args[1:]
+	if len(args) > 0 {
+		switch args[0] {
+		case "init":
+			opts.initialise = true
+			args = args[1:]
+		case "login":
+			opts.login = true
+			args = args[1:]
+			if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+				opts.loginProvider = args[0]
+				args = args[1:]
+			}
+		case "auth":
+			// One word under auth today. The refusal spells the whole command
+			// so a person who typed half of it is handed the other half.
+			if len(args) < 2 || args[1] != "status" {
+				return options{}, errors.New(`auth is asked with a word: "eva auth status"`)
+			}
+			opts.authStatus = true
+			args = args[2:]
+		}
 	}
 	fs := flag.NewFlagSet("eva", flag.ContinueOnError)
 
@@ -160,9 +191,21 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 		return ExitOK, nil
 	}
 
+	// Like init: logging in is what a person does when nothing else works
+	// yet, so it does not first insist on a valid configuration.
+	if opts.login {
+		return login(ctx, opts.loginProvider, stdout)
+	}
+
 	cfg, err := config.Load(opts.config)
 	if err != nil {
 		return ExitUsage, err
+	}
+
+	// After the configuration and before the Provider: a status report must
+	// answer for the credential that is missing, so it cannot require one.
+	if opts.authStatus {
+		return authStatus(cfg, stdout)
 	}
 
 	provider, err := open(cfg)
@@ -463,21 +506,34 @@ func (e *eva) Answer(ctx context.Context, intent string) (core.Outcome, error) {
 // The file a mistake belongs to is added here. The registry does not know there
 // is a file.
 func open(cfg config.Config) (providers.Provider, error) {
+	// Resolving the credential is deferred to the Provider that needs one:
+	// a recording replayed from a file must not fail for want of an API key
+	// it never sends. Reveal is the one place the secret leaves the type
+	// that stops it printing itself, and it happens inside this call.
+	credential := func() (string, error) {
+		key, err := cfg.RequireAPIKey()
+		if err != nil {
+			return "", err
+		}
+		return key.Reveal(), nil
+	}
+	// The auth mode alone decides which credential a run uses. There is no
+	// chain where an exported variable outranks a login or the reverse — a
+	// person can read the file and know, and `eva auth status` names a set
+	// key as unused rather than letting it silently win.
+	if cfg.Subscription() {
+		var err error
+		if credential, err = subscriptionCredential(cfg); err != nil {
+			return nil, err
+		}
+	}
+
 	provider, err := providers.Open(cfg.Provider.Name, providers.Options{
-		// Resolving the credential is deferred to the Provider that needs one:
-		// a recording replayed from a file must not fail for want of an API key
-		// it never sends. Reveal is the one place the secret leaves the type
-		// that stops it printing itself, and it happens inside this call.
-		Credential: func() (string, error) {
-			key, err := cfg.RequireAPIKey()
-			if err != nil {
-				return "", err
-			}
-			return key.Reveal(), nil
-		},
-		BaseURL:   cfg.Provider.BaseURL,
-		MaxTokens: cfg.Provider.MaxTokens,
-		Recording: cfg.Provider.Script,
+		Credential:   credential,
+		Subscription: cfg.Subscription(),
+		BaseURL:      cfg.Provider.BaseURL,
+		MaxTokens:    cfg.Provider.MaxTokens,
+		Recording:    cfg.Provider.Script,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w (in %s)", err, cfg.Path)

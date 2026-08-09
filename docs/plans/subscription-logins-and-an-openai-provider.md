@@ -1,6 +1,6 @@
 # Subscription logins and an OpenAI provider
 
-Status: draft plan. This document plans three features together because they share one seam:
+Status: phases 0–2 implemented (2026-08-09) — `internal/auth`, `eva login` / `eva auth status`, `internal/providers/openai`, config `auth` mode, ADRs 0031–0033. Remaining: Phase 3 polish and Phase 4 (fake-provider retirement, §Workstream E). This document plans three features together because they share one seam:
 
 1. **`eva login`** — log in to an OpenAI ChatGPT/Codex subscription with a device code, without ever handling an API key. The command shape (`eva login [provider]`) leaves room for more subscription providers later.
 2. **An OpenAI provider** — `internal/providers/openai`, speaking the Responses API, with two transports: the public API (API key) and the ChatGPT/Codex subscription backend (OAuth token).
@@ -135,7 +135,7 @@ New directory + depguard rule: `$gostd`, `internal/events`, `internal/core`, `in
 | Mode | Base URL | Auth | Model default |
 |---|---|---|---|
 | `api_key` | `https://api.openai.com/v1/responses` | `Authorization: Bearer $OPENAI_API_KEY` | configurable, e.g. `gpt-5.2` |
-| `subscription` | `https://chatgpt.com/backend-api/codex/responses` | Bearer access token + headers below | `gpt-5-codex` (the backend accepts only Codex models — neo exposes exactly one model in this mode, `neo:cmd/neo/provider.go:226-263`) |
+| `subscription` | `https://chatgpt.com/backend-api/codex/responses` | Bearer access token + headers below | the current Codex client default (`gpt-5.6-terra` as of Aug 2026 — the backend entitles a ChatGPT account to a shifting subset and 400s the rest, so this tracks the current default, not a fixed one) |
 
 Subscription headers (`neo:internal/llm/openai/codex.go:116-121`, asserted in `codex_test.go:57-64`):
 
@@ -189,7 +189,7 @@ Two rules fall out:
 name = "openai"            # existing key; new accepted value
 auth = "subscription"      # NEW: api_key | subscription — subscription is valid for name = "openai" only
 api_key_env = "OPENAI_API_KEY"   # existing key; default now depends on name
-model = "gpt-5-codex"      # default derived from name + auth when unset
+model = "gpt-5.6-terra"    # default derived from name + auth when unset
 ```
 
 - Defaults become provider-aware: `DefaultAPIKeyEnv` per provider name; default model per (name, auth) pair — neo does exactly this (`neo:internal/config/config.go:256-272`).

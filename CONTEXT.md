@@ -102,6 +102,24 @@ _Avoid_: Status, error, success flag
 A position in an Event stream that a consumer has durably committed. A reconnecting peer resumes from its last cursor and the peer replays what follows. Only a durable commit advances a Cursor.
 _Avoid_: Offset, pointer, checkpoint (a checkpoint is a Session state, not a stream position)
 
+**Retry**:
+An attempt that spent money and wall clock and produced nothing. It is a record rather than a detail of one, because the cost of retrying is otherwise invisible — and the rule that decides how long to wait before the next one is one rule, shared by every Provider that answers over a network.
+_Avoid_: Backoff (that is the arithmetic, not the attempt), reattempt
+
+### Credentials
+
+**Credential**:
+What authenticates Eva to a Provider. It has a mode — an API key read from the environment, or a subscription obtained by a Login — and the configured mode alone decides which one a turn uses.
+_Avoid_: Token, key, secret (those are shapes a Credential takes, not the concept)
+
+**Login**:
+The act of obtaining a subscription Credential, and the CLI verb that performs it. A Login reaches the network and waits on a person, which is everything a Command must not do — so it is a word beside init, never a slash.
+_Avoid_: Sign-in, connect, authenticate (a turn authenticates; a person logs in)
+
+**Auth store**:
+The one file subscription Credentials live in, beside the configuration and private to the user. A Login writes it, a turn's credential resolver reads and renews it, and nothing prints what it holds.
+_Avoid_: Keychain, credential cache, token file
+
 ### Capability and extension
 
 **Harness**:

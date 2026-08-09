@@ -23,7 +23,37 @@ const (
 	DefaultAPIKeyEnv = "ANTHROPIC_API_KEY"
 	DefaultTenant    = "local"
 	DefaultActor     = "local"
+
+	// The OpenAI defaults, applied when the file selects that Provider and
+	// says nothing further.
+	//
+	// The model is the one the current Codex client ships as its default, so a
+	// subscription login works with a file that names nothing but the mode. The
+	// ChatGPT/Codex backend entitles an account to a shifting subset of models
+	// and rejects the rest with a 400 that names the model — so this tracks the
+	// current default rather than an older one a backend has since dropped, and
+	// a person on a different entitlement sets provider.model to one of theirs.
+	DefaultOpenAIModel     = "gpt-5.6-terra"
+	DefaultOpenAIAPIKeyEnv = "OPENAI_API_KEY"
 )
+
+// How a Provider authenticates. The mode alone decides which credential a run
+// uses — there is no precedence chain between an environment variable and a
+// login, so a set-but-unused key is a thing a status report can name rather
+// than a thing that silently wins.
+const (
+	// AuthAPIKey reads a key from the environment variable the file names.
+	AuthAPIKey = "api_key"
+	// AuthSubscription authenticates with a login's access token, obtained by
+	// `eva login` and kept in the auth store rather than the environment.
+	AuthSubscription = "subscription"
+)
+
+// openAIProvider is the one Provider a subscription can authenticate today.
+// The name is config's to compare because the refusal has to happen here,
+// before a run is wired — a mode the Provider cannot honour is a file mistake,
+// and file mistakes are reported by the layer that read the file.
+const openAIProvider = "openai"
 
 // Env vars that move the files, so that a test can start the binary against a
 // configuration of its own without touching the developer's home directory.
@@ -102,6 +132,10 @@ type Config struct {
 type ProviderConfig struct {
 	// Name selects the implementation.
 	Name string `toml:"name"`
+	// Auth selects how the Provider authenticates: an API key from the
+	// environment, or a subscription login. Empty is the API key, which is
+	// what every configuration written before this key existed meant.
+	Auth string `toml:"auth"`
 	// APIKeyEnv names the environment variable the credential is read from.
 	APIKeyEnv string `toml:"api_key_env"`
 	// BaseURL points a network provider somewhere other than its public API:
@@ -195,6 +229,10 @@ func (c Config) Actor() events.Identity {
 
 // Tenant is the tenant Events are attributed to.
 func (c Config) Tenant() events.TenantID { return events.TenantID(c.Identity.Tenant) }
+
+// Subscription reports whether the Provider authenticates with a login rather
+// than an API key.
+func (c Config) Subscription() bool { return c.Provider.Auth == AuthSubscription }
 
 // RequireAPIKey returns the credential, or an error that says how to set one.
 //
@@ -439,11 +477,15 @@ func decode(path string, cfg *Config) error {
 }
 
 func defaults() Config {
+	// The model and the credential variable are absent here on purpose,
+	// filled in by normalize once the Provider is known. Pre-filled, a file
+	// that chose a Provider and nothing else would keep another Provider's
+	// model and read its credential from another Provider's variable — the
+	// decode cannot tell a default from a choice, so the default has to wait
+	// until the choice is in.
 	return Config{
-		Model: DefaultModel,
 		Provider: ProviderConfig{
-			Name:      DefaultProvider,
-			APIKeyEnv: DefaultAPIKeyEnv,
+			Name: DefaultProvider,
 		},
 		Identity: IdentityConfig{
 			Tenant:    DefaultTenant,
@@ -456,14 +498,37 @@ func defaults() Config {
 // normalize fills in what the file left empty and expands the paths it gave.
 func (c *Config) normalize() error {
 	d := defaults()
-	if c.Model == "" {
-		c.Model = d.Model
-	}
 	if c.Provider.Name == "" {
 		c.Provider.Name = d.Provider.Name
 	}
+
+	// The remaining defaults follow the Provider, so they are resolved after
+	// it: a file that says name = "openai" and nothing else gets that
+	// Provider's model and reads that Provider's variable.
+	switch c.Provider.Auth {
+	case "":
+		c.Provider.Auth = AuthAPIKey
+	case AuthAPIKey:
+	case AuthSubscription:
+		if c.Provider.Name != openAIProvider {
+			return fmt.Errorf("config: %s: provider.auth = %q is not a mode provider %q supports — only %q can authenticate with a login today. Use auth = %q with an API key instead",
+				c.Path, AuthSubscription, c.Provider.Name, openAIProvider, AuthAPIKey)
+		}
+	default:
+		return fmt.Errorf("config: %s: provider.auth is %q, want %q or %q (or leave it out, and the API key is read)",
+			c.Path, c.Provider.Auth, AuthAPIKey, AuthSubscription)
+	}
+	if c.Model == "" {
+		c.Model = DefaultModel
+		if c.Provider.Name == openAIProvider {
+			c.Model = DefaultOpenAIModel
+		}
+	}
 	if c.Provider.APIKeyEnv == "" {
-		c.Provider.APIKeyEnv = d.Provider.APIKeyEnv
+		c.Provider.APIKeyEnv = DefaultAPIKeyEnv
+		if c.Provider.Name == openAIProvider {
+			c.Provider.APIKeyEnv = DefaultOpenAIAPIKeyEnv
+		}
 	}
 	if c.Identity.Tenant == "" {
 		c.Identity.Tenant = d.Identity.Tenant
