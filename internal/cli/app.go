@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/missingstudio/eva/internal/auth"
 	"github.com/missingstudio/eva/internal/config"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/core/prompt"
@@ -62,15 +63,17 @@ FLAGS:
                          with why on stderr
 
 CONFIG (env):
-  %-20s   required, unless a login authenticates instead
+  %-20s   required when the provider is %q
+  %-20s   required when the provider is %q with api_key auth,
+                         and unused when a login authenticates instead
   %-20s   default: ~/.eva/config.toml
   %-20s   default: the user's home directory
 
-The model is the config file's to choose (default: %s).
-
 In the console: enter sends, ctrl+c interrupts the turn in flight, ctrl+d
 leaves, and /help lists the commands.
-`, config.DefaultAPIKeyEnv, config.EnvConfig, config.EnvHome, config.DefaultModel)
+`, config.DefaultAPIKeyEnv, config.DefaultProvider,
+	config.DefaultOpenAIAPIKeyEnv, auth.ProviderOpenAI,
+	config.EnvConfig, config.EnvHome)
 
 // Main runs eva and returns the process exit code.
 //
