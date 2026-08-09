@@ -194,8 +194,7 @@ var escapes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][0-9A-B]|\x1b[=
 // It comes from the console rather than from the bytes it wrote. A console that
 // draws a screen in place emits cursor moves and overwrites, so those bytes
 // with their escapes stripped are the fragments of a transcript in the order
-// the cursor visited them, not the transcript. ADR 0022 recorded that for
-// colour; it is the same fact. See tui.Console.Screen.
+// the cursor visited them, not the transcript. See tui.Console.Screen.
 func (d *dialogue) read() string { return escapes.ReplaceAllString(d.console.Screen(), "") }
 
 // begin builds the interface with input disabled and output redirected, and

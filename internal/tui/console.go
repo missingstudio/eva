@@ -491,8 +491,8 @@ func (c *Console) refresh() {
 // became a screen. A console that draws in place emits cursor moves and
 // overwrites, so bytes with their escapes stripped are not a transcript of what
 // was read — they are the fragments of one, in the order the cursor happened to
-// visit them. ADR 0022 recorded that for colour; this is the same fact reaching
-// the rest of the frame.
+// visit them. This was already true of the colour in a turn, and it is true of
+// everything else in the frame for the same reason.
 //
 // So the assertion moves to what the interface composed, one step before the
 // terminal. It is the same string the pane is given.
