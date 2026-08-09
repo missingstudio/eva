@@ -19,6 +19,7 @@ import (
 	"github.com/missingstudio/eva/internal/providers/fake"
 	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui"
+	"github.com/missingstudio/eva/internal/ui"
 )
 
 // Exit codes. They are part of the contract a script reads, so they are named
@@ -43,10 +44,12 @@ var usage = fmt.Sprintf(`eva — an autonomous, multi-tenant, AI-native software
 
 USAGE:
   eva                    Interactive console
+  eva -p <prompt>        Answer one prompt and leave
   eva help               Show this help
 
 FLAGS:
   --config <path>        Configuration file
+  -p <prompt>            One turn, rendered to stdout; non-zero if it failed
 
 CONFIG (env):
   %-20s   required
@@ -97,6 +100,9 @@ var errHelp = errors.New("help requested")
 // it has to be — a file has to be found before it can say anything.
 type options struct {
 	config string
+	// prompt is one turn asked from the command line. It is empty for the
+	// console, which is what eva is with nothing to answer.
+	prompt string
 }
 
 func parse(args []string) (options, error) {
@@ -110,6 +116,7 @@ func parse(args []string) (options, error) {
 	// Eva prints its own usage, in its own words, on the stream it chooses.
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&opts.config, "config", "", "configuration file")
+	fs.StringVar(&opts.prompt, "p", "", "answer one prompt and leave")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -158,8 +165,54 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 	// The assembly is built once and handed to the frontend that drives it. It
 	// attaches through eva's own door, which is the only place a Run learns who
 	// is watching it and what it may claim.
+	if opts.prompt != "" {
+		return once(ctx, e, opts.prompt, stdout)
+	}
+
 	if err := tui.Run(ctx, e, stdin, stdout); err != nil {
 		return ExitFailure, err
+	}
+	return ExitOK, nil
+}
+
+// once answers one prompt onto a byte stream and returns the code that says how
+// it went.
+//
+// It exists because the console took the screen. An interface drawn in place
+// writes cursor moves to its output, so redirecting it captures the movements
+// of a cursor rather than an answer — and with it went the last way to get one
+// turn out of Eva without a terminal. This is that way back, and it is the
+// narrow one: a prompt in, a rendered answer out.
+//
+// It is not the machine-readable surface ADR 0022 removed, and it does not
+// bring one back. What a reader wanting data reads is the Trace, which holds
+// this turn exactly as it holds every other — committed, by the same schema,
+// through the same sink. This writes the same fold a person would have read.
+//
+// Nothing watches the turn arrive. Turn.Arriving is nil on this path, which is
+// what ADR 0015 already says of a run with no live area: there is nothing to
+// erase, so the answer is written when it is whole.
+//
+// A failed turn exits non-zero. The console has no exit code because it stays
+// open; this does not stay open, so the claim the Trace holds is also the
+// process's answer to whoever ran it.
+func once(ctx context.Context, e *eva, prompt string, stdout io.Writer) (int, error) {
+	// Dark is assumed rather than asked. Asking means writing a query to a
+	// terminal and reading it back, and this path may have no terminal at all —
+	// where it does not, lipgloss removes the escapes on the way out and the
+	// assumption costs nothing.
+	renderer, err := ui.New(ui.Stream(stdout), true)
+	if err != nil {
+		return ExitFailure, err
+	}
+	e.show(renderer)
+
+	outcome, err := e.Answer(ctx, prompt)
+	if err != nil {
+		return ExitFailure, err
+	}
+	if outcome.Result != events.ResultDone {
+		return ExitFailure, nil
 	}
 	return ExitOK, nil
 }
@@ -232,6 +285,17 @@ func (e *eva) Watch(sub core.Subscriber, arriving func(chunk string)) {
 	e.subs = []core.Subscriber{sub}
 	e.arriving = arriving
 	e.interrupt = true
+}
+
+// show attaches a projection that only reads what was committed.
+//
+// It is Watch without the two things a console brings: nothing is told what is
+// arriving, and no Interrupt capability is claimed. That is the whole difference
+// between a screen somebody is sitting at and a stream something is written to,
+// and it is a separate method rather than a flag on Watch because a capability
+// claimed and absent corrupts a Run, where a missing one only degrades it.
+func (e *eva) show(sub core.Subscriber) {
+	e.subs = []core.Subscriber{sub}
 }
 
 // Answer runs one turn as one Run against the Session.
