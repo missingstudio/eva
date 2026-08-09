@@ -28,12 +28,12 @@ The second corollary: **keep interfaces small.** One to three methods. `Provider
 
 ## Composition is explicit, selection is a registry
 
-Go composes by embedding and by passing values — there is no inheritance to lean on, which is the point. But composition has two halves and the repo only has one:
+Go composes by embedding and by passing values — there is no inheritance to lean on, which is the point. Composition has two halves and both are in force:
 
-- The *contract* half is done: anything can implement `Provider`, `TraceSink`, `Subscriber`.
-- The *selection* half is a hardcoded switch: `open()` in `internal/cli/app.go:336` knows every provider by name, `eva.subs` holds exactly one subscriber by assignment.
+- The *contract* half: anything can implement `Provider`, `TraceSink`, `Subscriber`.
+- The *selection* half: a registry the implementations put themselves into, the standard library's own answer (`database/sql` drivers, `image` formats). `providers.Open` reads one, `trace.New` reads its own, and `Attach` appends projections rather than assigning one — so the layer that wires a run knows no implementation by name, and the error naming what a person may choose is read from the registry rather than written where it would go stale.
 
-The standard library's answer is the registry: `database/sql` drivers, `image` formats. A registry turns "add an implementation" from four edits in three packages into one package that registers itself plus one config line. It is applied to providers, sinks, subscribers, and renderers; ADR 0028 holds the reasoning.
+A registry turns "add an implementation" from four edits in three packages into one package that registers itself plus one config line. ADR 0028 holds the reasoning, and its falsifier: selection that needs more than a name and a small struct wants a factory at the composition root, not a wider registry.
 
 ## Sealed where closed, registered where open
 
