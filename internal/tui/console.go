@@ -141,11 +141,6 @@ type Console struct {
 	// without an answer is owed the same short line as the rest.
 	interrupted bool
 
-	// located is whether this Session has already been told where the Trace is.
-	// It is per Session rather than per process, because clearing opens a new
-	// one and a transcript that no longer holds the line has not said it.
-	located bool
-
 	// completing is what had been typed before tab began filling it in, and
 	// completed is how far through the matches that is. Both are held because
 	// a second tab has to offer the next match rather than start again from
@@ -1320,18 +1315,19 @@ func (c *Console) close(a answered) tea.Cmd {
 		}
 		c.put(c.styles.hint.Render(said))
 
-		// And, once, where the rest of it went. The rule above keeps the
-		// provider's account off the screen; without this, that reads as the
-		// account having been destroyed rather than being one file away.
+		// Then what that means on this machine, and the one step that follows.
 		//
-		// Once per Session, because a line repeated after every failure is a
-		// line nobody finishes reading — and a person who has been told where
-		// the Trace is does not stop knowing between two turns. Interruption is
-		// not a failure and does not spend it.
-		if !c.interrupted && !c.located {
-			if where := render.Detail(c.about.Trace); where != "" {
-				c.located = true
-				c.put(c.styles.hint.Render(where))
+		// The line above says what happened and deliberately stops there,
+		// because this layer can see that a credential was refused and cannot
+		// see which credential or why. The layer that wired the run can see
+		// both, so it is asked — and it answers with nothing whenever it
+		// checked and could not place the failure, which is most of the time.
+		//
+		// Interruption spends none of this. There is no remedy for the thing a
+		// person just did on purpose.
+		if !c.interrupted {
+			if next := c.control.Remedy(a.outcome.Class).Said(); next != "" {
+				c.put(c.styles.hint.Render(next))
 			}
 		}
 	}

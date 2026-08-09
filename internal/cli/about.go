@@ -32,7 +32,6 @@ func (e *eva) About() tui.About {
 		Version: version(),
 		Branch:  branch(),
 		Dir:     workingDir(),
-		Trace:   e.trace,
 	}
 }
 

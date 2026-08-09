@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/missingstudio/eva/internal/core"
+	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/render"
 )
 
 // command is one thing a person types in the console instead of a prompt.
@@ -50,6 +52,25 @@ type Control interface {
 	// About is what this console can say about the run behind it before anyone
 	// has asked anything: the build, the branch, the directory.
 	About() About
+
+	// Remedy is what was checked about this machine after a turn failed this
+	// way, and the one command that follows from it.
+	//
+	// It is here because the console cannot answer it. Telling a rejected
+	// credential apart from an expired login means reading a configuration and
+	// an auth store, and the whole point of this interface is that the console
+	// reaches neither — so the question crosses instead, and the answer comes
+	// back as the two sentences a person reads.
+	//
+	// The zero Remedy is the ordinary answer. Most failures have no step on
+	// this side of the network, and one invented for them would be a guess in
+	// Eva's own voice.
+	//
+	// It is asked when the turn fails rather than told when the Run opens,
+	// because what makes a remedy checked is that it was checked now: a login
+	// live at the first prompt is one of the commonest things to have expired
+	// by the turn that fails.
+	Remedy(class events.ErrorClass) render.Remedy
 
 	// Model is which model the turns that follow will use.
 	Model() string
@@ -175,11 +196,6 @@ func (c *Console) cost(string) string { return c.renderer.Cost() }
 func (c *Console) clear(string) string {
 	c.control.Clear()
 	c.renderer.Cleared()
-
-	// A new Session has not been told where the Trace is. The line that said so
-	// went with the transcript, and a person reading an empty pane has no way
-	// to know it was ever there.
-	c.located = false
 
 	// Back to the top before the content goes, so that a person who had
 	// scrolled up is not left at an offset into a transcript that no longer

@@ -58,18 +58,41 @@ func TestEveryFailureClassHasItsOwnLine(t *testing.T) {
 	}
 }
 
-// The line that says where the detail went names the file and nothing else.
+// A remedy is a fact and, sometimes, the command that follows from it.
 //
-// A Trace nobody configured a path for says nothing at all, rather than
-// pointing at an empty string. The console draws no line for an empty one,
-// which is how every absent fact is handled.
-func TestTheDetailLineNamesTheTraceOrSaysNothing(t *testing.T) {
-	if got := render.Detail(""); got != "" {
-		t.Errorf("with no Trace path the line reads %q, want nothing", got)
-	}
-
-	got := render.Detail("/home/p/.eva/trace.jsonl")
-	if !strings.Contains(got, "/home/p/.eva/trace.jsonl") {
-		t.Errorf("the line does not name the Trace: %q", got)
+// The rule the shape enforces is that there is no step without a fact. A step
+// standing on nothing is advice, and advice in Eva's own voice is worse than
+// silence: somebody sent to fix a thing that was never broken stops reading the
+// line, and the line that would have helped them goes with it.
+func TestARemedyNeverOffersAStepItEstablishedNothingFor(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		remedy render.Remedy
+		want   string
+	}{
+		{
+			name:   "nothing established says nothing",
+			remedy: render.Remedy{},
+		},
+		{
+			name:   "a step with no fact behind it is not shown",
+			remedy: render.Remedy{Do: "eva login"},
+		},
+		{
+			name:   "a fact with no step is worth saying alone",
+			remedy: render.Remedy{Because: "the openai login has not expired"},
+			want:   "the openai login has not expired",
+		},
+		{
+			name:   "a fact and its step are the fact, then the command to type",
+			remedy: render.Remedy{Because: "no openai login is stored", Do: "eva login"},
+			want:   "no openai login is stored\n\n    eva login",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.remedy.Said(); got != c.want {
+				t.Errorf("the remedy reads %q, want %q", got, c.want)
+			}
+		})
 	}
 }

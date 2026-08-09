@@ -41,6 +41,7 @@ The one vocabulary. Every observable thing is an instance of one typed, versione
 
 - **A transcript entry is blocks, so a tool exchange can be rebuilt** ([0039](adr/0039-a-transcript-entry-is-blocks-so-a-tool-exchange-can-be-rebuilt.md)). A Message holds words, a tool call, and the result that answers it, behind a sealed set. The Event schema already recorded tool calls and could not give them back: a call had no identifier and a result named neither the call it answered nor what the model was shown, so the fold could rebuild that something happened and not the conversation. Both fields are additive, so the schema version does not move.
 - **A Unit holds its capabilities, and Execute takes only a Spec** ([0040](adr/0040-a-unit-holds-its-capabilities-and-execute-takes-only-a-spec.md)). The plan sketched a Runtime parameter; the composition rule decides against it, because a Unit is a tool to a parent Unit and a tool is called with arguments. Capabilities are fields set where a Unit is built, which is also where a parent narrows what a child it spawns may reach.
+
 ## Structure, purity, packaging
 
 - **core is pure, so IO lives beside it** ([0010](adr/0010-core-is-pure-so-io-lives-beside-it.md)). The domain reaches no filesystem, network, or terminal; every layer that does sits beside it, and depguard's strict allow lists fail closed. The packaging half was superseded by 0021; the layer graph and the purity rule stand.
@@ -58,7 +59,8 @@ The one vocabulary. Every observable thing is an instance of one typed, versione
 - **The live area shows the stream, and only the record is kept** ([0015](adr/0015-the-live-area-shows-the-stream-and-only-the-record-is-kept.md)). A person watches a turn arrive from the stream; when the Run closes, that is erased and replaced by the fold over what was committed, so nothing kept came from anywhere but the record. Where a kept turn goes was superseded by 0023.
 - **The base system prompt is compiled in, and its size is a gate** ([0020](adr/0020-the-base-system-prompt-is-compiled-in-and-its-size-is-a-gate.md)). What every turn is conditioned on before the transcript is bytes in the binary, reviewed as prose in a diff, and held to a 2 KiB budget CI enforces.
 - **The transcript is a pane the console owns** ([0023](adr/0023-the-transcript-is-a-pane-the-console-owns.md)). A block handed to the terminal's scrollback is one the program can never reach again — no re-wrap on resize, no real `/clear`. The pane keeps 0015's substance: arriving text is stored separately and dropped at close.
-- **A failed claim carries a class, and a projection spends the class rather than the prose** ([0038](adr/0038-a-failed-claim-carries-a-class-and-a-projection-spends-the-class.md)). What went wrong is a value from a fixed set and how it went wrong is prose; only the second is unsafe to show, so `Claim` carries an `ErrorClass` and a person reads Eva's own sentence for it. The class is stated by the Provider and never parsed back out of a message, the empty class means nobody classified rather than "other", and a failed turn names the Trace so that keeping the vendor's words off the screen does not read as having destroyed them.
+- **A failed claim carries a class, and a projection spends the class rather than the prose** ([0038](adr/0038-a-failed-claim-carries-a-class-and-a-projection-spends-the-class.md)). What went wrong is a value from a fixed set and how it went wrong is prose; only the second is unsafe to show, so `Claim` carries an `ErrorClass` and a person reads Eva's own sentence for it. The class is stated by the Provider and never parsed back out of a message, the empty class means nobody classified rather than "other". A failed turn also named the Trace, so that keeping the vendor's words off the screen did not read as having destroyed them; 0041 withdrew that line.
+- **A remedy is checked, and the layer that can check it is not the layer that says it** ([0041](adr/0041-a-remedy-is-checked-and-the-layer-that-can-check-it-is-not-the-layer-that-says-it.md)). 0038 stopped at what happened because `render` cannot tell a rejected key from an expired login; the layer that wires a run can, so it establishes the fact and hands back a `Remedy` the way it already hands back `About`. A step is shown only with a fact behind it, only when the fact leaves exactly one step correct, and never for the four classes with no local cause — a guess in Eva's own voice costs every later nudge that would have been right.
 
 ## Providers, credentials, wires
 
@@ -78,6 +80,7 @@ Nothing is rewritten; a superseded clause is marked in the older ADR's own statu
 | 0010 | the six-module packaging | 0021 |
 | 0012 | a transport failure is classified `other` | 0038 |
 | 0015 | where a kept turn goes on screen | 0023 |
+| 0038 | a failed turn names the Trace | 0041 |
 | 0019 | "/clear does not clear the screen" | 0023 |
 | Product.md | config format left open | 0009 |
 | Product.md | the layer tree in the final-repo-shape section | 0010 |
