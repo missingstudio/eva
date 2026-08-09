@@ -187,9 +187,9 @@ func TestModelSwitchesInTheMiddleOfASessionAndKeepsTheContext(t *testing.T) {
 	}
 
 	want := []core.Message{
-		{Author: core.AuthorUser, Text: "what is this project"},
-		{Author: core.AuthorAssistant, Text: "Eva is a software factory."},
-		{Author: core.AuthorUser, Text: "and what else"},
+		core.Say(core.AuthorUser, "what is this project"),
+		core.Say(core.AuthorAssistant, "Eva is a software factory."),
+		core.Say(core.AuthorUser, "and what else"),
 	}
 	calls := d.provider.transcripts()
 	if after := conversation(t, calls[1]); fmt.Sprint(after) != fmt.Sprint(want) {
@@ -237,7 +237,7 @@ func TestClearEmptiesTheTranscriptWithoutEndingTheProcess(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("the Provider was called %d time(s), want 2 — the process did not survive /clear", len(calls))
 	}
-	if after := conversation(t, calls[1]); len(after) != 1 || after[0].Text != "what did I just ask" {
+	if after := conversation(t, calls[1]); len(after) != 1 || after[0].Said() != "what did I just ask" {
 		t.Errorf("the turn after /clear was conditioned on\n%+v\nwant the new prompt alone", after)
 	}
 }

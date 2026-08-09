@@ -39,7 +39,7 @@ func fold(t *testing.T, s *core.Session, es ...events.Event) {
 func transcript(s *core.Session) string {
 	var out string
 	for _, m := range s.Messages() {
-		out += fmt.Sprintf("%s:%s|", m.Author, m.Text)
+		out += fmt.Sprintf("%s:%s|", m.Author, m.Said())
 	}
 	return out
 }
@@ -311,10 +311,24 @@ func TestMessagesHandsBackACopy(t *testing.T) {
 	fold(t, s, event("run_1", events.Started{Intent: "hello"}))
 
 	got := s.Messages()
-	got[0].Text = "something else"
+	got[0] = core.Say(core.AuthorUser, "something else")
 
-	if s.Messages()[0].Text != "hello" {
+	if s.Messages()[0].Said() != "hello" {
 		t.Error("a caller edited the transcript through the slice it was handed")
+	}
+}
+
+// An entry holds a slice, so copying the outer one alone would hand back
+// entries that still share the fold's own memory.
+func TestMessagesCopiesTheBlocksToo(t *testing.T) {
+	s := session()
+	fold(t, s, event("run_1", events.Started{Intent: "hello"}))
+
+	got := s.Messages()
+	got[0].Blocks[0] = core.Text{Text: "something else"}
+
+	if s.Messages()[0].Said() != "hello" {
+		t.Error("a caller edited the transcript through the blocks it was handed")
 	}
 }
 
@@ -387,5 +401,118 @@ func TestAFreshSessionKeepsTheIdentityAndEmptiesTheTranscript(t *testing.T) {
 	fold(t, next, said)
 	if got, want := transcript(next), "user:and what else|"; got != want {
 		t.Errorf("the fresh Session holds %q, want %q", got, want)
+	}
+}
+
+// A tool exchange is what the transcript could not hold before it held blocks.
+// The fold has to give back a call and the result that answers it, in the
+// entries a provider takes them in, or the next request carries a call nothing
+// answers and every provider rejects it.
+func TestAToolExchangeFoldsBackIntoTheTranscript(t *testing.T) {
+	s := session()
+	fold(t, s,
+		event("run_1", events.Started{Intent: "what is in this directory"}),
+		event("run_1", events.Text{Chunk: "Let me look."}),
+		event("run_1", events.ToolCall{ID: "call_1", Name: "list_dir", Args: []byte(`{"path":"."}`)}),
+		event("run_1", events.ToolResult{
+			Call: "call_1", Name: "list_dir",
+			Disposition: events.DispositionOK, Content: "README.md\ngo.mod",
+		}),
+		event("run_1", events.Text{Chunk: "Two files."}),
+	)
+
+	got := s.Messages()
+	if len(got) != 4 {
+		t.Fatalf("the exchange folded into %d entries, want the prompt, the call, the result, and the answer: %+v", len(got), got)
+	}
+
+	// The assistant asked in one entry: the words it said and the call it made.
+	asked := got[1]
+	if asked.Author != core.AuthorAssistant || len(asked.Blocks) != 2 {
+		t.Fatalf("the call arrived as %+v", asked)
+	}
+	call, isCall := asked.Blocks[1].(core.ToolCall)
+	if !isCall || call.ID != "call_1" || call.Name != "list_dir" || call.Args != `{"path":"."}` {
+		t.Errorf("the call folded to %+v", asked.Blocks[1])
+	}
+
+	// The result answers it in the next entry, naming the call it belongs to.
+	// Without the pairing a turn with two calls in flight cannot be rebuilt.
+	answered := got[2]
+	if answered.Author != core.AuthorUser || len(answered.Blocks) != 1 {
+		t.Fatalf("the result arrived as %+v", answered)
+	}
+	result, isResult := answered.Blocks[0].(core.ToolResult)
+	if !isResult || result.Call != call.ID || result.Content != "README.md\ngo.mod" {
+		t.Errorf("the result folded to %+v", answered.Blocks[0])
+	}
+	if result.Disposition != events.DispositionOK {
+		t.Errorf("the result folded with disposition %q", result.Disposition)
+	}
+
+	// What the assistant said after the result is a new entry, because the
+	// result was the other party speaking.
+	if last := got[3]; last.Author != core.AuthorAssistant || last.Said() != "Two files." {
+		t.Errorf("the answer after the tool ran folded to %+v", last)
+	}
+}
+
+// Two calls in one turn are answered separately, and each result names the call
+// it belongs to. This is the case a transcript of strings cannot express at all.
+func TestTwoCallsInOneTurnKeepTheirPairing(t *testing.T) {
+	s := session()
+	fold(t, s,
+		event("run_1", events.Started{Intent: "read both files"}),
+		event("run_1", events.ToolCall{ID: "call_1", Name: "read", Args: []byte(`{"path":"a"}`)}),
+		event("run_1", events.ToolCall{ID: "call_2", Name: "read", Args: []byte(`{"path":"b"}`)}),
+		event("run_1", events.ToolResult{Call: "call_1", Name: "read", Disposition: events.DispositionOK, Content: "A"}),
+		event("run_1", events.ToolResult{Call: "call_2", Name: "read", Disposition: events.DispositionFailed, Content: "no such file"}),
+	)
+
+	got := s.Messages()
+	if len(got) != 3 {
+		t.Fatalf("the exchange folded into %d entries, want the prompt, both calls, and both results: %+v", len(got), got)
+	}
+	if len(got[1].Blocks) != 2 || len(got[2].Blocks) != 2 {
+		t.Fatalf("the calls and results did not stay together: %+v", got)
+	}
+
+	for i, want := range []string{"call_1", "call_2"} {
+		call, isCall := got[1].Blocks[i].(core.ToolCall)
+		if !isCall || call.ID != want {
+			t.Errorf("call %d folded to %+v", i, got[1].Blocks[i])
+		}
+		result, isResult := got[2].Blocks[i].(core.ToolResult)
+		if !isResult || result.Call != want {
+			t.Errorf("result %d folded to %+v", i, got[2].Blocks[i])
+		}
+	}
+
+	// A call that failed is still a result the model can act on, so it is in
+	// the transcript rather than left out of it.
+	failed, _ := got[2].Blocks[1].(core.ToolResult)
+	if failed.Disposition != events.DispositionFailed || failed.Content != "no such file" {
+		t.Errorf("the failed call folded to %+v", got[2].Blocks[1])
+	}
+}
+
+// Words that arrive around a call still join the entry they were said in,
+// because a transcript entry is what was said and not how many pieces it
+// arrived in.
+func TestWordsAroundACallJoinOneEntry(t *testing.T) {
+	s := session()
+	fold(t, s,
+		event("run_1", events.Started{Intent: "look"}),
+		event("run_1", events.Text{Chunk: "I will "}),
+		event("run_1", events.Text{Chunk: "look now."}),
+		event("run_1", events.ToolCall{ID: "call_1", Name: "list_dir"}),
+	)
+
+	asked := s.Messages()[1]
+	if len(asked.Blocks) != 2 {
+		t.Fatalf("the chunks did not join around the call: %+v", asked.Blocks)
+	}
+	if asked.Said() != "I will look now." {
+		t.Errorf("the words folded to %q", asked.Said())
 	}
 }

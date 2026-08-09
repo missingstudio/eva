@@ -136,7 +136,16 @@ const KindToolCall Kind = "tool_call"
 
 // ToolCall is a request to run a tool. Args stay raw because a tool's schema is
 // the tool's, and Redacted says the arguments held something a Trace must not.
+//
+// ID is what the result of this call answers, and it is the provider's own
+// identifier rather than one Eva mints: the next request has to name the call
+// in the words the provider used, so an identifier of our own would have to be
+// translated back at the wire and would be a second identity for one call.
+// Without it a fold could put a call and a result in one transcript and still
+// not say which answered which, and a turn with two calls in flight is the
+// ordinary case rather than the exotic one.
 type ToolCall struct {
+	ID       string          `json:"id"`
 	Name     string          `json:"name"`
 	Args     json.RawMessage `json:"args"`
 	Redacted bool            `json:"redacted"`
@@ -177,9 +186,25 @@ const KindToolResult Kind = "tool_result"
 // ToolResult is how a tool call ended. A tool call always has one, whatever
 // happened to it, so the transcript stays structurally valid for the next
 // provider call.
+//
+// Call names the ToolCall this answers, and Content is what the model is shown
+// of the outcome. Both are here because the transcript is a fold and nothing
+// else: a record that said only that a call ended would leave the fold able to
+// rebuild that something happened and unable to rebuild the conversation, and
+// the next request would carry a call with no answer — which every provider
+// rejects. Bytes stays beside Content because what a projection shows and what
+// a model is sent are different sizes once a result is elided for display.
+//
+// Content is a string rather than raw JSON: what goes back to the provider is
+// what the model reads, and a tool that answers in JSON answers with JSON in
+// it. Redaction happens before a result reaches here, for the reason it happens
+// at the sink rather than after — written then scrubbed is a breach with extra
+// steps.
 type ToolResult struct {
+	Call        string      `json:"call"`
 	Name        string      `json:"name"`
 	Disposition Disposition `json:"disposition"`
+	Content     string      `json:"content"`
 	Bytes       int         `json:"bytes"`
 }
 

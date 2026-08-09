@@ -157,7 +157,7 @@ func ask(t *testing.T, p *anthropic.Provider) ([]events.Payload, error) {
 
 	s := p.Stream(context.Background(), providers.Call{
 		Model:    "claude-test",
-		Messages: []core.Message{{Author: core.AuthorUser, Text: "what is this project"}},
+		Messages: []core.Message{core.Say(core.AuthorUser, "what is this project")},
 	})
 	defer func() { _ = s.Close() }()
 
@@ -675,10 +675,10 @@ func TestTheTranscriptIsSentAsMessagesAndASystemPrompt(t *testing.T) {
 	s := p.Stream(context.Background(), providers.Call{
 		Model: "claude-test",
 		Messages: []core.Message{
-			{Author: core.AuthorSystem, Text: "answer briefly"},
-			{Author: core.AuthorUser, Text: "one"},
-			{Author: core.AuthorAssistant, Text: "two"},
-			{Author: core.AuthorUser, Text: "three"},
+			core.Say(core.AuthorSystem, "answer briefly"),
+			core.Say(core.AuthorUser, "one"),
+			core.Say(core.AuthorAssistant, "two"),
+			core.Say(core.AuthorUser, "three"),
 		},
 	})
 	for {
@@ -772,7 +772,7 @@ func TestReadingPastTheEndKeepsReturningEOF(t *testing.T) {
 	provider := open(t, base)
 	s := provider.Stream(context.Background(), providers.Call{
 		Model:    "claude-test",
-		Messages: []core.Message{{Author: core.AuthorUser, Text: "hello"}},
+		Messages: []core.Message{core.Say(core.AuthorUser, "hello")},
 	})
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -809,7 +809,7 @@ func TestACancelledStreamStopsAndStaysStopped(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := provider.Stream(ctx, providers.Call{
 		Model:    "claude-test",
-		Messages: []core.Message{{Author: core.AuthorUser, Text: "hello"}},
+		Messages: []core.Message{core.Say(core.AuthorUser, "hello")},
 	})
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -844,7 +844,36 @@ func TestAnthropicKeepsTheProviderContract(t *testing.T) {
 		},
 		Call: providers.Call{
 			Model:    "claude-test",
-			Messages: []core.Message{{Author: core.AuthorUser, Text: "hello"}},
+			Messages: []core.Message{core.Say(core.AuthorUser, "hello")},
 		},
 	})
+}
+
+// A block no wire can send fails the turn rather than being left out of it. A
+// transcript with a tool call dropped from it asks the model to continue
+// without knowing what it did, and nothing downstream could tell that from an
+// answer.
+func TestABlockThisProviderCannotSendFailsTheTurn(t *testing.T) {
+	base, requests := serve(t)
+
+	p := open(t, base)
+	s := p.Stream(context.Background(), providers.Call{
+		Model: "claude-test",
+		Messages: []core.Message{{
+			Author: core.AuthorAssistant,
+			Blocks: []core.Block{core.ToolCall{ID: "call_1", Name: "list_dir"}},
+		}},
+	})
+	defer func() { _ = s.Close() }()
+
+	_, err := s.Next(context.Background())
+	if err == nil {
+		t.Fatal("a turn carrying a block this Provider cannot send began")
+	}
+	if !strings.Contains(err.Error(), "ToolCall") {
+		t.Errorf("the refusal does not name the block that stopped it: %v", err)
+	}
+	if requests() != 0 {
+		t.Errorf("the server saw %d requests, want none", requests())
+	}
 }

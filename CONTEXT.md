@@ -35,6 +35,14 @@ These three were previously used interchangeably. They are distinct.
 The durable, resumable transcript. It is what survives `kill -9`, and what resume, branch, and rewind act on.
 _Avoid_: Conversation, thread, chat
 
+**Message**:
+One entry in the transcript: who said it, and the Blocks of what they said. It is never written, only folded — the Trace holds the records and a Message is what they come back as.
+_Avoid_: Turn (that is one exchange with a Provider), entry, line
+
+**Block**:
+One piece of what a Message says: words, a tool call, or the result that answers one. A Message is a list of these rather than a string because a turn that calls a tool says two things at once, and the answer has to arrive back paired with what it answers. The set is closed, for the reason the Event kinds are — a Block no Provider has heard of is a request none of them accepts.
+_Avoid_: Part, segment, content, chunk (a chunk is a piece of one Block arriving)
+
 **Run**:
 One execution of a Unit against a Session. A Session that is resumed twice has one Session and multiple Runs. The Run a prompt opens is the answer's whole account: the intent rides on its opening record, the answer is its Text, and the claim closes it — "this Run answered that prompt" is a complete sentence, and there is no third name for the arc between them.
 _Avoid_: Invocation, execution, turn (a turn is one exchange with a Provider, and one Run may hold many)

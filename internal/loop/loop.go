@@ -171,7 +171,8 @@ func (l *Loop) conditioning() []core.Message {
 	if l.SystemPrompt == "" {
 		return transcript
 	}
-	return append([]core.Message{{Author: core.AuthorSystem, Text: l.SystemPrompt}}, transcript...)
+	system := core.Say(core.AuthorSystem, l.SystemPrompt)
+	return append([]core.Message{system}, transcript...)
 }
 
 // unrecorded marks a failure to write rather than a failure to work.

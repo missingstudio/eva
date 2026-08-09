@@ -307,10 +307,10 @@ func TestTheBaseSystemPromptHeadsTheTurnAndIsNotInTheTranscript(t *testing.T) {
 	if len(sent) != 2 {
 		t.Fatalf("the Provider was sent %+v, want the base system prompt and the prompt", sent)
 	}
-	if sent[0].Author != core.AuthorSystem || sent[0].Text != prompt.Base() {
+	if sent[0].Author != core.AuthorSystem || sent[0].Said() != prompt.Base() {
 		t.Errorf("the turn opened on %+v, want the base system prompt as a system Message", sent[0])
 	}
-	if sent[1] != (core.Message{Author: core.AuthorUser, Text: "what is this project"}) {
+	if sent[1].Author != core.AuthorUser || sent[1].Said() != "what is this project" {
 		t.Errorf("the prompt reached the Provider as %+v", sent[1])
 	}
 

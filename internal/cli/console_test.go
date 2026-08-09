@@ -110,7 +110,7 @@ func (d *driven) models() []string {
 func conversation(t *testing.T, call []core.Message) []core.Message {
 	t.Helper()
 
-	if len(call) == 0 || call[0].Author != core.AuthorSystem || call[0].Text != prompt.Base() {
+	if len(call) == 0 || call[0].Author != core.AuthorSystem || call[0].Said() != prompt.Base() {
 		t.Fatalf("the call is not headed by the base system prompt:\n%+v", call)
 	}
 	return call[1:]
@@ -450,14 +450,14 @@ func TestASecondPromptIsAnsweredInTheLightOfTheFirst(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("the Provider was called %d time(s), want 2", len(calls))
 	}
-	if first := conversation(t, calls[0]); len(first) != 1 || first[0].Text != "what is this project" {
+	if first := conversation(t, calls[0]); len(first) != 1 || first[0].Said() != "what is this project" {
 		t.Fatalf("the first call was conditioned on %+v, want the first prompt alone", first)
 	}
 
 	want := []core.Message{
-		{Author: core.AuthorUser, Text: "what is this project"},
-		{Author: core.AuthorAssistant, Text: "Eva is a software factory."},
-		{Author: core.AuthorUser, Text: "and what else"},
+		core.Say(core.AuthorUser, "what is this project"),
+		core.Say(core.AuthorAssistant, "Eva is a software factory."),
+		core.Say(core.AuthorUser, "and what else"),
 	}
 	if second := conversation(t, calls[1]); fmt.Sprint(second) != fmt.Sprint(want) {
 		t.Errorf("the second call was conditioned on\n%+v\nwant\n%+v", second, want)
@@ -490,9 +490,9 @@ func TestCtrlCDuringAStreamReturnsThePromptAndLeavesTheSessionUsable(t *testing.
 		t.Fatalf("the Provider was called %d time(s), want 2 — the Session did not survive the interrupt", len(calls))
 	}
 	want := []core.Message{
-		{Author: core.AuthorUser, Text: "answer at length"},
-		{Author: core.AuthorAssistant, Text: "a long answer nobody wanted"},
-		{Author: core.AuthorUser, Text: "shorter please"},
+		core.Say(core.AuthorUser, "answer at length"),
+		core.Say(core.AuthorAssistant, "a long answer nobody wanted"),
+		core.Say(core.AuthorUser, "shorter please"),
 	}
 	if after := conversation(t, calls[1]); fmt.Sprint(after) != fmt.Sprint(want) {
 		t.Errorf("the turn after the interrupt was conditioned on\n%+v\nwant\n%+v", after, want)
@@ -702,11 +702,11 @@ func TestAPromptTypedDuringATurnIsAnsweredAfterIt(t *testing.T) {
 	}
 
 	after := conversation(t, calls[1])
-	if len(after) == 0 || after[len(after)-1].Text != "second question" {
+	if len(after) == 0 || after[len(after)-1].Said() != "second question" {
 		t.Fatalf("the second turn was conditioned on\n%+v\nwant the queued prompt last", after)
 	}
 	// And it was answered in the light of the turn it waited for.
-	if len(after) < 3 || !strings.Contains(after[1].Text, "the first answer") {
+	if len(after) < 3 || !strings.Contains(after[1].Said(), "the first answer") {
 		t.Errorf("the queued turn does not carry the answer it waited for:\n%+v", after)
 	}
 }

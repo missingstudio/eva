@@ -114,18 +114,30 @@ func request(call providers.Call, maxTokens int64) (sdk.MessageNewParams, error)
 	}
 
 	for _, m := range call.Messages {
-		if m.Text == "" {
-			// The API rejects an empty content block, and an empty Message
-			// says nothing the answer can be conditioned on.
+		// The system prompt is not a turn in the conversation, and this API
+		// takes it as its own field rather than as a message with a third role.
+		if m.Author == core.AuthorSystem {
+			if words := m.Said(); words != "" {
+				params.System = append(params.System, sdk.TextBlockParam{Text: words})
+			}
 			continue
 		}
+
+		content, err := content(m.Blocks)
+		if err != nil {
+			return sdk.MessageNewParams{}, err
+		}
+		if len(content) == 0 {
+			// The API rejects an empty content list, and an entry that says
+			// nothing is nothing the answer can be conditioned on.
+			continue
+		}
+
 		switch m.Author {
-		case core.AuthorSystem:
-			params.System = append(params.System, sdk.TextBlockParam{Text: m.Text})
 		case core.AuthorUser:
-			params.Messages = append(params.Messages, sdk.NewUserMessage(sdk.NewTextBlock(m.Text)))
+			params.Messages = append(params.Messages, sdk.NewUserMessage(content...))
 		case core.AuthorAssistant:
-			params.Messages = append(params.Messages, sdk.NewAssistantMessage(sdk.NewTextBlock(m.Text)))
+			params.Messages = append(params.Messages, sdk.NewAssistantMessage(content...))
 		default:
 			return sdk.MessageNewParams{}, fmt.Errorf("anthropic: %q is not an Author this Provider can send", m.Author)
 		}
@@ -135,4 +147,29 @@ func request(call providers.Call, maxTokens int64) (sdk.MessageNewParams, error)
 		return sdk.MessageNewParams{}, errors.New("anthropic: the turn has no transcript to answer")
 	}
 	return params, nil
+}
+
+// content maps one entry's blocks onto the API's content list.
+//
+// A block this Provider cannot send fails the turn here rather than being left
+// out. A transcript with a tool call dropped from it is a transcript the model
+// is asked to continue without knowing what it did, and the answer to that is a
+// confident invention — where a refusal is a turn that failed and said why.
+//
+// The tool blocks are the ones no wire sends today: nothing yet calls a tool,
+// so a mapping written here would be one nothing exercises and nobody could
+// trust. It lands with the tool registry that produces them.
+func content(blocks []core.Block) ([]sdk.ContentBlockParamUnion, error) {
+	out := make([]sdk.ContentBlockParamUnion, 0, len(blocks))
+	for _, block := range blocks {
+		text, isText := block.(core.Text)
+		if !isText {
+			return nil, fmt.Errorf("anthropic: this Provider cannot send a %T", block)
+		}
+		if text.Text == "" {
+			continue
+		}
+		out = append(out, sdk.NewTextBlock(text.Text))
+	}
+	return out, nil
 }
