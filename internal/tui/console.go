@@ -18,6 +18,8 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/theme"
+	"github.com/missingstudio/eva/internal/tui/keymap"
 	"github.com/missingstudio/eva/internal/ui"
 )
 
@@ -152,6 +154,13 @@ type Console struct {
 	// It starts at the assumption and is corrected by the answer.
 	dark   bool
 	styles styles
+
+	// look and keys are what a person configured, or the complete defaults when
+	// they configured nothing. They are held rather than read from a file
+	// because this layer cannot read a file: the layer that wires a run maps one
+	// onto these and hands them in.
+	look theme.Theme
+	keys keymap.Keymap
 }
 
 var _ tea.Model = (*Console)(nil)
@@ -202,35 +211,37 @@ func inputStyles(dark bool) textarea.Styles {
 	return s
 }
 
-func newStyles(dark bool) styles {
-	subdued := ui.Subdued(dark)
+func newStyles(look theme.Theme) styles {
+	subdued := look.Subdued()
 	return styles{
 		said: lipgloss.NewStyle().Bold(true),
 		// The same grey the cost line is written in. Both are subordinate to
 		// the answer, so both are one decision rather than two that happen to
 		// agree — see ui.Subdued.
 		hint: subdued,
-		spin: lipgloss.NewStyle(),
+		spin: spinStyle(look),
 		box: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder(), true, false, true, false).
+			Border(look.Border, true, false, true, false).
 			BorderForeground(subdued.GetForeground()),
 
 		// The person's mark carries the colour and Eva's does not, because
 		// there is far more of Eva on the screen. A hue down the side of every
 		// answer would be a hue nobody sees; a hue down the side of the four
 		// things a person said is a landmark.
-		person: lipgloss.NewStyle().Foreground(lipgloss.LightDark(dark)(personOnLight, personOnDark)),
-		eva:    subdued,
+		person: lipgloss.NewStyle().Foreground(look.Colors.Person),
+		eva:    lipgloss.NewStyle().Faint(true).Foreground(look.Colors.Eva),
 	}
 }
 
-// The person's mark, one per background. Chosen to sit beside the greys rather
-// than compete with them: it has to be findable at a glance down a column two
-// characters wide, and nothing more is asked of it.
-var (
-	personOnLight = lipgloss.Color("#2F6FB2")
-	personOnDark  = lipgloss.Color("#7AA6DC")
-)
+// spinStyle is plain unless a Theme named a colour for it. The spinner is the
+// one thing here that is not subdued — a faint spinner is a spinner nobody can
+// see moving — and plain is what that was before a colour could be chosen.
+func spinStyle(look theme.Theme) lipgloss.Style {
+	if look.Colors.Spinner == nil {
+		return lipgloss.NewStyle()
+	}
+	return lipgloss.NewStyle().Foreground(look.Colors.Spinner)
+}
 
 // block is one thing in the transcript, and whose it is.
 //
@@ -386,7 +397,12 @@ func pollable(file *os.File) bool {
 // from the moment it starts. Asking beside it would mean two readers of one
 // input, and the one that is not the program wins the keystrokes it should not
 // have seen.
-func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Writer) (*tea.Program, *Console, error) {
+func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Writer, opts ...Option) (*tea.Program, *Console, error) {
+	look, keys := theme.Default(true), keymap.Default()
+	for _, opt := range opts {
+		opt(&look, &keys)
+	}
+
 	// A prompt of several lines rather than one.
 	//
 	// A person writing to a model writes paragraphs, pastes a stack trace, and
@@ -396,26 +412,26 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	// prompt would be eating the answer it is about to ask about, and from there
 	// it scrolls within itself.
 	input := textarea.New()
-	input.Placeholder = "ask something"
+	input.Placeholder = look.Symbols.Placeholder
 	// The mark goes on the first line only, and the rest are indented under it.
 	// Repeated down the side it stops meaning "here is the prompt" and starts
 	// meaning "here is another one" — five lines of one thought would read as
 	// five things about to be sent.
 	input.SetPromptFunc(promptMark, func(line textarea.PromptInfo) string {
 		if line.LineNumber == 0 {
-			return "› "
+			return look.Symbols.Prompt
 		}
 		return "  "
 	})
 	input.DynamicHeight = true
 	input.MinHeight = 1
-	input.MaxHeight = promptRows
+	input.MaxHeight = look.Layout.PromptRows
 	// Line numbers belong to an editor. This is a prompt.
 	input.ShowLineNumbers = false
 	// Enter sends, so the newline is on the chord — see key. Terminals that
 	// cannot report shift+enter report alt+enter, and the ones that can report
 	// both.
-	input.KeyMap.InsertNewline.SetKeys("shift+enter", "alt+enter")
+	input.KeyMap.InsertNewline.SetKeys(keys.Chords(keymap.Newline)...)
 	input.SetStyles(inputStyles(true))
 
 	c := &Console{
@@ -423,11 +439,13 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		control: backend,
 		ctx:     ctx,
 		input:   input,
-		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		spin:    spinner.New(spinner.WithSpinner(spinnerFor(look))),
 		pane:    viewport.New(),
 		pick:    randomPick,
-		dark:    true,
-		styles:  newStyles(true),
+		dark:    look.Dark,
+		styles:  newStyles(look),
+		look:    look,
+		keys:    keys,
 	}
 
 	// The pane is given no bindings of its own. Its defaults are a pager's — j,
@@ -443,7 +461,7 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	// difference between a long answer arriving in ten seconds and in thirty.
 	c.pane.SoftWrap = false
 
-	renderer, err := ui.New(c, c.dark)
+	renderer, err := ui.New(c, c.look)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -585,13 +603,6 @@ func (c *Console) View() tea.View {
 // How far the queued line is indented past the word that labels it, so that a
 // prompt waiting behind a turn is cut to a width that leaves room for the label.
 const queuedLabel = "queued: "
-
-// promptRows is how tall the prompt may grow before it scrolls within itself.
-//
-// It is a bound rather than a limit on what may be written. Ten rows is a long
-// paragraph or a short stack trace, and past it the prompt would be taking the
-// screen from the answer a person is asking about.
-const promptRows = 10
 
 // promptMark is how many columns the mark down the left of the prompt takes.
 const promptMark = 2
@@ -797,7 +808,7 @@ func (c *Console) status() string {
 
 	// The prompt waiting behind this turn, shown because a person who cannot
 	// see it has no way to tell it was taken from one that was dropped.
-	return line + "\n" + c.styles.hint.Render(queuedLabel+oneLine(c.queued, c.width-len(queuedLabel)))
+	return line + "\n" + c.styles.hint.Render(queuedLabel+oneLine(c.queued, c.width-lipgloss.Width(queuedLabel), c.look.Symbols.Truncation))
 }
 
 // oneLine is a prompt as a single row: its line breaks and runs of spaces
@@ -807,7 +818,7 @@ func (c *Console) status() string {
 // left as it was written would push the prompt down the screen by however many
 // lines a person happened to type, which is the interface moving under someone
 // who is still typing into it.
-func oneLine(s string, room int) string {
+func oneLine(s string, room int, ellipsis string) string {
 	s = strings.Join(strings.Fields(s), " ")
 	if room < 1 {
 		return ""
@@ -817,7 +828,7 @@ func oneLine(s string, room int) string {
 	if len(runes) <= room {
 		return s
 	}
-	return string(runes[:room-1]) + "…"
+	return string(runes[:room-1]) + ellipsis
 }
 
 // refresh puts the transcript, and the turn currently arriving, into the pane.
@@ -937,7 +948,7 @@ func (c *Console) behind() string {
 	if rows < 1 {
 		return ""
 	}
-	return "↓ " + strconv.Itoa(rows) + " more · ctrl+end to follow"
+	return "↓ " + strconv.Itoa(rows) + " more · " + c.keys.Chord(keymap.Follow) + " to follow"
 }
 
 // busy reports whether a Run is in flight.
@@ -1014,14 +1025,18 @@ func (c *Console) stop() {
 }
 
 // background takes the terminal's answer about its own colour, and restyles
-// everything that follows from it. Nothing configures this: a style a person
-// had to select is a style most people never select.
+// everything that follows from it.
+//
+// What a person configured is not discarded: the Theme is rebuilt for the
+// background the terminal reported and their choices are applied over it again,
+// so an answer arriving late corrects the greys without undoing a decision.
 func (c *Console) background(dark bool) tea.Cmd {
 	if dark == c.dark {
 		return nil
 	}
 	c.dark = dark
-	c.styles = newStyles(dark)
+	c.look = c.look.For(dark)
+	c.styles = newStyles(c.look)
 
 	c.input.SetStyles(inputStyles(dark))
 
@@ -1044,15 +1059,16 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 	// window and takes the line being typed with it.
 	defer c.fit()
 
-	// Anything but a second ctrl+c withdraws the question the first one asked.
-	// A person who went on typing has answered it.
-	if c.leaving && pressed != "ctrl+c" {
+	// Anything but a second interrupt withdraws the question the first one
+	// asked. A person who went on typing has answered it.
+	if c.leaving && !c.keys.Is(pressed, keymap.Interrupt) {
 		c.leaving = false
 	}
 
-	// Tab offers the next command; any other key means the person is writing
-	// again rather than choosing, so the next tab starts from what is there.
-	if pressed == "tab" {
+	// Complete offers the next command; any other key means the person is
+	// writing again rather than choosing, so the next one starts from what is
+	// there.
+	if c.keys.Is(pressed, keymap.Complete) {
 		c.complete()
 		return nil
 	}
@@ -1062,8 +1078,15 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 
-	switch pressed {
-	case "ctrl+c":
+	action, bound := c.keys.Action(pressed)
+	if !bound {
+		var cmd tea.Cmd
+		c.input, cmd = c.input.Update(k)
+		return cmd
+	}
+
+	switch action {
+	case keymap.Interrupt:
 		// During a turn this cancels it and gives the prompt back, rather
 		// than ending the Session. A long wrong answer should cost seconds,
 		// and the Session is a fold over what was committed — so the part of
@@ -1085,11 +1108,11 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		}
 		return tea.Quit
 
-	case "ctrl+d":
+	case keymap.Leave:
 		c.stop()
 		return tea.Quit
 
-	case "enter":
+	case keymap.Submit:
 		prompt := strings.TrimSpace(c.input.Value())
 		if prompt == "" {
 			return nil
@@ -1141,18 +1164,23 @@ func (c *Console) send(prompt string) tea.Cmd {
 // Every one of them is a chord or a named key, for that reason: a binding that
 // is also a character is a binding that steals it.
 func (c *Console) scroll(pressed string) bool {
-	switch pressed {
-	case "pgup":
+	action, bound := c.keys.Action(pressed)
+	if !bound {
+		return false
+	}
+
+	switch action {
+	case keymap.PageUp:
 		c.pane.PageUp()
-	case "pgdown":
+	case keymap.PageDown:
 		c.pane.PageDown()
-	case "shift+up":
+	case keymap.ScrollUp:
 		c.pane.ScrollUp(1)
-	case "shift+down":
+	case keymap.ScrollDown:
 		c.pane.ScrollDown(1)
-	case "ctrl+home":
+	case keymap.Top:
 		c.pane.GotoTop()
-	case "ctrl+end":
+	case keymap.Follow:
 		c.pane.GotoBottom()
 	default:
 		return false
@@ -1409,3 +1437,37 @@ func (c *Console) Show(turn string) error {
 }
 
 var _ ui.Screen = (*Console)(nil)
+
+// Option is what a caller says about how this console looks and what its keys
+// do. A caller that says nothing gets the complete defaults.
+//
+// They are options rather than parameters because a console is built by a
+// frontend that may have nothing to configure — a test, a first run — and
+// because what a person configured arrives from a file this layer cannot read.
+type Option func(*theme.Theme, *keymap.Keymap)
+
+// WithTheme draws the interface the way a person asked.
+func WithTheme(look theme.Theme) Option {
+	return func(t *theme.Theme, _ *keymap.Keymap) { *t = look }
+}
+
+// WithKeymap answers the keys a person asked for.
+func WithKeymap(keys keymap.Keymap) Option {
+	return func(_ *theme.Theme, k *keymap.Keymap) { *k = keys }
+}
+
+// spinnerFor is the frames a Theme names.
+func spinnerFor(look theme.Theme) spinner.Spinner {
+	switch look.Symbols.Spinner {
+	case theme.SpinnerDot:
+		return spinner.Dot
+	case theme.SpinnerLine:
+		return spinner.Line
+	case theme.SpinnerPulse:
+		return spinner.Pulse
+	case theme.SpinnerPoints:
+		return spinner.Points
+	default:
+		return spinner.MiniDot
+	}
+}

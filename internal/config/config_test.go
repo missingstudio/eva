@@ -481,3 +481,39 @@ func TestANamedFileIsStillTheFileThatIsRead(t *testing.T) {
 		t.Errorf("base URL = %q, want the one the named file set", cfg.Provider.BaseURL)
 	}
 }
+
+// Look and feel is what a repository may set, which is the whole point of the
+// allow list having anything on it.
+func TestARepositoryMaySetLookAndFeel(t *testing.T) {
+	home(t)
+	project(t, `
+[theme.colors]
+person = "#ABCDEF"
+
+[theme.symbols]
+prompt = "» "
+
+[theme.layout]
+prompt_rows = 4
+
+[keymap.bind]
+follow = ["ctrl+g"]
+`)
+
+	cfg := load(t, "")
+	if cfg.Theme.Colors.Person != "#ABCDEF" {
+		t.Errorf("person = %q, want the repository's colour", cfg.Theme.Colors.Person)
+	}
+	if cfg.Theme.Symbols.Prompt == nil || *cfg.Theme.Symbols.Prompt != "» " {
+		t.Errorf("prompt = %v, want the repository's mark", cfg.Theme.Symbols.Prompt)
+	}
+	if cfg.Theme.Layout.PromptRows == nil || *cfg.Theme.Layout.PromptRows != 4 {
+		t.Errorf("prompt rows = %v, want the repository's measurement", cfg.Theme.Layout.PromptRows)
+	}
+	if got := cfg.Keys.Bind["follow"]; len(got) != 1 || got[0] != "ctrl+g" {
+		t.Errorf("follow = %v, want the repository's binding", got)
+	}
+	if cfg.Project == "" {
+		t.Error("Project is empty after a repository's settings were read")
+	}
+}

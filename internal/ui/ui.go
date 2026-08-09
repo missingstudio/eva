@@ -11,6 +11,7 @@ import (
 	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/theme"
 )
 
 // Screen is where a finished turn goes.
@@ -69,6 +70,10 @@ type Renderer struct {
 	// for one must not discard the other.
 	dark  bool
 	width int
+
+	// look is the colours and glyphs this draws with. It is held so that a
+	// rebuild for a resize keeps what a person configured.
+	look theme.Theme
 }
 
 // New builds a Renderer that shows each finished turn on a Screen.
@@ -78,13 +83,15 @@ type Renderer struct {
 // constructor that picked one would be the same decision made in two places,
 // and the one it picked would be the one nobody thought about.
 //
-// dark says whether the terminal has a dark background. It is a parameter
-// rather than something this package detects, because detecting it means
-// querying the terminal and this package holds no terminal — the frontend that
-// owns the outside world asks, and hands in the answer. There is no
-// configuration key: a style nobody chose is the only style there is.
-func New(screen Screen, dark bool) (*Renderer, error) {
-	r := &Renderer{screen: screen, dark: dark}
+// look is how the turn is drawn. It is handed in rather than detected, because
+// detecting the background means querying the terminal and this package holds
+// none — the frontend that owns the outside world asks, and hands in the
+// answer along with whatever a person configured.
+//
+// theme.Default(dark) is the whole of what this took before, so a caller with
+// nothing to say passes exactly that and sees exactly what it saw.
+func New(screen Screen, look theme.Theme) (*Renderer, error) {
+	r := &Renderer{screen: screen, dark: look.Dark, look: look}
 	if err := r.rebuild(); err != nil {
 		return nil, err
 	}
@@ -110,6 +117,7 @@ func Stream(out io.Writer) Screen { return stream{out: out} }
 // must not also reset what the conversation has cost.
 func (r *Renderer) Background(dark bool) error {
 	r.dark = dark
+	r.look = theme.Default(dark)
 	return r.rebuild()
 }
 
@@ -162,7 +170,7 @@ func (r *Renderer) rebuild() error {
 	}
 
 	r.markdown = markdown
-	r.costStyle = Subdued(r.dark)
+	r.costStyle = r.look.Subdued()
 	return nil
 }
 
@@ -172,11 +180,12 @@ func (r *Renderer) rebuild() error {
 // person's reason for being here.
 //
 // It is exported because it was written twice. The frontend cannot import the
-// two greys below without importing this package, and two packages naming one
-// colour is two places to change it and one place to forget.
-func Subdued(dark bool) lipgloss.Style {
-	return lipgloss.NewStyle().Faint(true).Foreground(lipgloss.LightDark(dark)(subduedOnLight, subduedOnDark))
-}
+// two greys without importing this package, and two packages naming one colour
+// is two places to change it and one place to forget.
+//
+// The colour itself is the Theme's now, so a person who chose one is obeyed
+// here as well as on the status line.
+func Subdued(dark bool) lipgloss.Style { return theme.Default(dark).Subdued() }
 
 // stream is the Screen a byte stream is: it writes the turn out, and that is
 // where the colour meets a destination that has a capability to be reduced to.
@@ -192,14 +201,6 @@ func (s stream) Show(turn string) error {
 	}
 	return nil
 }
-
-// The subdued grey, one per background. Both are true colour, and neither is
-// emitted as written: what reaches the terminal is downsampled to what the
-// terminal can show.
-var (
-	subduedOnLight = lipgloss.Color("#5C5C5C")
-	subduedOnDark  = lipgloss.Color("#9E9E9E")
-)
 
 // Committed folds one committed Event into what the person sees.
 //

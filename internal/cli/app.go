@@ -15,12 +15,14 @@ import (
 	"github.com/missingstudio/eva/internal/core/prompt"
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/providers"
+	"github.com/missingstudio/eva/internal/theme"
 
 	// The Providers a build can select, each registering itself as it loads.
 	_ "github.com/missingstudio/eva/internal/providers/anthropic"
 	_ "github.com/missingstudio/eva/internal/providers/fake"
 	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui"
+	"github.com/missingstudio/eva/internal/tui/keymap"
 	"github.com/missingstudio/eva/internal/ui"
 )
 
@@ -171,10 +173,59 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 		return once(ctx, e, opts.prompt, stdout)
 	}
 
-	if err := tui.Run(ctx, e, stdin, stdout); err != nil {
+	look, keys, err := appearance(cfg)
+	if err != nil {
+		return ExitUsage, err
+	}
+
+	if err := tui.Run(ctx, e, stdin, stdout, tui.WithTheme(look), tui.WithKeymap(keys)); err != nil {
 		return ExitFailure, err
 	}
 	return ExitOK, nil
+}
+
+// appearance maps what a person wrote onto the types the interface draws with.
+//
+// The mapping happens here and only here. A Theme is the console's vocabulary
+// and a Config is a file format, and the layer that reads files is the one that
+// turns the second into the first — which is what lets the console be
+// configurable while remaining unable to read a configuration.
+//
+// A dark terminal is assumed, and corrected when the real one answers. The
+// Theme carries what a person chose across that correction, so an answer
+// arriving late changes the greys without undoing a decision.
+func appearance(cfg config.Config) (theme.Theme, keymap.Keymap, error) {
+	look, err := theme.Build(true, theme.Settings{
+		Subdued:        cfg.Theme.Colors.Subdued,
+		Person:         cfg.Theme.Colors.Person,
+		Eva:            cfg.Theme.Colors.Eva,
+		Spinner:        cfg.Theme.Colors.Spinner,
+		SpinnerName:    cfg.Theme.Symbols.Spinner,
+		Prompt:         cfg.Theme.Symbols.Prompt,
+		Placeholder:    cfg.Theme.Symbols.Placeholder,
+		Truncation:     cfg.Theme.Symbols.Truncation,
+		Border:         cfg.Theme.Border,
+		PromptRows:     cfg.Theme.Layout.PromptRows,
+		CaptionSeconds: cfg.Theme.Layout.CaptionSeconds,
+	})
+	if err != nil {
+		return theme.Theme{}, keymap.Keymap{}, fmt.Errorf("%w (in %s)", err, appearanceFile(cfg))
+	}
+
+	keys, err := keymap.Parse(cfg.Keys.Bind)
+	if err != nil {
+		return theme.Theme{}, keymap.Keymap{}, fmt.Errorf("%w (in %s)", err, appearanceFile(cfg))
+	}
+	return look, keys, nil
+}
+
+// appearanceFile is which file a person has to go and edit. Look and feel is
+// the one thing a repository may set, so it is the more likely of the two.
+func appearanceFile(cfg config.Config) string {
+	if cfg.Project != "" {
+		return cfg.Project
+	}
+	return cfg.Path
 }
 
 // The fold a person reads a turn in is a projection of what was committed, and
@@ -213,7 +264,7 @@ func once(ctx context.Context, e *eva, prompt string, stdout io.Writer) (int, er
 	// terminal and reading it back, and this path may have no terminal at all —
 	// where it does not, lipgloss removes the escapes on the way out and the
 	// assumption costs nothing.
-	renderer, err := ui.New(ui.Stream(stdout), true)
+	renderer, err := ui.New(ui.Stream(stdout), theme.Default(true))
 	if err != nil {
 		return ExitFailure, err
 	}
