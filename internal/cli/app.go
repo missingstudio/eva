@@ -15,6 +15,7 @@ import (
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/core/prompt"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/loop"
 	"github.com/missingstudio/eva/internal/providers"
 	"github.com/missingstudio/eva/internal/theme"
 
@@ -320,9 +321,9 @@ var _ core.Subscriber = (*render.Renderer)(nil)
 // this turn exactly as it holds every other — committed, by the same schema,
 // through the same sink. This writes the same fold a person would have read.
 //
-// Nothing watches the turn arrive. Turn.Arriving is nil on this path, which is
-// what ADR 0015 already says of a run with no live area: there is nothing to
-// erase, so the answer is written when it is whole.
+// Nothing watches the turn arrive. loop.Loop.Arriving is nil on this path,
+// which is what ADR 0015 already says of a run with no live area: there is
+// nothing to erase, so the answer is written when it is whole.
 //
 // A failed turn exits non-zero. The console has no exit code because it stays
 // open; this does not stay open, so the claim the Trace holds is also the
@@ -369,7 +370,7 @@ type eva struct {
 
 	// interrupt says whether whoever is driving these turns listens for a
 	// cancellation and closes the Run, rather than letting the process die
-	// under it. It is a property of the frontend and not of a Turn, so it is
+	// under it. It is a property of the frontend and not of a Loop, so it is
 	// told rather than assumed: a capability claimed and absent corrupts a
 	// Run, where a missing one only degrades it.
 	interrupt bool
@@ -379,7 +380,8 @@ type eva struct {
 	subs []core.Subscriber
 
 	// arriving is who is watching the turn happen, and is nil when nobody is.
-	// See Turn.Arriving for why that is a different thing from a Subscriber.
+	// See loop.Loop.Arriving for why that is a different thing from a
+	// Subscriber.
 	arriving func(chunk string)
 }
 
@@ -413,7 +415,7 @@ func (e *eva) Clear() { e.session = e.session.Fresh(events.SessionID(newID("sess
 // this is where the listening is. A capability that is missing degrades a Run;
 // a capability claimed and absent corrupts it, and a scheduler that routed work
 // here on a false claim would have no way to find out — which is why the claim
-// is not a field a Turn's builder can set on its own.
+// is not a field a Loop's builder can set on its own.
 //
 // This is the only door. Everything a Run learns about who is watching it comes
 // through here, so the answer to "what does this Run claim, and who sees what it
@@ -449,7 +451,8 @@ func (e *eva) Attach(sub core.Subscriber, opts ...WatchOption) {
 type WatchOption func(*eva)
 
 // WithArriving says the frontend shows a turn while it happens. See
-// Turn.Arriving for why that is a different thing from being a Subscriber.
+// loop.Loop.Arriving for why that is a different thing from being a
+// Subscriber.
 func WithArriving(arriving func(chunk string)) WatchOption {
 	return func(e *eva) { e.arriving = arriving }
 }
@@ -479,7 +482,7 @@ func (e *eva) Answer(ctx context.Context, intent string) (core.Outcome, error) {
 		return core.Outcome{}, err
 	}
 
-	turn := &Turn{
+	unit := &loop.Loop{
 		Provider:     e.provider,
 		ProviderName: e.providerName,
 		Recorder:     recorder,
@@ -493,7 +496,7 @@ func (e *eva) Answer(ctx context.Context, intent string) (core.Outcome, error) {
 		Arriving:     e.arriving,
 	}
 
-	return turn.Execute(ctx, core.Spec{
+	return unit.Execute(ctx, core.Spec{
 		Tenant: e.session.Tenant,
 		Actor:  e.session.Actor,
 		Intent: intent,

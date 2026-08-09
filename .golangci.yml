@@ -245,6 +245,33 @@ linters:
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/trace
 
+        # loop is the Unit that answers a prompt: it assembles one call out of
+        # what it was handed, replays what the Provider yields into the Trace,
+        # and closes the Run with the claim of how it went. One provider turn
+        # today; tool dispatch, parallel groups, and approval gates later.
+        #
+        # The absences are why it is a layer rather than a package under the
+        # frontend. No config, so the layer that reads a person's file is still
+        # the only layer that reads it. No trace, so the sink a Run commits to is
+        # chosen above and handed in as a Recorder. No tui and no render, so a
+        # Loop cannot show a person anything it did not first commit — which is
+        # the property a loop grown inside the frontend would have had no rule to
+        # keep.
+        loop:
+          list-mode: strict
+          files:
+            - "**/internal/loop/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            # core, for the Unit it satisfies, the Recorder every step reaches
+            # the Trace through, and the Session a turn is conditioned on.
+            - github.com/missingstudio/eva/internal/core
+            # providers, for the Provider a turn is asked of, and the contract
+            # alone. No implementation is named: which Provider answers is
+            # configuration's to say and the registry's to hold.
+            - github.com/missingstudio/eva/internal/providers
+
         # cli assembles a run and is the top of the graph. It may import
         # everything below it, and it holds no terminal: the console is tui's,
         # and the fold a person reads a turn in is ui's. What is left here is
@@ -270,6 +297,10 @@ linters:
             - github.com/missingstudio/eva/internal/auth
             - github.com/missingstudio/eva/internal/providers
             - github.com/missingstudio/eva/internal/trace
+            # loop, the Unit a prompt is answered by. This builds one out of the
+            # assembly it holds and asks it for an Outcome; what the Unit does
+            # between provider turns is the loop's and never the frontend's.
+            - github.com/missingstudio/eva/internal/loop
             # render, for the fold a person reads a turn in. It is a layer beside
             # core rather than a package under this one: it holds no terminal,
             # so the frontend consumes it and it consumes nothing of the

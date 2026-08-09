@@ -108,6 +108,10 @@ _Avoid_: Backoff (that is the arithmetic, not the attempt), reattempt
 
 ### Answering a turn
 
+**Loop**:
+The Unit that answers a prompt: it assembles one call out of what it was handed, replays what the Provider yields into the Trace, and closes the Run with the claim of how it went. It runs one turn today and decides nothing between turns; what it grows into is the cycle that proposes, acts, and observes, with the tool dispatch and the gates that go with it. It is named for what it becomes rather than for what it does, because the rename and the move out of the frontend are one act and the type was constructed in one place.
+_Avoid_: Agent (an agent is a Unit at a longer timescale), executor, runner, Driver (that is one Provider's half of one turn, a layer below)
+
 **Turn**:
 One exchange with a Provider: a request begun, a stream read to its end. It is the providers' word — a Provider begins one, a Wire carries one attempt at one, a Driver pulls one — and it is not a unit of record: what the Trace holds is a Run, and one Run holds many turns the day there are tools to call between them. What answers a prompt is the Run, not the turn the answer arrived on.
 _Avoid_: Turn as the prompt-to-answer arc (retired: that arc is a Run, and one concept gets one name), completion, round-trip

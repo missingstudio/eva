@@ -1,4 +1,4 @@
-package cli
+package loop
 
 import (
 	"context"
@@ -11,19 +11,23 @@ import (
 	"github.com/missingstudio/eva/internal/providers"
 )
 
-// Turn is one prompt answered by one model call. It is the smallest Unit Eva
-// has: it takes a Spec and returns an Outcome, exactly as a workflow, an
-// agent, or a factory does at a longer timescale.
+// Loop is the Unit that answers one prompt. It takes a Spec and returns an
+// Outcome, exactly as a workflow, an agent, or a factory does at a longer
+// timescale, and the whole account of the prompt-to-answer arc is the Run this
+// Unit executes as — there is no third name for that arc.
 //
-// A Turn is not a Run. A Run is one execution of a Unit against a Session, and
-// it is the Run the Recorder stamps; a Turn is the Unit being executed. The
-// words are close and the glossary keeps them apart on purpose.
+// It is named for what it becomes rather than for what it does today, which is
+// exactly one provider turn with nothing to decide between turns. The day there
+// are tools to call, one Run holds many turns and the cycle that chooses the
+// next one is written here. The name came with the move out of the frontend
+// because a rename and a move are one reviewable act, and the type was
+// constructed in one place on the day it was cheap.
 //
-// What a Turn does not hold is as telling as what it does. It has no clock, no
+// What a Loop does not hold is as telling as what it does. It has no clock, no
 // identifier source, no output stream, and no way to write to the Session —
-// the Recorder owns all four. A Turn says what happened; it does not decide
+// the Recorder owns all four. A Loop says what happened; it does not decide
 // how that is recorded, and it cannot record one thing and report another.
-type Turn struct {
+type Loop struct {
 	Provider providers.Provider
 
 	// ProviderName is what configuration selected the Provider by, and is what
@@ -46,15 +50,15 @@ type Turn struct {
 	// on before it is conditioned on anything anybody said. Empty sends none.
 	//
 	// It is told rather than read from the package that holds it, for the
-	// reason the Model is. A Turn assembles one call out of what it was
-	// handed, and a Turn that reached for a prompt of its own would be a Turn
+	// reason the Model is. A Loop assembles one call out of what it was
+	// handed, and a Loop that reached for a prompt of its own would be a Loop
 	// whose context spend no caller can see or substitute.
 	SystemPrompt string
 
 	// Interrupt says whether a cancellation of this turn is a clean cancel:
 	// whether something is listening for it and lets the Run close, rather
 	// than the process dying under it. It is a property of whoever drives the
-	// Turn, so it is told rather than worked out here.
+	// Loop, so it is told rather than worked out here.
 	Interrupt bool
 
 	// Arriving is told each chunk as the Provider yields it, before any of it
@@ -75,7 +79,7 @@ type Turn struct {
 	Arriving func(chunk string)
 }
 
-var _ core.Unit = (*Turn)(nil)
+var _ core.Unit = (*Loop)(nil)
 
 // Execute answers one prompt.
 //
@@ -89,12 +93,12 @@ var _ core.Unit = (*Turn)(nil)
 // and a caller reading something else would be reading a second account of one
 // turn. The error is what the Outcome cannot carry: the record itself failing,
 // where there is nothing in the Trace to read instead.
-func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error) {
+func (l *Loop) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error) {
 	// The intent rides on Started, which is what puts the prompt in the Trace
 	// and therefore in the Session. A transcript whose first message lives
 	// only in this process is one a Trace cannot reconstruct.
-	started := events.Started{Intent: spec.Intent, Capabilities: capabilities(t.Interrupt)}
-	if err := t.Recorder.Record(ctx, started); err != nil {
+	started := events.Started{Intent: spec.Intent, Capabilities: capabilities(l.Interrupt)}
+	if err := l.Recorder.Record(ctx, started); err != nil {
 		// The Run may be open even though this failed. A group is committed
 		// before it is published, so a projection that broke on the way out
 		// leaves the Started record in the Trace and returns an error anyway —
@@ -105,11 +109,11 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 		// A sink that is broken rather than a projection fails this too, and
 		// then there was no Run to close and nothing is lost by having tried.
 		closed := core.Outcome{Result: events.ResultFailed, Summary: "the run could not be opened"}
-		_ = t.Recorder.Finish(context.WithoutCancel(ctx), closed.Claim())
+		_ = l.Recorder.Finish(context.WithoutCancel(ctx), closed.Claim())
 		return core.Outcome{}, err
 	}
 
-	streamErr := t.stream(ctx)
+	streamErr := l.stream(ctx)
 
 	outcome := core.Outcome{Result: events.ResultDone, Summary: "answered"}
 	switch {
@@ -130,9 +134,9 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	// record is a Run a reader cannot tell from one that is still going — and
 	// an interrupted Run is exactly the one whose close would otherwise be
 	// cancelled along with it. The Recorder closes the Run rather than the
-	// Turn writing the record, because anything the Run could not understand
+	// Loop writing the record, because anything the Run could not understand
 	// qualifies the claim and has to be committed with it.
-	if err := t.Recorder.Finish(context.WithoutCancel(ctx), outcome.Claim()); err != nil {
+	if err := l.Recorder.Finish(context.WithoutCancel(ctx), outcome.Claim()); err != nil {
 		return outcome, err
 	}
 
@@ -162,12 +166,12 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 // The day it stops being constant — a profile that carries its own, a memory
 // folded in per Session — is the day it has to enter the record, because from
 // then on the Trace could no longer say what a turn was conditioned on.
-func (t *Turn) conditioning() []core.Message {
-	transcript := t.Session.Messages()
-	if t.SystemPrompt == "" {
+func (l *Loop) conditioning() []core.Message {
+	transcript := l.Session.Messages()
+	if l.SystemPrompt == "" {
 		return transcript
 	}
-	return append([]core.Message{{Author: core.AuthorSystem, Text: t.SystemPrompt}}, transcript...)
+	return append([]core.Message{{Author: core.AuthorSystem, Text: l.SystemPrompt}}, transcript...)
 }
 
 // unrecorded marks a failure to write rather than a failure to work.
@@ -190,17 +194,17 @@ func (u unrecorded) Unwrap() error { return u.err }
 // batch that is safe to hold: everything already recorded survives the process
 // dying, so buffering a whole turn would trade the property invariant 1 rests
 // on for a smaller file.
-func (t *Turn) stream(ctx context.Context) error {
-	stream := t.Provider.Stream(ctx, providers.Call{
-		Model:    t.Model,
-		Messages: t.conditioning(),
+func (l *Loop) stream(ctx context.Context) error {
+	stream := l.Provider.Stream(ctx, providers.Call{
+		Model:    l.Model,
+		Messages: l.conditioning(),
 	})
 	// The turn's outcome is what the caller acts on. A stream that failed to
 	// close has nothing to add to it, and the Trace already holds what
 	// happened.
 	defer func() { _ = stream.Close() }()
 
-	block := newBlocks(t.Recorder)
+	block := newBlocks(l.Recorder)
 	for {
 		payload, err := stream.Next(ctx)
 		if errors.Is(err, io.EOF) {
@@ -218,15 +222,15 @@ func (t *Turn) stream(ctx context.Context) error {
 			if ferr := block.close(context.WithoutCancel(ctx)); ferr != nil {
 				return ferr
 			}
-			return fmt.Errorf("provider %s: %w", t.ProviderName, err)
+			return fmt.Errorf("provider %s: %w", l.ProviderName, err)
 		}
 
 		// Whoever is watching the turn happen is told first, because being
 		// told is the only reason they are watching. It is told what arrived,
 		// which is not the same act as recording it: the record is committed
 		// below, a content block at a time.
-		if text, isText := payload.(events.Text); isText && t.Arriving != nil {
-			t.Arriving(text.Chunk)
+		if text, isText := payload.(events.Text); isText && l.Arriving != nil {
+			l.Arriving(text.Chunk)
 		}
 
 		if degraded, isCaveat := payload.(events.Degraded); isCaveat {
@@ -235,7 +239,7 @@ func (t *Turn) stream(ctx context.Context) error {
 			// that noticed two things — and a Run whose Trace also holds a
 			// record nobody understood — still close on a single Degraded
 			// rather than on a scattering of them a reader has to reconcile.
-			t.Recorder.Degrade(degraded.Missing...)
+			l.Recorder.Degrade(degraded.Missing...)
 			continue
 		}
 
@@ -248,7 +252,7 @@ func (t *Turn) stream(ctx context.Context) error {
 		switch payload.(type) {
 		case events.Text, events.Usage, events.Retry:
 		default:
-			return fmt.Errorf("provider %s yielded a %T, which is not a Provider's to record", t.ProviderName, payload)
+			return fmt.Errorf("provider %s yielded a %T, which is not a Provider's to record", l.ProviderName, payload)
 		}
 
 		if err := block.add(ctx, payload); err != nil {

@@ -1,18 +1,21 @@
-package cli
+package loop
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/core/prompt"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/providers"
 )
 
-// These tests are about the two things a Turn decides that nothing downstream
+// These tests are about the two things a Loop decides that nothing downstream
 // can decide for it: where a group ends, and what counts as the turn failing
 // rather than the record failing.
 //
@@ -22,6 +25,71 @@ import (
 // between an Outcome and an error is a difference between two return values,
 // not two files. So they are asserted here, at the interface, rather than
 // through the binary.
+
+// driven is a Provider the test drives.
+//
+// It keeps the transcript each call was conditioned on, which is the only way
+// to observe what a Loop assembled: an answer read back from the Trace is the
+// same answer whatever the call that produced it said.
+type driven struct {
+	mu     sync.Mutex
+	script []recording
+	turn   int
+	calls  []providers.Call
+}
+
+// recording is one turn this Provider replays.
+type recording struct {
+	// chunks is the answer, split the way a stream would deliver it.
+	chunks []string
+}
+
+var _ providers.Provider = (*driven)(nil)
+
+func (d *driven) Stream(_ context.Context, call providers.Call) providers.Stream {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.turn >= len(d.script) {
+		return providers.Failed(fmt.Errorf("driven: the script records %d turn(s) and this is turn %d", len(d.script), d.turn+1))
+	}
+	rec := d.script[d.turn]
+	d.turn++
+	d.calls = append(d.calls, call)
+
+	return &drivenStream{rec: rec}
+}
+
+// transcripts is the transcript of every call so far.
+func (d *driven) transcripts() [][]core.Message {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	out := make([][]core.Message, len(d.calls))
+	for i, call := range d.calls {
+		out[i] = call.Messages
+	}
+	return out
+}
+
+type drivenStream struct {
+	rec recording
+	at  int
+}
+
+func (s *drivenStream) Next(ctx context.Context) (events.Payload, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.at < len(s.rec.chunks) {
+		chunk := s.rec.chunks[s.at]
+		s.at++
+		return events.Text{Chunk: chunk}, nil
+	}
+	return nil, io.EOF
+}
+
+func (s *drivenStream) Close() error { return nil }
 
 // grouped is a TraceSink that keeps the groups it was appended rather than the
 // records inside them.
@@ -216,11 +284,11 @@ func TestAContentBlockCommitsAsOneGroup(t *testing.T) {
 
 // The base system prompt is what a turn is conditioned on before it is
 // conditioned on anything anybody said, and it is not part of the transcript.
-// Turn.conditioning has why the two are separate.
+// Loop.conditioning has why the two are separate.
 func TestTheBaseSystemPromptHeadsTheTurnAndIsNotInTheTranscript(t *testing.T) {
 	provider := &driven{script: []recording{{chunks: []string{"answered."}}}}
 	session := newTestSession()
-	turn := &Turn{
+	unit := &Loop{
 		Provider: provider,
 		// The Session opens its own Run, so the prompt folds into the
 		// transcript as it is committed — which is what the Provider is then
@@ -231,7 +299,7 @@ func TestTheBaseSystemPromptHeadsTheTurnAndIsNotInTheTranscript(t *testing.T) {
 		SystemPrompt: prompt.Base(),
 	}
 
-	if _, err := turn.Execute(context.Background(), core.Spec{Intent: "what is this project"}); err != nil {
+	if _, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"}); err != nil {
 		t.Fatalf("answer a turn: %v", err)
 	}
 
@@ -253,20 +321,20 @@ func TestTheBaseSystemPromptHeadsTheTurnAndIsNotInTheTranscript(t *testing.T) {
 	}
 }
 
-// A Turn told no system prompt sends none, rather than sending an empty one.
+// A Loop told no system prompt sends none, rather than sending an empty one.
 // An empty Message says nothing an answer can be conditioned on, and the API
 // rejects an empty content block.
 func TestATurnWithNoSystemPromptSendsNoSystemMessage(t *testing.T) {
 	provider := &driven{script: []recording{{chunks: []string{"answered."}}}}
 	session := newTestSession()
-	turn := &Turn{
+	unit := &Loop{
 		Provider: provider,
 		Recorder: opened(t, session, &grouped{}),
 		Session:  session,
 		Model:    "test-model",
 	}
 
-	if _, err := turn.Execute(context.Background(), core.Spec{Intent: "what is this project"}); err != nil {
+	if _, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"}); err != nil {
 		t.Fatalf("answer a turn: %v", err)
 	}
 
@@ -302,14 +370,14 @@ func TestAProviderFailureIsAnOutcomeRatherThanAnError(t *testing.T) {
 	sink := &grouped{}
 	// An empty script, so the first call is refused. What broke does not
 	// matter here; that it broke before the Trace did is the whole of it.
-	turn := &Turn{
+	unit := &Loop{
 		Provider: &driven{},
 		Recorder: recorder(t, sink),
 		Session:  newTestSession(),
 		Model:    "test-model",
 	}
 
-	outcome, err := turn.Execute(context.Background(), core.Spec{Intent: "what is this project"})
+	outcome, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"})
 	if err != nil {
 		t.Fatalf("err = %v, want a turn that failed to be answered with an Outcome", err)
 	}
@@ -342,14 +410,14 @@ func TestAProviderFailureIsAnOutcomeRatherThanAnError(t *testing.T) {
 // close produced.
 func TestARecordThatCannotBeWrittenReachesTheCallerAsAnError(t *testing.T) {
 	sink := &refusing{refuse: 2}
-	turn := &Turn{
+	unit := &Loop{
 		Provider: &driven{script: []recording{{chunks: []string{"answered."}}}},
 		Recorder: recorder(t, sink),
 		Session:  newTestSession(),
 		Model:    "test-model",
 	}
 
-	outcome, err := turn.Execute(context.Background(), core.Spec{Intent: "what is this project"})
+	outcome, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"})
 	if !errors.Is(err, errFull) {
 		t.Fatalf("err = %v, want the sink's own failure", err)
 	}
@@ -390,14 +458,14 @@ func TestARunThatOpenedClosesEvenWhenOpeningItFailed(t *testing.T) {
 		t.Fatalf("build a Recorder: %v", err)
 	}
 
-	turn := &Turn{
+	unit := &Loop{
 		Recorder: rec,
 		Session:  newTestSession(),
 		Provider: &driven{script: []recording{{chunks: []string{"answered."}}}},
 		Model:    "test-model",
 	}
 
-	if _, err := turn.Execute(context.Background(), core.Spec{Intent: "hello"}); err == nil {
+	if _, err := unit.Execute(context.Background(), core.Spec{Intent: "hello"}); err == nil {
 		t.Fatal("a publish failure while opening the Run was not reported")
 	}
 

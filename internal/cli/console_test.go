@@ -166,6 +166,30 @@ func (s *drivenStream) Next(ctx context.Context) (events.Payload, error) {
 
 func (s *drivenStream) Close() error { return nil }
 
+// newTestSession opens a Session for the turns under test, on a clock that does
+// not move and identifiers that count.
+//
+// Both are the Session's rather than the process's, which is the point of
+// handing them in: a timestamp nothing chose is a field a test can only check
+// the shape of, and a Run named by eight random bytes is one no failure can
+// name back.
+func newTestSession() *core.Session {
+	var runs, records uint64
+	return core.NewSession("sess_test", "tenant_test",
+		events.Identity{ID: "test", Kind: events.ActorAgent},
+		core.Origin{
+			Now: func() events.Timestamp { return events.Timestamp{} },
+			RunID: func() events.RunID {
+				runs++
+				return events.RunID(fmt.Sprintf("run_%d", runs))
+			},
+			EventID: func() events.EventID {
+				records++
+				return events.EventID(fmt.Sprintf("evt_%d", records))
+			},
+		})
+}
+
 // heard is a buffer two goroutines touch: the program renders into it and the
 // test reads it.
 type heard struct {
@@ -523,7 +547,7 @@ func TestATurnCancelledByCtrlCLeavesATraceThatParses(t *testing.T) {
 // A Run driven from here can be cancelled cleanly, and says so.
 //
 // The claim is made by the frontend that does the listening rather than by the
-// Turn, so it is a claim and not a constant: a frontend that let the process
+// Loop, so it is a claim and not a constant: a frontend that let the process
 // die under a Run would not make it. The console is the only frontend Eva has
 // today, which is why this is the only place the claim is asserted.
 func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
