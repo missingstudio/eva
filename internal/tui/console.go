@@ -11,9 +11,9 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/term"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
@@ -55,9 +55,22 @@ type Console struct {
 	// block are each only meaningful once they are complete.
 	arriving strings.Builder
 
-	// pending holds what is waiting to go above the view. The program puts it
-	// there, and only the update loop may ask it to.
-	pending []string
+	// transcript is what has been kept: every rendered turn, every prompt
+	// echoed back, and every command answered. It holds no arriving text — see
+	// refresh — so nothing in it came from anywhere but a committed record.
+	transcript strings.Builder
+
+	// pane is the window onto the transcript. It scrolls, so the transcript is
+	// not truncated to fit; what a person sees is a position in it.
+	pane viewport.Model
+
+	// screen is what refresh last composed, and shown guards it. It is read
+	// from outside the update loop by whoever is driving the program — see
+	// Screen — and written inside it, so the two need to agree on a lock.
+	shown  sync.Mutex
+	screen string
+	// answering mirrors busy under the same lock, for Busy.
+	answering bool
 
 	// cancel ends the Run in flight, and is nil when there is none.
 	cancel context.CancelFunc
@@ -68,14 +81,10 @@ type Console struct {
 	// instrument to detect.
 	running sync.WaitGroup
 
-	// profile is what the destination can show. Colour is reduced to it here,
-	// before a turn is handed over, for the reason put sets out.
-	profile colorprofile.Profile
-
-	// height and width are the window's, and are zero until the program reports
-	// them. The width is what the footer puts the model at the far end of.
-	height int
-	width  int
+	// width is the window's, and is zero until the program reports one. It is
+	// what the footer puts the model at the far end of, and what the answer is
+	// wrapped to.
+	width int
 
 	// spin turns while a Run is in flight. It is the answer to the one question
 	// a live area cannot otherwise answer: an answer that has not started
@@ -105,16 +114,23 @@ type styles struct {
 	// spin is the one thing here that is not subdued. A faint spinner is a
 	// spinner nobody can see moving, and its whole job is to be seen moving.
 	spin lipgloss.Style
+	// box is the border around the prompt. It is drawn in the same grey as
+	// everything else here, because a border is the least of what is on screen.
+	box lipgloss.Style
 }
 
 func newStyles(dark bool) styles {
+	subdued := ui.Subdued(dark)
 	return styles{
 		said: lipgloss.NewStyle().Bold(true),
 		// The same grey the cost line is written in. Both are subordinate to
 		// the answer, so both are one decision rather than two that happen to
 		// agree — see ui.Subdued.
-		hint: ui.Subdued(dark),
+		hint: subdued,
 		spin: lipgloss.NewStyle(),
+		box: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(subdued.GetForeground()),
 	}
 }
 
@@ -239,7 +255,7 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		ctx:     ctx,
 		input:   input,
 		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot)),
-		profile: colorprofile.Detect(out, os.Environ()),
+		pane:    viewport.New(),
 		dark:    true,
 		styles:  newStyles(true),
 	}
@@ -249,6 +265,9 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		return nil, nil, err
 	}
 	c.renderer = renderer
+
+	// A size to draw at until the window reports its own. See initialWidth.
+	c.layout(initialWidth, initialHeight)
 
 	// The program does not exist until the model does, and the reader has to
 	// be able to end the program it is read by. The closure is what ties the
@@ -279,22 +298,20 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 // Init focuses the prompt, asks the terminal what colour it is, and says how
 // to leave.
 func (c *Console) Init() tea.Cmd {
-	return tea.Batch(
-		c.input.Focus(),
-		tea.RequestBackgroundColor,
-		tea.Println(c.styles.hint.Render("eva — enter to send, /help for the commands, ctrl+c to interrupt a turn, ctrl+d to leave")),
-	)
+	c.put(c.styles.hint.Render("eva — enter to send, /help for the commands, ctrl+c to interrupt a turn, ctrl+d to leave"))
+	return tea.Batch(c.input.Focus(), tea.RequestBackgroundColor)
 }
 
 // Update folds one message into the interface.
 func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		c.height = msg.Height
-		if msg.Width > 0 {
-			c.width = msg.Width
-			c.input.SetWidth(msg.Width)
-		}
+		c.layout(msg.Width, msg.Height)
+
+	case tea.MouseWheelMsg:
+		var cmd tea.Cmd
+		c.pane, cmd = c.pane.Update(msg)
+		return c, cmd
 
 	case spinner.TickMsg:
 		// Only while a Run is in flight. The spinner schedules its own next
@@ -316,6 +333,7 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case chunk:
 		c.arriving.WriteString(msg.text)
+		c.refresh()
 		return c, nil
 
 	case committed:
@@ -340,34 +358,138 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // transcript itself would be a second copy of what the Trace already holds, and
 // the two would disagree the first time a turn failed halfway.
 func (c *Console) View() tea.View {
-	var live strings.Builder
-
-	if c.busy() {
-		if arriving := strings.TrimRight(c.arriving.String(), "\n"); arriving != "" {
-			live.WriteString(c.tail(arriving))
-			live.WriteString("\n")
-		}
-		live.WriteString(c.status())
-	} else {
-		live.WriteString(c.input.View())
+	// Until a window has said how big it is there is no box to draw, and
+	// guessing one means drawing it twice at two sizes.
+	if c.width <= 0 {
+		return tea.View{AltScreen: true, MouseMode: tea.MouseModeCellMotion}
 	}
 
-	if footer := c.footer(); footer != "" {
-		live.WriteString("\n")
-		live.WriteString(footer)
-	}
-	return tea.NewView(live.String())
+	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left,
+		c.pane.View(),
+		c.status(),
+		// Width on a bordered style is the whole frame, border included, so the
+		// window's own width is what makes the box reach both edges.
+		c.styles.box.Width(c.width).Render(c.input.View()),
+		c.footer(),
+	))
+	view.AltScreen = true
+	// Cell motion is the least that carries a wheel, which is the only mouse
+	// event this uses. Anything more would take click and drag away from the
+	// terminal, and with them a person's own way of selecting text.
+	view.MouseMode = tea.MouseModeCellMotion
+	return view
 }
 
-// status is what a turn in flight shows in place of the prompt: that it is
-// running, and for how long.
+// The rows the chrome takes from the window: the status line, the prompt with
+// a border above and below it, and the footer.
+const (
+	borderColumns = 2
+	chromeRows    = 1 + 3 + 1
+)
+
+// The size a console is built at, before a window has said what the real one
+// is.
 //
-// The elapsed figure is rounded to the second because it is read, not measured.
-// It comes free with the spinner's own frame rate, so nothing else has to wake
-// the interface up to keep it true.
+// It is a guess, and it is here because the alternative is worse: an interface
+// that draws nothing until a size arrives is an interface that draws nothing at
+// all if one never does. A program takes messages only once it is running, so
+// the very first size is a message that can be missed — and what is missed is
+// then the whole screen rather than one frame of it. Eighty by twenty-four is
+// wrong on most terminals for the moment before the real size lands, and right
+// about the thing that matters, which is that there is something to correct.
+const (
+	initialWidth  = 80
+	initialHeight = 24
+)
+
+// layout fits the interface to the window.
+//
+// The answer is re-wrapped here too. A markdown renderer wraps at the width it
+// was built with, so a window that changed size and a renderer that did not
+// would disagree about where a paragraph ends.
+func (c *Console) layout(width, height int) {
+	if width <= 0 {
+		return
+	}
+	c.width = width
+	c.input.SetWidth(width - borderColumns)
+
+	rows := height - chromeRows
+	if rows < 1 {
+		rows = 1
+	}
+	c.pane.SetWidth(width)
+	c.pane.SetHeight(rows)
+
+	if err := c.renderer.Width(width); err != nil {
+		c.blame(err)
+	}
+	c.refresh()
+}
+
+// status is what the line above the prompt says: that Eva is waiting for a
+// person, or that a turn is running and for how long.
+//
+// It is always a line, whether or not a turn is running, so that the prompt
+// does not move when one starts. The elapsed figure is rounded to the second
+// because it is read, not measured, and it comes free with the spinner's own
+// frame rate — nothing else has to wake the interface up to keep it true.
 func (c *Console) status() string {
+	if !c.busy() {
+		return c.styles.hint.Render("ready")
+	}
 	return c.styles.spin.Render(c.spin.View()) + " " +
 		c.styles.hint.Render("answering "+time.Since(c.since).Round(time.Second).String()+" — ctrl+c to interrupt")
+}
+
+// refresh puts the transcript, and the turn currently arriving, into the pane.
+//
+// The two are concatenated rather than stored together, and that is the whole
+// of ADR 0015 in one function: what is kept is the transcript, which holds only
+// what the Renderer folded from committed records. Arriving text exists here
+// for exactly as long as the Run does. When the Run closes, the chunks are
+// dropped and the rendered turn takes their place — so a process killed
+// mid-block leaves nothing behind that says it arrived.
+//
+// The pane follows the end of the transcript only while it is already there. A
+// person who has scrolled back to read something is reading it, and an
+// interface that yanked them to the bottom on the next chunk would be an
+// interface they cannot read at all.
+func (c *Console) refresh() {
+	content := c.transcript.String()
+	if arriving := strings.TrimRight(c.arriving.String(), "\n"); arriving != "" {
+		content += arriving + "\n"
+	}
+	content = strings.TrimRight(content, "\n")
+
+	follow := c.pane.AtBottom()
+	c.pane.SetContent(content)
+	if follow {
+		c.pane.GotoBottom()
+	}
+
+	c.shown.Lock()
+	c.screen = content
+	c.shown.Unlock()
+}
+
+// Screen is everything the console has put in front of a person: the turns it
+// kept, and the one arriving if there is one.
+//
+// It exists for a test that drives this program without a terminal, and it
+// exists because the byte stream stopped being readable when the interface
+// became a screen. A console that draws in place emits cursor moves and
+// overwrites, so bytes with their escapes stripped are not a transcript of what
+// was read — they are the fragments of one, in the order the cursor happened to
+// visit them. ADR 0022 recorded that for colour; this is the same fact reaching
+// the rest of the frame.
+//
+// So the assertion moves to what the interface composed, one step before the
+// terminal. It is the same string the pane is given.
+func (c *Console) Screen() string {
+	c.shown.Lock()
+	defer c.shown.Unlock()
+	return c.screen
 }
 
 // footer is the model the turns are running against, at the far end of the
@@ -389,35 +511,25 @@ func (c *Console) footer() string {
 	return c.styles.hint.Render(strings.Repeat(" ", c.width-lipgloss.Width(model)) + model)
 }
 
-// liveLines is how many lines of an arriving answer the view shows when the
-// window has not said how tall it is.
-const liveLines = 10
-
-// tail is the end of what has arrived, at most as many lines as there is room
-// for.
-//
-// The live area is a window on a stream and not a transcript. Showing the
-// whole of a long answer would grow the view past the window, and the whole of
-// it is put above the view anyway once the Run closes — rendered, which is
-// what a person actually reads it as.
-func (c *Console) tail(arriving string) string {
-	room := liveLines
-	if c.height > 0 && c.height-2 < room {
-		room = c.height - 2
-	}
-	if room < 1 {
-		room = 1
-	}
-
-	lines := strings.Split(arriving, "\n")
-	if len(lines) <= room {
-		return arriving
-	}
-	return strings.Join(lines[len(lines)-room:], "\n")
-}
-
 // busy reports whether a Run is in flight.
 func (c *Console) busy() bool { return c.cancel != nil }
+
+// Busy reports whether a Run is in flight, for whoever is driving this program
+// rather than typing at it.
+//
+// A console answers one turn at a time and takes no keys while it is answering,
+// so a driver that types without asking loses the keys it typed. A person never
+// has this problem: they can see the status line. This is the same answer, for a
+// caller that cannot.
+//
+// It is read from outside the update loop, and it reports a field the update
+// loop writes. The lock is the one Screen uses, because the question is the same
+// one — what is on screen right now — asked of a different part of the frame.
+func (c *Console) Busy() bool {
+	c.shown.Lock()
+	defer c.shown.Unlock()
+	return c.answering
+}
 
 // Wait returns once no Run is still committing.
 //
@@ -438,6 +550,10 @@ func (c *Console) stop() {
 		c.cancel()
 		c.cancel = nil
 	}
+
+	c.shown.Lock()
+	c.answering = false
+	c.shown.Unlock()
 }
 
 // background takes the terminal's answer about its own colour, and restyles
@@ -459,7 +575,8 @@ func (c *Console) background(dark bool) tea.Cmd {
 	if err := c.renderer.Background(dark); err != nil {
 		c.blame(err)
 	}
-	return c.print()
+	c.refresh()
+	return nil
 }
 
 // key acts on a key press.
@@ -497,9 +614,9 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		// Trace holds no record of a turn that never ran.
 		if strings.HasPrefix(prompt, "/") {
 			c.put(c.obey(prompt))
-			return c.print()
+			return nil
 		}
-		return tea.Sequence(c.print(), c.start(prompt))
+		return c.start(prompt)
 	}
 
 	if c.busy() {
@@ -522,6 +639,10 @@ func (c *Console) start(prompt string) tea.Cmd {
 	c.arriving.Reset()
 	c.since = time.Now()
 	c.running.Add(1)
+
+	c.shown.Lock()
+	c.answering = true
+	c.shown.Unlock()
 
 	turn := func() tea.Msg {
 		defer c.running.Done()
@@ -549,7 +670,7 @@ func (c *Console) fold(e events.Event) tea.Cmd {
 	if err := c.renderer.Committed(c.ctx, e); err != nil {
 		c.blame(err)
 	}
-	return c.print()
+	return nil
 }
 
 // close ends the turn the interface was waiting on.
@@ -577,23 +698,19 @@ func (c *Console) close(a answered) tea.Cmd {
 		c.blame(a.err)
 	}
 
-	return tea.Batch(c.print(), c.input.Focus())
+	return c.input.Focus()
 }
 
-// put queues a block to go above the view, with its colour reduced to what the
-// destination can show.
+// put adds a block to the transcript, which is what a person keeps.
 //
-// The reduction happens here rather than on the way out. A program renders its
-// own view against what the terminal can show, and puts what it is handed
-// above that view exactly as it was handed it — so a turn nobody reduced would
-// reach a sixteen-colour terminal in twenty-four-bit colour.
+// Nothing reduces the colour here any more. The transcript is drawn inside this
+// program's own view, and a program renders its view against what the terminal
+// can show — so the reduction that used to happen on the way to the scrollback
+// now happens where every other styled byte's does.
 func (c *Console) put(block string) {
-	var adapted strings.Builder
-	reduce := colorprofile.Writer{Forward: &adapted, Profile: c.profile}
-	// Neither a builder nor the reducer in front of it has anywhere to fail.
-	_, _ = io.WriteString(&reduce, strings.TrimRight(block, "\n"))
-
-	c.pending = append(c.pending, adapted.String())
+	c.transcript.WriteString(strings.TrimRight(block, "\n"))
+	c.transcript.WriteString("\n")
+	c.refresh()
 }
 
 // blame queues a failure to go above the view, in the interface's own voice.
@@ -611,22 +728,3 @@ func (c *Console) Show(turn string) error {
 }
 
 var _ ui.Screen = (*Console)(nil)
-
-// print asks the program to put what is queued above its view.
-//
-// In sequence rather than in a batch: a batch runs its commands at once, and
-// what a person reads is an order.
-func (c *Console) print() tea.Cmd {
-	if len(c.pending) == 0 {
-		return nil
-	}
-
-	blocks := c.pending
-	c.pending = nil
-
-	cmds := make([]tea.Cmd, len(blocks))
-	for i, block := range blocks {
-		cmds[i] = tea.Println(block)
-	}
-	return tea.Sequence(cmds...)
-}

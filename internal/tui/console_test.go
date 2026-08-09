@@ -1,8 +1,8 @@
 package tui
 
 import (
+	"bytes"
 	"context"
-	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -84,6 +84,8 @@ func TestTheStatusLineSaysHowLongTheTurnHasRun(t *testing.T) {
 		styles: newStyles(true),
 		spin:   spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 		since:  time.Now().Add(-3 * time.Second),
+		// A Run in flight is one with something to cancel. See busy.
+		cancel: func() {},
 	}
 
 	got := plain(c.status())
@@ -97,55 +99,46 @@ func TestTheStatusLineSaysHowLongTheTurnHasRun(t *testing.T) {
 	}
 }
 
-// The live area is a window on a stream, and it shows the end of it. An answer
-// longer than the window would otherwise push the view past the screen while
-// it arrives — and the whole of it goes above the view when the Run closes,
-// rendered, which is what a person actually reads it as.
-func TestTheLiveAreaShowsTheEndOfWhatHasArrived(t *testing.T) {
-	lines := func(n int) string {
-		out := make([]string, n)
-		for i := range out {
-			out[i] = fmt.Sprintf("line %d", i)
-		}
-		return strings.Join(out, "\n")
+// With no Run in flight the same line says so, rather than disappearing. A
+// status line that came and went would move the prompt under a person's hands
+// every time a turn started.
+func TestTheStatusLineIsStillALineWhenNothingIsRunning(t *testing.T) {
+	c := &Console{styles: newStyles(true), spin: spinner.New()}
+
+	if got := plain(c.status()); got != "ready" {
+		t.Errorf("the status line reads %q, want %q", got, "ready")
+	}
+}
+
+// The live area is erased when the Run closes, and what is kept is the fold
+// over what the Trace holds. So arriving chunks reach the pane without ever
+// reaching the transcript, and the transcript is what survives them.
+func TestArrivingTextIsShownWithoutBeingKept(t *testing.T) {
+	// Built the way a run builds it, so that the pane, the renderer and the
+	// styles are the ones a person would be looking at. The program it returns
+	// is never started: nothing here needs a turn.
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+	c.layout(40, 12)
+
+	c.arriving.WriteString("half an answer")
+	c.refresh()
+	if got := plain(c.pane.View()); !strings.Contains(got, "half an answer") {
+		t.Errorf("the pane does not show what is arriving:\n%s", got)
+	}
+	if kept := c.transcript.String(); strings.Contains(kept, "half an answer") {
+		t.Errorf("the transcript kept an arriving chunk:\n%s", kept)
 	}
 
-	for _, c := range []struct {
-		name    string
-		height  int
-		arrived string
-		want    string
-	}{
-		{
-			name:    "an answer that fits is shown whole",
-			height:  24,
-			arrived: lines(3),
-			want:    lines(3),
-		},
-		{
-			name:    "a window that has said how tall it is keeps room for the rest of the view",
-			height:  6,
-			arrived: lines(20),
-			want:    "line 16\nline 17\nline 18\nline 19",
-		},
-		{
-			name:    "a window that has not said keeps to a length a screen will hold",
-			height:  0,
-			arrived: lines(20),
-			want:    "line 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19",
-		},
-		{
-			name:    "a window with no room at all still shows the last line",
-			height:  1,
-			arrived: lines(20),
-			want:    "line 19",
-		},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			got := (&Console{height: c.height}).tail(c.arrived)
-			if got != c.want {
-				t.Errorf("tail = %q, want %q", got, c.want)
-			}
-		})
+	// What the Run closing does: the chunks go, the rendered turn arrives.
+	c.arriving.Reset()
+	c.put("the whole answer")
+	if got := plain(c.pane.View()); strings.Contains(got, "half an answer") {
+		t.Errorf("the pane still shows arriving text after the Run closed:\n%s", got)
+	}
+	if got := plain(c.pane.View()); !strings.Contains(got, "the whole answer") {
+		t.Errorf("the pane does not show the turn that was kept:\n%s", got)
 	}
 }

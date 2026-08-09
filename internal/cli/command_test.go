@@ -26,12 +26,14 @@ func (d *dialogue) answers(t *testing.T, typed string) string {
 	t.Helper()
 
 	before := d.read()
-	d.say(typed)
+	d.say(t, typed)
 
+	// Two lines: the prompt echoed back, and what the command answered. The
+	// echo lands first, so waiting for the second is waiting for the answer.
 	var said string
 	d.settle(t, func() bool {
 		said = strings.TrimPrefix(d.read(), before)
-		return strings.Contains(said, typed) && strings.Count(said, "\n") > 2
+		return strings.Contains(said, typed) && strings.Count(said, "\n") >= 2
 	})
 	return said
 }
@@ -57,7 +59,7 @@ func TestHelpAnswersWithoutOpeningARun(t *testing.T) {
 func TestAnUnknownCommandNamesItselfAndDoesNotEndTheSession(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"still here."}})
 
-	d.say("/nope")
+	d.say(t, "/nope")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "/nope") })
 
 	read := d.read()
@@ -69,7 +71,7 @@ func TestAnUnknownCommandNamesItselfAndDoesNotEndTheSession(t *testing.T) {
 	}
 
 	// And the Session is one the next prompt can still use.
-	d.say("are you there")
+	d.say(t, "are you there")
 	d.closed(t, 1)
 	d.settle(t, func() bool { return strings.Contains(d.read(), "still here.") })
 }
@@ -85,9 +87,9 @@ func TestCostReportsThePerTurnAndCumulativeSpendOnDemand(t *testing.T) {
 		recording{chunks: []string{"It is autonomous."}},
 	)
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
-	d.say("and what else")
+	d.say(t, "and what else")
 	d.closed(t, 2)
 	d.settle(t, func() bool { return strings.Contains(d.read(), "It is autonomous.") })
 
@@ -110,7 +112,7 @@ func TestCostCarriesTheCaveatOfADegradedTurn(t *testing.T) {
 	const missing = "what this turn cost: the provider reported no usage"
 	d := begin(t, recording{chunks: []string{"partly."}, degraded: []string{missing}})
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
 	d.settle(t, func() bool { return strings.Contains(d.read(), missing) })
 
@@ -126,11 +128,11 @@ func TestCostCarriesTheCaveatOfADegradedTurn(t *testing.T) {
 func TestClearEmptiesTheSpendWithTheTranscript(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"Eva is a software factory."}})
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
 	d.settle(t, func() bool { return strings.Contains(d.read(), "session 10 in / 20 out") })
 
-	d.say("/clear")
+	d.say(t, "/clear")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "cleared") })
 
 	said := d.answers(t, "/cost")
@@ -148,13 +150,13 @@ func TestModelSwitchesInTheMiddleOfASessionAndKeepsTheContext(t *testing.T) {
 		recording{chunks: []string{"It is autonomous."}},
 	)
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
 
-	d.say("/model another-model")
+	d.say(t, "/model another-model")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "another-model") })
 
-	d.say("and what else")
+	d.say(t, "and what else")
 	d.closed(t, 2)
 
 	used := d.provider.models()
@@ -184,11 +186,11 @@ func TestModelSwitchesInTheMiddleOfASessionAndKeepsTheContext(t *testing.T) {
 func TestModelWithNoNameReportsTheModelInUse(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"still on it."}})
 
-	d.say("/model")
+	d.say(t, "/model")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "test-model") })
 
 	// And it switched to nothing: the next turn runs on the same model.
-	d.say("are you there")
+	d.say(t, "are you there")
 	d.closed(t, 1)
 
 	if used := d.provider.models(); used[0] != "test-model" {
@@ -206,13 +208,13 @@ func TestClearEmptiesTheTranscriptWithoutEndingTheProcess(t *testing.T) {
 		recording{chunks: []string{"I have nothing to go on."}},
 	)
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
 
-	d.say("/clear")
+	d.say(t, "/clear")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "cleared") })
 
-	d.say("what did I just ask")
+	d.say(t, "what did I just ask")
 	d.closed(t, 2)
 
 	calls := d.provider.transcripts()
@@ -232,11 +234,11 @@ func TestAClearedTranscriptIsANewSession(t *testing.T) {
 		recording{chunks: []string{"I have nothing to go on."}},
 	)
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
-	d.say("/clear")
+	d.say(t, "/clear")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "cleared") })
-	d.say("what did I just ask")
+	d.say(t, "what did I just ask")
 	d.closed(t, 2)
 
 	opened := d.of(t, events.KindStarted)

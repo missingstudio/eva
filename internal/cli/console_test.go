@@ -189,7 +189,14 @@ type dialogue struct {
 // the words a person reads rather than on the bytes that place them.
 var escapes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][0-9A-B]|\x1b[=>]`)
 
-func (d *dialogue) read() string { return escapes.ReplaceAllString(d.out.String(), "") }
+// read is what the console has put in front of a person.
+//
+// It comes from the console rather than from the bytes it wrote. A console that
+// draws a screen in place emits cursor moves and overwrites, so those bytes
+// with their escapes stripped are the fragments of a transcript in the order
+// the cursor visited them, not the transcript. ADR 0022 recorded that for
+// colour; it is the same fact. See tui.Console.Screen.
+func (d *dialogue) read() string { return escapes.ReplaceAllString(d.console.Screen(), "") }
 
 // begin builds the interface with input disabled and output redirected, and
 // starts it. Nothing here has a terminal.
@@ -222,21 +229,36 @@ func begin(t *testing.T, script ...recording) *dialogue {
 		_, err := program.Run()
 		d.done <- err
 	}()
-	// Nothing is sent to a program that has not started, so the first key
-	// would block on a channel nobody is reading yet.
-	d.settle(t, func() bool { return strings.Contains(d.read(), "eva") })
 
-	// A window size, as a terminal would send one. Without it the program has
-	// no room to draw the live area in, and the answer arriving would have
-	// nowhere to arrive.
-	d.program.Send(tea.WindowSizeMsg{Width: 80, Height: 24})
+	// A window size, as a terminal would send one, until the first frame comes
+	// back.
+	//
+	// Two things make this a loop rather than one call. A program takes
+	// messages only once it is running, and nothing says when that is — so a
+	// size sent too early is dropped. And with no terminal on the output, this
+	// message is the only way the renderer learns how big the screen is: until
+	// it has one it draws nothing at all, so there is no first key to wait for
+	// either. Sending it until something is drawn settles both.
+	d.settle(t, func() bool {
+		d.program.Send(tea.WindowSizeMsg{Width: 80, Height: 24})
+		return strings.Contains(d.read(), "eva")
+	})
 
 	t.Cleanup(func() { d.leave(t) })
 	return d
 }
 
 // say types a prompt and sends it.
-func (d *dialogue) say(prompt string) {
+//
+// It waits for the console to be idle first. A console answers one turn at a
+// time and takes no keys while it is answering, so a key typed a moment too
+// early is a key that is dropped — and a prompt missing its first character is
+// a slash command that goes to the model instead. A person waits by reading the
+// status line; this is the same wait.
+func (d *dialogue) say(t *testing.T, prompt string) {
+	t.Helper()
+	d.settle(t, func() bool { return !d.console.Busy() })
+
 	for _, r := range prompt {
 		d.program.Send(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
@@ -347,7 +369,7 @@ func (d *dialogue) of(t *testing.T, kind events.Kind) []events.Event {
 func TestTheInterfaceRunsWithInputDisabledAndOutputRedirected(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"Eva is a ", "software factory."}})
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
 	d.settle(t, func() bool { return strings.Contains(d.read(), "software factory.") })
 
@@ -366,7 +388,7 @@ func TestAnAnswerStreamsAsItArrivesRatherThanAtTheEnd(t *testing.T) {
 	gate := make(chan struct{})
 	d := begin(t, recording{chunks: []string{"Eva is a ", "software factory."}, gate: gate})
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "software factory.") })
 
 	// Still in flight: the answer is readable and the Run has not closed.
@@ -385,9 +407,9 @@ func TestASecondPromptIsAnsweredInTheLightOfTheFirst(t *testing.T) {
 		recording{chunks: []string{"It is autonomous."}},
 	)
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
-	d.say("and what else")
+	d.say(t, "and what else")
 	d.closed(t, 2)
 
 	calls := d.provider.transcripts()
@@ -416,7 +438,7 @@ func TestCtrlCDuringAStreamReturnsThePromptAndLeavesTheSessionUsable(t *testing.
 		recording{chunks: []string{"a short one."}},
 	)
 
-	d.say("answer at length")
+	d.say(t, "answer at length")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "a long answer nobody wanted") })
 
 	d.interrupt()
@@ -425,7 +447,7 @@ func TestCtrlCDuringAStreamReturnsThePromptAndLeavesTheSessionUsable(t *testing.
 
 	// The prompt is back, and the next turn runs against a Session that holds
 	// what did arrive.
-	d.say("shorter please")
+	d.say(t, "shorter please")
 	d.closed(t, 2)
 	d.settle(t, func() bool { return strings.Contains(d.read(), "a short one.") })
 
@@ -448,7 +470,7 @@ func TestCtrlCDuringAStreamReturnsThePromptAndLeavesTheSessionUsable(t *testing.
 func TestATurnCancelledByCtrlCLeavesATraceThatParses(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"half an ", "answer"}, gate: make(chan struct{})})
 
-	d.say("answer at length")
+	d.say(t, "answer at length")
 	d.settle(t, func() bool { return strings.Contains(d.read(), "half an answer") })
 	d.interrupt()
 	d.closed(t, 1)
@@ -497,7 +519,7 @@ func TestATurnCancelledByCtrlCLeavesATraceThatParses(t *testing.T) {
 func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"answered."}})
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
 
 	opened := d.of(t, events.KindStarted)
@@ -524,7 +546,7 @@ func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 	// No recording at all, so the Provider refuses the call.
 	d := begin(t)
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
 
 	closed := d.of(t, events.KindFinished)
@@ -545,7 +567,7 @@ func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 	// And the prompt is back. A console that ended on the first provider
 	// failure would throw away a conversation over something the next prompt
 	// might not hit.
-	d.say("try again")
+	d.say(t, "try again")
 	d.closed(t, 2)
 }
 
@@ -556,7 +578,7 @@ func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 func TestWhatIsShownIsWhatTheTraceHolds(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"Eva is a ", "software factory."}})
 
-	d.say("what is this project")
+	d.say(t, "what is this project")
 	d.closed(t, 1)
 	d.settle(t, func() bool { return strings.Contains(d.read(), "turn ") })
 
