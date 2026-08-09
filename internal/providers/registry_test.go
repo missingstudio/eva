@@ -1,0 +1,123 @@
+package providers_test
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/missingstudio/eva/internal/providers"
+)
+
+// stub is a Provider that answers nothing. What is under test is selection, not
+// answering.
+type stub struct{ name string }
+
+func (s stub) Name() string { return s.name }
+
+func (s stub) Stream(context.Context, providers.Call) (providers.Stream, error) {
+	return nil, errors.New("stub: this Provider does not answer")
+}
+
+// A Provider is reachable by the name it registered under, and it is built from
+// the settings a person chose.
+//
+// This is the whole of what a new Provider costs: a package that registers
+// itself, and an import naming it. Selection used to be a switch in the layer
+// that wires a run, and two of the four edits it took did not stop the build
+// when they were forgotten.
+func TestARegisteredProviderIsSelectableByName(t *testing.T) {
+	const name = "test-selectable"
+
+	var built providers.Options
+	providers.Register(name, func(o providers.Options) (providers.Provider, error) {
+		built = o
+		return stub{name: name}, nil
+	})
+
+	got, err := providers.Open(name, providers.Options{BaseURL: "https://gateway.example", MaxTokens: 512})
+	if err != nil {
+		t.Fatalf("a registered Provider did not open: %v", err)
+	}
+	if got.Name() != name {
+		t.Errorf("opened %q, want %q", got.Name(), name)
+	}
+	if built.BaseURL != "https://gateway.example" || built.MaxTokens != 512 {
+		t.Errorf("the Provider was built from %+v, want the settings Open was given", built)
+	}
+}
+
+// The sentence naming what a person may choose is read from the registry, so it
+// cannot be missing a Provider that works.
+func TestTheUnknownProviderErrorNamesWhatIsRegistered(t *testing.T) {
+	_, err := providers.Open("not-a-provider", providers.Options{})
+	if err == nil {
+		t.Fatal("opening an unregistered Provider succeeded")
+	}
+
+	for _, name := range providers.Names() {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("the error does not offer %q, which is registered: %v", name, err)
+		}
+	}
+	if !strings.Contains(err.Error(), "not-a-provider") {
+		t.Errorf("the error does not name what was asked for: %v", err)
+	}
+}
+
+// A credential is resolved by the Provider that needs one, and never before.
+//
+// Resolved up front, a recording replayed from a file would refuse to open for
+// want of an API key it never sends, and every test that replays one would have
+// to carry a secret.
+func TestACredentialIsResolvedOnlyByAProviderThatAsks(t *testing.T) {
+	var asked bool
+	options := providers.Options{
+		Credential: func() (string, error) {
+			asked = true
+			return "", errors.New("no API key")
+		},
+	}
+
+	providers.Register("test-incurious", func(providers.Options) (providers.Provider, error) {
+		return stub{name: "test-incurious"}, nil
+	})
+
+	if _, err := providers.Open("test-incurious", options); err != nil {
+		t.Fatalf("a Provider that needs no credential failed to open: %v", err)
+	}
+	if asked {
+		t.Error("a Provider that sends nothing resolved a credential")
+	}
+
+	providers.Register("test-curious", func(o providers.Options) (providers.Provider, error) {
+		if _, err := o.Credential(); err != nil {
+			return nil, err
+		}
+		return stub{name: "test-curious"}, nil
+	})
+
+	if _, err := providers.Open("test-curious", options); err == nil {
+		t.Error("a Provider that needs a credential opened without one")
+	}
+	if !asked {
+		t.Error("a Provider that needs a credential did not resolve one")
+	}
+}
+
+// Two Providers answering to one name is a configuration that cannot mean one
+// thing, and which one a person got would depend on link order.
+func TestRegisteringOneNameTwiceIsRefused(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("registering a name twice was allowed")
+		}
+	}()
+
+	providers.Register("test-twice", func(providers.Options) (providers.Provider, error) {
+		return stub{name: "test-twice"}, nil
+	})
+	providers.Register("test-twice", func(providers.Options) (providers.Provider, error) {
+		return stub{name: "test-twice"}, nil
+	})
+}

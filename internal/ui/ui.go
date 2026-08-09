@@ -206,11 +206,15 @@ var (
 // Only the kinds that a person reads fold. Started opens a turn, Text is the
 // answer, Usage is what it cost, and Degraded is what the Run did not
 // understand; Finished is what makes all four appear, because a turn is shown
-// when it is over. Every other kind is real and recorded and simply has
-// nothing to show at this stage.
+// when it is over.
 //
 // Degraded arrives in the group Finished closes on, so it is folded before the
 // turn is written rather than after it.
+//
+// A kind this does not fold shows nothing, and Silent below is where that is
+// said out loud. The schema is open — a kind can be added to it — and a fold
+// that met a new one by falling off the end of a switch would show a person
+// nothing and tell nobody it had decided to.
 func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 	switch payload := e.Payload.(type) {
 	case events.Started:
@@ -229,6 +233,39 @@ func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 		return r.show()
 	}
 	return nil
+}
+
+// Shown is every kind this fold puts on a screen.
+//
+// It is a list rather than something read off the switch above because Go
+// cannot be asked what a type switch handles. What keeps the two honest is the
+// test that walks the schema's own registry: a kind in neither this nor Silent
+// fails the build, so adding one to events is a decision about what a person
+// sees rather than a silence nobody chose.
+func Shown() []events.Kind {
+	return []events.Kind{
+		events.KindStarted,
+		events.KindText,
+		events.KindUsage,
+		events.KindDegraded,
+		events.KindFinished,
+	}
+}
+
+// Silent is every kind this fold deliberately shows nothing for, and why.
+//
+// Each is real, recorded, and not something a person reads a turn as. The
+// reason is written down because "it does not appear" and "nobody has got to it
+// yet" look identical on a screen, and only one of them is a decision.
+func Silent() map[events.Kind]string {
+	return map[events.Kind]string{
+		events.KindToolCall:   "a tool call is shown by the frontend that approves it, at stage 2",
+		events.KindToolResult: "the disposition of a call belongs beside the call, at stage 2",
+		events.KindEdit:       "an edit is shown as a diff to approve, at stage 2",
+		events.KindRetry:      "an attempt that produced nothing is a cost, and the cost line already carries it",
+		events.KindNeedsHuman: "an escalation is answered rather than read, and gets its own surface",
+		events.KindUnknown:    "a kind this build cannot read has nothing to render; the Run says it was degraded",
+	}
 }
 
 // reset clears what belongs to one turn. A turn opening is what ends the last

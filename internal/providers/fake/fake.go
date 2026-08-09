@@ -85,6 +85,20 @@ type Usage struct {
 	USD              *float64 `toml:"usd"`
 }
 
+// This Provider puts itself in the set configuration can select.
+//
+// It reads a file and sends nothing, so it asks for no credential. A recording
+// that refused to open for want of an API key it never uses would make every
+// test that replays one carry a secret.
+func init() {
+	providers.Register(Name, func(o providers.Options) (providers.Provider, error) {
+		if o.Recording == "" {
+			return nil, fmt.Errorf("provider %q needs a recording: set provider.script", Name)
+		}
+		return Load(o.Recording)
+	})
+}
+
 // Provider replays a Script.
 type Provider struct {
 	mu     sync.Mutex

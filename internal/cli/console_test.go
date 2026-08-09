@@ -109,6 +109,15 @@ func (d *driven) models() []string {
 // a kilobyte of prose in order to say something about three messages. The
 // assertion stays here rather than being skipped: it is what proves the
 // frontend hands the prompt to every turn it opens.
+func conversation(t *testing.T, call []core.Message) []core.Message {
+	t.Helper()
+
+	if len(call) == 0 || call[0].Author != core.AuthorSystem || call[0].Text != prompt.Base() {
+		t.Fatalf("the call is not headed by the base system prompt:\n%+v", call)
+	}
+	return call[1:]
+}
+
 // reported is the figure a counter carries, and a failure when it carries none.
 // Asserting on a dereferenced absence would report a wrong number rather than a
 // figure that never arrived, and those are different bugs.
@@ -119,15 +128,6 @@ func reported(t *testing.T, n *uint64) uint64 {
 		t.Fatal("the counter reports no figure, want one")
 	}
 	return *n
-}
-
-func conversation(t *testing.T, call []core.Message) []core.Message {
-	t.Helper()
-
-	if len(call) == 0 || call[0].Author != core.AuthorSystem || call[0].Text != prompt.Base() {
-		t.Fatalf("the call is not headed by the base system prompt:\n%+v", call)
-	}
-	return call[1:]
 }
 
 type drivenStream struct {
@@ -688,3 +688,88 @@ func TestAPromptTypedDuringATurnIsAnsweredAfterIt(t *testing.T) {
 		t.Errorf("the queued turn does not carry the answer it waited for:\n%+v", after)
 	}
 }
+
+// The Providers this build ships are selectable, because each put itself in the
+// registry as it loaded. This layer names them as imports and knows nothing
+// else about them.
+func TestTheShippedProvidersAreSelectable(t *testing.T) {
+	registered := map[string]bool{}
+	for _, name := range providers.Names() {
+		registered[name] = true
+	}
+
+	for _, want := range []string{"anthropic", "fake"} {
+		if !registered[want] {
+			t.Errorf("%q is not registered, so no configuration can select it", want)
+		}
+	}
+}
+
+// Every projection attached sees every committed Event.
+//
+// Attaching used to assign a slice of one, so a second projection silently
+// replaced the first: no metrics tap beside a console, no second screen, and
+// nothing anywhere to say the first had stopped being fed.
+func TestEveryAttachedProjectionSeesEveryEvent(t *testing.T) {
+	e := &eva{
+		provider: &driven{script: []recording{{chunks: []string{"answered"}}}},
+		sink:     &collecting{},
+		session:  newTestSession(),
+		model:    "test-model",
+	}
+
+	var first, second int
+	e.Attach(core.SubscriberFunc(func(context.Context, events.Event) error { first++; return nil }))
+	e.Attach(core.SubscriberFunc(func(context.Context, events.Event) error { second++; return nil }))
+
+	if _, err := e.Answer(context.Background(), "say something"); err != nil {
+		t.Fatalf("the turn failed: %v", err)
+	}
+
+	if first == 0 || second == 0 {
+		t.Fatalf("projections saw %d and %d Events, want both fed", first, second)
+	}
+	if first != second {
+		t.Errorf("projections saw %d and %d Events, want the same Trace", first, second)
+	}
+}
+
+// A capability is claimed on purpose, and attaching a projection is not a claim.
+func TestAttachingAProjectionClaimsNoCapability(t *testing.T) {
+	e := &eva{}
+
+	e.Attach(core.SubscriberFunc(func(context.Context, events.Event) error { return nil }))
+	if e.interrupt {
+		t.Error("attaching a projection claimed the Interrupt capability")
+	}
+	if e.arriving != nil {
+		t.Error("attaching a projection said it watches a turn arrive")
+	}
+
+	e.Attach(nil, WithInterrupt())
+	if !e.interrupt {
+		t.Error("WithInterrupt did not claim the capability")
+	}
+}
+
+// collecting is a sink that keeps what it was given, for a test that cares who
+// was published to rather than what was written.
+type collecting struct {
+	mu   sync.Mutex
+	next uint64
+}
+
+func (c *collecting) Append(_ context.Context, group []events.Event) ([]events.Event, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	out := make([]events.Event, len(group))
+	for i, e := range group {
+		c.next++
+		e.Seq = c.next
+		out[i] = e
+	}
+	return out, nil
+}
+
+func (c *collecting) Close() error { return nil }
