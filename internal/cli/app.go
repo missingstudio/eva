@@ -166,16 +166,20 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 		model:    cfg.Model,
 	}
 
+	// How it looks is resolved before either path is chosen, so that a file a
+	// person got wrong is reported whichever way they ran Eva. A theme that was
+	// only read when the console opened would make a broken configuration a
+	// thing that depends on how you started the program.
+	look, keys, err := appearance(cfg)
+	if err != nil {
+		return ExitUsage, err
+	}
+
 	// The assembly is built once and handed to the frontend that drives it. It
 	// attaches through eva's own door, which is the only place a Run learns who
 	// is watching it and what it may claim.
 	if opts.prompt != "" {
-		return once(ctx, e, opts.prompt, stdout)
-	}
-
-	look, keys, err := appearance(cfg)
-	if err != nil {
-		return ExitUsage, err
+		return once(ctx, e, opts.prompt, stdout, look)
 	}
 
 	if err := tui.Run(ctx, e, stdin, stdout, tui.WithTheme(look), tui.WithKeymap(keys)); err != nil {
@@ -259,12 +263,13 @@ var _ core.Subscriber = (*ui.Renderer)(nil)
 // A failed turn exits non-zero. The console has no exit code because it stays
 // open; this does not stay open, so the claim the Trace holds is also the
 // process's answer to whoever ran it.
-func once(ctx context.Context, e *eva, prompt string, stdout io.Writer) (int, error) {
-	// Dark is assumed rather than asked. Asking means writing a query to a
+func once(ctx context.Context, e *eva, prompt string, stdout io.Writer, look theme.Theme) (int, error) {
+	// The Theme is the one a person configured, built for a dark terminal
+	// because this path does not ask. Asking means writing a query to a
 	// terminal and reading it back, and this path may have no terminal at all —
 	// where it does not, lipgloss removes the escapes on the way out and the
 	// assumption costs nothing.
-	renderer, err := ui.New(ui.Stream(stdout), theme.Default(true))
+	renderer, err := ui.New(ui.Stream(stdout), look)
 	if err != nil {
 		return ExitFailure, err
 	}
