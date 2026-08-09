@@ -56,6 +56,13 @@ type Renderer struct {
 	// line over data known to be incomplete, printed with nothing to say so, is
 	// a figure that reads as a measurement.
 	missing []string
+
+	// dark and width are what the markdown renderer is built against. They are
+	// held because either can change after a Renderer exists — a terminal
+	// answers late about its colour, and a window is resized — and rebuilding
+	// for one must not discard the other.
+	dark  bool
+	width int
 }
 
 // New builds a Renderer that shows each finished turn on a Screen.
@@ -71,8 +78,8 @@ type Renderer struct {
 // owns the outside world asks, and hands in the answer. There is no
 // configuration key: a style nobody chose is the only style there is.
 func New(screen Screen, dark bool) (*Renderer, error) {
-	r := &Renderer{screen: screen}
-	if err := r.Background(dark); err != nil {
+	r := &Renderer{screen: screen, dark: dark}
+	if err := r.rebuild(); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -96,19 +103,51 @@ func Stream(out io.Writer) Screen { return stream{out: out} }
 // What the Session has spent is not disturbed. A terminal that answered late
 // must not also reset what the conversation has cost.
 func (r *Renderer) Background(dark bool) error {
+	r.dark = dark
+	return r.rebuild()
+}
+
+// Width tells the Renderer how many columns an answer may use.
+//
+// It exists because the markdown renderer wraps at a fixed width chosen when it
+// is built, and the frontend that owns a window learns the real one later and
+// again on every resize. Left alone it wraps at eighty, which is a paragraph
+// that overruns every narrower window and stops short in every wider one.
+//
+// A width of zero or less keeps the default, because a window that has not said
+// how wide it is has not said anything worth acting on.
+func (r *Renderer) Width(cols int) error {
+	if cols == r.width {
+		return nil
+	}
+	r.width = cols
+	return r.rebuild()
+}
+
+// rebuild makes the markdown renderer the current background and width call
+// for. It is one function because the two settings are one object: rebuilding
+// for a resize must not forget what colour the terminal is, and the way to
+// guarantee that is to never build from one of them alone.
+func (r *Renderer) rebuild() error {
 	// The markdown renderer no longer detects a background for itself and
 	// defaults to dark, so the style is named here rather than left to it.
 	style := styles.LightStyle
-	if dark {
+	if r.dark {
 		style = styles.DarkStyle
 	}
-	markdown, err := glamour.NewTermRenderer(glamour.WithStandardStyle(style))
+
+	options := []glamour.TermRendererOption{glamour.WithStandardStyle(style)}
+	if r.width > 0 {
+		options = append(options, glamour.WithWordWrap(r.width))
+	}
+
+	markdown, err := glamour.NewTermRenderer(options...)
 	if err != nil {
 		return fmt.Errorf("ui: build the markdown renderer: %w", err)
 	}
 
 	r.markdown = markdown
-	r.costStyle = Subdued(dark)
+	r.costStyle = Subdued(r.dark)
 	return nil
 }
 
