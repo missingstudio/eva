@@ -517,3 +517,30 @@ follow = ["ctrl+g"]
 		t.Error("Project is empty after a repository's settings were read")
 	}
 }
+
+// A person's own settings are not a repository's, whatever directory they are
+// standing in.
+//
+// The two files have the same name — ~/.eva/config.toml is where a person's
+// settings live, and .eva/config.toml is what the walk looks for — so running
+// from the home directory found the file that had already been read and applied
+// a repository's allow list to it. The result was an error telling a person to
+// move a setting into the file it was already in, and eva unusable from $HOME.
+func TestAPersonsOwnFileIsNotReadAsARepositorys(t *testing.T) {
+	dir := home(t)
+	write(t, dir, "[provider]\nname = \"fake\"\nscript = \"turns.toml\"\n")
+
+	// The home directory itself, which is where the two paths collide.
+	t.Chdir(dir)
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("a person's own configuration was refused as a repository's: %v", err)
+	}
+	if cfg.Provider.Name != "fake" {
+		t.Errorf("provider = %q, want the one their own file chose", cfg.Provider.Name)
+	}
+	if cfg.Project != "" {
+		t.Errorf("Project = %q, want empty: their own file is not a repository's", cfg.Project)
+	}
+}

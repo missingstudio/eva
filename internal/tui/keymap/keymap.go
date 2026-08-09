@@ -134,16 +134,74 @@ func usable(chord string) error {
 	if chord == "" {
 		return fmt.Errorf("a binding needs a key")
 	}
-	if strings.Contains(chord, "+") {
-		return nil
+
+	lower := strings.ToLower(chord)
+
+	// A bare key is judged on what it costs the prompt before anything else,
+	// because that is the answer whichever case it was written in: "J" and "j"
+	// are the same character taken away from whoever is typing.
+	if !strings.Contains(chord, "+") && !named[lower] {
+		return fmt.Errorf(
+			"%q is a key a person types, so binding it would take that character away from the prompt — "+
+				"use a chord (ctrl+%s) or a named key (%s)", chord, lower, list(namedKeys()))
 	}
-	if named[chord] {
-		return nil
+
+	// A terminal reports a key in lower case, so an upper-case one never fires.
+	// It would also replace the action's default, which makes a written
+	// "Ctrl+C" an interrupt key that does nothing and no interrupt key at all —
+	// a silence, from a package whose whole job is turning a bad binding into a
+	// message.
+	if chord != lower {
+		return fmt.Errorf("%q is not how a terminal spells a key: write it in lower case (%s)", chord, lower)
 	}
-	return fmt.Errorf(
-		"%q is a key a person types, so binding it would take that character away from the prompt — "+
-			"use a chord (ctrl+%s) or a named key (%s)", chord, chord, list(namedKeys()))
+
+	if held, key, chorded := strings.Cut(chord, "+"); chorded {
+		return holds(chord, held, key)
+	}
+	return nil
 }
+
+// holds checks a chord's two halves.
+//
+// A modifier this cannot name is one no terminal reports, and a chord with
+// nothing after it is a modifier held on its own. Both were accepted before,
+// because "contains a plus" was the whole of the test — so "a+b" and "ctrl+"
+// bound an action to a key that could never arrive.
+func holds(chord, held, key string) error {
+	if held == "" {
+		return fmt.Errorf("%q begins with a plus, so it names no modifier and no terminal reports it", chord)
+	}
+	for held != "" {
+		var modifier string
+		modifier, held, _ = strings.Cut(held, "+")
+		if !modifiers[modifier] {
+			return fmt.Errorf("%q is not a key a terminal reports: %q is not a modifier (they are: %s)",
+				chord, modifier, list(modifierNames()))
+		}
+	}
+	if key == "" {
+		return fmt.Errorf("%q is a modifier held on its own, and a terminal reports no such key", chord)
+	}
+	if strings.Contains(key, "+") {
+		// Cut took the first plus, so what is left holding another is a second
+		// modifier in the wrong half — "ctrl+alt+x" reaches here as key
+		// "alt+x", which is well formed and recursed into.
+		modifier, rest, _ := strings.Cut(key, "+")
+		return holds(chord, modifier, rest)
+	}
+	return nil
+}
+
+// modifiers are what a terminal can report as held.
+var modifiers = func() map[string]bool {
+	out := map[string]bool{}
+	for _, m := range modifierNames() {
+		out[m] = true
+	}
+	return out
+}()
+
+func modifierNames() []string { return []string{"alt", "ctrl", "meta", "shift", "super"} }
 
 // named are the keys that type nothing, so binding one costs a person no
 // character.

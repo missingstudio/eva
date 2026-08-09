@@ -281,6 +281,15 @@ func (c *Config) loadProject() error {
 	if !found {
 		return nil
 	}
+	// A person's own settings live in ~/.eva/config.toml, which is the path
+	// this walk looks for — so running from the home directory finds the file
+	// that was already read and applies a repository's allow list to it,
+	// refusing a setting for being somewhere it is allowed to be. The two are
+	// the same file, and a file is not a repository's because of where someone
+	// happened to be standing.
+	if sameFile(path, c.Path) {
+		return nil
+	}
 
 	var project Config
 	md, err := toml.DecodeFile(path, &project)
@@ -389,6 +398,25 @@ func findProject(start string) (string, bool) {
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// sameFile reports whether two paths are one file, whatever they are spelled
+// like. A symlink, a relative walk, and a path with a trailing element removed
+// all reach one file by different names, and comparing the strings would miss
+// every one of them.
+func sameFile(a, b string) bool {
+	if a == b {
+		return true
+	}
+	infoA, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	infoB, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(infoA, infoB)
 }
 
 // decode reads the file strictly: a key Eva does not know is an error naming

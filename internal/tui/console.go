@@ -1033,6 +1033,27 @@ func (c *Console) stop() {
 	}
 }
 
+// interrupt ends the Run in flight without forgetting it.
+//
+// The difference from stop is the whole of what "busy" means. A cancelled Run
+// is not over: its goroutine is still unwinding and its close has not been
+// folded in yet. Forgetting it here would make the console idle for that
+// window, so the next prompt would open a second Run instead of queueing —
+// and then the first Run's close would arrive and cancel the second one, reset
+// its stream, and drop its queued prompt.
+//
+// So the Run stays in hand until its own close clears it, which is what stop
+// is for and where it is called from.
+func (c *Console) interrupt() {
+	c.shown.Lock()
+	cancel := c.cancel
+	c.shown.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+}
+
 // background takes the terminal's answer about its own colour, and restyles
 // everything that follows from it.
 //
@@ -1103,7 +1124,7 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		// turn is conditioned on it.
 		if c.busy() {
 			c.interrupted = true
-			c.stop()
+			c.interrupt()
 			return nil
 		}
 

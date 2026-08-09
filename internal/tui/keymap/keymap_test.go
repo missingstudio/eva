@@ -163,3 +163,44 @@ func TestEveryActionIsBound(t *testing.T) {
 		}
 	}
 }
+
+// A terminal reports a key in lower case, so an upper-case binding never fires
+// — and it replaces the default, so writing "Ctrl+C" would leave a person with
+// an interrupt key that does nothing and no interrupt key at all.
+func TestAnUpperCaseChordIsRefused(t *testing.T) {
+	for _, chord := range []string{"Ctrl+C", "CTRL+G", "Shift+Up"} {
+		t.Run(chord, func(t *testing.T) {
+			_, err := keymap.Parse(map[string][]string{"interrupt": {chord}})
+			if err == nil {
+				t.Fatalf("%q was accepted, and no terminal reports it", chord)
+			}
+			if !strings.Contains(err.Error(), "lower case") {
+				t.Errorf("the refusal does not say how to spell it: %v", err)
+			}
+		})
+	}
+}
+
+// A chord is two halves and both have to be real. "contains a plus" was the
+// whole of the old test, so a modifier held on its own and a key with a made-up
+// modifier both bound an action to something that could never arrive.
+func TestAChordThatNoTerminalReportsIsRefused(t *testing.T) {
+	for _, chord := range []string{"ctrl+", "+", "a+b", "hyper+x", "+x"} {
+		t.Run(chord, func(t *testing.T) {
+			if _, err := keymap.Parse(map[string][]string{"follow": {chord}}); err == nil {
+				t.Errorf("%q was accepted, and no terminal reports it", chord)
+			}
+		})
+	}
+}
+
+// A chord with two modifiers is one a terminal does report.
+func TestATwoModifierChordIsAccepted(t *testing.T) {
+	keys, err := keymap.Parse(map[string][]string{"follow": {"ctrl+shift+g"}})
+	if err != nil {
+		t.Fatalf("ctrl+shift+g was refused: %v", err)
+	}
+	if !keys.Is("ctrl+shift+g", keymap.Follow) {
+		t.Error("the two-modifier chord does not follow")
+	}
+}

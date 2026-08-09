@@ -117,7 +117,13 @@ func Stream(out io.Writer) Screen { return stream{out: out} }
 // must not also reset what the conversation has cost.
 func (r *Renderer) Background(dark bool) error {
 	r.dark = dark
-	r.look = theme.Default(dark)
+	// For rather than Default: the answer corrects the colours nobody chose and
+	// leaves alone the ones somebody did. Rebuilding from the default here
+	// would drop a configured grey the moment the terminal answered, and the
+	// console — which keeps its own copy — would go on using it. One colour
+	// named in two places, disagreeing, which is what this package's Subdued
+	// exists to prevent.
+	r.look = r.look.For(dark)
 	return r.rebuild()
 }
 

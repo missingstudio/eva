@@ -49,15 +49,6 @@ var captions = []string{
 	"listening to the wire",
 }
 
-// captionEvery is how long one caption stays before another is chosen.
-//
-// It is not the spinner's frame. A caption that changed twelve times a second
-// would be unreadable, and one that never changed would stop being evidence
-// that anything is still happening — which is the whole reason a spinner is
-// there. Eight seconds is long enough to read twice and short enough that a slow
-// turn keeps saying something new.
-const captionEvery = 8 * time.Second
-
 // caption chooses one, avoiding the one already on screen.
 //
 // Avoiding it matters more than it looks: a random choice from a list of this
@@ -81,8 +72,14 @@ func (c *Console) recaption() {
 // It is asked on the spinner's tick, because that is the one thing already
 // waking this interface up while a turn runs. A timer of its own would be a
 // second reason to redraw for a line that changes eight seconds apart.
+// How long a caption stays is the Theme's. It is not the spinner's frame: one
+// that changed twelve times a second would be unreadable, and one that never
+// changed would stop being evidence that anything is still happening, which is
+// the whole reason a spinner is there. The default is eight seconds — long
+// enough to read twice, short enough that a slow turn keeps saying something
+// new.
 func (c *Console) captionDue() bool {
-	return time.Since(c.captioned) >= captionEvery
+	return time.Since(c.captioned) >= time.Duration(c.look.Layout.CaptionSeconds)*time.Second
 }
 
 // randomPick is what a console picks with when nobody has said otherwise.
