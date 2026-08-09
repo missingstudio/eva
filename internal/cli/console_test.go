@@ -239,9 +239,13 @@ func begin(t *testing.T, script ...recording) *dialogue {
 	// message is the only way the renderer learns how big the screen is: until
 	// it has one it draws nothing at all, so there is no first key to wait for
 	// either. Sending it until something is drawn settles both.
+	// The prompt character is what says a frame has been drawn. It is looked
+	// for in the bytes rather than through read, because read is the transcript
+	// and a console that has drawn its first frame has an empty one — there is
+	// nothing to keep until somebody says something.
 	d.settle(t, func() bool {
 		d.program.Send(tea.WindowSizeMsg{Width: 80, Height: 24})
-		return strings.Contains(d.read(), "eva")
+		return strings.Contains(d.out.String(), "›")
 	})
 
 	t.Cleanup(func() { d.leave(t) })

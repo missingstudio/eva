@@ -302,10 +302,13 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	return program, c, nil
 }
 
-// Init focuses the prompt, asks the terminal what colour it is, and says how
-// to leave.
+// Init focuses the prompt and asks the terminal what colour it is.
+//
+// It says nothing else. A console that opened by listing its own keys would be
+// spending the first thing a person reads on the interface rather than on their
+// work — and the screen already answers it: the status line says ready, the
+// footer says which model, and /help lists the commands for whoever wants them.
 func (c *Console) Init() tea.Cmd {
-	c.put(c.styles.hint.Render("eva — enter to send, /help for the commands, ctrl+c to interrupt a turn, ctrl+d to leave"))
 	return tea.Batch(c.input.Focus(), tea.RequestBackgroundColor)
 }
 
@@ -683,7 +686,14 @@ func (c *Console) fold(e events.Event) tea.Cmd {
 // close ends the turn the interface was waiting on.
 func (c *Console) close(a answered) tea.Cmd {
 	c.stop()
+
+	// Show has already erased this for a turn that produced one. This is the
+	// turn that did not: interrupted before a word arrived, or broken partway
+	// through. What arrived is dropped rather than kept, because it is not a
+	// record — and the pane is recomposed, because a reset nothing redraws is a
+	// reset nobody sees.
 	c.arriving.Reset()
+	c.refresh()
 
 	// A turn that did not answer says why in its own claim, and that claim is
 	// the one the Trace holds. The interface reads it rather than working the
@@ -730,6 +740,14 @@ func (c *Console) blame(err error) {
 // Show takes a finished turn from the Renderer. It is the Screen a Renderer
 // built by newConsole writes to.
 func (c *Console) Show(turn string) error {
+	// The live area is erased by the thing that replaces it, here, rather than
+	// a moment later when the Run is closed. The two are not the same instant:
+	// the rendered turn arrives with the record that closes the Run, and the
+	// Run's own closing reaches this model as a separate message afterwards.
+	// Erasing on the later one leaves a frame — and, since nothing recomposed
+	// after it, every frame after that — showing the answer twice: once as the
+	// chunks that arrived, and once as the turn that was kept.
+	c.arriving.Reset()
 	c.put(turn)
 	return nil
 }
