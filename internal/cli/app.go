@@ -189,8 +189,8 @@ type eva struct {
 	arriving func(chunk string)
 }
 
-// eva is what a console's commands act on.
-var _ control = (*eva)(nil)
+// eva is what a console drives.
+var _ Control = (*eva)(nil)
 
 // Model is which model the turns that follow will use.
 func (e *eva) Model() string { return e.model }
@@ -209,7 +209,7 @@ func (e *eva) UseModel(model string) { e.model = model }
 // the same sink, and the same Provider. Session.Fresh has why it is a new one.
 func (e *eva) Clear() { e.session = e.session.Fresh(events.SessionID(newID("sess"))) }
 
-// watch attaches the frontend that drives these turns. It is told what was
+// Watch attaches the frontend that drives these turns. It is told what was
 // committed after the Trace holds it, it is told what is arriving before any of
 // it is committed, and it listens for a cancellation and lets the Run close
 // rather than letting the process die under it.
@@ -223,13 +223,13 @@ func (e *eva) Clear() { e.session = e.session.Fresh(events.SessionID(newID("sess
 // This is the only door. Everything a Run learns about who is watching it comes
 // through here, so the answer to "what does this Run claim, and who sees what it
 // commits?" is these five lines rather than a search.
-func (e *eva) watch(sub core.Subscriber, arriving func(chunk string)) {
+func (e *eva) Watch(sub core.Subscriber, arriving func(chunk string)) {
 	e.subs = []core.Subscriber{sub}
 	e.arriving = arriving
 	e.interrupt = true
 }
 
-// answer runs one turn as one Run against the Session.
+// Answer runs one turn as one Run against the Session.
 //
 // What is assembled here is only what changes between turns. Who is running,
 // under which tenant, on whose clock — the Session holds all of it and opens
@@ -238,7 +238,7 @@ func (e *eva) watch(sub core.Subscriber, arriving func(chunk string)) {
 // The argument is the Spec's intent, which is what a person typed at a prompt.
 // The word "prompt" is spent on the package that holds the base system one, so
 // the glossary's word is used here for the other thing.
-func (e *eva) answer(ctx context.Context, intent string) (core.Outcome, error) {
+func (e *eva) Answer(ctx context.Context, intent string) (core.Outcome, error) {
 	recorder, err := e.session.Open(e.sink, e.subs...)
 	if err != nil {
 		return core.Outcome{}, err
