@@ -3,11 +3,13 @@ package fake_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/providers"
@@ -224,5 +226,88 @@ func TestTheProviderNamesWhatConfigurationSelectsItBy(t *testing.T) {
 	// hold however it were renamed, and every existing config would break.
 	if provider.Name() != "fake" {
 		t.Errorf("Name() = %q, want %q", provider.Name(), "fake")
+	}
+}
+
+// A paced recording waits before each chunk, so that a person with no API key
+// sees an answer stream and a spinner turn beside it.
+func TestAPacedRecordingWaitsBeforeEachChunk(t *testing.T) {
+	const delay = 20 * time.Millisecond
+
+	p, err := fake.Load(write(t, fmt.Sprintf(`
+chunk_delay_ms = %d
+[[turn]]
+  [[turn.block]]
+  chunks = ["one ", "two ", "three"]
+`, delay.Milliseconds())))
+	if err != nil {
+		t.Fatalf("load the recording: %v", err)
+	}
+
+	start := time.Now()
+	replay(t, p)
+
+	// Three chunks are three waits. The usage record is not paced, so the
+	// bound is three rather than four.
+	if took := time.Since(start); took < 3*delay {
+		t.Errorf("the turn replayed in %s, want at least %s — the chunks were not paced", took, 3*delay)
+	}
+}
+
+// An unpaced recording is the default, because a test that paced itself would
+// spend its own runtime doing nothing.
+func TestARecordingIsUnpacedUnlessItSaysOtherwise(t *testing.T) {
+	p, err := fake.Load(write(t, `
+[[turn]]
+  [[turn.block]]
+  chunks = ["one ", "two ", "three"]
+`))
+	if err != nil {
+		t.Fatalf("load the recording: %v", err)
+	}
+
+	start := time.Now()
+	replay(t, p)
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("an unpaced turn took %s", took)
+	}
+}
+
+// The wait is cancellable. A person who interrupts a paced replay is
+// interrupting a turn, and should not have to wait out its pacing first.
+func TestAPacedReplayStopsWhenTheRunIsCancelled(t *testing.T) {
+	p, err := fake.Load(write(t, `
+chunk_delay_ms = 10000
+[[turn]]
+  [[turn.block]]
+  chunks = ["never arrives"]
+`))
+	if err != nil {
+		t.Fatalf("load the recording: %v", err)
+	}
+
+	stream, err := p.Stream(context.Background(), providers.Call{})
+	if err != nil {
+		t.Fatalf("open the turn: %v", err)
+	}
+	defer func() { _ = stream.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	if _, err := stream.Next(ctx); !errors.Is(err, context.Canceled) {
+		t.Errorf("the paced read answered %v, want the cancellation", err)
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("the paced read waited %s before noticing the cancellation", took)
+	}
+}
+
+// A pace that is not a length of time is a mistake, and is refused rather than
+// read as no delay at all.
+func TestANegativePaceIsRefused(t *testing.T) {
+	if _, err := fake.Load(write(t, "chunk_delay_ms = -1\n[[turn]]\n  [[turn.block]]\n  chunks = [\"x\"]\n")); err == nil {
+		t.Fatal("a negative chunk_delay_ms was accepted")
 	}
 }
