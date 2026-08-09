@@ -25,6 +25,13 @@ import (
 // how that is recorded, and it cannot record one thing and report another.
 type Turn struct {
 	Provider providers.Provider
+
+	// ProviderName is what configuration selected the Provider by, and is what
+	// a failure names. It is told rather than asked of the Provider: the
+	// registry key is the name, and a second copy of it on the Provider would
+	// be a copy that could disagree with the one a person wrote.
+	ProviderName string
+
 	Recorder *core.Recorder
 
 	// Session is read, never written. The transcript the answer is
@@ -184,13 +191,10 @@ func (u unrecorded) Unwrap() error { return u.err }
 // dying, so buffering a whole turn would trade the property invariant 1 rests
 // on for a smaller file.
 func (t *Turn) stream(ctx context.Context) error {
-	stream, err := t.Provider.Stream(ctx, providers.Call{
+	stream := t.Provider.Stream(ctx, providers.Call{
 		Model:    t.Model,
 		Messages: t.conditioning(),
 	})
-	if err != nil {
-		return fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
-	}
 	// The turn's outcome is what the caller acts on. A stream that failed to
 	// close has nothing to add to it, and the Trace already holds what
 	// happened.
@@ -214,7 +218,7 @@ func (t *Turn) stream(ctx context.Context) error {
 			if ferr := block.close(context.WithoutCancel(ctx)); ferr != nil {
 				return ferr
 			}
-			return fmt.Errorf("provider %s: %w", t.Provider.Name(), err)
+			return fmt.Errorf("provider %s: %w", t.ProviderName, err)
 		}
 
 		// Whoever is watching the turn happen is told first, because being
@@ -233,6 +237,18 @@ func (t *Turn) stream(ctx context.Context) error {
 			// rather than on a scattering of them a reader has to reconcile.
 			t.Recorder.Degrade(degraded.Missing...)
 			continue
+		}
+
+		// Three kinds are a Provider's to record, and the schema admits eleven.
+		// The rest belong to the Recorder — a Provider that yielded a Finished
+		// would put a second account of the Run in the Trace beside the one the
+		// claim closed it with, and a reader would have no way to tell which
+		// was the Run's own (ADR-0011). The contract says four kinds cross the
+		// seam; this is where saying it stops being a comment.
+		switch payload.(type) {
+		case events.Text, events.Usage, events.Retry:
+		default:
+			return fmt.Errorf("provider %s yielded a %T, which is not a Provider's to record", t.ProviderName, payload)
 		}
 
 		if err := block.add(ctx, payload); err != nil {

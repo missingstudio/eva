@@ -88,6 +88,11 @@ func commands() []command {
 			about:    "report which model answers, or switch to another",
 			run:      (*Console).model,
 		},
+		{
+			name:  "login",
+			about: "where to log in to a subscription, which is not here",
+			run:   (*Console).login,
+		},
 	}
 }
 
@@ -122,6 +127,20 @@ func (c *Console) model(name string) string {
 	was := c.control.Model()
 	c.control.UseModel(name)
 	return c.styles.hint.Render("model " + was + " → " + name)
+}
+
+// login says where a login happens, and it is not here.
+//
+// A Login opens a browser and waits for a person to come back, which is
+// everything a Command is not: a command opens no Run, reaches nothing over a
+// network, and leaves no record. So this is the one command that answers by
+// naming what does the work instead of doing it.
+//
+// It is a command at all because the alternative is a person typing /login,
+// being told there is no such command, and having no idea what there is
+// instead. An answer that points somewhere is worth more than a refusal.
+func (c *Console) login(string) string {
+	return c.styles.hint.Render(`run "eva login" in a shell — a login opens a browser, and a command opens nothing`)
 }
 
 // cost is what the Session has cost so far.

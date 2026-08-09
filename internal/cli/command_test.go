@@ -337,3 +337,18 @@ func TestClearLeavesTheMastheadStanding(t *testing.T) {
 		t.Errorf("the console stopped saying what it is after /clear:\n%s", got)
 	}
 }
+
+// A Login opens a browser and waits on a person, which is the one thing a
+// Command may not do. So /login answers by naming the shell word that does the
+// work — and, like every other command, opens no Run.
+func TestLoginPointsAtTheShellWithoutOpeningARun(t *testing.T) {
+	d := begin(t)
+
+	said := d.answers(t, "/login")
+	if !strings.Contains(said, "eva login") {
+		t.Errorf("/login did not name the command that logs in:\n%s", said)
+	}
+	if opened := d.of(t, events.KindStarted); len(opened) != 0 {
+		t.Errorf("/login opened %d Run(s) — a command reaches no Provider", len(opened))
+	}
+}

@@ -138,16 +138,16 @@ linters:
         #
         # Each implementation has a rule of its own below. One rule over the
         # whole subtree would grant every dependency to every implementation,
-        # so the fake would be allowed the Anthropic SDK and the Anthropic
-        # Provider would be allowed to read files. Both lists said what they
-        # were for and neither could enforce it.
+        # so the OpenAI Provider would be allowed the Anthropic SDK and the
+        # contract suite would be allowed both. Each list says what it is for,
+        # and having its own is what lets it enforce that.
         providers:
           list-mode: strict
           files:
             - "**/internal/providers/**"
             - "!**/internal/providers/anthropic/**"
-            - "!**/internal/providers/fake/**"
             - "!**/internal/providers/openai/**"
+            - "!**/internal/providers/providertest/**"
             - "!**/internal/providers/retry/**"
           allow:
             - $gostd
@@ -156,6 +156,10 @@ linters:
             # is conditioned on, and it is the whole of what this layer needs
             # from the domain.
             - github.com/missingstudio/eva/internal/core
+            # retry, for the Policy a caller chooses. The rule is one rule and
+            # it lives below this layer, so what crosses the seam is the leaf's
+            # own type rather than a second copy of it here.
+            - github.com/missingstudio/eva/internal/providers/retry
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/providers
 
@@ -177,6 +181,19 @@ linters:
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/providers/retry
 
+        # providertest is the Provider contract written as tests, so it gets the
+        # contract and the schema and nothing else. No vendor SDK and no file
+        # format: a suite that could build one Provider's fixtures would be a
+        # suite with an opinion about which Provider it was for.
+        providers-providertest:
+          list-mode: strict
+          files:
+            - "**/internal/providers/providertest/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/providers
+
         # The Anthropic Provider: the vendor's SDK, and the contract it
         # satisfies. It does not read files.
         providers-anthropic:
@@ -189,6 +206,9 @@ linters:
             - github.com/missingstudio/eva/internal/core
             - github.com/missingstudio/eva/internal/providers
             - github.com/missingstudio/eva/internal/providers/anthropic
+            # providertest, for the shared contract suite. Test files only —
+            # nothing in the implementation can reach it.
+            - github.com/missingstudio/eva/internal/providers/providertest
             - github.com/missingstudio/eva/internal/providers/retry
             - github.com/anthropics/anthropic-sdk-go
 
@@ -206,26 +226,11 @@ linters:
             - github.com/missingstudio/eva/internal/core
             - github.com/missingstudio/eva/internal/providers
             - github.com/missingstudio/eva/internal/providers/openai
+            # providertest, for the shared contract suite. Test files only —
+            # nothing in the implementation can reach it.
+            - github.com/missingstudio/eva/internal/providers/providertest
             - github.com/missingstudio/eva/internal/providers/retry
 
-        # The fake Provider replays a recorded turn, so it reads one: toml, and
-        # no vendor's SDK. It reads its own recording rather than being handed
-        # one because the layer that reads files is config, and config may not
-        # import providers.
-        #
-        # core is absent. A recording answers from a file and is conditioned on
-        # nothing, so the one type this layer takes from the domain is one the
-        # fake never touches.
-        providers-fake:
-          list-mode: strict
-          files:
-            - "**/internal/providers/fake/**"
-          allow:
-            - $gostd
-            - github.com/missingstudio/eva/internal/events
-            - github.com/missingstudio/eva/internal/providers
-            - github.com/missingstudio/eva/internal/providers/fake
-            - github.com/BurntSushi/toml
 
         # trace writes files. core declares the TraceSink interface; this
         # satisfies it.

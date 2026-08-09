@@ -62,20 +62,18 @@ type recording struct {
 
 var _ providers.Provider = (*driven)(nil)
 
-func (d *driven) Name() string { return "driven" }
-
-func (d *driven) Stream(_ context.Context, call providers.Call) (providers.Stream, error) {
+func (d *driven) Stream(_ context.Context, call providers.Call) providers.Stream {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	if d.turn >= len(d.script) {
-		return nil, fmt.Errorf("driven: the script records %d turn(s) and this is turn %d", len(d.script), d.turn+1)
+		return providers.Failed(fmt.Errorf("driven: the script records %d turn(s) and this is turn %d", len(d.script), d.turn+1))
 	}
 	rec := d.script[d.turn]
 	d.turn++
 	d.calls = append(d.calls, call)
 
-	return &drivenStream{rec: rec}, nil
+	return &drivenStream{rec: rec}
 }
 
 // transcripts is the transcript of every call so far.
@@ -698,7 +696,7 @@ func TestTheShippedProvidersAreSelectable(t *testing.T) {
 		registered[name] = true
 	}
 
-	for _, want := range []string{"anthropic", "fake"} {
+	for _, want := range []string{"anthropic", "openai"} {
 		if !registered[want] {
 			t.Errorf("%q is not registered, so no configuration can select it", want)
 		}

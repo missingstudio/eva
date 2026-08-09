@@ -18,24 +18,8 @@ const Name = "anthropic"
 // This Provider puts itself in the set configuration can select. The layer that
 // wires a run therefore names it once, as an import, rather than knowing how to
 // build it.
-//
-// The credential is resolved here and not before: this is the Provider that
-// needs one, so this is where failing for want of one is the right failure.
 func init() {
-	providers.Register(Name, func(o providers.Options) (providers.Provider, error) {
-		if o.Credential == nil {
-			return nil, errors.New("anthropic: no API key")
-		}
-		key, err := o.Credential()
-		if err != nil {
-			return nil, err
-		}
-		return New(Options{
-			APIKey:    key,
-			BaseURL:   o.BaseURL,
-			MaxTokens: o.MaxTokens,
-		})
-	})
+	providers.Register(Name, func(o providers.Options) (providers.Provider, error) { return New(o) })
 }
 
 // DefaultMaxTokens caps one answer when the caller chooses no cap of its own.
@@ -43,29 +27,6 @@ func init() {
 // number — and a turn that ran under this one and hit it says so, rather than
 // returning a truncated answer that looks whole.
 const DefaultMaxTokens int64 = 8192
-
-// Options is everything the Provider needs to reach the API.
-type Options struct {
-	// APIKey is the credential.
-	//
-	// It is a plain string because the type that stops a credential printing
-	// itself lives in config, and a provider may not import config. The call
-	// site therefore reveals the secret to pass it, which is exactly where
-	// that step should be visible.
-	APIKey string
-
-	// BaseURL points the client somewhere other than the public API — a
-	// gateway, a proxy, or the recorded server a test runs against. Empty is
-	// the public API.
-	BaseURL string
-
-	// MaxTokens caps one answer. Zero takes DefaultMaxTokens.
-	MaxTokens int64
-
-	// Retry is how a refused attempt is retried. The zero value takes the
-	// shared default.
-	Retry retry.Policy
-}
 
 // Provider answers turns from the Anthropic Messages API.
 type Provider struct {
@@ -77,13 +38,30 @@ type Provider struct {
 var _ providers.Provider = (*Provider)(nil)
 
 // New builds a Provider, or reports what it cannot be built without.
-func New(o Options) (*Provider, error) {
-	if o.APIKey == "" {
+//
+// The credential is resolved here rather than per attempt, because the one mode
+// this Provider serves is an API key and an API key does not renew. A
+// subscription is refused rather than tried: this vendor's login is not a thing
+// Eva can obtain today, and a Provider that accepted the mode and then sent the
+// token as an `x-api-key` would fail on the wire with a sentence about the key
+// rather than about the mode that was never going to work.
+func New(o providers.Options) (*Provider, error) {
+	if !o.Credential.Present() {
+		return nil, errors.New("anthropic: no API key")
+	}
+	if o.Credential.Mode() != providers.ModeAPIKey {
+		return nil, fmt.Errorf("anthropic: this Provider authenticates with an API key, and the credential is a %s", o.Credential.Mode())
+	}
+	key, err := o.Credential.Resolve()
+	if err != nil {
+		return nil, err
+	}
+	if key == "" {
 		return nil, errors.New("anthropic: no API key")
 	}
 
 	opts := []option.RequestOption{
-		option.WithAPIKey(o.APIKey),
+		option.WithAPIKey(key),
 		// The SDK retries twice by default, inside the call, where nothing
 		// can see it. An attempt that spent money and produced nothing is a
 		// record this project keeps, so the retrying is done here instead.
@@ -104,24 +82,19 @@ func New(o Options) (*Provider, error) {
 	}, nil
 }
 
-// Name reports the name configuration selects this Provider by.
-func (p *Provider) Name() string { return Name }
-
 // Stream begins one turn.
 //
 // Nothing is sent here. The request is made on the first read, because an
 // attempt that failed is reported as a payload, and a caller that never read
-// the Stream would never see the retries that preceded the answer.
-func (p *Provider) Stream(ctx context.Context, call providers.Call) (providers.Stream, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
+// the Stream would never see the retries that preceded the answer. A Call this
+// Provider cannot send fails from that first read too, so a turn has one place
+// it goes wrong.
+func (p *Provider) Stream(_ context.Context, call providers.Call) providers.Stream {
 	params, err := request(call, p.maxTokens)
 	if err != nil {
-		return nil, err
+		return providers.Failed(err)
 	}
-	return &stream{provider: p, params: params}, nil
+	return providers.Drive(&wire{provider: p, params: params}, p.retry)
 }
 
 // request maps the transcript onto the API's own shape.

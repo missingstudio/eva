@@ -106,6 +106,23 @@ _Avoid_: Offset, pointer, checkpoint (a checkpoint is a Session state, not a str
 An attempt that spent money and wall clock and produced nothing. It is a record rather than a detail of one, because the cost of retrying is otherwise invisible — and the rule that decides how long to wait before the next one is one rule, shared by every Provider that answers over a network.
 _Avoid_: Backoff (that is the arithmetic, not the attempt), reattempt
 
+### Answering a turn
+
+**Provider**:
+A model behind one contract: one method, which begins a turn and yields payloads of the one Event schema. It knows what happened and not what becomes of it — no Run, no Session, no tenant — so it states each thing where it noticed it and states it once. What selects a Provider is its registry key, which is the only place its name lives.
+_Avoid_: Backend, vendor, client (a client is what a Provider holds, not what it is)
+
+**Wire**:
+One Provider's own half of a turn: how to make a single attempt, how to read a single frame, how to let go. It is everything that genuinely differs between two Providers — a vendor's SDK against a hand-rolled POST, a typed error document against a status line.
+_Avoid_: Transport (that is one Provider's choice of host and headers, a level below), connection
+
+**Driver**:
+The state machine every turn runs through, whatever wire carries it: the queue a caller pulls from, the retry that is a record before it is a wait, and the books that close once. Written per Provider it was the same two hundred lines twice.
+_Avoid_: Loop (a caller pulls, so nothing here loops on its own), pump, engine
+
+**Transport**:
+One Provider's way of reaching its own API — a host, the headers beyond the credential, and what a turn must carry to be accepted there. One Provider can have two: an API key against a public API, a subscription against the vendor's own backend, identical past the dial.
+
 ### Credentials
 
 **Credential**:

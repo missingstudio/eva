@@ -85,11 +85,22 @@ type provider struct {
 	key string
 }
 
-// fake answers from a recording on disk: no network, and no credential.
-func fake(script string) provider {
+// replayed answers one scripted turn from a local server speaking the API's
+// own wire protocol.
+//
+// It is what a recording on disk used to be, and it is better in the way that
+// matters: the turn runs through the Provider that answers in production, over
+// the frames that Provider actually parses. A recording proved the machinery
+// around a Provider; this proves the Provider too, and still needs no account
+// and no network past the loopback.
+func replayed(t *testing.T) provider {
+	t.Helper()
+
+	base, _ := api(t, oneTurn)
 	return provider{
 		model: "test-model",
-		table: fmt.Sprintf("[provider]\nname = \"fake\"\nscript = %q\n", script),
+		table: fmt.Sprintf("[provider]\nname = \"anthropic\"\nbase_url = %q\n", base),
+		key:   "sk-ant-test",
 	}
 }
 
@@ -119,49 +130,25 @@ func (p provider) plus(line string) provider {
 }
 
 // oneTurn is the turn this package answers from when a test does not generate
-// one of its own.
+// one of its own, written as the frames the API sends.
 //
-// The fake Provider replays it, so no test and no demo needs network access or
-// an API key. What is here is a recording rather than a simulation: a test that
-// fails, fails because Eva changed.
-const oneTurn = `[[turn]]
-
-  # One content block, delivered in three chunks. The block is what the sink
-  # folds on, so this turn reaches the Trace as one Text record.
-  [[turn.block]]
-  chunks = [
-    "Eva is an autonomous, ",
-    "multi-tenant, ",
-    "AI-native software factory.",
-  ]
-
-  # A cached turn, so that cache writes and cache reads are separate non-zero
-  # figures rather than one number that cannot compute cost.
-  [turn.usage]
-  input_tokens = 1200
-  output_tokens = 340
-  cache_write_tokens = 96
-  cache_read_tokens = 1024
-  # reasoning_tokens, server_tool_tokens, and usd are left out on purpose.
-  # Anthropic reports no reasoning figure and bills thinking tokens inside
-  # output tokens, so a zero here would be a confident lie rather than a
-  # measurement.
-`
-
-// recording writes that turn where the process under test can reach it.
+// The figures are split the way the API splits them: what the input cost when
+// the message opens, what the output cost when it closes. A cached turn, so
+// that cache writes and cache reads are separate non-zero figures rather than
+// one number that cannot compute cost. Three chunks of one content block, so
+// that what the sink folds is visible in what the Trace holds.
 //
-// It is written from the constant above rather than kept in a file beside the
-// test, so that the figures the assertions name — 1.2k in, 340 out, 96 write,
-// 1.0k read — are read in the same file that names them.
-func recording(t *testing.T) string {
-	t.Helper()
-
-	path := filepath.Join(t.TempDir(), "script.toml")
-	if err := os.WriteFile(path, []byte(oneTurn), 0o600); err != nil {
-		t.Fatalf("write the recording: %v", err)
-	}
-	return path
-}
+// Reasoning and server-tool figures are absent on purpose: this API reports no
+// reasoning figure and bills thinking inside the output tokens, so a zero here
+// would be a confident lie rather than a measurement.
+var oneTurn = frames(
+	"message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"test-model","content":[],"usage":{"input_tokens":1200,"output_tokens":1,"cache_creation_input_tokens":96,"cache_read_input_tokens":1024}}}`,
+	"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Eva is an autonomous, "}}`,
+	"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"multi-tenant, "}}`,
+	"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"AI-native software factory."}}`,
+	"message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":340}}`,
+	"message_stop", `{"type":"message_stop"}`,
+)
 
 // newWorld writes a configuration and puts the Trace somewhere this test owns.
 func newWorld(t *testing.T, p provider) *world {
@@ -364,7 +351,7 @@ func kinds(es []events.Event) []events.Kind {
 }
 
 func TestHelpPrintsTheUsageBlock(t *testing.T) {
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 
 	got := w.run(t, "help")
 	if got.code != 0 {
@@ -400,7 +387,7 @@ func TestHelpPrintsTheUsageBlock(t *testing.T) {
 // the sink folds them into one record at commit. A Trace record is a unit of
 // meaning, so three chunks are one Text.
 func TestAPlainTurnRecordsStartedTextUsageAndFinished(t *testing.T) {
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 
 	got := w.answer(t, "what is this project")
 
@@ -455,7 +442,7 @@ func TestAPlainTurnRecordsStartedTextUsageAndFinished(t *testing.T) {
 func TestThePromptReachesTheTrace(t *testing.T) {
 	const prompt = "what is this project"
 
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 	got := w.answer(t, prompt)
 
 	started, ok := got[0].Payload.(events.Started)
@@ -478,7 +465,7 @@ func TestThePromptReachesTheTrace(t *testing.T) {
 // A second prompt is answered in the light of the first, and both turns are in
 // one Trace under one Session.
 func TestASecondPromptIsAnsweredInTheSameSession(t *testing.T) {
-	w := newWorld(t, fake(oneTurnEach(t, 2)))
+	w := newWorld(t, replayed(t))
 
 	got, held := w.converse(t, "one", "two")
 	if got.code != 0 {
@@ -499,7 +486,7 @@ func TestASecondPromptIsAnsweredInTheSameSession(t *testing.T) {
 }
 
 func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 	held := w.answer(t, "what is this project")
 
 	body, err := os.ReadFile(w.trace)
@@ -550,7 +537,7 @@ func TestEveryEventCarriesTheWholeEnvelope(t *testing.T) {
 // reach the Trace, so the Trace sequence stays dense while the wire sequence
 // skips the chunks the fold absorbed.
 func TestTracePositionIsDenseAndIsNotTheWirePosition(t *testing.T) {
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 	got := w.answer(t, "what is this project")
 
 	var skipped bool
@@ -571,7 +558,7 @@ func TestTracePositionIsDenseAndIsNotTheWirePosition(t *testing.T) {
 }
 
 func TestTheTurnIsAppendedToATraceThatParses(t *testing.T) {
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 	held := w.answer(t, "what is this project")
 
 	if len(held) == 0 {
@@ -589,7 +576,7 @@ func TestTheTurnIsAppendedToATraceThatParses(t *testing.T) {
 // A second process appends rather than replacing, so the Trace is a record the
 // developer did not have to ask for.
 func TestASecondRunAppendsToTheSameTrace(t *testing.T) {
-	w := newWorld(t, fake(oneTurnEach(t, 2)))
+	w := newWorld(t, replayed(t))
 
 	first := w.answer(t, "one")
 	if len(first) == 0 {
@@ -611,29 +598,13 @@ func TestASecondRunAppendsToTheSameTrace(t *testing.T) {
 	}
 }
 
-// oneTurnEach writes a recording of n identical turns, for the tests that need
-// a console to answer more than once.
-func oneTurnEach(t *testing.T, n int) string {
-	t.Helper()
-
-	var body strings.Builder
-	for range n {
-		body.WriteString(oneTurn)
-	}
-	path := filepath.Join(t.TempDir(), "script.toml")
-	if err := os.WriteFile(path, []byte(body.String()), 0o600); err != nil {
-		t.Fatalf("write the recording: %v", err)
-	}
-	return path
-}
-
-// longRecording writes a turn of blocks, each split into chunks, and returns
-// the recording's path with the text one block folds to.
+// longReplay answers one turn of many blocks, each of many chunks, and reports
+// what one block folds to.
 //
-// It is generated rather than checked in. A recording of thousands of chunks
-// is a large file that records nothing real except its shape, and the shape is
-// the only part these two tests read.
-func longRecording(t *testing.T, blocks, chunks int) (path, folded string) {
+// It is generated rather than written down because the point is the volume:
+// enough chunks that a Trace holding one record per chunk would be obvious,
+// and enough blocks to interrupt in the middle of.
+func longReplay(t *testing.T, blocks, chunks int) (provider, string) {
 	t.Helper()
 
 	// Every block is the same chunks, so what one folds to is what all of them
@@ -643,24 +614,26 @@ func longRecording(t *testing.T, blocks, chunks int) (path, folded string) {
 		fmt.Fprintf(&block, "chunk %d. ", c)
 	}
 
-	var body strings.Builder
-	body.WriteString("# Generated by the test that needs it: a turn long enough to be\n")
-	body.WriteString("# interrupted, and chunky enough to show what the fold is worth.\n\n")
-	body.WriteString("[[turn]]\n")
-	for range blocks {
-		body.WriteString("\n  [[turn.block]]\n  chunks = [\n")
+	pairs := []string{
+		"message_start", `{"type":"message_start","message":{"usage":{"input_tokens":10}}}`,
+	}
+	for b := range blocks {
 		for c := range chunks {
-			fmt.Fprintf(&body, "    %s,\n", strconv.Quote(fmt.Sprintf("chunk %d. ", c)))
+			pairs = append(pairs, "content_block_delta", fmt.Sprintf(
+				`{"type":"content_block_delta","index":%d,"delta":{"type":"text_delta","text":%s}}`,
+				b, strconv.Quote(fmt.Sprintf("chunk %d. ", c))))
 		}
-		body.WriteString("  ]\n")
 	}
-	body.WriteString("\n  [turn.usage]\n  input_tokens = 10\n  output_tokens = 20\n")
+	pairs = append(pairs,
+		"message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":20}}`,
+		"message_stop", `{"type":"message_stop"}`)
 
-	path = filepath.Join(t.TempDir(), "long.toml")
-	if err := os.WriteFile(path, []byte(body.String()), 0o600); err != nil {
-		t.Fatalf("write the recording: %v", err)
-	}
-	return path, block.String()
+	base, _ := api(t, frames(pairs...))
+	return provider{
+		model: "test-model",
+		table: fmt.Sprintf("[provider]\nname = \"anthropic\"\nbase_url = %q\n", base),
+		key:   "sk-ant-test",
+	}, block.String()
 }
 
 // The Trace stays proportionate to meaning rather than to tokens: thousands of
@@ -673,8 +646,8 @@ func TestAChunkHeavyRunProducesOneRecordPerBlock(t *testing.T) {
 		chunks = 1500
 	)
 
-	script, folded := longRecording(t, blocks, chunks)
-	w := newWorld(t, fake(script))
+	long, folded := longReplay(t, blocks, chunks)
+	w := newWorld(t, long)
 	held := w.answer(t, "answer at length")
 
 	want := []events.Kind{events.KindStarted}
@@ -737,8 +710,8 @@ func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
 		caught = 20
 	)
 
-	script, _ := longRecording(t, blocks, 3)
-	w := newWorld(t, fake(script))
+	long, _ := longReplay(t, blocks, 3)
+	w := newWorld(t, long)
 
 	cmd := exec.Command(binary)
 	cmd.Env = w.env
@@ -826,7 +799,7 @@ func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
 // A typo must not quietly disable the thing the user meant to set. The console
 // never opens: a configuration Eva would not act on is refused before it is.
 func TestAnUnknownConfigKeyExitsNonZeroNamingTheKey(t *testing.T) {
-	w := newWorld(t, fake(recording(t)).plus(`nmae = "anthropic"`))
+	w := newWorld(t, replayed(t).plus(`nmae = "anthropic"`))
 
 	got := w.run(t)
 	if got.code == 0 {
@@ -879,7 +852,7 @@ func TestAMissingAPIKeyExitsNonZeroSayingHowToSetOne(t *testing.T) {
 func TestTheAPIKeyNeverReachesTheTraceOrTheStream(t *testing.T) {
 	const key = "sk-ant-canary-do-not-store-me"
 
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 	w.env = append(w.env, "ANTHROPIC_API_KEY="+key)
 
 	got, _ := w.converse(t, "what is this project")
@@ -899,7 +872,7 @@ func TestTheAPIKeyNeverReachesTheTraceOrTheStream(t *testing.T) {
 // Configuration is a file, and the flag says which one. The environment names
 // a default; the flag overrides it.
 func TestTheConfigFlagChoosesTheFile(t *testing.T) {
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 	w.env = append(w.env, "EVA_CONFIG="+filepath.Join(w.dir, "there-is-no-such-file.toml"))
 
 	// The console opens over the file the flag named and finds no input, so it
@@ -919,7 +892,7 @@ func TestTheConfigFlagChoosesTheFile(t *testing.T) {
 // not. The interface itself is exercised in console_test.go, in this process,
 // where the keys and the Events can be told apart.
 func TestNoArgumentsOpensAnInteractiveChat(t *testing.T) {
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 
 	got, held := w.converse(t, "what is this project")
 	if got.code != 0 {
@@ -944,7 +917,7 @@ func TestNoArgumentsOpensAnInteractiveChat(t *testing.T) {
 }
 
 func TestTheCommandLineFailsClosed(t *testing.T) {
-	w := newWorld(t, fake(recording(t)))
+	w := newWorld(t, replayed(t))
 
 	for _, c := range []struct {
 		name string
@@ -1002,7 +975,7 @@ func TestALookAndFeelMistakeIsReportedOnEitherPath(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			w := newWorld(t, fake(recording(t)))
+			w := newWorld(t, replayed(t))
 
 			body, err := os.ReadFile(w.config)
 			if err != nil {

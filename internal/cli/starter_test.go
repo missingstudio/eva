@@ -105,7 +105,7 @@ func TestTheStarterChoosesNothing(t *testing.T) {
 // than written out, so it cannot offer a Provider that is not there.
 func TestTheStarterNamesWhatThisBuildShips(t *testing.T) {
 	got := starter()
-	for _, want := range []string{"anthropic", "fake", "jsonl"} {
+	for _, want := range []string{"anthropic", "openai", "jsonl"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the starter does not name %q, which this build ships", want)
 		}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/providers"
 	"github.com/missingstudio/eva/internal/providers/anthropic"
+	"github.com/missingstudio/eva/internal/providers/providertest"
 	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
@@ -137,10 +139,10 @@ func records(t *testing.T, rep reply) (base string, sent func() string) {
 func open(t *testing.T, base string) *anthropic.Provider {
 	t.Helper()
 
-	p, err := anthropic.New(anthropic.Options{
-		APIKey:  "sk-ant-test",
-		BaseURL: base,
-		Retry:   retry.Policy{Attempts: 4, Base: 4 * time.Millisecond, Cap: 40 * time.Millisecond},
+	p, err := anthropic.New(providers.Options{
+		Credential: providers.APIKey(func() (string, error) { return "sk-ant-test", nil }),
+		BaseURL:    base,
+		Retry:      retry.Policy{Attempts: 4, Base: 4 * time.Millisecond, Cap: 40 * time.Millisecond},
 	})
 	if err != nil {
 		t.Fatalf("open the Provider: %v", err)
@@ -153,13 +155,10 @@ func open(t *testing.T, base string) *anthropic.Provider {
 func ask(t *testing.T, p *anthropic.Provider) ([]events.Payload, error) {
 	t.Helper()
 
-	s, err := p.Stream(context.Background(), providers.Call{
+	s := p.Stream(context.Background(), providers.Call{
 		Model:    "claude-test",
 		Messages: []core.Message{{Author: core.AuthorUser, Text: "what is this project"}},
 	})
-	if err != nil {
-		t.Fatalf("begin the turn: %v", err)
-	}
 	defer func() { _ = s.Close() }()
 
 	var out []events.Payload
@@ -383,10 +382,10 @@ func TestAWholeAnswerCarriesNoCaveat(t *testing.T) {
 func TestTheAnswerCapIsWhatTheCallerChose(t *testing.T) {
 	base, sent := records(t, answers("capped"))
 
-	p, err := anthropic.New(anthropic.Options{
-		APIKey:    "sk-ant-test",
-		BaseURL:   base,
-		MaxTokens: 1234,
+	p, err := anthropic.New(providers.Options{
+		Credential: providers.APIKey(func() (string, error) { return "sk-ant-test", nil }),
+		BaseURL:    base,
+		MaxTokens:  1234,
 	})
 	if err != nil {
 		t.Fatalf("open the Provider: %v", err)
@@ -673,7 +672,7 @@ func TestTheTranscriptIsSentAsMessagesAndASystemPrompt(t *testing.T) {
 	base, sent := records(t, answers("anything"))
 
 	p := open(t, base)
-	s, err := p.Stream(context.Background(), providers.Call{
+	s := p.Stream(context.Background(), providers.Call{
 		Model: "claude-test",
 		Messages: []core.Message{
 			{Author: core.AuthorSystem, Text: "answer briefly"},
@@ -682,9 +681,6 @@ func TestTheTranscriptIsSentAsMessagesAndASystemPrompt(t *testing.T) {
 			{Author: core.AuthorUser, Text: "three"},
 		},
 	})
-	if err != nil {
-		t.Fatalf("begin the turn: %v", err)
-	}
 	for {
 		if _, err := s.Next(context.Background()); err != nil {
 			break
@@ -715,9 +711,13 @@ func TestATurnWithNoTranscriptIsRejected(t *testing.T) {
 	base, requests := serve(t)
 
 	p := open(t, base)
-	s, err := p.Stream(context.Background(), providers.Call{Model: "claude-test"})
-	if err == nil {
-		_ = s.Close()
+	s := p.Stream(context.Background(), providers.Call{Model: "claude-test"})
+	defer func() { _ = s.Close() }()
+
+	// The refusal arrives from the first read, because that is where every
+	// other failure of a turn arrives. What matters is that it arrives before
+	// anything is sent.
+	if _, err := s.Next(context.Background()); err == nil {
 		t.Fatal("a turn with no transcript began")
 	}
 	if requests() != 0 {
@@ -726,14 +726,33 @@ func TestATurnWithNoTranscriptIsRejected(t *testing.T) {
 }
 
 func TestAProviderWithNoCredentialIsRefusedAtConstruction(t *testing.T) {
-	if _, err := anthropic.New(anthropic.Options{}); err == nil {
+	if _, err := anthropic.New(providers.Options{}); err == nil {
 		t.Fatal("a Provider was built with no credential")
 	}
 }
 
-func TestTheProviderIsNamedForWhatSelectsIt(t *testing.T) {
-	if got := open(t, "http://127.0.0.1:1").Name(); got != anthropic.Name {
-		t.Errorf("name = %q, want %q", got, anthropic.Name)
+// This Provider serves one mode, and says so rather than sending a login's
+// token as an API key and failing on the wire about the key.
+func TestASubscriptionCredentialIsRefusedRatherThanSpent(t *testing.T) {
+	_, err := anthropic.New(providers.Options{
+		Credential: providers.Subscription(func() (string, error) { return "token", nil }),
+	})
+	if err == nil {
+		t.Fatal("a subscription credential built an API-key Provider")
+	}
+	if !strings.Contains(err.Error(), "API key") {
+		t.Errorf("the refusal does not say what this Provider authenticates with: %v", err)
+	}
+}
+
+// The name is the registry's key. It is published, so it is compared against
+// the literal a person writes in a file rather than against itself.
+func TestTheProviderRegistersItselfUnderItsPublishedName(t *testing.T) {
+	if anthropic.Name != "anthropic" {
+		t.Errorf("Name = %q, want %q", anthropic.Name, "anthropic")
+	}
+	if !slices.Contains(providers.Names(), anthropic.Name) {
+		t.Errorf("%q is not in the registry: %v", anthropic.Name, providers.Names())
 	}
 }
 
@@ -751,13 +770,10 @@ func TestReadingPastTheEndKeepsReturningEOF(t *testing.T) {
 	))
 
 	provider := open(t, base)
-	s, err := provider.Stream(context.Background(), providers.Call{
+	s := provider.Stream(context.Background(), providers.Call{
 		Model:    "claude-test",
 		Messages: []core.Message{{Author: core.AuthorUser, Text: "hello"}},
 	})
-	if err != nil {
-		t.Fatalf("open the stream: %v", err)
-	}
 	t.Cleanup(func() { _ = s.Close() })
 
 	// Drain it, with a bound: a stream that never ends must fail this test
@@ -791,13 +807,10 @@ func TestACancelledStreamStopsAndStaysStopped(t *testing.T) {
 
 	provider := open(t, base)
 	ctx, cancel := context.WithCancel(context.Background())
-	s, err := provider.Stream(ctx, providers.Call{
+	s := provider.Stream(ctx, providers.Call{
 		Model:    "claude-test",
 		Messages: []core.Message{{Author: core.AuthorUser, Text: "hello"}},
 	})
-	if err != nil {
-		t.Fatalf("open the stream: %v", err)
-	}
 	t.Cleanup(func() { _ = s.Close() })
 
 	cancel()
@@ -806,4 +819,32 @@ func TestACancelledStreamStopsAndStaysStopped(t *testing.T) {
 			t.Fatalf("a cancelled stream returned %v, want context.Canceled", err)
 		}
 	}
+}
+
+// The Provider contract, driven through the seam every Provider shares.
+func TestAnthropicKeepsTheProviderContract(t *testing.T) {
+	providertest.Run(t, providertest.Contract{
+		Answers: func(t *testing.T) providers.Provider {
+			base, _ := serve(t, stream(
+				frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":12,"output_tokens":1}}}`),
+				frame("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}}`),
+				frame("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}`),
+				frame("message_stop", `{"type":"message_stop"}`),
+			))
+			return open(t, base)
+		},
+		Unpriced: func(t *testing.T) providers.Provider {
+			base, _ := serve(t, stream(
+				frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[]}}`),
+				frame("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}}`),
+				frame("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"}}`),
+				frame("message_stop", `{"type":"message_stop"}`),
+			))
+			return open(t, base)
+		},
+		Call: providers.Call{
+			Model:    "claude-test",
+			Messages: []core.Message{{Author: core.AuthorUser, Text: "hello"}},
+		},
+	})
 }
