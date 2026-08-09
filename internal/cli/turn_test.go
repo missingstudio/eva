@@ -362,3 +362,62 @@ func TestARecordThatCannotBeWrittenReachesTheCallerAsAnError(t *testing.T) {
 		t.Errorf("the Trace holds %d groups, want the opening and the close", len(sink.groups))
 	}
 }
+
+// A Run that opened is a Run that closes, even when opening it reported a
+// failure.
+//
+// A group is committed before it is published, so a projection that breaks on
+// the way out leaves the Started record in the Trace and returns an error
+// anyway. Returning there left a Run open forever — and a Run with no Finished
+// record is one a reader cannot tell from a Run still going, which is the
+// distinction the whole Trace rests on.
+func TestARunThatOpenedClosesEvenWhenOpeningItFailed(t *testing.T) {
+	sink := &grouped{}
+	broken := core.SubscriberFunc(func(context.Context, events.Event) error {
+		return errors.New("the projection is gone")
+	})
+
+	var minted uint64
+	rec, err := core.NewRecorder(core.RecorderOptions{
+		Sink:        sink,
+		Run:         "run_test",
+		Session:     "sess_test",
+		Now:         func() events.Timestamp { return events.Timestamp{} },
+		NewID:       func() events.EventID { minted++; return events.EventID(fmt.Sprintf("evt_%d", minted)) },
+		Subscribers: []core.Subscriber{broken},
+	})
+	if err != nil {
+		t.Fatalf("build a Recorder: %v", err)
+	}
+
+	turn := &Turn{
+		Recorder: rec,
+		Session:  newTestSession(),
+		Provider: &driven{script: []recording{{chunks: []string{"answered."}}}},
+		Model:    "test-model",
+	}
+
+	if _, err := turn.Execute(context.Background(), core.Spec{Intent: "hello"}); err == nil {
+		t.Fatal("a publish failure while opening the Run was not reported")
+	}
+
+	// The Trace holds the Run's open and its close, so a reader can tell it
+	// ended.
+	var opened, closed bool
+	for _, group := range sink.groups {
+		for _, payload := range group {
+			switch payload.(type) {
+			case events.Started:
+				opened = true
+			case events.Finished:
+				closed = true
+			}
+		}
+	}
+	if !opened {
+		t.Fatal("the Started record never reached the Trace, so there is nothing this test is about")
+	}
+	if !closed {
+		t.Error("the Run opened and never closed: a reader cannot tell it from a Run still going")
+	}
+}

@@ -88,6 +88,17 @@ func (t *Turn) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	// only in this process is one a Trace cannot reconstruct.
 	started := events.Started{Intent: spec.Intent, Capabilities: capabilities(t.Interrupt)}
 	if err := t.Recorder.Record(ctx, started); err != nil {
+		// The Run may be open even though this failed. A group is committed
+		// before it is published, so a projection that broke on the way out
+		// leaves the Started record in the Trace and returns an error anyway —
+		// and a Run that opened and never closed is one a reader cannot tell
+		// from a Run still going. So it is closed here, and the failure that
+		// caused it is what is reported.
+		//
+		// A sink that is broken rather than a projection fails this too, and
+		// then there was no Run to close and nothing is lost by having tried.
+		closed := core.Outcome{Result: events.ResultFailed, Summary: "the run could not be opened"}
+		_ = t.Recorder.Finish(context.WithoutCancel(ctx), closed.Claim())
 		return core.Outcome{}, err
 	}
 

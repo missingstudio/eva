@@ -1030,3 +1030,62 @@ func TestALookAndFeelMistakeIsReportedOnEitherPath(t *testing.T) {
 		})
 	}
 }
+
+// eva init writes a configuration a person can then edit, and refuses to write
+// over one they already keep.
+func TestInitWritesAStarterAndWillNotOverwriteIt(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	path := filepath.Join(home, "config.toml")
+
+	w := &world{dir: dir, config: path}
+	// No EVA_CONFIG: init resolves the same way a run does, and this is the
+	// path a person gets when they have said nothing.
+	w.env = append(os.Environ(), "EVA_HOME="+home, "EVA_CONFIG=", "ANTHROPIC_API_KEY=")
+
+	first := w.run(t, "init")
+	if first.code != 0 {
+		t.Fatalf("eva init exited %d: %s", first.code, first.stderr)
+	}
+	if !strings.Contains(first.stdout, path) {
+		t.Errorf("eva init does not say where it wrote:\n%s", first.stdout)
+	}
+
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("eva init wrote no file: %v", err)
+	}
+	if len(written) == 0 {
+		t.Fatal("eva init wrote an empty file")
+	}
+	// A configuration names the variable a credential is read from, which is
+	// not a thing to leave readable to everyone on a shared machine.
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("the configuration is mode %o, want 600", mode)
+	}
+
+	// And Eva runs against what it just wrote.
+	if got := w.run(t, "help"); got.code != 0 {
+		t.Errorf("eva does not run against its own starter: %s", got.stderr)
+	}
+
+	second := w.run(t, "init")
+	if second.code != 2 {
+		t.Errorf("a second eva init exited %d, want 2 — it must not write over a configuration", second.code)
+	}
+	if !strings.Contains(second.stderr, "already exists") {
+		t.Errorf("the refusal does not say the file is already there:\n%s", second.stderr)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the configuration after the refused init: %v", err)
+	}
+	if string(after) != string(written) {
+		t.Error("the refused init changed the file anyway")
+	}
+}
