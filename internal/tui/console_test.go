@@ -132,13 +132,44 @@ func TestArrivingTextIsShownWithoutBeingKept(t *testing.T) {
 		t.Errorf("the transcript kept an arriving chunk:\n%s", kept)
 	}
 
-	// What the Run closing does: the chunks go, the rendered turn arrives.
-	c.arriving.Reset()
-	c.put("the whole answer")
+	// What the Run closing does: the rendered turn arrives, and showing it is
+	// what erases the chunks.
+	if err := c.Show("the whole answer"); err != nil {
+		t.Fatalf("show the turn: %v", err)
+	}
 	if got := plain(c.pane.View()); strings.Contains(got, "half an answer") {
 		t.Errorf("the pane still shows arriving text after the Run closed:\n%s", got)
 	}
 	if got := plain(c.pane.View()); !strings.Contains(got, "the whole answer") {
 		t.Errorf("the pane does not show the turn that was kept:\n%s", got)
+	}
+}
+
+// A turn is on screen once, not twice.
+//
+// The rendered turn arrives with the record that closes the Run, and the Run's
+// own closing reaches the interface as a separate message afterwards. Erasing
+// the chunks on the later one leaves the answer shown twice — once as what
+// arrived, once as what was kept — and nothing recomposes after it, so it stays
+// that way until the next turn.
+func TestAnAnsweredTurnIsShownOnce(t *testing.T) {
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+	c.layout(60, 12)
+
+	// A turn arrives in chunks, and is then kept as one rendered block. The
+	// words are the same either way, which is the whole difficulty.
+	answer := "the answer"
+	c.arriving.WriteString(answer)
+	c.refresh()
+	if err := c.Show(answer); err != nil {
+		t.Fatalf("show the turn: %v", err)
+	}
+	c.close(answered{})
+
+	if got := strings.Count(plain(c.pane.View()), answer); got != 1 {
+		t.Errorf("the answer is on screen %d times, want 1:\n%s", got, plain(c.pane.View()))
 	}
 }
