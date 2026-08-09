@@ -238,12 +238,31 @@ linters:
           list-mode: strict
           files:
             - "**/internal/trace/**"
+            - "!**/internal/trace/tracetest/**"
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
             - github.com/missingstudio/eva/internal/core
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/trace
+            # tracetest, for the shared contract suite. Test files only —
+            # nothing in the implementation can reach it.
+            - github.com/missingstudio/eva/internal/trace/tracetest
+
+        # tracetest is the TraceSink contract written as tests, so it gets the
+        # interface and the schema and nothing else. No trace: a suite that
+        # could build one sink's fixtures would be a suite with an opinion
+        # about which sink it was for.
+        trace-tracetest:
+          list-mode: strict
+          files:
+            - "**/internal/trace/tracetest/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            # core, for the TraceSink the suite drives. The interface is the
+            # whole of what a sink under test has to be.
+            - github.com/missingstudio/eva/internal/core
 
         # loop is the Unit that answers a prompt: it assembles one call out of
         # what it was handed, replays what the Provider yields into the Trace,
