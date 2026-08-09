@@ -18,7 +18,7 @@ Two things follow, and they are the reason for the decision.
 
 **There is one write path, so there is one transcript.** `Session` had a writer of its own. A turn appended the user's message before the stream and the assistant's message after it, and only when the stream succeeded — so a turn that failed halfway left the partial answer in the Trace and nothing in the Session. Two sources of truth, disagreeing, with nothing to detect it. `Session` now folds committed Events (`Committed`, satisfying `core.Subscriber`) and has no other way to learn anything. The same fold serves the live turn, resume replaying a stored Trace, and any projection that needs a transcript.
 
-`--json` is a Subscriber for the same reason: what it prints is a projection of the Trace, so it prints what was committed rather than a second copy the producer made.
+Any machine-readable surface is a Subscriber for the same reason: what it prints is a projection of the Trace, so it prints what was committed rather than a second copy the producer made. `--json` was one while it existed. The Trace file is that surface now, and the rule outlived the feature.
 
 ## The prompt is now a record
 
@@ -30,7 +30,7 @@ Adding a field is additive and keeps `SchemaVersion` at 1 (ADR 0006). Mid-run us
 
 **A Recorder belongs to one Run and is safe for concurrent use.** It holds the wire counter, and commits and publishes under one lock so that no Subscriber sees the Trace out of the order the Trace holds. A Subscriber must therefore not call `Record`. Stage 2 runs parallel tool groups against one Recorder, which is why this is decided now rather than found later.
 
-**A Subscriber failure is reported and does not un-commit.** A broken output stream is a real failure. The Trace already holds the record, and the Trace is the source of truth.
+**A Subscriber failure is reported and does not un-commit.** A broken output stream is a real failure. The Trace already holds the record, and the Trace is the source of truth. ADR 0025 later decided what happens to the *other* Subscribers: a failure stops the one that returned it rather than the publishing, and the Run says a projection stopped following.
 
 **`core` gained `sync`, `errors`, and `fmt`.** Three lines on the allow list ADR 0010 keeps deliberately short, recorded here so they are not mistaken for drift. `core`'s test files are governed by a separate `core-tests` rule, so a package a test needs never becomes a package production code may import.
 

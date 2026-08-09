@@ -33,13 +33,10 @@ import (
 // Provider, no Recorder, and no way to reach the Trace, so it cannot show a
 // turn the record does not hold.
 type Console struct {
-	// ask runs one turn and returns when the Run is closed. It is held as a
-	// function because that is the whole of what starting a turn is, and a
-	// command never needs it.
-	ask func(ctx context.Context, prompt string) (core.Outcome, error)
-
-	// control is what a command may change about the turns that follow. What
-	// keeps a Provider and a sink out of reach is now the type: see Control.
+	// control is the whole of what this console can reach of the run behind it:
+	// starting a turn, and what a command may change about the turns that
+	// follow. What keeps a Provider and a sink out of reach is the type — see
+	// Control.
 	control Control
 
 	// renderer is the projection a person reads: a fold over committed Events,
@@ -77,10 +74,11 @@ type Console struct {
 	// Screen — and written inside it, so the two need to agree on a lock.
 	shown  sync.Mutex
 	screen string
-	// answering mirrors busy under the same lock, for Busy.
-	answering bool
-
-	// cancel ends the Run in flight, and is nil when there is none.
+	// cancel ends the Run in flight, and is nil when there is none. It is
+	// under the same lock as the screen because it answers the same question
+	// from two sides: the update loop asks whether a turn is running, and
+	// whoever is driving the program asks from outside it. Two fields for one
+	// fact were two things to keep in step, and nothing made them.
 	cancel context.CancelFunc
 
 	// running counts the Runs whose goroutine has not returned. The process
@@ -161,6 +159,11 @@ type Console struct {
 	// onto these and hands them in.
 	look theme.Theme
 	keys keymap.Keymap
+
+	// wrapStyle folds a block to the window. It is held rather than built per
+	// call because refresh wraps every block on every frame of a streaming
+	// turn, and it changes only when the window does.
+	wrapStyle lipgloss.Style
 }
 
 var _ tea.Model = (*Console)(nil)
@@ -435,7 +438,6 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	input.SetStyles(inputStyles(true))
 
 	c := &Console{
-		ask:     backend.Answer,
 		control: backend,
 		ctx:     ctx,
 		input:   input,
@@ -644,6 +646,10 @@ func (c *Console) layout(width, height int) {
 
 	c.input.SetWidth(width - c.styles.box.GetHorizontalFrameSize())
 	c.pane.SetWidth(width)
+	// The wrapping style is built here rather than per line. refresh rewraps
+	// every block of the transcript on each frame of a streaming turn, and a
+	// style allocated inside that loop is one allocation per block per chunk.
+	c.wrapStyle = lipgloss.NewStyle().Width(width - gutterWidth)
 	c.fit()
 
 	if err := c.renderer.Width(width - gutterWidth); err != nil {
@@ -733,11 +739,10 @@ func (c *Console) live(text string) string {
 // on the whole transcript rather than on the part that needs it. See where
 // SoftWrap is set.
 func (c *Console) wrap(text string) string {
-	room := c.width - gutterWidth
-	if room <= 0 {
+	if c.width-gutterWidth <= 0 {
 		return text
 	}
-	return lipgloss.NewStyle().Width(room).Render(text)
+	return c.wrapStyle.Render(text)
 }
 
 // chrome is everything the view holds but the pane, in the order it is drawn.
@@ -952,7 +957,11 @@ func (c *Console) behind() string {
 }
 
 // busy reports whether a Run is in flight.
-func (c *Console) busy() bool { return c.cancel != nil }
+func (c *Console) busy() bool {
+	c.shown.Lock()
+	defer c.shown.Unlock()
+	return c.cancel != nil
+}
 
 // Busy reports whether a Run is in flight, for whoever is driving this program
 // rather than typing at it.
@@ -968,7 +977,7 @@ func (c *Console) busy() bool { return c.cancel != nil }
 func (c *Console) Busy() bool {
 	c.shown.Lock()
 	defer c.shown.Unlock()
-	return c.answering
+	return c.cancel != nil
 }
 
 // Queued is the prompt waiting behind the turn in flight, and is empty when
@@ -1014,14 +1023,14 @@ func (c *Console) Wait() { c.running.Wait() }
 // goroutine that started the program, so by the time that call returns there
 // is nothing else touching this.
 func (c *Console) stop() {
-	if c.cancel != nil {
-		c.cancel()
-		c.cancel = nil
-	}
-
 	c.shown.Lock()
-	c.answering = false
+	cancel := c.cancel
+	c.cancel = nil
 	c.shown.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
 }
 
 // background takes the terminal's answer about its own colour, and restyles
@@ -1094,7 +1103,7 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		// turn is conditioned on it.
 		if c.busy() {
 			c.interrupted = true
-			c.cancel()
+			c.stop()
 			return nil
 		}
 
@@ -1195,22 +1204,21 @@ func (c *Console) scroll(pressed string) bool {
 // there is no Run the wait can miss.
 func (c *Console) start(prompt string) tea.Cmd {
 	ctx, cancel := context.WithCancel(c.ctx)
+	c.shown.Lock()
 	c.cancel = cancel
+	c.shown.Unlock()
+
 	c.arriving.Reset()
 	c.since = time.Now()
 	c.interrupted = false
 	c.recaption()
 	c.running.Add(1)
 
-	c.shown.Lock()
-	c.answering = true
-	c.shown.Unlock()
-
 	turn := func() tea.Msg {
 		defer c.running.Done()
 		defer cancel()
 
-		outcome, err := c.ask(ctx, prompt)
+		outcome, err := c.control.Answer(ctx, prompt)
 		return answered{outcome: outcome, err: err}
 	}
 

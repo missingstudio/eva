@@ -259,7 +259,6 @@ func TestAPromptTypedDuringATurnWaitsForIt(t *testing.T) {
 	// busy is holding a way to cancel.
 	_, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
-	c.answering = true
 	t.Cleanup(cancel)
 
 	for _, typed := range "next" {
