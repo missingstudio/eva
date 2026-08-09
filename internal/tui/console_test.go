@@ -738,3 +738,49 @@ func TestTheFollowHintNamesTheKeyThatFollows(t *testing.T) {
 		t.Errorf("the hint still names the key that was replaced:\n%s", got)
 	}
 }
+
+// An interrupted Run is not an ended one, and the console stays busy until its
+// close arrives.
+//
+// Forgetting the Run at the moment it was cancelled made the console idle for
+// the window between ctrl+c and the close being folded in. A prompt typed in
+// that window opened a second Run instead of queueing, and then the first Run's
+// close arrived and cancelled the second one, reset its stream, and dropped
+// whatever was queued behind it.
+func TestAnInterruptedRunIsStillInHandUntilItCloses(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	// A Run in flight, without one actually running: what makes the console
+	// busy is holding a way to cancel.
+	ctx, cancel := context.WithCancel(context.Background())
+	c.cancel = cancel
+	t.Cleanup(cancel)
+
+	c.key(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+
+	if ctx.Err() == nil {
+		t.Error("the interrupt did not cancel the Run in flight")
+	}
+	if !c.busy() {
+		t.Error("the console is idle while the Run it cancelled is still unwinding")
+	}
+
+	// So a prompt typed now waits rather than opening a second Run.
+	for _, typed := range "next" {
+		c.key(tea.KeyPressMsg{Code: typed, Text: string(typed)})
+	}
+	c.key(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if got := c.Queued(); got != "next" {
+		t.Errorf("the prompt typed after an interrupt is %q, want it queued behind the closing Run", got)
+	}
+
+	// The close is what releases it, and the prompt that waited is sent rather
+	// than dropped. The Run that sends it is a new one: the old Run's close must
+	// not reach into it.
+	c.close(answered{})
+	if got := c.Queued(); got != "" {
+		t.Errorf("the queued prompt is still %q after the Run it waited for closed", got)
+	}
+	c.stop()
+}

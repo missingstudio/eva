@@ -1,9 +1,12 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/missingstudio/eva/internal/theme"
 	"time"
 )
 
@@ -59,9 +62,10 @@ func TestACaptionChangesOnItsOwnClock(t *testing.T) {
 	}
 
 	// Long enough ago that the next tick asks for another.
-	c.captioned = time.Now().Add(-captionEvery - time.Second)
+	stays := time.Duration(c.look.Layout.CaptionSeconds) * time.Second
+	c.captioned = time.Now().Add(-stays - time.Second)
 	if !c.captionDue() {
-		t.Fatalf("a caption %s old is not due, want it replaced after %s", captionEvery+time.Second, captionEvery)
+		t.Fatalf("a caption %s old is not due, want it replaced after %s", stays+time.Second, stays)
 	}
 
 	at = 1
@@ -126,5 +130,32 @@ func TestNoCaptionClaimsEvaActedOnAnything(t *testing.T) {
 				t.Errorf("the caption %q says Eva %q, which it cannot do", caption, claim)
 			}
 		}
+	}
+}
+
+// How long a caption stays is a person's to choose. The setting was validated,
+// accepted, and read by nothing, which is worse than refusing it: a person who
+// set it had every sign that it had worked.
+func TestHowLongACaptionStaysIsConfigured(t *testing.T) {
+	seconds := 30
+	look, err := theme.Build(true, theme.Settings{CaptionSeconds: &seconds})
+	if err != nil {
+		t.Fatalf("build the Theme: %v", err)
+	}
+
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+
+	// Past the default, and short of what was asked for.
+	c.captioned = time.Now().Add(-20 * time.Second)
+	if c.captionDue() {
+		t.Error("a caption 20s old is due, and 30s was asked for")
+	}
+
+	c.captioned = time.Now().Add(-31 * time.Second)
+	if !c.captionDue() {
+		t.Error("a caption 31s old is not due, and 30s was asked for")
 	}
 }

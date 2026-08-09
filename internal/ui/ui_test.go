@@ -630,3 +630,33 @@ func payloadFor(t *testing.T, kind events.Kind) events.Payload {
 		return nil
 	}
 }
+
+// A terminal answering late about its own colour must not discard what a person
+// configured.
+//
+// The Renderer rebuilt from the compiled default here, so a configured grey
+// survived on the console's status line and vanished from the cost line the
+// moment the terminal answered — one colour named in two places, disagreeing,
+// which is the split ui.Subdued exists to prevent.
+func TestABackgroundAnsweringLateKeepsTheConfiguredColour(t *testing.T) {
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	look, err := theme.Build(true, theme.Settings{Subdued: "#FF00FF"})
+	if err != nil {
+		t.Fatalf("build the Theme: %v", err)
+	}
+
+	var out bytes.Buffer
+	renderer, err := ui.New(ui.Stream(&out), look)
+	if err != nil {
+		t.Fatalf("build a Renderer: %v", err)
+	}
+
+	before := renderer.Cost()
+	if err := renderer.Background(false); err != nil {
+		t.Fatalf("the background answer: %v", err)
+	}
+	if after := renderer.Cost(); after != before {
+		t.Errorf("the cost line changed when the terminal answered:\nbefore %q\nafter  %q", before, after)
+	}
+}
