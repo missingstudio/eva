@@ -3,14 +3,17 @@ package tui
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/missingstudio/eva/internal/core"
+	"github.com/missingstudio/eva/internal/events"
 )
 
 // These tests draw the interface and read what it drew. Nothing here runs a
@@ -43,7 +46,11 @@ func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 // A person who has just used /model should not have to use it again to find
 // out what it did.
 func TestTheFooterPutsTheModelAtTheFarEnd(t *testing.T) {
-	c := &Console{control: &fixed{model: "claude-sonnet-4-5"}, width: 40, styles: newStyles(true)}
+	// A whole console, because the footer now reads what the Session has spent
+	// and the fold is what knows.
+	c := drawn(t)
+	c.control = &fixed{model: "claude-sonnet-4-5"}
+	c.layout(40, 12)
 
 	got := plain(c.footer())
 	if !strings.HasSuffix(got, "claude-sonnet-4-5") {
@@ -128,7 +135,7 @@ func TestArrivingTextIsShownWithoutBeingKept(t *testing.T) {
 	if got := plain(c.pane.View()); !strings.Contains(got, "half an answer") {
 		t.Errorf("the pane does not show what is arriving:\n%s", got)
 	}
-	if kept := c.transcript.String(); strings.Contains(kept, "half an answer") {
+	if kept := c.kept(); strings.Contains(kept, "half an answer") {
 		t.Errorf("the transcript kept an arriving chunk:\n%s", kept)
 	}
 
@@ -171,5 +178,460 @@ func TestAnAnsweredTurnIsShownOnce(t *testing.T) {
 
 	if got := strings.Count(plain(c.pane.View()), answer); got != 1 {
 		t.Errorf("the answer is on screen %d times, want 1:\n%s", got, plain(c.pane.View()))
+	}
+}
+
+// The view is exactly the window it was given.
+//
+// A view a row too tall scrolls the terminal and leaves a duplicate line behind
+// on every frame; a row too short leaves a band the interface never draws into.
+// Neither announces itself, which is why the arithmetic is asserted rather than
+// looked at — and why the chrome is measured rather than counted, since the
+// status line grows a row when a prompt is queued behind a turn.
+func TestTheViewIsExactlyTheWindow(t *testing.T) {
+	for _, size := range []struct{ width, height int }{
+		{80, 24}, {120, 60}, {200, 15}, {40, 10}, {30, 6}, {24, 5}, {20, 4},
+	} {
+		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
+			c := drawn(t)
+			c.layout(size.width, size.height)
+
+			if got := lipgloss.Height(c.View().Content); got != size.height {
+				t.Errorf("the view is %d rows in a window of %d:\n%s",
+					got, size.height, plain(c.View().Content))
+			}
+		})
+	}
+}
+
+// A window too small for all of the chrome sheds it from the outside in, and
+// keeps the prompt. A console a person cannot type into is not a console.
+func TestASmallWindowKeepsThePrompt(t *testing.T) {
+	c := drawn(t)
+	c.layout(40, 5)
+
+	if got := plain(c.View().Content); !strings.Contains(got, "›") {
+		t.Errorf("a five-row window dropped the prompt:\n%s", got)
+	}
+}
+
+// The transcript scrolls by key, and the keys that scroll it are never keys
+// that also type.
+//
+// The second half is the one that matters. The pane's own defaults bind j, k,
+// space, f, b, u and d — and ctrl+d, which is how this console is left — so a
+// pane holding them would make the prompt unusable and would do it silently.
+func TestTheTranscriptScrollsWithoutStealingCharacters(t *testing.T) {
+	c := drawn(t)
+	c.layout(40, 10)
+	for i := range 100 {
+		c.put(fmt.Sprintf("line %d", i))
+	}
+
+	if !c.pane.AtBottom() {
+		t.Fatal("the pane does not start at the end of the transcript")
+	}
+	c.key(tea.KeyPressMsg{Code: tea.KeyPgUp})
+	if c.pane.AtBottom() {
+		t.Error("pgup did not move the pane")
+	}
+
+	// Every character the pane's defaults would have taken reaches the prompt.
+	for _, typed := range "jkfbud " {
+		c.key(tea.KeyPressMsg{Code: typed, Text: string(typed)})
+	}
+	if got := c.input.Value(); got != "jkfbud " {
+		t.Errorf("the prompt holds %q — the pane took characters from it", got)
+	}
+}
+
+// A prompt typed while a turn is running waits for it rather than being lost.
+//
+// Dropping the keys was the old behaviour and it was silent: a person watched
+// the characters appear, pressed enter, and had nothing to show for either.
+func TestAPromptTypedDuringATurnWaitsForIt(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	// A Run in flight, without one actually running: what makes the console
+	// busy is holding a way to cancel.
+	_, cancel := context.WithCancel(context.Background())
+	c.cancel = cancel
+	c.answering = true
+	t.Cleanup(cancel)
+
+	for _, typed := range "next" {
+		c.key(tea.KeyPressMsg{Code: typed, Text: string(typed)})
+	}
+	if got := c.input.Value(); got != "next" {
+		t.Fatalf("the prompt holds %q while a turn runs, want the keys that were typed", got)
+	}
+
+	c.key(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if c.queued != "next" {
+		t.Errorf("the queued prompt is %q, want it held until the turn closes", c.queued)
+	}
+	if got := plain(c.status()); !strings.Contains(got, "next") {
+		t.Errorf("the status line does not show the prompt that is waiting:\n%s", got)
+	}
+	// Not echoed yet: the transcript reads in the order the turns happened.
+	if kept := c.kept(); strings.Contains(kept, "next") {
+		t.Errorf("a queued prompt was echoed before it was sent:\n%s", kept)
+	}
+}
+
+// An idle ctrl+c asks before it ends a Session, and any other key answers no.
+//
+// It sits next to the key that interrupts a turn, and a Session is an hour of
+// somebody's work by the time it is worth keeping. ctrl+d stays one press,
+// because nobody types it by accident.
+func TestAnIdleCtrlCAsksBeforeItLeaves(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	if cmd := c.key(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
+		t.Fatal("the first ctrl+c ended the Session without asking")
+	}
+	if got := plain(c.status()); !strings.Contains(got, "again to leave") {
+		t.Errorf("the first ctrl+c did not ask:\n%s", got)
+	}
+
+	// Carrying on typing is an answer.
+	c.key(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	if c.leaving {
+		t.Error("a key that was not ctrl+c left the question standing")
+	}
+	if cmd := c.key(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
+		t.Fatal("ctrl+c after another key left without asking again")
+	}
+	if cmd := c.key(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd == nil {
+		t.Error("the second ctrl+c did not leave")
+	}
+}
+
+// The footer says how much transcript is below a person who has scrolled away
+// from the end, and says nothing while they are at it.
+//
+// It is what a scrolling pane needs and a scrollback never did: a person
+// scrolled up during a streaming answer sees a screen that does not change, and
+// nothing else on it tells that apart from a program that has stopped.
+func TestTheFooterSaysHowMuchIsBelow(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+	for i := range 100 {
+		c.put(fmt.Sprintf("line %d", i))
+	}
+
+	if got := plain(c.footer()); strings.Contains(got, "more") {
+		t.Errorf("the footer counts what is below while a person is at the end:\n%s", got)
+	}
+
+	c.key(tea.KeyPressMsg{Code: tea.KeyPgUp})
+	if got := plain(c.footer()); !strings.Contains(got, "more") {
+		t.Errorf("the footer says nothing after a person scrolled away:\n%s", got)
+	}
+}
+
+// drawn is a console built the way a run builds one, so that the pane, the
+// renderer and the styles are the ones a person would be looking at. The
+// program it returns is never started: nothing here needs a turn.
+func drawn(t *testing.T) *Console {
+	t.Helper()
+
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+	// What the program does before it draws anything. Without it the prompt is
+	// unfocused, and an unfocused prompt takes no keys — so a test that typed
+	// into one would be asserting about a console no person ever sees.
+	c.Init()
+	return c
+}
+
+// The prompt takes more than one line, and grows to what is being written.
+//
+// A person writing to a model writes paragraphs and pastes stack traces. A
+// single-line field scrolls all of that sideways past a fixed window, which
+// leaves what they are about to send as the one thing on screen they cannot
+// read.
+//
+// Enter still sends, so the newline is on a chord. What the pane gives up is
+// what the prompt takes, exactly: the window is the window.
+func TestThePromptGrowsWithoutTakingTheWindow(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 20)
+
+	was := c.pane.Height()
+	for _, typed := range "first" {
+		c.key(tea.KeyPressMsg{Code: typed, Text: string(typed)})
+	}
+
+	// The chord, rather than enter, which sends.
+	c.key(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift})
+	for _, typed := range "second" {
+		c.key(tea.KeyPressMsg{Code: typed, Text: string(typed)})
+	}
+
+	if got := c.input.Value(); got != "first\nsecond" {
+		t.Fatalf("the prompt holds %q, want two lines", got)
+	}
+	if len(c.transcript) != 0 {
+		t.Errorf("the chord sent the prompt instead of breaking the line:\n%s", c.kept())
+	}
+
+	// No refit asked for here. Growing the prompt has to take its row from the
+	// pane by itself, on the keystroke that grew it — otherwise the view is a
+	// row taller than the window, and what falls off the bottom is the line
+	// being typed.
+	if now := c.pane.Height(); now != was-1 {
+		t.Errorf("the pane is %d rows and was %d — the second prompt row came from somewhere else", now, was)
+	}
+	if got := lipgloss.Height(c.View().Content); got != 20 {
+		t.Errorf("the view is %d rows in a window of 20", got)
+	}
+
+	// And enter still sends the whole of it.
+	c.key(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if kept := c.kept(); !strings.Contains(kept, "first") {
+		t.Errorf("enter did not send the prompt:\n%s", kept)
+	}
+}
+
+// A window that changed size takes the turns already on screen with it.
+//
+// An answer is wrapped by the fold that rendered it, to whatever the window was
+// at the time. Nothing about that survives a resize on its own: narrow the
+// window and every answer on screen overruns it, widen it and they stand in a
+// column with the rest of the screen empty beside them.
+//
+// What a person typed is left alone. It was never wrapped to anything, and where
+// it sits in the order is what makes the transcript readable.
+func TestAResizedWindowRewrapsTheTurnsAlreadyAnswered(t *testing.T) {
+	c := drawn(t)
+	c.layout(100, 20)
+
+	// A turn, the way one actually gets kept: folded from committed records and
+	// handed to this console as the Screen.
+	long := strings.TrimSpace(strings.Repeat("wrapping is the whole question here. ", 12))
+	c.keep(block{text: c.styles.said.Render("ask something"), voice: personVoice})
+	for _, e := range []events.Event{
+		{Kind: events.KindStarted, Payload: events.Started{}},
+		{Kind: events.KindText, Payload: events.Text{Chunk: long}},
+		{Kind: events.KindFinished, Payload: events.Finished{}},
+	} {
+		if err := c.renderer.Committed(context.Background(), e); err != nil {
+			t.Fatalf("fold %s: %v", e.Kind, err)
+		}
+	}
+
+	if over := widest(plain(c.kept())); over > 100 {
+		t.Fatalf("a line is %d columns wide in a window of 100", over)
+	}
+
+	c.layout(50, 20)
+	if over := widest(plain(c.kept())); over > 50 {
+		t.Errorf("a line is %d columns wide after the window narrowed to 50:\n%s", over, plain(c.kept()))
+	}
+
+	// And the prompt that was echoed is still where it was, unchanged.
+	if !strings.Contains(plain(c.kept()), "ask something") {
+		t.Errorf("the resize lost what a person typed:\n%s", plain(c.kept()))
+	}
+	if c.transcript[0].voice != personVoice {
+		t.Error("an echoed prompt is not in a person's voice, so a resize would redraw it as a turn")
+	}
+}
+
+// widest is the longest line in a block of text.
+func widest(s string) int {
+	over := 0
+	for _, line := range strings.Split(s, "\n") {
+		over = max(over, lipgloss.Width(line))
+	}
+	return over
+}
+
+// What is arriving and what is kept sit in the same column.
+//
+// They are the same answer a moment apart, so a person watching one become the
+// other should see nothing move. They did move: the fold indented a finished
+// document by two columns of its own while the chunks arrived at column zero, so
+// every answer stepped sideways the instant its Run closed. One owner of the
+// inset is what fixes that, and this is the assertion that keeps it one.
+func TestAnAnswerDoesNotMoveWhenItStopsArriving(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	const answer = "short enough to stay on one line."
+
+	c.arriving.WriteString(answer)
+	c.refresh()
+	streaming := column(t, plain(c.pane.View()), answer)
+
+	// And now the way the fold hands it over when the Run closes.
+	for _, e := range []events.Event{
+		{Kind: events.KindStarted, Payload: events.Started{}},
+		{Kind: events.KindText, Payload: events.Text{Chunk: answer}},
+		{Kind: events.KindFinished, Payload: events.Finished{}},
+	} {
+		if err := c.renderer.Committed(context.Background(), e); err != nil {
+			t.Fatalf("fold %s: %v", e.Kind, err)
+		}
+	}
+	kept := column(t, plain(c.pane.View()), answer)
+
+	if streaming != kept {
+		t.Errorf("the answer arrives at column %d and is kept at column %d — it steps sideways when the Run closes",
+			streaming, kept)
+	}
+	if streaming != gutterWidth {
+		t.Errorf("the answer sits at column %d, want the gutter's %d", streaming, gutterWidth)
+	}
+}
+
+// The gutter says whose block it is: a person's mark, Eva's mark, and no mark
+// at all for the interface talking about itself.
+//
+// The two marks differ in colour rather than in shape, because what they are for
+// is being found without being read. Everything is inset by the same width, so
+// the edge they stand on is straight.
+func TestTheGutterSaysWhoseBlockItIs(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	person := c.gutter("what I asked", personVoice)
+	eva := c.gutter("what Eva answered", evaVoice)
+	aside := c.gutter("what the console said", asideVoice)
+
+	for _, marked := range []string{person, eva} {
+		if !strings.HasPrefix(plain(marked), mark) {
+			t.Errorf("a block in the conversation carries no mark:\n%q", plain(marked))
+		}
+	}
+	if strings.Contains(plain(aside), mark) {
+		t.Errorf("an aside carries a mark, which says it is part of the conversation:\n%q", plain(aside))
+	}
+
+	// Different colours, same glyph: the escapes differ, the plain text does not.
+	if person == eva {
+		t.Error("a person's mark and Eva's are drawn identically — the gutter segregates nothing")
+	}
+
+	// One straight edge: every voice starts its text in the same column.
+	for _, block := range []struct {
+		drawn string
+		text  string
+	}{
+		{person, "what I asked"},
+		{eva, "what Eva answered"},
+		{aside, "what the console said"},
+	} {
+		if got := column(t, plain(block.drawn), block.text); got != gutterWidth {
+			t.Errorf("%q starts at column %d, want the gutter's %d", block.text, got, gutterWidth)
+		}
+	}
+}
+
+// column is the display column the given text starts at on the line holding it.
+func column(t *testing.T, screen, text string) int {
+	t.Helper()
+
+	for _, line := range strings.Split(screen, "\n") {
+		if i := strings.Index(line, text); i >= 0 {
+			return lipgloss.Width(line[:i])
+		}
+	}
+	t.Fatalf("%q is not on screen:\n%s", text, screen)
+	return 0
+}
+
+// One blank line stands between blocks, and it carries no mark.
+//
+// Without it a prompt and the answer under it are adjacent lines of one band,
+// and a conversation reads as a wall. The gap is what makes each exchange a
+// thing you can find. It is unmarked because a marked gap would join the two
+// bands it is there to separate — while a blank line *inside* a block keeps its
+// mark, since a paragraph break in one answer is not a boundary between two.
+func TestBlocksAreSpacedApartAndTheGapCarriesNoMark(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	c.keep(block{text: "what I asked", voice: personVoice})
+	c.keep(block{text: "first paragraph\n\nsecond paragraph", voice: evaVoice})
+
+	lines := strings.Split(plain(c.kept()), "\n")
+	want := []string{
+		mark + " what I asked",
+		"",
+		mark + " first paragraph",
+		mark + " ",
+		mark + " second paragraph",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("the transcript drew %d lines, want %d:\n%q", len(lines), len(want), lines)
+	}
+	for i, line := range lines {
+		if strings.TrimRight(line, " ") != strings.TrimRight(want[i], " ") {
+			t.Errorf("line %d is %q, want %q", i, line, want[i])
+		}
+	}
+}
+
+// A block brings no blank lines of its own. The fold pads a rendered document
+// above and below, which would put a marked empty line at the top of every
+// answer and space nothing evenly.
+func TestABlockIsTrimmedOfTheBlankLinesItArrivedWith(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	c.keep(block{text: "\n\n  padded above and below  \n\n", voice: evaVoice})
+
+	if got := plain(c.kept()); got != mark+"   padded above and below  " {
+		t.Errorf("the block kept the blank lines it arrived with:\n%q", got)
+	}
+}
+
+// An answer is formatted while it arrives, not only once it is over.
+//
+// It goes through the same fold at the same width as the turn that will replace
+// it, so that when the record lands nothing on screen changes shape. It used to
+// be the raw bytes: a list arrived as hyphens and re-set itself as bullets the
+// instant the Run closed, which put the most visible event on the screen at the
+// exact moment a person had finally got what they were waiting for.
+func TestAnAnswerIsFormattedWhileItArrives(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	const answer = "- first bullet\n- second bullet"
+
+	c.arriving.WriteString(answer)
+	c.refresh()
+	streaming := plain(c.pane.View())
+
+	if strings.Contains(streaming, "- first bullet") {
+		t.Errorf("the answer arrives as raw markdown:\n%s", streaming)
+	}
+	if !strings.Contains(streaming, "• first bullet") {
+		t.Errorf("the arriving answer is not formatted:\n%s", streaming)
+	}
+
+	// And the turn that replaces it draws the same lines.
+	for _, e := range []events.Event{
+		{Kind: events.KindStarted, Payload: events.Started{}},
+		{Kind: events.KindText, Payload: events.Text{Chunk: answer}},
+		{Kind: events.KindFinished, Payload: events.Finished{}},
+	} {
+		if err := c.renderer.Committed(context.Background(), e); err != nil {
+			t.Fatalf("fold %s: %v", e.Kind, err)
+		}
+	}
+
+	kept := plain(c.pane.View())
+	for _, bullet := range []string{"• first bullet", "• second bullet"} {
+		if column(t, streaming, bullet) != column(t, kept, bullet) {
+			t.Errorf("%q sits at column %d while arriving and %d once kept",
+				bullet, column(t, streaming, bullet), column(t, kept, bullet))
+		}
 	}
 }

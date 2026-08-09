@@ -380,9 +380,6 @@ func TestTheInterfaceRunsWithInputDisabledAndOutputRedirected(t *testing.T) {
 	if !strings.Contains(read, "what is this project") {
 		t.Errorf("the prompt was never shown back:\n%s", read)
 	}
-	if !strings.Contains(read, "turn ") || !strings.Contains(read, "session ") {
-		t.Errorf("the turn reports no cost line:\n%s", read)
-	}
 }
 
 // The answer is on screen while the turn is still running. A turn that only
@@ -540,11 +537,19 @@ func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
 
 // A turn that broke says so in the words the Trace holds.
 //
-// The console reads the claim that closed the Run rather than working the
-// reason out again from the error it was handed. The two are the same fact,
-// and a console that classified it a second time could put a sentence on
-// screen that no record supports — which is the one failure a person reading
-// the screen has no way to detect.
+// A turn that broke says so in one line, and the reason it broke is in the
+// Trace.
+//
+// The provider's words used to go on screen. They are written for whoever is
+// debugging the provider rather than for whoever asked the question, and a
+// person who typed a prompt and got back a sentence about how many turns a
+// recording holds has been handed the program's internals in place of an
+// answer.
+//
+// So both halves are asserted here, and the second is the one that makes the
+// first safe: the screen says only that nothing came back, and the claim the
+// Trace holds still carries the provider's words verbatim. Losing the reason
+// rather than moving it is what this test exists to catch.
 func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 	// No recording at all, so the Provider refuses the call.
 	d := begin(t)
@@ -565,7 +570,11 @@ func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 	if !strings.Contains(finished.Claim.Summary, said) {
 		t.Fatalf("the claim is %q, want it to carry what the Provider said", finished.Claim.Summary)
 	}
-	d.settle(t, func() bool { return strings.Contains(d.read(), said) })
+
+	d.settle(t, func() bool { return strings.Contains(d.read(), "no response") })
+	if shown := d.read(); strings.Contains(shown, said) {
+		t.Errorf("the provider's own words are on screen:\n%s", shown)
+	}
 
 	// And the prompt is back. A console that ended on the first provider
 	// failure would throw away a conversation over something the next prompt
@@ -583,7 +592,7 @@ func TestWhatIsShownIsWhatTheTraceHolds(t *testing.T) {
 
 	d.say(t, "what is this project")
 	d.closed(t, 1)
-	d.settle(t, func() bool { return strings.Contains(d.read(), "turn ") })
+	d.settle(t, func() bool { return strings.Contains(d.read(), "software factory.") })
 
 	read := d.read()
 
@@ -607,12 +616,63 @@ func TestWhatIsShownIsWhatTheTraceHolds(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload = %#v, want Usage", priced[0].Payload)
 	}
+	// The figures are asked for rather than read off the turn: what a Session
+	// has spent is on the footer now, and /cost is how a person asks for the
+	// breakdown. It is the same fold either way, which is the point being made.
+	said := d.answers(t, "/cost")
 	for _, want := range []string{
 		fmt.Sprintf("%d in", usage.InputTokens),
 		fmt.Sprintf("%d out", usage.OutputTokens),
 	} {
-		if !strings.Contains(read, want) {
-			t.Errorf("the cost line does not report %q, which the Usage Event holds:\n%s", want, read)
+		if !strings.Contains(said, want) {
+			t.Errorf("/cost does not report %q, which the Usage Event holds:\n%s", want, said)
 		}
+	}
+}
+
+// A prompt typed while a turn is running is answered when that turn closes.
+//
+// The keys used to be dropped, silently: a person watched the characters appear,
+// pressed enter, and had nothing to show for either. What makes the queue worth
+// the state it costs is the second assertion — the turn it opens is conditioned
+// on the one it waited for, so waiting is the whole of what the queue does.
+func TestAPromptTypedDuringATurnIsAnsweredAfterIt(t *testing.T) {
+	gate := make(chan struct{})
+	d := begin(t,
+		recording{chunks: []string{"the first answer."}, gate: gate},
+		recording{chunks: []string{"the second answer."}},
+	)
+
+	d.say(t, "first question")
+	d.settle(t, func() bool { return d.console.Busy() })
+
+	// Typed without waiting, which is the case the queue exists for. say would
+	// have waited for the turn, and waiting is what a person does not do.
+	for _, r := range "second question" {
+		d.program.Send(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	d.program.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	d.settle(t, func() bool { return d.console.Queued() == "second question" })
+
+	// Nothing has been asked twice yet: the first turn is still open.
+	if calls := d.provider.transcripts(); len(calls) != 1 {
+		t.Fatalf("the Provider was called %d time(s) while the first turn was open, want 1", len(calls))
+	}
+
+	close(gate)
+	d.closed(t, 2)
+
+	calls := d.provider.transcripts()
+	if len(calls) != 2 {
+		t.Fatalf("the Provider was called %d time(s), want 2 — the queued prompt was dropped", len(calls))
+	}
+
+	after := conversation(t, calls[1])
+	if len(after) == 0 || after[len(after)-1].Text != "second question" {
+		t.Fatalf("the second turn was conditioned on\n%+v\nwant the queued prompt last", after)
+	}
+	// And it was answered in the light of the turn it waited for.
+	if len(after) < 3 || !strings.Contains(after[1].Text, "the first answer") {
+		t.Errorf("the queued turn does not carry the answer it waited for:\n%+v", after)
 	}
 }

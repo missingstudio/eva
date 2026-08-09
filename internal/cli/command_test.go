@@ -20,20 +20,27 @@ import (
 
 // answers types a command and returns what appeared because of it.
 //
-// What went before is cut off, because a cost line is on screen after every
-// turn and the whole buffer could not say which of them the command wrote.
+// What went before is cut off, so that a test can say what this command wrote
+// rather than searching a whole transcript for it.
 func (d *dialogue) answers(t *testing.T, typed string) string {
 	t.Helper()
 
 	before := d.read()
 	d.say(t, typed)
 
-	// Two lines: the prompt echoed back, and what the command answered. The
-	// echo lands first, so waiting for the second is waiting for the answer.
+	// Two blocks: the prompt echoed back, and what the command answered. They
+	// are separated by a blank line and the echo lands first, so waiting for the
+	// second separator is waiting for the answer.
+	//
+	// Looked for after the echo rather than counted over the whole fragment. A
+	// block is spaced off the one before it, so the echo alone already carries a
+	// blank line — and on an empty transcript it carries no leading one at all,
+	// so any fixed count is wrong for one case or the other.
 	var said string
 	d.settle(t, func() bool {
 		said = strings.TrimPrefix(d.read(), before)
-		return strings.Contains(said, typed) && strings.Count(said, "\n") >= 2
+		echo := strings.Index(said, typed)
+		return echo >= 0 && strings.Contains(said[echo:], "\n\n")
 	})
 	return said
 }
@@ -60,7 +67,10 @@ func TestAnUnknownCommandNamesItselfAndDoesNotEndTheSession(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"still here."}})
 
 	d.say(t, "/nope")
-	d.settle(t, func() bool { return strings.Contains(d.read(), "/nope") })
+	// Settled on the refusal rather than on the command, which the prompt
+	// echoed back already satisfies — the two are put on screen one after the
+	// other, so a wait that ends on the first can read before the second.
+	d.settle(t, func() bool { return strings.Contains(d.read(), "not a command") })
 
 	read := d.read()
 	if !strings.Contains(read, "/help") {
@@ -76,12 +86,15 @@ func TestAnUnknownCommandNamesItselfAndDoesNotEndTheSession(t *testing.T) {
 	d.settle(t, func() bool { return strings.Contains(d.read(), "still here.") })
 }
 
-// /cost reports what the last turn cost and what the Session has cost, on
-// demand rather than at the end of a turn.
+// /cost reports what the whole Session has cost, on demand.
+//
+// Not what the last turn cost. That figure was reported beside this one and was
+// the one that aged fastest — true for a turn, restated on the next, and never
+// the number a person is deciding on.
 //
 // Each turn of the script reports 10 in and 20 out, so after two of them the
 // figures are known without computing them the way the code does.
-func TestCostReportsThePerTurnAndCumulativeSpendOnDemand(t *testing.T) {
+func TestCostReportsTheWholeSessionOnDemand(t *testing.T) {
 	d := begin(t,
 		recording{chunks: []string{"Eva is a software factory."}},
 		recording{chunks: []string{"It is autonomous."}},
@@ -94,11 +107,11 @@ func TestCostReportsThePerTurnAndCumulativeSpendOnDemand(t *testing.T) {
 	d.settle(t, func() bool { return strings.Contains(d.read(), "It is autonomous.") })
 
 	said := d.answers(t, "/cost")
-	if !strings.Contains(said, "turn 10 in / 20 out") {
-		t.Errorf("/cost does not report what the last turn cost:\n%s", said)
-	}
 	if !strings.Contains(said, "session 20 in / 40 out") {
 		t.Errorf("/cost does not report what the Session has cost:\n%s", said)
+	}
+	if strings.Contains(said, "turn ") {
+		t.Errorf("/cost still reports a per-turn figure:\n%s", said)
 	}
 	if opened := d.of(t, events.KindStarted); len(opened) != 2 {
 		t.Errorf("the Trace holds %d opened Runs, want 2 — /cost is not a turn", len(opened))
@@ -130,10 +143,10 @@ func TestClearEmptiesTheSpendWithTheTranscript(t *testing.T) {
 
 	d.say(t, "what is this project")
 	d.closed(t, 1)
-	d.settle(t, func() bool { return strings.Contains(d.read(), "session 10 in / 20 out") })
+	d.settle(t, func() bool { return strings.Contains(d.read(), "Eva is a software factory.") })
 
 	d.say(t, "/clear")
-	d.settle(t, func() bool { return strings.Contains(d.read(), "cleared") })
+	d.settle(t, func() bool { return strings.TrimSpace(d.read()) == "" })
 
 	said := d.answers(t, "/cost")
 	if !strings.Contains(said, "session no usage reported") {
@@ -212,7 +225,7 @@ func TestClearEmptiesTheTranscriptWithoutEndingTheProcess(t *testing.T) {
 	d.closed(t, 1)
 
 	d.say(t, "/clear")
-	d.settle(t, func() bool { return strings.Contains(d.read(), "cleared") })
+	d.settle(t, func() bool { return strings.TrimSpace(d.read()) == "" })
 
 	d.say(t, "what did I just ask")
 	d.closed(t, 2)
@@ -223,6 +236,43 @@ func TestClearEmptiesTheTranscriptWithoutEndingTheProcess(t *testing.T) {
 	}
 	if after := conversation(t, calls[1]); len(after) != 1 || after[0].Text != "what did I just ask" {
 		t.Errorf("the turn after /clear was conditioned on\n%+v\nwant the new prompt alone", after)
+	}
+}
+
+// /clear empties the pane as well as the Session.
+//
+// The transcript is the console's own now rather than the terminal's scrollback,
+// and a command whose whole job is to empty a transcript that leaves it on
+// screen is a command a person has to take on trust every time they use it.
+//
+// The second half is what makes the first half safe: what left the screen is
+// still in the Trace. That is the difference between closing a window on
+// evidence and destroying it.
+func TestClearEmptiesThePane(t *testing.T) {
+	d := begin(t, recording{chunks: []string{"Eva is a software factory."}})
+
+	d.say(t, "what is this project")
+	d.closed(t, 1)
+	d.settle(t, func() bool { return strings.Contains(d.read(), "software factory") })
+
+	d.say(t, "/clear")
+
+	// Empty, and empty of everything — including any word about having been
+	// emptied. An empty screen is what was asked for and it is its own
+	// evidence; a line reporting it would be the only thing left on screen,
+	// which is to say the command would not have done what it says.
+	d.settle(t, func() bool { return strings.TrimSpace(d.read()) == "" })
+
+	shown := d.read()
+	for _, gone := range []string{"software factory", "what is this project", "/clear"} {
+		if strings.Contains(shown, gone) {
+			t.Errorf("%q is still on screen after /clear:\n%s", gone, shown)
+		}
+	}
+
+	// Nothing was destroyed to make the screen empty.
+	if text := d.of(t, events.KindText); len(text) != 1 {
+		t.Errorf("the Trace holds %d Text records, want the 1 that /clear took off the screen", len(text))
 	}
 }
 
@@ -237,7 +287,7 @@ func TestAClearedTranscriptIsANewSession(t *testing.T) {
 	d.say(t, "what is this project")
 	d.closed(t, 1)
 	d.say(t, "/clear")
-	d.settle(t, func() bool { return strings.Contains(d.read(), "cleared") })
+	d.settle(t, func() bool { return strings.TrimSpace(d.read()) == "" })
 	d.say(t, "what did I just ask")
 	d.closed(t, 2)
 
