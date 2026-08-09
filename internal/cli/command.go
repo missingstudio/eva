@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
+
+	"github.com/missingstudio/eva/internal/core"
 )
 
 // command is one thing a person types in the console instead of a prompt.
@@ -23,18 +26,27 @@ type command struct {
 	run func(c *console, argument string) string
 }
 
-// control is what a command may reach of the assembly behind the console.
+// Control is the whole of what a console may reach of the assembly behind it.
 //
-// It is a short list of narrow methods rather than the assembly itself, for the
-// reason ask is a function: everything the interface could do with a Provider,
-// a Recorder, or the Trace is something it must not do. What a person may
-// change from a console is which model answers and whether the transcript is
-// empty, and this is the whole of it.
+// It is a short list of narrow methods rather than the assembly itself:
+// everything the interface could do with a Provider, a Recorder, or the Trace
+// is something it must not do. Before, that was a discipline held by passing a
+// function instead of the assembly. Here it is a type, so what a frontend can
+// reach is a list a reader can finish rather than a rule a reader must trust.
+//
+// The first two methods are the turn; the last three are what a person may
+// change about the turns that follow.
 //
 // Nothing here takes a lock. A command runs in the update loop, and the update
 // loop only reaches a command when no Run is in flight — so the goroutine that
 // would otherwise be reading these has already returned.
-type control interface {
+type Control interface {
+	// Answer runs one turn as one Run, and returns when the Run is closed.
+	Answer(ctx context.Context, intent string) (core.Outcome, error)
+	// Watch attaches the frontend that drives these turns: what was committed,
+	// what is arriving, and the Interrupt capability that listening claims.
+	Watch(sub core.Subscriber, arriving func(chunk string))
+
 	// Model is which model the turns that follow will use.
 	Model() string
 	// UseModel switches it, from the next turn on.

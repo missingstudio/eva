@@ -28,13 +28,14 @@ import (
 // Provider, no Recorder, and no way to reach the Trace, so it cannot show a
 // turn the record does not hold.
 type console struct {
-	// ask runs one turn and returns when the Run is closed. It is a function
-	// rather than the assembly behind it, because everything the interface
-	// could do with a Provider or a sink is something it must not do.
+	// ask runs one turn and returns when the Run is closed. It is held as a
+	// function because that is the whole of what starting a turn is, and a
+	// command never needs it.
 	ask func(ctx context.Context, prompt string) (core.Outcome, error)
 
-	// control is what a command may change about the turns that follow.
-	control control
+	// control is what a command may change about the turns that follow. What
+	// keeps a Provider and a sink out of reach is now the type: see Control.
+	control Control
 
 	// renderer is the projection a person reads: a fold over committed Events,
 	// showing on this model rather than writing to a stream.
@@ -209,14 +210,14 @@ func pollable(file *os.File) bool {
 // from the moment it starts. Asking beside it would mean two readers of one
 // input, and the one that is not the program wins the keystrokes it should not
 // have seen.
-func newConsole(ctx context.Context, e *eva, in io.Reader, out io.Writer) (*tea.Program, *console, error) {
+func newConsole(ctx context.Context, backend Control, in io.Reader, out io.Writer) (*tea.Program, *console, error) {
 	input := textinput.New()
 	input.Prompt = "› "
 	input.Placeholder = "ask something"
 
 	c := &console{
-		ask:     e.answer,
-		control: e,
+		ask:     backend.Answer,
+		control: backend,
 		ctx:     ctx,
 		input:   input,
 		profile: colorprofile.Detect(out, os.Environ()),
@@ -248,7 +249,7 @@ func newConsole(ctx context.Context, e *eva, in io.Reader, out io.Writer) (*tea.
 	// turn tells the second what is arriving; both reach the interface as a
 	// message from outside the update loop, and the interface keeps them apart
 	// because they are different claims.
-	e.watch(
+	backend.Watch(
 		&feed{program: program},
 		func(text string) { program.Send(chunk{text: text}) },
 	)
