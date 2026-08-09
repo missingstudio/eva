@@ -300,7 +300,7 @@ type committed struct{ event events.Event }
 
 // chunk carries one piece of an answer into the update loop ahead of the
 // record of it. It is what the live area is made of, and it is never what a
-// turn leaves behind — see Turn.Arriving.
+// turn leaves behind — see loop.Loop.Arriving.
 type chunk struct{ text string }
 
 // answered says a Run has closed, whatever it claimed.
