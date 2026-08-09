@@ -112,6 +112,42 @@ func TestARecordedTurnStreamsItsBlocksInFileOrder(t *testing.T) {
 	}
 }
 
+// A recording that reports no usage yields the caveat the network Providers
+// emit, not a Usage of seven absences. Silence is not the same as free: a
+// missing [turn.usage] table means "we were never told", and the Degraded
+// record is what stops that absence reading as a turn nobody looked at.
+func TestARecordingWithoutUsageEmitsTheCaveatNotEmptyUsage(t *testing.T) {
+	provider, err := fake.Load(write(t, `
+[[turn]]
+  [[turn.block]]
+  chunks = ["an answer with no bill"]
+`))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	got := replay(t, provider)
+
+	var degraded *events.Degraded
+	for _, payload := range got {
+		if u, ok := payload.(events.Usage); ok {
+			t.Errorf("the turn emitted Usage %+v, want none when the recording reports no usage", u)
+		}
+		if d, ok := payload.(events.Degraded); ok {
+			if degraded != nil {
+				t.Errorf("the turn emitted a second Degraded %+v", d)
+			}
+			degraded = &d
+		}
+	}
+	if degraded == nil {
+		t.Fatal("the turn emitted no Degraded payload, want a caveat saying the usage went unreported")
+	}
+	if len(degraded.Missing) != 1 || !strings.Contains(degraded.Missing[0], "usage") {
+		t.Errorf("degraded = %+v, want one caveat naming the unreported usage", *degraded)
+	}
+}
+
 // The script records turns, and the Provider replays them one per call. A
 // recording that has run out says so, rather than repeating its last turn.
 func TestTheScriptIsReplayedOneTurnPerCall(t *testing.T) {

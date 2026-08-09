@@ -85,6 +85,13 @@ type Usage struct {
 	USD              *float64 `toml:"usd"`
 }
 
+// reported says whether the recording stated any figure at all. A turn it said
+// nothing about emits no Usage record, because a record of seven absences says
+// the same thing at more cost to whoever reads it.
+func (u Usage) reported() bool {
+	return u != Usage{}
+}
+
 // This Provider puts itself in the set configuration can select.
 //
 // It reads a file and sends nothing, so it asks for no credential. A recording
@@ -169,8 +176,19 @@ func (p *Provider) Stream(ctx context.Context, _ providers.Call) (providers.Stre
 			paced = append(paced, true)
 		}
 	}
-	payloads = append(payloads, events.Usage(turn.Usage))
-	// The usage figure is not paced. It is an accounting record rather than
+	// Silence is not the same as free. A Usage of all nils would say nothing at
+	// the cost of seven absences, so a recording that reports no usage gets the
+	// same caveat the network Providers emit: usage counters are nullable so
+	// that silence is not zero, and the caveat is what stops the absence
+	// reading as a turn nobody looked at.
+	if turn.Usage.reported() {
+		payloads = append(payloads, events.Usage(turn.Usage))
+	} else {
+		payloads = append(payloads, events.Degraded{
+			Missing: []string{"what this turn cost: the provider reported no usage"},
+		})
+	}
+	// The closing record is not paced. It is an accounting record rather than
 	// something a person watches arrive, and a wait before it would only delay
 	// the cost line after the answer is already whole.
 	paced = append(paced, false)
