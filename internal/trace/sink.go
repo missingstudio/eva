@@ -136,6 +136,15 @@ func (s *Sink) Append(ctx context.Context, group []events.Event) ([]events.Event
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// A closed sink says so in its own words. Writing to the closed file
+	// reports too, because the standard library refuses a nil receiver — but it
+	// refuses it with "invalid argument", which tells a reader that something
+	// about their group was wrong rather than that the Trace they are appending
+	// to is no longer open.
+	if s.file == nil {
+		return nil, errors.New("trace: append to a closed Trace")
+	}
+
 	// Positions are taken from a copy of the counters, and only written back
 	// once the group is durable. A rejected group must not leave a gap.
 	taken := make(map[events.SessionID]uint64, len(group))

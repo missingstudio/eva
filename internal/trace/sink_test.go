@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -865,5 +866,23 @@ func TestATornTailDoesNotStopTheTraceBeingContinued(t *testing.T) {
 	}
 	if got[0].Seq != 2 {
 		t.Errorf("the record after a torn tail took Seq %d, want 2 — the position the whole records reached", got[0].Seq)
+	}
+}
+
+// A closed Trace says it is closed. Writing to the closed file reports too,
+// but it reports the standard library's "invalid argument" — which reads as
+// something being wrong with the group rather than with the Trace.
+func TestAppendingToAClosedTraceSaysSo(t *testing.T) {
+	sink, _ := open(t)
+	if err := sink.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := sink.Append(context.Background(), []events.Event{wired("sess_1", 1, events.Text{Chunk: "late"})})
+	if err == nil {
+		t.Fatal("an append to a closed Trace was accepted")
+	}
+	if !strings.Contains(err.Error(), "closed") {
+		t.Errorf("the refusal does not say the Trace is closed: %v", err)
 	}
 }
