@@ -16,12 +16,16 @@ An autonomous, multi-tenant, AI-native software factory.
 git clone git@github.com:missingstudio/eva.git
 cd eva
 go build -o eva ./cmd/eva
+
+./eva init                # write a starter configuration
 export ANTHROPIC_API_KEY=...
 
 ./eva                     # the console
 ./eva -p "explain this"   # one turn, rendered to stdout
 ./eva help                # the flags a process is started with
 ```
+
+`eva init` writes `~/.eva/config.toml` with every setting commented out and what it does without it written beside it, so the file documents the surface without choosing anything on your behalf. Eva behaves identically until you uncomment a line. It refuses to write over a configuration you already keep.
 
 `eva` opens the console. `eva -p <prompt>` answers one turn onto stdout and leaves, exiting non-zero when the turn failed, which is what a script needs and all it gets. There is no machine-readable output mode: every turn is appended to the Trace as typed Events, and that file, not a stream on stdout, is what a later reader folds.
 

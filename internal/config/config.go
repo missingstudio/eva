@@ -537,3 +537,46 @@ func expand(path string) (string, error) {
 	}
 	return filepath.Join(home, strings.TrimPrefix(path, "~")), nil
 }
+
+// Init writes a starter configuration, and reports where it put it.
+//
+// path selects the file, resolved the way Load resolves it, so that a person
+// who has moved their configuration with a flag or the environment initialises
+// the file they are actually going to use.
+//
+// content is composed by the caller. What a starter file should say names the
+// Providers a build ships, the sinks it can write to, and what its interface
+// looks like unconfigured — three things this layer cannot see and must not,
+// since a configuration that could reach a Provider is a configuration that
+// could select itself. The layer that wires a run can see all of them.
+//
+// It refuses to overwrite. A configuration is something a person edits and
+// keeps, and a command that silently replaced one would be a command nobody
+// could run twice safely — so an existing file is reported rather than
+// improved upon.
+func Init(path, content string) (string, error) {
+	if path == "" {
+		path = os.Getenv(EnvConfig)
+	}
+	if path == "" {
+		home, err := Home()
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(home, "config.toml")
+	}
+
+	if exists(path) {
+		return "", fmt.Errorf("config: %s already exists, and Eva will not write over a configuration you keep", path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", fmt.Errorf("config: make %s: %w", filepath.Dir(path), err)
+	}
+	// The same mode the Trace is written with: a configuration names the
+	// variable a credential is read from, which is not a thing to leave
+	// readable to everyone on a shared machine.
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		return "", fmt.Errorf("config: write %s: %w", path, err)
+	}
+	return path, nil
+}

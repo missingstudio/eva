@@ -49,6 +49,7 @@ var usage = fmt.Sprintf(`eva — an autonomous, multi-tenant, AI-native software
 USAGE:
   eva                    Interactive console
   eva -p <prompt>        Answer one prompt and leave
+  eva init               Write a starter configuration
   eva help               Show this help
 
 FLAGS:
@@ -104,6 +105,10 @@ var errHelp = errors.New("help requested")
 // it has to be — a file has to be found before it can say anything.
 type options struct {
 	config string
+	// initialise says the run writes a starter configuration and leaves. It is
+	// a word rather than a flag for the reason help is: it is a thing to do, not
+	// a way of doing the thing.
+	initialise bool
 	// prompt is one turn asked from the command line. It is empty for the
 	// console, which is what eva is with nothing to answer.
 	prompt string
@@ -115,6 +120,10 @@ func parse(args []string) (options, error) {
 	}
 
 	var opts options
+	if len(args) > 0 && args[0] == "init" {
+		opts.initialise = true
+		args = args[1:]
+	}
 	fs := flag.NewFlagSet("eva", flag.ContinueOnError)
 
 	// Eva prints its own usage, in its own words, on the stream it chooses.
@@ -139,6 +148,18 @@ func parse(args []string) (options, error) {
 // failure the turn itself did not see. A Trace that failed to flush is not a
 // successful run, whatever the turn claimed.
 func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (code int, err error) {
+	// Before the configuration is read, because writing one is what a person
+	// does when they have none — and a starter run that first insisted on a
+	// valid file would be a command nobody could use for its own purpose.
+	if opts.initialise {
+		path, err := config.Init(opts.config, starter())
+		if err != nil {
+			return ExitUsage, err
+		}
+		_, _ = fmt.Fprintf(stdout, "wrote %s\n\nEvery setting in it is commented out, so Eva behaves exactly as it\ndoes now until you uncomment one. Set %s in your environment\nand run eva.\n", path, config.DefaultAPIKeyEnv)
+		return ExitOK, nil
+	}
+
 	cfg, err := config.Load(opts.config)
 	if err != nil {
 		return ExitUsage, err
