@@ -184,8 +184,7 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 // turn out of Eva without a terminal. This is that way back, and it is the
 // narrow one: a prompt in, a rendered answer out.
 //
-// It is not the machine-readable surface ADR 0022 removed, and it does not
-// bring one back. What a reader wanting data reads is the Trace, which holds
+// It is not a machine-readable surface, and it does not bring one back. What a reader wanting data reads is the Trace, which holds
 // this turn exactly as it holds every other — committed, by the same schema,
 // through the same sink. This writes the same fold a person would have read.
 //
