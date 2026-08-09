@@ -3,8 +3,5 @@
 *.test
 *.out
 
-# Go workspace sum file — the workspace is a local concern, the modules are not
-go.work.sum
-
 # Local trace and config, which the sink and config loader will write
 .eva/

@@ -1,8 +1,15 @@
 ---
-status: accepted
+status: accepted, packaging superseded by 0021
 ---
 
 # core is pure, so every module that touches the outside world sits beside it
+
+> ADR 0021 replaced the packaging: the repository is one module, the layers are
+> directories under `internal/`, and there is no `go.work`. Read "Module" below
+> as "layer", and `github.com/missingstudio/eva/<layer>` as
+> `github.com/missingstudio/eva/internal/<layer>`. The layer graph, the purity
+> rule, and the enforcement are what this document decides, and 0021 changed
+> none of them.
 
 `core` holds the domain: Unit, Spec, Outcome, the loop, Session and turn logic, and the interfaces the outer layers implement. It imports `events` and nothing else from within Eva, and it never reaches the outside world — no filesystem, no network, no terminal, no subprocesses.
 
@@ -22,9 +29,9 @@ Two entries in that table were widened after stage 0's spine landed, and are rec
 - `core` gets `context`, and only `context`. `TraceSink.Append` is a durable write and a durable write is cancellable; an interface that cannot carry cancellation forces every implementation to invent its own way. This is the friction working as intended — the allow list grew by one line, on purpose, for a stated reason.
 - `providers` gets `toml`. The fake Provider replays a recorded turn from a file and therefore reads one. The layer that reads files is `config`, but `config` may not import `providers`, and handing the recording through `core` would put a test fixture's shape into the pure domain. Reading its own recording is the smaller cost.
 
-Each module's rule also allows that module's own import path, which reaches nothing but the external test packages (`events_test`, `trace_test`) and the sub-packages of a module (`providers/fake`, `cli/cmd/eva`). A package cannot import itself, so the line widens nothing else.
+Each module's rule also allows that module's own import path, which reaches nothing but the external test packages (`events_test`, `trace_test`) and the sub-packages of a module (`providers/fake`, `cli/render`). A package cannot import itself, so the line widens nothing else.
 
-There is no root module. `go.work` is the root, and the workspace is what ties the six together.
+~~There is no root module. `go.work` is the root, and the workspace is what ties the six together.~~ Superseded by 0021: one root module holds the six, and `cmd/eva` holds the command.
 
 `session` and `render` from stage 0's package list are not modules. Session and turn logic are pure, so they live in `core`. Rendering is a frontend concern, so it lives in `cli` — which is where the plan's own tree puts it.
 
@@ -63,4 +70,4 @@ Module paths appear in every import written afterwards, so this is expensive to 
 
 An outer module can always be added later without touching `core`. Moving something *out* of `core` later would break every importer, so the bias is to keep `core` smaller than feels necessary.
 
-A new module must be added to `go.work` **and** given a rule in `.golangci.yml`. A module with no rule falls through to depguard's default, which allows only the standard library — restrictive rather than permissive, so a forgotten rule fails loudly instead of silently.
+A new layer must be given a rule in `.golangci.yml`. A layer with no rule falls through to depguard's default, which allows only the standard library — restrictive rather than permissive, so a forgotten rule fails loudly instead of silently. (Under 0021 the `go.work` entry this once also required is gone with the workspace.)

@@ -1,0 +1,49 @@
+package providers
+
+import (
+	"context"
+
+	"github.com/missingstudio/eva/internal/core"
+	"github.com/missingstudio/eva/internal/events"
+)
+
+type Call struct {
+	Model string
+	// Messages is the transcript the answer is conditioned on.
+	Messages []core.Message
+}
+
+// Provider is a model behind one contract, so that a test is deterministic,
+// free, and needs no API key. Substitution is the point of the interface: the
+// fake implementation replays recorded output, and the network ones sit
+// behind the same three methods.
+type Provider interface {
+	// Name is what configuration selects this Provider by.
+	Name() string
+
+	// Stream begins one turn. The caller reads the Stream to completion or
+	// closes it.
+	Stream(ctx context.Context, call Call) (Stream, error)
+}
+
+// Stream is one turn in progress.
+//
+// It yields payloads of the one Event schema rather than a shape of its own.
+// A provider knows what happened; it does not know the Run, the Session, or
+// the tenant it happened under, so it does not fill in an envelope. There is
+// no second vocabulary to normalize from (invariant 8).
+type Stream interface {
+	// Next returns the next payload of the turn, or io.EOF when the turn is
+	// complete. A provider failure arrives here as an error rather than as a
+	// panic.
+	//
+	// A payload says what happened; it does not say what becomes of it. A
+	// Degraded yielded here is a caveat rather than a record — the caller
+	// folds it into the one a Run closes with — so a Provider states each
+	// thing it noticed where it noticed it, and states it once, rather than
+	// saving them up to be emitted together.
+	Next(ctx context.Context) (events.Payload, error)
+
+	// Close releases the turn, whether or not it ran to completion.
+	Close() error
+}
