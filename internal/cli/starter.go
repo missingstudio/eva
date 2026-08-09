@@ -7,6 +7,7 @@ import (
 	"github.com/missingstudio/eva/internal/config"
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/providers"
+	"github.com/missingstudio/eva/internal/providers/openai"
 	"github.com/missingstudio/eva/internal/theme"
 	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui/keymap"
@@ -45,6 +46,11 @@ func starter() string {
 [provider]
 # Which Provider answers. This build ships: %s.
 # name = %q
+
+# How the Provider authenticates: %q reads the variable named below, and %q
+# uses the login that "eva login" keeps (%q only). The mode alone decides
+# which credential a turn uses.
+# auth = %q
 
 # The environment variable the credential is read from.
 # api_key_env = %q
@@ -117,6 +123,7 @@ func starter() string {
 `,
 		config.DefaultModel,
 		strings.Join(providers.Names(), ", "), config.DefaultProvider,
+		config.AuthAPIKey, config.AuthSubscription, openai.Name, config.AuthAPIKey,
 		config.DefaultAPIKeyEnv,
 		config.EnvHome, strings.Join(trace.Kinds(), ", "), trace.JSONL,
 		config.DefaultTenant, config.DefaultActor, string(events.ActorHuman),

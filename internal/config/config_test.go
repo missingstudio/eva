@@ -544,3 +544,74 @@ func TestAPersonsOwnFileIsNotReadAsARepositorys(t *testing.T) {
 		t.Errorf("Project = %q, want empty: their own file is not a repository's", cfg.Project)
 	}
 }
+
+// The auth mode is an enum, and its default follows the Provider: a file that
+// selects openai and says nothing else must not read another Provider's
+// credential variable or run another Provider's model.
+func TestChoosingOpenAIFollowsWithItsOwnDefaults(t *testing.T) {
+	dir := home(t)
+	path := write(t, dir, "[provider]\nname = \"openai\"\n")
+
+	cfg := load(t, path)
+	if cfg.Provider.Auth != config.AuthAPIKey {
+		t.Errorf("auth = %q, want the API key mode by default", cfg.Provider.Auth)
+	}
+	if cfg.Provider.APIKeyEnv != config.DefaultOpenAIAPIKeyEnv {
+		t.Errorf("api_key_env = %q, want %q — another Provider's variable would hold another Provider's key", cfg.Provider.APIKeyEnv, config.DefaultOpenAIAPIKeyEnv)
+	}
+	if cfg.Model != config.DefaultOpenAIModel {
+		t.Errorf("model = %q, want %q", cfg.Model, config.DefaultOpenAIModel)
+	}
+}
+
+func TestASubscriptionOutsideOpenAIIsRejectedNamingTheSupportedPair(t *testing.T) {
+	dir := home(t)
+	path := write(t, dir, "[provider]\nname = \"anthropic\"\nauth = \"subscription\"\n")
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("a subscription under a Provider that cannot honour one was accepted")
+	}
+	for _, want := range []string{"anthropic", "openai", path} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q: %v", want, err)
+		}
+	}
+}
+
+func TestAnAuthModeOutsideTheEnumIsRejected(t *testing.T) {
+	dir := home(t)
+	path := write(t, dir, "[provider]\nauth = \"oauth\"\n")
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("an auth mode Eva does not have was accepted")
+	}
+	for _, want := range []string{"oauth", config.AuthAPIKey, config.AuthSubscription} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q: %v", want, err)
+		}
+	}
+}
+
+func TestASubscriptionIsNotARepositorysToChoose(t *testing.T) {
+	dir := home(t)
+	write(t, dir, "")
+	nested := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(filepath.Join(nested, config.ProjectDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, config.ProjectDir, "config.toml"),
+		[]byte("[provider]\nauth = \"subscription\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(nested)
+
+	_, err := config.Load("")
+	if err == nil {
+		t.Fatal("a cloned repository chose how a run authenticates")
+	}
+	if !strings.Contains(err.Error(), "provider.auth") {
+		t.Errorf("the refusal does not name the key: %v", err)
+	}
+}

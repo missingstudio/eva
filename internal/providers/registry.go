@@ -29,6 +29,13 @@ type Options struct {
 	// struct that gets logged, compared, or copied on the way here.
 	Credential func() (string, error)
 
+	// Subscription says the credential is a login's short-lived access token
+	// rather than an API key. A Provider that serves both resolves the
+	// credential per attempt in this mode — the token renews under a long
+	// session — and speaks to the endpoint the vendor serves subscriptions
+	// from, which is not always the one an API key reaches.
+	Subscription bool
+
 	// BaseURL points a Provider at a gateway or a proxy. Empty is the vendor's
 	// own endpoint.
 	BaseURL string

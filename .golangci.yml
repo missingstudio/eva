@@ -106,6 +106,20 @@ linters:
             - $gostd
             - github.com/missingstudio/eva/internal/core/prompt
 
+        # auth holds subscription Credentials: the store they live in, the
+        # source that keeps one fresh, and the login flow that obtains one. It
+        # talks to one thing — the vendor's authorization server — and gets the
+        # standard library alone: no config, so the layer that reads the
+        # configuration file is still the only layer that reads it (the store's
+        # path is passed in); no providers, so a credential cannot select what
+        # it authenticates.
+        auth:
+          list-mode: strict
+          files:
+            - "**/internal/auth/**"
+          allow:
+            - $gostd
+
         # config reads files, so it sits outside core.
         config:
           list-mode: strict
@@ -133,6 +147,8 @@ linters:
             - "**/internal/providers/**"
             - "!**/internal/providers/anthropic/**"
             - "!**/internal/providers/fake/**"
+            - "!**/internal/providers/openai/**"
+            - "!**/internal/providers/retry/**"
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
@@ -142,6 +158,24 @@ linters:
             - github.com/missingstudio/eva/internal/core
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/providers
+
+        # retry is how a refused attempt is retried, and nothing else. It is a
+        # leaf beside the implementations rather than a file inside one because
+        # two Providers need the same arithmetic and neither may import the
+        # other.
+        #
+        # The standard library alone. No events, so it cannot name why an
+        # attempt failed — that is learned from a wire, each Provider has its
+        # own, and a rule that could read one would be a rule with an opinion
+        # about which.
+        providers-retry:
+          list-mode: strict
+          files:
+            - "**/internal/providers/retry/**"
+          allow:
+            - $gostd
+            # See the events rule: this reaches the external test package only.
+            - github.com/missingstudio/eva/internal/providers/retry
 
         # The Anthropic Provider: the vendor's SDK, and the contract it
         # satisfies. It does not read files.
@@ -155,7 +189,24 @@ linters:
             - github.com/missingstudio/eva/internal/core
             - github.com/missingstudio/eva/internal/providers
             - github.com/missingstudio/eva/internal/providers/anthropic
+            - github.com/missingstudio/eva/internal/providers/retry
             - github.com/anthropics/anthropic-sdk-go
+
+        # The OpenAI Provider: the standard library's HTTP client, and the
+        # contract it satisfies. No vendor SDK — the surface it needs is one
+        # POST and one SSE body, and the subscription backend needs a host and
+        # headers no SDK ships with. It does not read files.
+        providers-openai:
+          list-mode: strict
+          files:
+            - "**/internal/providers/openai/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
+            - github.com/missingstudio/eva/internal/providers
+            - github.com/missingstudio/eva/internal/providers/openai
+            - github.com/missingstudio/eva/internal/providers/retry
 
         # The fake Provider replays a recorded turn, so it reads one: toml, and
         # no vendor's SDK. It reads its own recording rather than being handed
@@ -208,6 +259,10 @@ linters:
             - github.com/missingstudio/eva/internal/events
             - github.com/missingstudio/eva/internal/core
             - github.com/missingstudio/eva/internal/config
+            # auth, for the subscription Credentials a login stores. The store's
+            # path is composed here and the token resolver is handed to the
+            # Provider — this is the one place config, auth, and providers meet.
+            - github.com/missingstudio/eva/internal/auth
             - github.com/missingstudio/eva/internal/providers
             - github.com/missingstudio/eva/internal/trace
             # render, for the fold a person reads a turn in. It is a layer beside
@@ -236,6 +291,7 @@ linters:
             - github.com/missingstudio/eva/internal/events
             - github.com/missingstudio/eva/internal/core
             - github.com/missingstudio/eva/internal/config
+            - github.com/missingstudio/eva/internal/auth
             - github.com/missingstudio/eva/internal/providers
             - github.com/missingstudio/eva/internal/trace
             - github.com/missingstudio/eva/internal/render
