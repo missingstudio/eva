@@ -1,8 +1,15 @@
 ---
-status: accepted
+status: accepted, the Trace-naming consequence withdrawn by 0041
 ---
 
 # A failed claim carries a class, and a projection spends the class rather than the prose
+
+> ADR 0041 withdrew one consequence below: a failed turn no longer names the
+> Trace. The argument for it was made when the failure was one line; it is now
+> two, and the second says something a person can act on. The line is withdrawn
+> rather than overturned — nothing else surfaces the Trace path, so the gap it
+> leaves is real and is expected to be filled by something better placed than a
+> failure message.
 
 A Run that fails closes on a Claim whose Summary is the words of whatever broke — a vendor's error document, a status line, a request identifier. Those words are written for whoever is debugging that thing. A person who typed a prompt and got one back has been handed the program's internals in place of an answer, so the console stopped showing them and said `no response` instead.
 

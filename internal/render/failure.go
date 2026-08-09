@@ -53,18 +53,50 @@ func Unanswered(class events.ErrorClass) string {
 	}
 }
 
-// Detail says where the provider's own account of a failure went.
+// Remedy is a next step something checked, and never one it is guessing at.
 //
-// It exists because the rule above reads as "the detail was destroyed" without
-// it. Nothing on screen said the Trace existed, so a person who wanted the
-// status line had no way to learn there was one to want.
+// Because is the fact that was established about this machine — which
+// credential was sent, which file names the model, where the turn was pointed.
+// Do is what a person types, verbatim, and is empty whenever the fact leaves
+// more than one step correct.
 //
-// It names the file and stops. Telling somebody to open it would be this layer
-// deciding they are debugging a provider, which is a thing it cannot know — and
-// the path is enough for whoever is.
-func Detail(trace string) string {
-	if trace == "" {
+// The two are one value because a step with no fact behind it is advice. Advice
+// is what this path exists to avoid: somebody sent to fix a thing that was never
+// broken stops reading the line, and then the line that would have helped them
+// is gone too. A fact with no step is the ordinary case and is worth saying
+// alone — that a login has not expired is what stops a person logging in again
+// to no effect.
+//
+// The zero Remedy is one nothing could establish, and nothing is drawn for it.
+// That is how every absent fact is handled: the masthead draws no row for a
+// branch that is not there either.
+//
+// Composing one means reaching a configuration and an auth store, which this
+// layer deliberately cannot see. So the type is here, beside the sentences it
+// is read with, and the checking is done by the layer that wires a run.
+type Remedy struct {
+	Because string
+	Do      string
+}
+
+// Said is the remedy as a person reads it: the fact, and under it the command
+// to type.
+//
+// A remedy with nothing to type is the fact alone. A remedy with nothing
+// established says nothing at all, whatever it holds to type — which is the "no
+// step without a fact" rule held here rather than trusted upstream, because
+// upstream is where the temptation to offer a likely-looking step lives.
+//
+// The command is set off and indented rather than written into the sentence.
+// That is the shape `eva init` and `eva login` already end with: something to
+// copy stands away from the prose explaining it.
+func (r Remedy) Said() string {
+	switch {
+	case r.Because == "":
 		return ""
+	case r.Do == "":
+		return r.Because
+	default:
+		return r.Because + "\n\n    " + r.Do
 	}
-	return "the provider's own words are in " + trace
 }

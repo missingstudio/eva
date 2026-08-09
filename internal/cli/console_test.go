@@ -259,7 +259,6 @@ func begin(t *testing.T, script ...recording) *dialogue {
 		sink:     sink,
 		session:  newTestSession(),
 		model:    "test-model",
-		trace:    path,
 	}
 
 	out := &heard{}
@@ -862,28 +861,13 @@ func (c *collecting) Append(_ context.Context, group []events.Event) ([]events.E
 
 func (c *collecting) Close() error { return nil }
 
-// The Trace is named once in a Session, not after every failure.
+// The console says where the provider's own account of a failure went, once per
+// Session.
 //
-// A line repeated after every failure is a line nobody finishes reading, and a
-// person who has been told where the Trace is does not stop knowing between two
-// turns.
-func TestTheTraceIsNamedOncePerSession(t *testing.T) {
-	// Two refusals, so the second failure is the one that must not repeat it.
-	fail := recording{refusal: &providers.Fault{
-		Err:   fmt.Errorf("anthropic: %s: 401", events.ErrorAuthFailed),
-		Class: events.ErrorAuthFailed,
-	}}
-	d := begin(t, fail, fail)
-
-	d.say(t, "what is this project")
-	d.closed(t, 1)
-	d.settle(t, func() bool { return strings.Contains(d.read(), d.trace) })
-
-	d.say(t, "try again")
-	d.closed(t, 2)
-	d.settle(t, func() bool { return strings.Count(d.read(), "the credential was refused") == 2 })
-
-	if got := strings.Count(d.read(), d.trace); got != 1 {
-		t.Errorf("the Trace path is on screen %d times after two failures, want once:\n%s", got, d.read())
-	}
-}
+// Without it, keeping the vendor's words off the screen reads as having
+// destroyed them. Nothing said the Trace existed, so a person who wanted the
+// status line had no way to learn there was one to want.
+//
+// Once, because a line repeated after every failure is a line nobody finishes
+// reading, and somebody told where the Trace is does not stop knowing between
+// two turns.

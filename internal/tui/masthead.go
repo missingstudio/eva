@@ -24,14 +24,6 @@ type About struct {
 	Branch string
 	// Dir is the working directory, already shortened for reading.
 	Dir string
-	// Trace is where the record is written, and is what a failed turn names
-	// once so that the provider's own words are findable rather than gone.
-	//
-	// The masthead does not draw it. It is not one of the facts a person checks
-	// before they trust an answer — it is the fact they want after one did not
-	// arrive — and a fifth row spent on it would be four rows of chrome plus a
-	// path, on every window, for the turns that went fine.
-	Trace string
 }
 
 // masthead is what a console opens with: what it is, and the four facts a

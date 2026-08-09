@@ -14,6 +14,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/render"
 	"github.com/missingstudio/eva/internal/theme"
 	"github.com/missingstudio/eva/internal/tui/keymap"
 )
@@ -25,7 +26,13 @@ import (
 // fixed is a Control that never answers. It is what the console draws against
 // when the drawing is the whole of the question — which is the seam Control
 // exists for: a frontend needs a model's name and nothing behind it.
-type fixed struct{ model string }
+type fixed struct {
+	model string
+	// remedy is what this machine would have checked, for the tests that ask
+	// what the console does with one. The zero value is a machine nothing could
+	// be established about, which is what most failures leave behind.
+	remedy render.Remedy
+}
 
 var _ Control = (*fixed)(nil)
 
@@ -34,9 +41,12 @@ func (f *fixed) Answer(context.Context, string) (core.Outcome, error) {
 }
 func (f *fixed) Watch(core.Subscriber, func(string)) {}
 func (f *fixed) About() About                        { return About{} }
-func (f *fixed) Model() string                       { return f.model }
-func (f *fixed) UseModel(model string)               { f.model = model }
-func (f *fixed) Clear()                              {}
+func (f *fixed) Remedy(events.ErrorClass) render.Remedy {
+	return f.remedy
+}
+func (f *fixed) Model() string         { return f.model }
+func (f *fixed) UseModel(model string) { f.model = model }
+func (f *fixed) Clear()                {}
 
 // escapes matches any terminal escape sequence, so that a test can assert on
 // the words a person reads rather than on the bytes that place them.
@@ -856,5 +866,67 @@ func TestTheMastheadBarIsTheChosenAccent(t *testing.T) {
 	plainConsole.layout(80, 24)
 	if head == plainConsole.masthead() {
 		t.Error("the bar draws the same bytes whichever accent was chosen")
+	}
+}
+
+// A failed turn says what happened, and then what that means on this machine.
+//
+// The console cannot establish the second part and does not try. It asks the
+// thing that wired the run — which can see a configuration and an auth store,
+// where this layer deliberately cannot — and draws whatever came back.
+func TestAFailedTurnDrawsTheCheckedNextStep(t *testing.T) {
+	c := drawn(t)
+	c.control = &fixed{model: "m", remedy: render.Remedy{
+		Because: "no openai login is stored",
+		Do:      "eva login",
+	}}
+	c.layout(60, 12)
+
+	c.close(answered{outcome: core.Outcome{Result: events.ResultFailed, Class: events.ErrorAuthFailed}})
+
+	got := plain(c.kept())
+	for _, want := range []string{
+		render.Unanswered(events.ErrorAuthFailed),
+		"no openai login is stored",
+		"eva login",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the transcript does not say %q:\n%s", want, got)
+		}
+	}
+}
+
+// A machine nothing could be established about gets the one line and no more.
+//
+// This is the ordinary case, not the edge one: most failures have no step on
+// this side of the network. A console that filled the gap with a likely-looking
+// suggestion would be the last place able to tell it was inventing one.
+func TestAFailureWithNothingCheckedDrawsNoStep(t *testing.T) {
+	c := drawn(t)
+	c.control = &fixed{model: "m"}
+	c.layout(60, 12)
+
+	c.close(answered{outcome: core.Outcome{Result: events.ResultFailed, Class: events.ErrorOverloaded}})
+
+	if got := strings.TrimSpace(plain(c.kept())); got != render.Unanswered(events.ErrorOverloaded) {
+		t.Errorf("the transcript reads %q, want the failure line alone", got)
+	}
+}
+
+// Interruption spends none of this. There is no remedy for the thing a person
+// just did on purpose, and offering one would answer a question nobody asked.
+func TestAnInterruptedTurnIsGivenNoRemedy(t *testing.T) {
+	c := drawn(t)
+	c.control = &fixed{model: "m", remedy: render.Remedy{
+		Because: "no openai login is stored",
+		Do:      "eva login",
+	}}
+	c.layout(60, 12)
+	c.interrupted = true
+
+	c.close(answered{outcome: core.Outcome{Result: events.ResultFailed, Class: events.ErrorAuthFailed}})
+
+	if got := strings.TrimSpace(plain(c.kept())); got != "interrupted" {
+		t.Errorf("an interrupted turn reads %q, want %q alone", got, "interrupted")
 	}
 }

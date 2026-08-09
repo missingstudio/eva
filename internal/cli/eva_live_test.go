@@ -437,16 +437,15 @@ func TestTheAnswerCapInTheFileReachesTheAPI(t *testing.T) {
 	}
 }
 
-// One turn from the command line says why it produced nothing, and where the
-// rest of the account went.
+// One turn from the command line says why it produced nothing.
 //
 // It exited in silence before this — a non-zero code and not one word — which
 // is the worst of the three ways to report a failure. A script got a number
 // with no reason, and a person got their shell prompt back and nothing at all.
 //
 // The line goes to stderr, and the guardrail the console holds is held here
-// too: what a person reads is this project's own words, and the vendor's are in
-// the Trace that the second line names.
+// too: what a person reads is this project's own words, and the vendor's stay
+// in the Trace.
 func TestOneTurnFromTheCommandLineSaysWhyItFailed(t *testing.T) {
 	base, _ := api(t, "", refused{http.StatusUnauthorized, "authentication_error"})
 	w := newWorld(t, live(base))
@@ -458,9 +457,6 @@ func TestOneTurnFromTheCommandLineSaysWhyItFailed(t *testing.T) {
 	}
 	if !strings.Contains(got.stderr, "the credential was refused") {
 		t.Errorf("stderr does not say why the turn produced nothing:\n%s", got.stderr)
-	}
-	if !strings.Contains(got.stderr, w.trace) {
-		t.Errorf("stderr does not say where the detail went:\n%s", got.stderr)
 	}
 
 	// stdout is the answer, and there was none. A failure written there would

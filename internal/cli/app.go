@@ -230,7 +230,13 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout, stderr io.W
 		sink:         sink,
 		session:      core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor(), origin()),
 		model:        cfg.Model,
-		trace:        cfg.Trace.Path,
+		checks: checks{
+			subscription: cfg.Subscription(),
+			keyEnv:       cfg.Provider.APIKeyEnv,
+			baseURL:      cfg.Provider.BaseURL,
+			configPath:   cfg.Path,
+			login:        storedLogin,
+		},
 	}
 
 	// How it looks is resolved before either path is chosen, so that a file a
@@ -358,11 +364,12 @@ func once(ctx context.Context, e *eva, prompt string, stdout, stderr io.Writer, 
 	}
 	if outcome.Result != events.ResultDone {
 		_, _ = fmt.Fprintln(stderr, render.Unanswered(outcome.Class))
-		// And where the rest of it is, every time rather than once: this
-		// process is one turn, so there is no second failure for a person to
-		// have remembered the path from.
-		if where := render.Detail(e.trace); where != "" {
-			_, _ = fmt.Fprintln(stderr, where)
+		// Then what that means here. This path is the one a script reads, and a
+		// script's author is the person most likely to be looking at a machine
+		// they did not configure — so the checked fact is worth as much here as
+		// it is in the console, and it is the same one.
+		if next := e.Remedy(outcome.Class).Said(); next != "" {
+			_, _ = fmt.Fprintln(stderr, next)
 		}
 		return ExitFailure, nil
 	}
@@ -387,11 +394,19 @@ type eva struct {
 	session      *core.Session
 	model        string
 
-	// trace is where the sink is writing, held as a path because a sink is a
-	// thing to write to and not a thing to name. It is what a failed turn tells
-	// a person, so that the provider's own account of it — which no screen
-	// shows — is findable rather than gone.
-	trace string
+	// checks is what a failed turn's remedy is established from: the
+	// configuration this assembly was opened with, and the store a login lives
+	// in. See Remedy for why the checking lives in this layer and the sentence
+	// does not.
+	checks checks
+
+	// chosen says the model came from /model rather than from a file. It is
+	// remembered rather than worked out, because there is nothing to work it
+	// out from afterwards — a name switched in a Session and a name read from
+	// a file are the same string by the time a turn fails, and telling somebody
+	// to edit a file that does not hold the model they are running is the kind
+	// of confident wrongness a remedy exists to avoid.
+	chosen bool
 
 	// interrupt says whether whoever is driving these turns listens for a
 	// cancellation and closes the Run, rather than letting the process die
@@ -425,7 +440,10 @@ func (e *eva) Model() string { return e.model }
 // from what was true when this was written would refuse a model released since
 // — so the Provider is what answers, and a name it does not know fails the turn
 // and says so in the words the Trace holds.
-func (e *eva) UseModel(model string) { e.model = model }
+// It also records that the name is this Session's rather than the file's, so
+// that a model the Provider will not serve is reported against the place it was
+// actually chosen.
+func (e *eva) UseModel(model string) { e.model, e.chosen = model, true }
 
 // Clear empties the transcript by opening a new Session over the same identity,
 // the same sink, and the same Provider. Session.Fresh has why it is a new one.
