@@ -145,8 +145,6 @@ type ProviderConfig struct {
 	// is what knows its own API — so there is no default here to be kept in
 	// step with the one that does the work.
 	MaxTokens int64 `toml:"max_tokens"`
-	// Script is the recorded output the fake provider replays.
-	Script string `toml:"script"`
 }
 
 // ThemeConfig is how the interface looks. Every field is optional and an empty
@@ -470,10 +468,25 @@ func decode(path string, cfg *Config) error {
 		for _, k := range undecoded {
 			keys = append(keys, k.String())
 		}
+		if gone, gone_ := retired[keys[0]]; gone_ {
+			return fmt.Errorf("config: %s: %q is a setting Eva used to have — %s", path, keys[0], gone)
+		}
 		return fmt.Errorf("config: %s: unknown key %q (the file has %d key(s) Eva does not know: %s)",
 			path, keys[0], len(keys), strings.Join(keys, ", "))
 	}
 	return nil
+}
+
+// retired names the settings Eva has removed, and what to do instead.
+//
+// A key that was real and is gone reads exactly like a typo to a strict
+// decoder, and the two want different answers: one person mistyped a setting
+// they meant, the other is carrying a file forward across a version that took
+// the setting away. Naming it is the difference between "fix your spelling"
+// and "this is not here any more, and here is why".
+var retired = map[string]string{
+	"provider.script": "the replaying Provider it selected was removed once real Providers answered turns. " +
+		"Point provider.base_url at a server of your own to answer turns without reaching a vendor.",
 }
 
 func defaults() Config {
@@ -566,16 +579,6 @@ func (c *Config) normalize() error {
 		return err
 	}
 
-	if c.Provider.Script != "" {
-		// Relative to the configuration file, so that a script and the file
-		// naming it can move together.
-		if c.Provider.Script, err = expand(c.Provider.Script); err != nil {
-			return err
-		}
-		if !filepath.IsAbs(c.Provider.Script) {
-			c.Provider.Script = filepath.Join(filepath.Dir(c.Path), c.Provider.Script)
-		}
-	}
 	return nil
 }
 

@@ -62,9 +62,6 @@ func starter() string {
 # own API.
 # max_tokens = 0
 
-# The recording a replaying Provider reads, relative to this file.
-# script = "turns.toml"
-
 [trace]
 # Where the Trace is written. Every turn is appended there as typed Events, and
 # every projection — the console you read, anything that reads it later — is a

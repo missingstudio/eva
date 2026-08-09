@@ -13,10 +13,8 @@ import (
 // answering.
 type stub struct{ name string }
 
-func (s stub) Name() string { return s.name }
-
-func (s stub) Stream(context.Context, providers.Call) (providers.Stream, error) {
-	return nil, errors.New("stub: this Provider does not answer")
+func (s stub) Stream(context.Context, providers.Call) providers.Stream {
+	return providers.Failed(errors.New("stub: this Provider does not answer"))
 }
 
 // A Provider is reachable by the name it registered under, and it is built from
@@ -39,8 +37,11 @@ func TestARegisteredProviderIsSelectableByName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a registered Provider did not open: %v", err)
 	}
-	if got.Name() != name {
-		t.Errorf("opened %q, want %q", got.Name(), name)
+	// The name is the registry's key and lives nowhere else, so what proves the
+	// right Provider was built is the Provider itself rather than a second copy
+	// of the name it could answer with.
+	if built, ok := got.(stub); !ok || built.name != name {
+		t.Errorf("opened %#v, want the stub registered under %q", got, name)
 	}
 	if built.BaseURL != "https://gateway.example" || built.MaxTokens != 512 {
 		t.Errorf("the Provider was built from %+v, want the settings Open was given", built)
@@ -73,10 +74,10 @@ func TestTheUnknownProviderErrorNamesWhatIsRegistered(t *testing.T) {
 func TestACredentialIsResolvedOnlyByAProviderThatAsks(t *testing.T) {
 	var asked bool
 	options := providers.Options{
-		Credential: func() (string, error) {
+		Credential: providers.APIKey(func() (string, error) {
 			asked = true
 			return "", errors.New("no API key")
-		},
+		}),
 	}
 
 	providers.Register("test-incurious", func(providers.Options) (providers.Provider, error) {
@@ -91,7 +92,7 @@ func TestACredentialIsResolvedOnlyByAProviderThatAsks(t *testing.T) {
 	}
 
 	providers.Register("test-curious", func(o providers.Options) (providers.Provider, error) {
-		if _, err := o.Credential(); err != nil {
+		if err := o.Credential.Available(); err != nil {
 			return nil, err
 		}
 		return stub{name: "test-curious"}, nil

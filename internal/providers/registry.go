@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
 // Options is what a Provider is built from.
@@ -19,22 +21,10 @@ import (
 // conversation about the field, not a map of strings to be read differently by
 // each implementation.
 type Options struct {
-	// Credential resolves the secret a Provider authenticates with, and is
-	// never the secret itself.
-	//
-	// It is a function because resolving one can fail, and only a Provider that
-	// needs a credential should be able to fail for want of it. Resolved up
-	// front instead, a recording replayed from a file would refuse to open for
-	// want of an API key it never sends. It also keeps the credential out of a
-	// struct that gets logged, compared, or copied on the way here.
-	Credential func() (string, error)
-
-	// Subscription says the credential is a login's short-lived access token
-	// rather than an API key. A Provider that serves both resolves the
-	// credential per attempt in this mode — the token renews under a long
-	// session — and speaks to the endpoint the vendor serves subscriptions
-	// from, which is not always the one an API key reaches.
-	Subscription bool
+	// Credential is how a Provider authenticates, and the mode that decides
+	// what kind of secret that is. The zero value is the one a Provider that
+	// sends nothing is built with.
+	Credential Credential
 
 	// BaseURL points a Provider at a gateway or a proxy. Empty is the vendor's
 	// own endpoint.
@@ -43,9 +33,15 @@ type Options struct {
 	// MaxTokens caps one response. Zero leaves the cap to the Provider.
 	MaxTokens int64
 
-	// Recording is the file a replaying Provider reads, already resolved to a
-	// path this process can open.
-	Recording string
+	// Retry is how a refused attempt is retried. The zero value takes the
+	// shared default.
+	//
+	// It crosses here rather than being each Provider's own, because the rule
+	// is one rule: a turn that is rate-limited against one vendor waits the way
+	// a turn rate-limited against the next one does, and a policy a caller
+	// could set for one Provider and not the other would be a policy nobody
+	// could state.
+	Retry retry.Policy
 }
 
 // Build makes one Provider from the settings a person chose.
@@ -74,6 +70,7 @@ func Register(name string, build Build) {
 	if name == "" {
 		panic("providers: a Provider registered under no name cannot be selected")
 	}
+
 	if build == nil {
 		panic(fmt.Sprintf("providers: %q registered with no way to build it", name))
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/providers"
 	"github.com/missingstudio/eva/internal/providers/openai"
+	"github.com/missingstudio/eva/internal/providers/providertest"
 	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
@@ -109,11 +110,14 @@ func subscriptionToken(t *testing.T, accountID string) string {
 // open builds a Provider against base, retrying on a clock a test can afford.
 func open(t *testing.T, base, credential string, subscription bool) *openai.Provider {
 	t.Helper()
-	p, err := openai.New(openai.Options{
-		Credential:   func() (string, error) { return credential, nil },
-		Subscription: subscription,
-		BaseURL:      base,
-		Retry:        retry.Policy{Attempts: 4, Base: time.Millisecond, Cap: 5 * time.Millisecond},
+	cred := providers.APIKey(func() (string, error) { return credential, nil })
+	if subscription {
+		cred = providers.Subscription(func() (string, error) { return credential, nil })
+	}
+	p, err := openai.New(providers.Options{
+		Credential: cred,
+		BaseURL:    base,
+		Retry:      retry.Policy{Attempts: 4, Base: time.Millisecond, Cap: 5 * time.Millisecond},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -134,10 +138,7 @@ func turn() providers.Call {
 // drain pulls a Stream to completion and returns everything it yielded.
 func drain(t *testing.T, p *openai.Provider, call providers.Call) []events.Payload {
 	t.Helper()
-	s, err := p.Stream(context.Background(), call)
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := p.Stream(context.Background(), call)
 	defer func() { _ = s.Close() }()
 
 	var out []events.Payload
@@ -290,13 +291,10 @@ func TestARateLimitedAttemptIsRetriedAndTheAttemptIsARecord(t *testing.T) {
 
 func TestARejectedCredentialIsNotRetried(t *testing.T) {
 	base, seen := serve(t, fails(http.StatusUnauthorized))
-	s, err := open(t, base, "sk-bad", false).Stream(context.Background(), turn())
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := open(t, base, "sk-bad", false).Stream(context.Background(), turn())
 	defer func() { _ = s.Close() }()
 
-	_, err = s.Next(context.Background())
+	_, err := s.Next(context.Background())
 	if err == nil {
 		t.Fatal("a rejected credential answered a turn")
 	}
@@ -369,10 +367,7 @@ func TestAnAnswerStatedOnlyAtTheEndIsStillAnAnswer(t *testing.T) {
 
 func TestAStreamThatEndsMidTurnIsAFailureNotAnAnswer(t *testing.T) {
 	base, _ := serve(t, stream(data(`{"type": "response.output_text.delta", "output_index": 0, "delta": "Hal"}`)))
-	s, err := open(t, base, "sk-key", false).Stream(context.Background(), turn())
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := open(t, base, "sk-key", false).Stream(context.Background(), turn())
 	defer func() { _ = s.Close() }()
 
 	var sawText bool
@@ -394,13 +389,15 @@ func TestAStreamThatEndsMidTurnIsAFailureNotAnAnswer(t *testing.T) {
 }
 
 func TestAProviderWithNoCredentialIsRefusedAtConstruction(t *testing.T) {
-	_, err := openai.New(openai.Options{})
+	_, err := openai.New(providers.Options{})
 	if err == nil {
 		t.Fatal("a Provider with no credential was built")
 	}
 
-	_, err = openai.New(openai.Options{
-		Credential: func() (string, error) { return "", errors.New("not logged in to openai: run `eva login`") },
+	_, err = openai.New(providers.Options{
+		Credential: providers.Subscription(func() (string, error) {
+			return "", errors.New("not logged in to openai: run `eva login`")
+		}),
 	})
 	if err == nil || !strings.Contains(err.Error(), "eva login") {
 		t.Errorf("a person who never logged in is not told to at startup: %v", err)
@@ -409,17 +406,50 @@ func TestAProviderWithNoCredentialIsRefusedAtConstruction(t *testing.T) {
 
 func TestASubscriptionCredentialThatIsNotALoginsTokenFailsTheTurn(t *testing.T) {
 	base, _ := serve(t)
-	s, err := open(t, base, "sk-plain-key", true).Stream(context.Background(), turn())
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := open(t, base, "sk-plain-key", true).Stream(context.Background(), turn())
 	defer func() { _ = s.Close() }()
 
-	_, err = s.Next(context.Background())
+	_, err := s.Next(context.Background())
 	if err == nil {
 		t.Fatal("a plain key was sent to the subscription backend, which cannot accept one")
 	}
 	if !strings.Contains(err.Error(), "access token") {
 		t.Errorf("the failure does not say what the credential is not: %v", err)
+	}
+}
+
+// The Provider contract, driven through the seam every Provider shares. Both
+// transports are driven, because a transport is a way this Provider answers and
+// the contract is the same either way.
+func TestOpenAIKeepsTheProviderContract(t *testing.T) {
+	for _, mode := range []struct {
+		name         string
+		subscription bool
+		credential   string
+	}{
+		{name: "api key", credential: "sk-key"},
+		{name: "subscription", subscription: true},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			credential := mode.credential
+			if mode.subscription {
+				credential = subscriptionToken(t, "acct_contract")
+			}
+			providertest.Run(t, providertest.Contract{
+				Answers: func(t *testing.T) providers.Provider {
+					base, _ := serve(t, stream(answered()))
+					return open(t, base, credential, mode.subscription)
+				},
+				Unpriced: func(t *testing.T) providers.Provider {
+					base, _ := serve(t, stream(strings.Join([]string{
+						data(`{"type": "response.output_text.delta", "output_index": 0, "delta": "unpriced"}`),
+						data(`{"type": "response.completed", "response": {"status": "completed"}}`),
+						data("[DONE]"),
+					}, "")))
+					return open(t, base, credential, mode.subscription)
+				},
+				Call: turn(),
+			})
+		})
 	}
 }

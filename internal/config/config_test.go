@@ -185,24 +185,22 @@ func TestTheIdentityBecomesTheEnvelopeFields(t *testing.T) {
 	}
 }
 
-// The recording a fake provider replays is named relative to the file that
-// names it, so a configuration and its script can move together.
-func TestARelativeScriptResolvesAgainstTheConfigFile(t *testing.T) {
+// A setting Eva used to have reads exactly like a typo to a strict decoder,
+// and the two want different answers. A file carried forward across the
+// version that removed the replaying Provider is told what happened to it,
+// not told to check its spelling.
+func TestARetiredSettingIsNamedRatherThanCalledATypo(t *testing.T) {
 	dir := home(t)
-	path := write(t, dir, "[provider]\nname = \"fake\"\nscript = \"testdata/script.toml\"\n")
+	path := write(t, dir, "[provider]\nscript = \"turns.toml\"\n")
 
-	if want := filepath.Join(dir, "testdata", "script.toml"); load(t, path).Provider.Script != want {
-		t.Errorf("script = %q, want %q", load(t, path).Provider.Script, want)
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("a setting Eva no longer has was accepted")
 	}
-}
-
-func TestAnAbsoluteScriptIsLeftAlone(t *testing.T) {
-	dir := home(t)
-	absolute := filepath.Join(dir, "elsewhere", "script.toml")
-	path := write(t, dir, "[provider]\nname = \"fake\"\nscript = "+quote(absolute)+"\n")
-
-	if got := load(t, path).Provider.Script; got != absolute {
-		t.Errorf("script = %q, want %q", got, absolute)
+	for _, want := range []string{"provider.script", "used to have", "base_url", path} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not say %q: %v", want, err)
+		}
 	}
 }
 
@@ -359,10 +357,10 @@ func TestARepositoryMayNotSetWhatARunDoes(t *testing.T) {
 		body string
 		key  string
 	}{
-		{"the Provider", "[provider]\nname = \"fake\"\n", "provider.name"},
+		{"the Provider", "[provider]\nname = \"openai\"\n", "provider.name"},
 		{"where the credential is read from", "[provider]\napi_key_env = \"ATTACKER_KEY\"\n", "provider.api_key_env"},
 		{"where the traffic goes", "[provider]\nbase_url = \"https://attacker.example\"\n", "provider.base_url"},
-		{"the recording that answers", "[provider]\nscript = \"turns.toml\"\n", "provider.script"},
+		{"how it authenticates", "[provider]\nauth = \"subscription\"\n", "provider.auth"},
 		{"where the Trace is written", "[trace]\npath = \"/tmp/exfiltrated.jsonl\"\n", "trace.path"},
 		{"which sink writes it", "[trace]\nkind = \"jsonl\"\n", "trace.kind"},
 		{"who the run is attributed to", "[identity]\ntenant = \"someone-else\"\n", "identity.tenant"},
@@ -528,7 +526,7 @@ follow = ["ctrl+g"]
 // move a setting into the file it was already in, and eva unusable from $HOME.
 func TestAPersonsOwnFileIsNotReadAsARepositorys(t *testing.T) {
 	dir := home(t)
-	write(t, dir, "[provider]\nname = \"fake\"\nscript = \"turns.toml\"\n")
+	write(t, dir, "[provider]\nname = \"openai\"\nbase_url = \"http://localhost:1\"\n")
 
 	// The home directory itself, which is where the two paths collide.
 	t.Chdir(dir)
@@ -537,7 +535,7 @@ func TestAPersonsOwnFileIsNotReadAsARepositorys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a person's own configuration was refused as a repository's: %v", err)
 	}
-	if cfg.Provider.Name != "fake" {
+	if cfg.Provider.Name != "openai" {
 		t.Errorf("provider = %q, want the one their own file chose", cfg.Provider.Name)
 	}
 	if cfg.Project != "" {

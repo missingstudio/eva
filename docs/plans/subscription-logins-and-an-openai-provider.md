@@ -1,6 +1,6 @@
 # Subscription logins and an OpenAI provider
 
-Status: phases 0–2 implemented (2026-08-09) — `internal/auth`, `eva login` / `eva auth status`, `internal/providers/openai`, config `auth` mode, ADRs 0031–0033. Remaining: Phase 3 polish and Phase 4 (fake-provider retirement, §Workstream E). This document plans three features together because they share one seam:
+Status: complete (2026-08-09) — phases 0–4 shipped. `internal/auth`, `eva login` / `eva auth status`, `internal/providers/openai`, the config `auth` mode, the `/login` console hint, and the retirement of the replaying Provider (ADR 0036). ADRs 0031–0033 and 0036. This document plans three features together because they share one seam:
 
 1. **`eva login`** — log in to an OpenAI ChatGPT/Codex subscription with a device code, without ever handling an API key. The command shape (`eva login [provider]`) leaves room for more subscription providers later.
 2. **An OpenAI provider** — `internal/providers/openai`, speaking the Responses API, with two transports: the public API (API key) and the ChatGPT/Codex subscription backend (OAuth token).
@@ -161,7 +161,7 @@ Steal neo's mapping wholesale (`neo:internal/llm/openai/responses.go`):
 
 ### C3. Streaming — where Eva must diverge from neo
 
-Neo buffers the whole SSE body (`io.ReadAll`) because it presents blocking results (`neo:internal/llm/openai/codex.go:103-105,128`). **Eva must not** — the console renders live and the `Stream` contract is pull-based. Build the same queue + state machine as `internal/providers/anthropic/stream.go` (`dial` one attempt per call, `pump` one SSE frame per call, `end` emits usage or a `Degraded` caveat):
+Neo buffers the whole SSE body (`io.ReadAll`) because it presents blocking results (`neo:internal/llm/openai/codex.go:103-105,128`). **Eva must not** — the console renders live and the `Stream` contract is pull-based. Implement `providers.Wire` and hand it to `providers.Drive` (`Dial` one attempt per call, `Pump` one SSE frame per call; the Driver emits usage or the `Degraded` caveat). This instruction used to read *build the same queue + state machine as `internal/providers/anthropic/stream.go`* — following it is what produced the duplication ADR-0034 then removed, so the shared half is no longer anybody's to rebuild:
 
 - Map `response.output_text.delta` → text-delta payloads; `response.output_item.done` → block completion; `response.completed` / `response.incomplete` → end-of-turn + usage; `response.failed` / `error` → error classification.
 - **Codex-backend gotcha:** `response.completed` omits the `output` array (`neo:codex.go:132-140,214-219`). Content must be assembled from per-item events; never read only the terminal event.

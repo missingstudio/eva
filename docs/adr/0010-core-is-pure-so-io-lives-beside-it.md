@@ -30,15 +30,17 @@ Everything that does reach outside sits in its own module beside `core`:
 | `core` | domain types, the loop, Session and turn logic, and the interfaces — including the `TraceSink` **interface** | events, `context` |
 | `config` | TOML loading, key resolution, model selection | events, core, stdlib, toml |
 | `providers` | the `Provider` interface, Anthropic, the fake Provider | events, core, stdlib, the Anthropic SDK, toml |
+
+The `providers` row is no longer current: the fake Provider was retired and `toml` left that allow list with it, so the layer that reads a file format is once again only the layer that reads the configuration. The rest of the table stands.
 | `trace` | the JSONL sink — the `TraceSink` **implementation** | events, core, stdlib |
 | `cli` | REPL, rendering, one-shot, machine-readable output | all of the above, plus the terminal libraries |
 
 Two entries in that table were widened after stage 0's spine landed, and are recorded here rather than left in a comment in the linter config:
 
 - `core` gets `context`, and only `context`. `TraceSink.Append` is a durable write and a durable write is cancellable; an interface that cannot carry cancellation forces every implementation to invent its own way. This is the friction working as intended — the allow list grew by one line, on purpose, for a stated reason.
-- `providers` gets `toml`. The fake Provider replays a recorded turn from a file and therefore reads one. The layer that reads files is `config`, but `config` may not import `providers`, and handing the recording through `core` would put a test fixture's shape into the pure domain. Reading its own recording is the smaller cost.
+- `providers` gets `toml`. The fake Provider replays a recorded turn from a file and therefore reads one. The layer that reads files is `config`, but `config` may not import `providers`, and handing the recording through `core` would put a test fixture's shape into the pure domain. Reading its own recording is the smaller cost. **This widening has since been undone** — the Provider that needed it is gone, and the exception went with it.
 
-Each module's rule also allows that module's own import path, which reaches nothing but the external test packages (`events_test`, `trace_test`) and the sub-packages of a module (`providers/fake`, `cli/render`). A package cannot import itself, so the line widens nothing else.
+Each module's rule also allows that module's own import path, which reaches nothing but the external test packages (`events_test`, `trace_test`) and the sub-packages of a module (`cli/render`, and the sub-packages of `providers`). A package cannot import itself, so the line widens nothing else.
 
 ~~There is no root module. `go.work` is the root, and the workspace is what ties the six together.~~ Superseded by 0021: one root module holds the six, and `cmd/eva` holds the command.
 

@@ -20,7 +20,6 @@ import (
 
 	// The Providers a build can select, each registering itself as it loads.
 	_ "github.com/missingstudio/eva/internal/providers/anthropic"
-	_ "github.com/missingstudio/eva/internal/providers/fake"
 	_ "github.com/missingstudio/eva/internal/providers/openai"
 	"github.com/missingstudio/eva/internal/render"
 	"github.com/missingstudio/eva/internal/trace"
@@ -224,10 +223,11 @@ func run(ctx context.Context, opts options, stdin io.Reader, stdout io.Writer) (
 	}()
 
 	e := &eva{
-		provider: provider,
-		sink:     sink,
-		session:  core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor(), origin()),
-		model:    cfg.Model,
+		provider:     provider,
+		providerName: cfg.Provider.Name,
+		sink:         sink,
+		session:      core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor(), origin()),
+		model:        cfg.Model,
 	}
 
 	// How it looks is resolved before either path is chosen, so that a file a
@@ -358,9 +358,14 @@ func once(ctx context.Context, e *eva, prompt string, stdout io.Writer, look the
 // what lasts and answer builds what does not.
 type eva struct {
 	provider providers.Provider
-	sink     core.TraceSink
-	session  *core.Session
-	model    string
+	// providerName is what configuration selected the Provider by. It is held
+	// beside the Provider rather than asked of it: the registry key is the
+	// name, and a Provider that could answer with a second copy of it is a
+	// Provider that could answer with a different one.
+	providerName string
+	sink         core.TraceSink
+	session      *core.Session
+	model        string
 
 	// interrupt says whether whoever is driving these turns listens for a
 	// cancellation and closes the Run, rather than letting the process die
@@ -475,10 +480,11 @@ func (e *eva) Answer(ctx context.Context, intent string) (core.Outcome, error) {
 	}
 
 	turn := &Turn{
-		Provider: e.provider,
-		Recorder: recorder,
-		Session:  e.session,
-		Model:    e.model,
+		Provider:     e.provider,
+		ProviderName: e.providerName,
+		Recorder:     recorder,
+		Session:      e.session,
+		Model:        e.model,
 		// The base system prompt is the same for every turn of this build, and
 		// its size is gated in CI, so what every Run of Eva spends before the
 		// first word of the transcript is a figure the repository states.
@@ -510,30 +516,32 @@ func open(cfg config.Config) (providers.Provider, error) {
 	// a recording replayed from a file must not fail for want of an API key
 	// it never sends. Reveal is the one place the secret leaves the type
 	// that stops it printing itself, and it happens inside this call.
-	credential := func() (string, error) {
+	// The auth mode alone decides which credential a run uses. There is no
+	// chain where an exported variable outranks a login or the reverse — a
+	// person can read the file and know, and `eva auth status` names a set
+	// key as unused rather than letting it silently win.
+	//
+	// The mode travels with the resolver rather than beside it, so there is no
+	// way to hand a Provider a login's token labelled as an API key.
+	credential := providers.APIKey(func() (string, error) {
 		key, err := cfg.RequireAPIKey()
 		if err != nil {
 			return "", err
 		}
 		return key.Reveal(), nil
-	}
-	// The auth mode alone decides which credential a run uses. There is no
-	// chain where an exported variable outranks a login or the reverse — a
-	// person can read the file and know, and `eva auth status` names a set
-	// key as unused rather than letting it silently win.
+	})
 	if cfg.Subscription() {
-		var err error
-		if credential, err = subscriptionCredential(cfg); err != nil {
+		resolve, err := subscriptionCredential(cfg)
+		if err != nil {
 			return nil, err
 		}
+		credential = providers.Subscription(resolve)
 	}
 
 	provider, err := providers.Open(cfg.Provider.Name, providers.Options{
-		Credential:   credential,
-		Subscription: cfg.Subscription(),
-		BaseURL:      cfg.Provider.BaseURL,
-		MaxTokens:    cfg.Provider.MaxTokens,
-		Recording:    cfg.Provider.Script,
+		Credential: credential,
+		BaseURL:    cfg.Provider.BaseURL,
+		MaxTokens:  cfg.Provider.MaxTokens,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w (in %s)", err, cfg.Path)
