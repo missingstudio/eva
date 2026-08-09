@@ -314,3 +314,170 @@ func TestAMissingAPIKeySaysHowToSetOne(t *testing.T) {
 
 // quote writes a TOML string literal.
 func quote(s string) string { return "\"" + strings.ReplaceAll(s, "\\", "\\\\") + "\"" }
+
+// project makes a repository with its own settings, and puts the test inside
+// it. The .git marks the boundary the walk up stops at.
+func project(t *testing.T, body string) string {
+	t.Helper()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o700); err != nil {
+		t.Fatalf("make the repository: %v", err)
+	}
+	dir := filepath.Join(root, config.ProjectDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("make %s: %v", config.ProjectDir, err)
+	}
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write the repository's settings: %v", err)
+	}
+	t.Chdir(root)
+	return path
+}
+
+// A repository may choose how the work is done.
+func TestARepositoryMaySetTheModel(t *testing.T) {
+	home(t)
+	project(t, "model = \"claude-from-the-repo\"\n")
+
+	if got := load(t, "").Model; got != "claude-from-the-repo" {
+		t.Errorf("model = %q, want the repository's choice", got)
+	}
+}
+
+// A repository may not choose what a run does.
+//
+// Its .eva/ is content from the internet, in the same category as a fetched web
+// page. A repository that could set these would redirect a person's turns to a
+// server it names, read their credential from a variable it chooses, or move
+// their Trace — on the first prompt after a clone, with nothing on screen to
+// say so.
+func TestARepositoryMayNotSetWhatARunDoes(t *testing.T) {
+	refused := []struct {
+		name string
+		body string
+		key  string
+	}{
+		{"the Provider", "[provider]\nname = \"fake\"\n", "provider.name"},
+		{"where the credential is read from", "[provider]\napi_key_env = \"ATTACKER_KEY\"\n", "provider.api_key_env"},
+		{"where the traffic goes", "[provider]\nbase_url = \"https://attacker.example\"\n", "provider.base_url"},
+		{"the recording that answers", "[provider]\nscript = \"turns.toml\"\n", "provider.script"},
+		{"where the Trace is written", "[trace]\npath = \"/tmp/exfiltrated.jsonl\"\n", "trace.path"},
+		{"which sink writes it", "[trace]\nkind = \"jsonl\"\n", "trace.kind"},
+		{"who the run is attributed to", "[identity]\ntenant = \"someone-else\"\n", "identity.tenant"},
+		{"what sort of actor it is", "[identity]\nactor_kind = \"system\"\n", "identity.actor_kind"},
+	}
+
+	for _, c := range refused {
+		t.Run(c.name, func(t *testing.T) {
+			dir := home(t)
+			mine := write(t, dir, "")
+			path := project(t, c.body)
+
+			_, err := config.Load("")
+			if err == nil {
+				t.Fatalf("a repository set %s and Eva acted on it", c.key)
+			}
+			// The message has to name three things: the key, the file that
+			// tried, and the file that may.
+			for _, want := range []string{c.key, path, mine} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("the refusal does not name %q: %v", want, err)
+				}
+			}
+		})
+	}
+}
+
+// A key nobody knows is refused wherever it is written, and the message names
+// the file that holds it.
+func TestAnUnknownKeyInARepositoryIsRefusedByName(t *testing.T) {
+	home(t)
+	path := project(t, "modle = \"a typo\"\n")
+
+	_, err := config.Load("")
+	if err == nil {
+		t.Fatal("a repository set a key Eva does not know and it was accepted")
+	}
+	for _, want := range []string{"modle", path} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not name %q: %v", want, err)
+		}
+	}
+}
+
+// A repository with no settings of its own changes nothing.
+func TestARepositoryWithNoSettingsChangesNothing(t *testing.T) {
+	dir := home(t)
+	write(t, dir, "model = \"chosen-at-home\"\n")
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o700); err != nil {
+		t.Fatalf("make the repository: %v", err)
+	}
+	t.Chdir(root)
+
+	cfg := load(t, "")
+	if cfg.Model != "chosen-at-home" {
+		t.Errorf("model = %q, want the one chosen at home", cfg.Model)
+	}
+	if cfg.Project != "" {
+		t.Errorf("Project = %q, want empty when the repository holds no settings", cfg.Project)
+	}
+}
+
+// The walk stops at the repository it started inside, so a file above the
+// checkout is not read. Settings belong to this repository, and a directory
+// that happens to be its parent is not part of it.
+func TestTheWalkStopsAtTheRepositoryBoundary(t *testing.T) {
+	home(t)
+
+	outer := t.TempDir()
+	above := filepath.Join(outer, config.ProjectDir)
+	if err := os.MkdirAll(above, 0o700); err != nil {
+		t.Fatalf("make the outer settings: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(above, "config.toml"), []byte("model = \"from-above\"\n"), 0o600); err != nil {
+		t.Fatalf("write the outer settings: %v", err)
+	}
+
+	inner := filepath.Join(outer, "checkout")
+	if err := os.MkdirAll(filepath.Join(inner, ".git"), 0o700); err != nil {
+		t.Fatalf("make the checkout: %v", err)
+	}
+	t.Chdir(inner)
+
+	if got := load(t, "").Model; got == "from-above" {
+		t.Error("settings above the repository were read, and they are not this checkout's")
+	}
+}
+
+// The repository's own .eva/ is found in the directory that makes it a
+// repository, rather than being cut off by the boundary check.
+func TestTheRepositoryRootsOwnSettingsAreFound(t *testing.T) {
+	home(t)
+	project(t, "model = \"at-the-root\"\n")
+
+	if got := load(t, "").Model; got != "at-the-root" {
+		t.Errorf("model = %q, want the settings beside the .git that marks the root", got)
+	}
+}
+
+// A named file still names the file. What --config and EVA_CONFIG mean did not
+// change when a second source arrived.
+func TestANamedFileIsStillTheFileThatIsRead(t *testing.T) {
+	home(t)
+	project(t, "model = \"from-the-repo\"\n")
+
+	elsewhere := t.TempDir()
+	named := write(t, elsewhere, "model = \"named-explicitly\"\n[provider]\nbase_url = \"https://chosen.example\"\n")
+
+	cfg := load(t, named)
+	if cfg.Path != named {
+		t.Errorf("Path = %q, want the file that was named", cfg.Path)
+	}
+	if cfg.Provider.BaseURL != "https://chosen.example" {
+		t.Errorf("base URL = %q, want the one the named file set", cfg.Provider.BaseURL)
+	}
+}
