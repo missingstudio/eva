@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/term"
 	"github.com/missingstudio/eva/cli/render"
 	"github.com/missingstudio/eva/core"
 	"github.com/missingstudio/eva/events"
@@ -160,6 +161,39 @@ func (e ended) Read(p []byte) (int, error) {
 	return n, err //nolint:wrapcheck // a reader's error is the reader's.
 }
 
+// endedFile is ended's counterpart for a descriptor [pollable] says cannot be
+// handed over: the same "quit on EOF" behaviour, but as a bare reader, so the
+// program never learns this input had a descriptor to begin with.
+type endedFile struct {
+	io.Reader
+	quit func()
+}
+
+func (e endedFile) Read(p []byte) (int, error) {
+	n, err := e.Reader.Read(p)
+	if errors.Is(err, io.EOF) {
+		e.quit()
+	}
+	return n, err //nolint:wrapcheck // a reader's error is the reader's.
+}
+
+// pollable is whether the operating system can watch this descriptor for
+// readiness rather than fabricate it: a terminal or a pipe say so honestly, but
+// a plain file and the null device report readiness without meaning it, and
+// asking the OS to watch one for it fails outright rather than degrading. That
+// failure is the program's to avoid, not the input's to surface, so this is
+// checked before the descriptor is ever handed over.
+func pollable(file *os.File) bool {
+	if term.IsTerminal(file.Fd()) {
+		return true
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&(os.ModeNamedPipe|os.ModeSocket) != 0
+}
+
 // newConsole builds the interactive program, and the interface behind it.
 //
 // The streams are parameters rather than the process's own, so that the
@@ -201,7 +235,12 @@ func newConsole(ctx context.Context, e *eva, in io.Reader, out io.Writer) (*tea.
 	// knot; it is called from the read loop, which the program starts.
 	var program *tea.Program
 	if file, isFile := in.(*os.File); isFile {
-		in = ended{File: file, quit: func() { program.Quit() }}
+		quit := func() { program.Quit() }
+		if pollable(file) {
+			in = ended{File: file, quit: quit}
+		} else {
+			in = endedFile{Reader: file, quit: quit}
+		}
 	}
 	program = tea.NewProgram(c, tea.WithContext(ctx), tea.WithInput(in), tea.WithOutput(out))
 

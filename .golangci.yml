@@ -156,6 +156,12 @@ linters:
             # frontend owns the terminal, and the renderer is not allowed to
             # know there is one.
             - github.com/charmbracelet/colorprofile
+            # x/term, for the console's own check of whether a descriptor is
+            # one the terminal libraries can watch for readiness. It is the
+            # same package bubbletea itself asks, so a file this rejects is
+            # one bubbletea would have rejected too — just before the failure
+            # instead of during it.
+            - github.com/charmbracelet/x/term
 
         # render is a pure consumer of Events. It sits inside the frontend and
         # is held to less than the frontend is: the Event schema and the
