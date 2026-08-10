@@ -1,9 +1,5 @@
 # Target architecture
 
-> **Status: draft.** This describes what Eva will be, not what it is.
-> Only stage 0 is built. Where this and an ADR in [`../adr/`](../adr/) disagree,
-> the ADR wins. Verification basis: the tip of `main` on 2026-08-09.
-
 What Eva owns and what it delegates, the harness adapter contract, the event
 schema, the hook surface, the wire protocols, and the repository layout.
 
@@ -14,7 +10,7 @@ schema, the hook surface, the wire protocols, and the repository layout.
 3. **Daemons advertise their harness inventory.** The capability advertisement includes the installed harnesses and their versions.
 4. **Eva can run any harness.** Eva, Claude Code, Codex, OpenCode, and the next tool to ship all run behind one adapter contract.
 5. **Portable skills and defined protocols.** One skill source of truth compiles per harness. Tools interoperate over MCP. The task graph mediates each agent handoff.
-6. **Community-extensible core.** Events and hooks are part of the harness contract. They are not an afterthought. Skills, tools, checks, commands, and UI compose in from the ecosystem. Anyone can express as an extension what we can express as an extension.
+6. **Community-extensible core.** Events and hooks are part of the harness contract. They are not an afterthought. Skills, tools, checks, commands, and UI compose in from the ecosystem. We build our own skills, tools, checks, and UI through the same extension surface we publish.
 
 ## Architecture in one paragraph
 
@@ -441,7 +437,7 @@ Use one module, with a directory under `internal/` for each layer. Imports point
 eva/                    # go.mod; cmd/ for binaries, these layers under internal/
 ├── events/             # THE schema: events, trace records, versioning
 │                       #   imports: stdlib only, nothing internal  (stage 0)
-├── core/               # Unit, Spec, Outcome, loop, budget, hooks (HookBus),
+├── core/               # Unit, Spec, Outcome, loop, budget, hooks,
 │   │                   # verifier contract, tool registry
 │   │                   #   imports: events                         (stages 0-2, 5-6)
 │   ├── prompt/ schema/ pipeline/                                 # stage 1

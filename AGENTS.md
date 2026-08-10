@@ -74,8 +74,8 @@ State facts before conclusions.
 | apply or filter a triage label                                              | `docs/agents/triage-labels.md`                                         |
 | use a word this project defines                                             | `CONTEXT.md`                                                           |
 
-Work the lowest stage whose exit test has not yet passed. `docs/roadmap.md` is a
-draft: it describes what Eva will be, not what it is.
+Work the lowest stage whose exit test has not yet passed.
 
-`docs/Product.md` maps every design document. `docs/adr/` holds the decisions, one
-file each, and the filename is the decision — so `ls` is the index.
+`docs/product.md` maps every design document and is the one place their status is
+written — read it before you treat any of them as spec. `docs/adr/` holds the
+decisions, one file each, and the filename is the decision — so `ls` is the index.

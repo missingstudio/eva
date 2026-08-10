@@ -1,9 +1,7 @@
 # Eva
 
-> **Status: draft, except for stage 0.** Stage 0 is built, and its exit test passes
-> with one clause superseded — see that stage in [the roadmap](roadmap.md). The other
-> eighteen stages are not built. Verification basis: the tip of `main` on 2026-08-09.
-> Each later stage sets this to its own commit as it ships.
+> **Status.** The ladder, the primitive, both references, and the roadmap are drafts.
+> Stage 0 is built; the other eighteen stages are not.
 
 Eva goes from a single model call to an autonomous, multi-tenant software factory.
 This page is the map. It holds no argument of its own. Each document below owns its
@@ -15,7 +13,7 @@ part, and this page says which one to open.
 | ------------------------------------------------------------ | ----------------------------------------------------------------- | ----------- |
 | [tutorial/first-run.md](tutorial/first-run.md)               | I have never run Eva. Show me.                                    | Tutorial    |
 | [how-to/](how-to/)                                           | I need to do one specific thing.                                  | How-to      |
-| [explanation/the-ladder.md](explanation/the-ladder.md)       | Why does a factory need five rungs nobody builds?                 | Explanation |
+| [explanation/the-ladder.md](explanation/the-ladder.md)       | Why does a factory need ten rungs, and in what order?             | Explanation |
 | [explanation/the-primitive.md](explanation/the-primitive.md) | What is the one type, and why that shape?                         | Explanation |
 | [reference/architecture.md](reference/architecture.md)       | What is the event schema, the adapter contract, the hook surface? | Reference   |
 | [reference/platform.md](reference/platform.md)               | How do tenancy, isolation, and billing work?                      | Reference   |
@@ -56,7 +54,7 @@ Three further decisions override this document:
 | [`adr/0010`](adr/0010-core-is-pure-so-io-lives-beside-it.md)                       | The layer graph, which differs from the tree in [reference/architecture.md](reference/architecture.md) |
 | [`adr/0021`](adr/0021-the-repository-is-one-module-and-internal-is-the-default.md) | One module, with those layers under `internal/`                                                        |
 
-Where this document and an ADR disagree, the ADR wins.
+Where any document mapped above and an ADR disagree, the ADR wins.
 
 ## Two decisions that bind every page
 

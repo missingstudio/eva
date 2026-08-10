@@ -214,10 +214,10 @@ Nothing is rewritten. A superseded clause is marked in the older ADR's own statu
 | 0015                                         | where a kept turn goes on screen               | 0023                          |
 | 0038                                         | a failed turn names the Trace                  | 0041                          |
 | 0019                                         | "/clear does not clear the screen"             | 0023                          |
-| Product.md (now `roadmap.md`)                | config format left open                        | 0009                          |
-| Product.md (now `reference/architecture.md`) | the layer tree in the final-repo-shape section | 0010                          |
-| Product.md (now `roadmap.md`, stage 0)       | six modules                                    | 0021                          |
-| Product.md stage 0 (now `roadmap.md`)        | the `eva -p --json` exit-test clause           | stated in `roadmap.md` itself |
+| product.md (now `roadmap.md`)                | config format left open                        | 0009                          |
+| product.md (now `reference/architecture.md`) | the layer tree in the final-repo-shape section | 0010                          |
+| product.md (now `roadmap.md`, stage 0)       | six modules                                    | 0021                          |
+| product.md stage 0 (now `roadmap.md`)        | the `eva -p --json` exit-test clause           | stated in `roadmap.md` itself |
 
 ## Open decisions
 

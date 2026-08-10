@@ -1,12 +1,5 @@
 # The primitive
 
-> **Status: draft.** This describes what Eva will be, not what it is.
-> Only stage 0 is built. Where this and an ADR in [`../adr/`](../adr/) disagree,
-> the ADR wins. Verification basis: the tip of `main` on 2026-08-09.
-
-One type recurs at every rung of the ladder. Build it first; everything above
-it is a nesting of it. This explains the shape and the reasoning.
-
 One type recurs at every rung. Build this type first. Everything else is a nesting of it.
 
 ```go
@@ -31,18 +24,17 @@ type Spec struct {
     Mandate     MandateID    // authority under which this runs
 }
 
-// Runtime is what Rust would call Ctx — renamed because context.Context
-// is Go's cancellation plumbing and rides alongside as the first argument.
+// Runtime is Go's cancellation plumbing and rides alongside as the first argument.
 type Runtime struct {
     Env       Env       // window | process | worktree | sandbox | fleet | market
-    Tools     ToolSet   // bounded action surface
+    Tools     Tools     // bounded action surface
     Procedure Procedure // compiled (workflow) | interpreted (skill)
     Memory    Memory    // episodic | semantic | procedural
     Verifier  Verifier  // Spec.Acceptance -> Evidence
     Meter     Meter     // consumption, live
     Identity  Identity  // who acts
     Trace     TraceSink // append-only, always
-    Hooks     HookBus   // extensions attach here — observe | veto | mutate (Part 2)
+    Hooks     Hooks     // extensions attach here — observe | veto | mutate (Part 2)
 }
 
 type OutcomeKind int // Done | Failed | NeedsHuman | Exhausted
