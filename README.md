@@ -107,6 +107,8 @@ go install github.com/missingstudio/eva/cmd/eva@latest
 
 # the same, checksum-verified, without needing Go
 curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh -s -- --channel next  
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh -s -- --channel stable
 ```
 
 The script reads your platform, downloads the matching archive, and checks it against the release's published checksums before installing anything — a checksum that doesn't match installs nothing and prints both figures. If you would rather not pipe a URL into a shell, it is [scripts/install.sh](scripts/install.sh) in this repository; read it, then run it.
@@ -365,31 +367,31 @@ make verify
 
 That is exactly what CI runs. It splits in two: `make check` needs nothing but this repository, and `make audit` reaches the network — so its answer can change while the tree does not, which is why CI also runs it on a schedule.
 
-| Target             | What it does                                                        |
-| ------------------ | ------------------------------------------------------------------- |
-| `make verify`      | `check` and `audit` — everything CI runs                             |
-| `make check`       | fmt, build, vet, lint, test                                          |
-| `make audit`       | tidy-check, mod-verify, vuln                                         |
-| `make fmt`         | Fails if anything isn't gofmt-clean                                  |
-| `make lint`        | golangci-lint, where the package boundaries are enforced             |
-| `make gosec`       | Security patterns in Eva's own code                                  |
-| `make test`        | Every package, under the race detector, in a shuffled order          |
-| `make vuln`        | Known vulnerabilities in code Eva actually calls                     |
-| `make tidy-check`  | Fails if `go.mod` isn't what the imports imply                       |
-| `make eva`         | Build the binary into the repo root                                  |
-| `make snapshot`    | Build every release archive locally, publishing nothing              |
-| `make tidy`        | Tidy dependencies                                                    |
+| Target            | What it does                                                |
+| ----------------- | ----------------------------------------------------------- |
+| `make verify`     | `check` and `audit` — everything CI runs                    |
+| `make check`      | fmt, build, vet, lint, test                                 |
+| `make audit`      | tidy-check, mod-verify, vuln                                |
+| `make fmt`        | Fails if anything isn't gofmt-clean                         |
+| `make lint`       | golangci-lint, where the package boundaries are enforced    |
+| `make gosec`      | Security patterns in Eva's own code                         |
+| `make test`       | Every package, under the race detector, in a shuffled order |
+| `make vuln`       | Known vulnerabilities in code Eva actually calls            |
+| `make tidy-check` | Fails if `go.mod` isn't what the imports imply              |
+| `make eva`        | Build the binary into the repo root                         |
+| `make snapshot`   | Build every release archive locally, publishing nothing     |
+| `make tidy`       | Tidy dependencies                                           |
 
 Every tool version is pinned and run via `go run`, so you install nothing and your results match CI.
 
 CI is four workflows, split by what makes each one fail:
 
-| Workflow                                        | Runs                                    | When                            |
-| ----------------------------------------------- | --------------------------------------- | ------------------------------- |
-| [ci.yml](.github/workflows/ci.yml)              | fmt, build, vet, test, lint, platforms   | Every change                    |
-| [security.yml](.github/workflows/security.yml)  | gosec                                    | Every change                    |
-| [audit.yml](.github/workflows/audit.yml)        | tidy-check, mod-verify, vuln             | Every change, **and Mondays**   |
-| [release.yml](.github/workflows/release.yml)    | All three, then builds and publishes     | A `v*` tag                      |
+| Workflow                                       | Runs                                   | When                          |
+| ---------------------------------------------- | -------------------------------------- | ----------------------------- |
+| [ci.yml](.github/workflows/ci.yml)             | fmt, build, vet, test, lint, platforms | Every change                  |
+| [security.yml](.github/workflows/security.yml) | gosec                                  | Every change                  |
+| [audit.yml](.github/workflows/audit.yml)       | tidy-check, mod-verify, vuln           | Every change, **and Mondays** |
+| [release.yml](.github/workflows/release.yml)   | All three, then builds and publishes   | A `v*` tag                    |
 
 Only the audit has a schedule, and it is the only one that needs one: a vulnerability is published on somebody else's timetable, so its answer changes while the tree does not. Everything else is a pure function of the tree.
 

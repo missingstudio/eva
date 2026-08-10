@@ -112,14 +112,15 @@ if [ -z "$VERSION" ]; then
 		[ -n "$tag" ] || die "no stable release found for $REPO
 A prerelease may exist: try --channel next."
 	else
-		# The releases endpoint is newest first, so the first prerelease in it is
-		# the newest one. tr puts one release per line so that head means what it
-		# looks like it means.
-		tag=$(fetch "$API/releases?per_page=30" |
-			tr '{' '\n' |
-			grep '"prerelease": *true' |
-			sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
-		[ -n "$tag" ] || die "no prerelease found for $REPO
+		for candidate in $(fetch "$API/releases?per_page=20" |
+			sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p'); do
+			if fetch "$API/releases/tags/$candidate" |
+				grep -q '"prerelease": *true'; then
+				tag="$candidate"
+				break
+			fi
+		done
+		[ -n "${tag:-}" ] || die "no prerelease found for $REPO
 Try --channel stable."
 	fi
 	VERSION="${tag#v}"
