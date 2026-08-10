@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -150,6 +151,20 @@ func TestTheStoreRoundTripsAndKeepsTheFilePrivate(t *testing.T) {
 	}
 	if got.AccessToken != want.AccessToken || got.AccountID != want.AccountID {
 		t.Errorf("got %+v, want what was stored", got)
+	}
+
+	// The mode is a POSIX guarantee, and Windows has no POSIX modes. os.Chmod
+	// there sets one read-only bit, and Perm() reports 0666 for any writable file
+	// whatever was asked for — so asserting 0600 on that platform would be
+	// asserting something the platform cannot express either way.
+	//
+	// What keeps the file private on Windows is the ACL it inherits from the
+	// user's profile directory, which a FileMode cannot describe and this test
+	// therefore cannot check. That is a real gap and it is named rather than
+	// hidden: the check does not run there, and the log says so.
+	if runtime.GOOS == "windows" {
+		t.Log("degraded: file modes are not POSIX here, so 0600/0700 went unchecked")
+		return
 	}
 
 	info, err := os.Stat(path)
