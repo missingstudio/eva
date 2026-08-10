@@ -62,15 +62,15 @@ Three mechanisms make the other rules checkable rather than aspirational, and ar
 Only some of this is a rule a machine holds. Knowing which is which is the
 difference between a contract and a habit.
 
-| Rule | Held by |
-| --- | --- |
-| The import graph, and every layer's allow list | `depguard`, `list-mode: strict`, in `.golangci.yml` |
-| `core` is pure | the same, with an allow list that omits the standard library |
-| One module, `./...` reaches everything | ADR 0021, and CI gates on a nested `go.mod` |
-| The closed set of Event kinds | the compiler, via an unexported method (ADR 0005) |
-| Every kind is rendered or explicitly silent | a test over the schema's own registry |
-| The base prompt's byte budget | a test (ADR 0020) |
-| Everything else here | review, and this document |
+| Rule                                           | Held by                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| The import graph, and every layer's allow list | `depguard`, `list-mode: strict`, in `.golangci.yml`          |
+| `core` is pure                                 | the same, with an allow list that omits the standard library |
+| One module, `./...` reaches everything         | ADR 0021, and CI gates on a nested `go.mod`                  |
+| The closed set of Event kinds                  | the compiler, via an unexported method (ADR 0005)            |
+| Every kind is rendered or explicitly silent    | a test over the schema's own registry                        |
+| The base prompt's byte budget                  | a test (ADR 0020)                                            |
+| Everything else here                           | review, and this document                                    |
 
 A rule in the last row that keeps being broken is a rule that wants a linter,
 not a stronger sentence.

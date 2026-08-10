@@ -24,14 +24,14 @@ The control plane holds the task graph, the specs, the mandates, the scheduler, 
 
 Eva supports third-party harnesses. So Eva is no longer *a* harness. Eva is the control plane that makes harnesses interchangeable. This works only if Eva never delegates some things.
 
-| Eva owns — never delegated               | Harness owns — swappable             |
-| ---------------------------------------- | ------------------------------------ |
-| Task spec and acceptance criteria        | Prompting strategy                   |
-| Workspace creation, snapshot, rollback   | Context assembly and compaction      |
+| Eva owns — never delegated               | Harness owns — swappable              |
+| ---------------------------------------- | ------------------------------------- |
+| Task spec and acceptance criteria        | Prompting strategy                    |
+| Workspace creation, snapshot, rollback   | Context assembly and compaction       |
 | The verifier and what counts as evidence | Tool-calling loop and retry behaviour |
-| Trace schema and trace store             | Internal subagent decomposition      |
-| Budget enforcement and the mandate       | Edit generation strategy             |
-| Merge authority                          | —                                    |
+| Trace schema and trace store             | Internal subagent decomposition       |
+| Budget enforcement and the mandate       | Edit generation strategy              |
+| Merge authority                          | —                                     |
 
 **When a harness reports success, that report is an unverified claim.** The harness ran inside a sandbox that you created. It ran against criteria that you wrote. You run the checks again.
 
@@ -39,7 +39,7 @@ Eva supports third-party harnesses. So Eva is no longer *a* harness. Eva is the 
 
 The table above governs what Eva delegates to *foreign harnesses*. This table governs what Eva opens to *its own ecosystem*. The logic is the same. Eva never delegates some things.
 
-| Kernel — never pluggable                      | Extension points — pluggable through published interfaces                      |
+| Kernel — never pluggable                      | Extension points — pluggable through published interfaces                  |
 | --------------------------------------------- | -------------------------------------------------------------------------- |
 | Event schema and trace store                  | Providers (`Provider` interface: anthropic, openai-compat, local)          |
 | Spec, budget, and mandate enforcement         | Harnesses (`Harness` interface — below)                                    |
