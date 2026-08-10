@@ -18,17 +18,17 @@ Default location is `~/.eva/trace.jsonl`, one JSON object per line. `[trace] pat
 
 Every record carries the same envelope, whatever its kind:
 
-| Field | What it is |
-| --- | --- |
-| `id` | This record's identity |
-| `seq` | Trace position, per Session, assigned by the sink at commit |
-| `wire_seq` | Wire position, per connection, assigned by the producer |
-| `at` | `wall` for reading and ordering, `mono_ns` for latency |
-| `version` | The schema version this record was written under |
-| `kind` | Which payload it carries, from a closed set |
-| `tenant`, `actor` | Who it is attributed to |
-| `run`, `session`, `parent` | What it belongs to |
-| `payload` | Display detail, shaped by `kind` |
+| Field                      | What it is                                                  |
+| -------------------------- | ----------------------------------------------------------- |
+| `id`                       | This record's identity                                      |
+| `seq`                      | Trace position, per Session, assigned by the sink at commit |
+| `wire_seq`                 | Wire position, per connection, assigned by the producer     |
+| `at`                       | `wall` for reading and ordering, `mono_ns` for latency      |
+| `version`                  | The schema version this record was written under            |
+| `kind`                     | Which payload it carries, from a closed set                 |
+| `tenant`, `actor`          | Who it is attributed to                                     |
+| `run`, `session`, `parent` | What it belongs to                                          |
+| `payload`                  | Display detail, shaped by `kind`                            |
 
 `seq` and `wire_seq` are different sequences and diverge by construction. The sink
 coalesces many wire chunks into one record. See
@@ -110,12 +110,12 @@ which is why the sink reads the file back when it opens it. See
 
 ## Troubleshooting
 
-| What you see | What it means |
-| --- | --- |
-| No file | No run has completed yet, or `[trace] path` points elsewhere. |
-| A kind you do not recognise | A record from a build that knew a kind yours does not. Its bytes are kept intact and the run is marked `degraded`, never dropped. See [adr/0002](../adr/0002-unknown-event-kinds-are-preserved-not-dropped.md). |
-| The file ends mid-line after a crash | It should not. A killed writer leaves no partial record and no partial group. If you can reproduce a torn line, that is a bug worth reporting. |
-| `usd` is always `null` | Expected. Neither Anthropic nor OpenAI returns a dollar figure with a response. |
+| What you see                         | What it means                                                                                                                                                                                                   |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No file                              | No run has completed yet, or `[trace] path` points elsewhere.                                                                                                                                                   |
+| A kind you do not recognise          | A record from a build that knew a kind yours does not. Its bytes are kept intact and the run is marked `degraded`, never dropped. See [adr/0002](../adr/0002-unknown-event-kinds-are-preserved-not-dropped.md). |
+| The file ends mid-line after a crash | It should not. A killed writer leaves no partial record and no partial group. If you can reproduce a torn line, that is a bug worth reporting.                                                                  |
+| `usd` is always `null`               | Expected. Neither Anthropic nor OpenAI returns a dollar figure with a response.                                                                                                                                 |
 
 ## Related
 

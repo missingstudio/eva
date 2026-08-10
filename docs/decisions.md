@@ -207,17 +207,17 @@ sequence-numbered Event. There is no second vocabulary anywhere in the system.
 
 Nothing is rewritten. A superseded clause is marked in the older ADR's own status line.
 
-| Older decision | Superseded clause | By |
-| --- | --- | --- |
-| 0010 | the six-module packaging | 0021 |
-| 0012 | a transport failure is classified `other` | 0038 |
-| 0015 | where a kept turn goes on screen | 0023 |
-| 0038 | a failed turn names the Trace | 0041 |
-| 0019 | "/clear does not clear the screen" | 0023 |
-| Product.md (now `roadmap.md`) | config format left open | 0009 |
-| Product.md (now `reference/architecture.md`) | the layer tree in the final-repo-shape section | 0010 |
-| Product.md (now `roadmap.md`, stage 0) | six modules | 0021 |
-| Product.md stage 0 (now `roadmap.md`) | the `eva -p --json` exit-test clause | stated in `roadmap.md` itself |
+| Older decision                               | Superseded clause                              | By                            |
+| -------------------------------------------- | ---------------------------------------------- | ----------------------------- |
+| 0010                                         | the six-module packaging                       | 0021                          |
+| 0012                                         | a transport failure is classified `other`      | 0038                          |
+| 0015                                         | where a kept turn goes on screen               | 0023                          |
+| 0038                                         | a failed turn names the Trace                  | 0041                          |
+| 0019                                         | "/clear does not clear the screen"             | 0023                          |
+| Product.md (now `roadmap.md`)                | config format left open                        | 0009                          |
+| Product.md (now `reference/architecture.md`) | the layer tree in the final-repo-shape section | 0010                          |
+| Product.md (now `roadmap.md`, stage 0)       | six modules                                    | 0021                          |
+| Product.md stage 0 (now `roadmap.md`)        | the `eva -p --json` exit-test clause           | stated in `roadmap.md` itself |
 
 ## Open decisions
 

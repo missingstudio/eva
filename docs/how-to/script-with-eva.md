@@ -58,10 +58,10 @@ trace tells you more than stdout could, and tells you sooner.
 
 ## Troubleshooting
 
-| What you see | What to do |
-| --- | --- |
-| Escape codes in the captured file | You captured the chat, not `-p`. Add `-p "<question>"`. |
-| Exit 0 but an empty file | Check stderr. A turn that produced no text still closes cleanly. |
+| What you see                       | What to do                                                                                         |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Escape codes in the captured file  | You captured the chat, not `-p`. Add `-p "<question>"`.                                            |
+| Exit 0 but an empty file           | Check stderr. A turn that produced no text still closes cleanly.                                   |
 | You need the events, not the prose | Read `~/.eva/trace.jsonl`, filtered by the run. See [how-to/read-the-trace.md](read-the-trace.md). |
 
 ## Related

@@ -62,12 +62,12 @@ month without noticing. See
 
 ## Troubleshooting
 
-| What you see | What to do |
-| --- | --- |
-| `No response — the credential was refused` and `run eva login` | There is no live login under `subscription`. Run `eva login`. Eva offers this step only after it has read the store and found nothing, so the step is a checked fact. |
-| `No response — the credential was refused` with **no** next step, and a live login | Logging in again is not what this needs. Eva says so rather than sending you round a loop that cannot help. |
-| `/login` inside the chat does nothing | Correct. A login reaches the network and waits on a person, which is everything a slash command must not do. It is a shell verb beside `init`. See [adr/0032](../adr/0032-a-login-is-a-cli-verb-and-its-credential-lives-in-one-auth-store.md). |
-| A subscription is refused for a provider other than OpenAI | Only the OpenAI pairing ships. Eva names the supported pair rather than failing vaguely. |
+| What you see                                                                       | What to do                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `No response — the credential was refused` and `run eva login`                     | There is no live login under `subscription`. Run `eva login`. Eva offers this step only after it has read the store and found nothing, so the step is a checked fact.                                                                           |
+| `No response — the credential was refused` with **no** next step, and a live login | Logging in again is not what this needs. Eva says so rather than sending you round a loop that cannot help.                                                                                                                                     |
+| `/login` inside the chat does nothing                                              | Correct. A login reaches the network and waits on a person, which is everything a slash command must not do. It is a shell verb beside `init`. See [adr/0032](../adr/0032-a-login-is-a-cli-verb-and-its-credential-lives-in-one-auth-store.md). |
+| A subscription is refused for a provider other than OpenAI                         | Only the OpenAI pairing ships. Eva names the supported pair rather than failing vaguely.                                                                                                                                                        |
 
 ## Related
 

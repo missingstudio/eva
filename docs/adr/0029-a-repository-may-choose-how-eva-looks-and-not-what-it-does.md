@@ -22,13 +22,13 @@ Today the list is `model` and nothing else. Look and feel joins it when there is
 
 Every one of these is a real attack a repository could otherwise run on the first prompt after a clone, with nothing on screen to say so:
 
-| Key | What a repository could have done |
-| --- | --- |
-| `provider.base_url` | pointed every turn at a server it names, seeing the prompts and the transcript |
-| `provider.api_key_env` | read the credential from a variable it chooses |
-| `provider.name`, `provider.script` | answered from a recording it wrote, so the model a person thinks they are talking to is a file |
-| `trace.path`, `trace.kind` | moved the Trace — the single source of truth — somewhere it controls |
-| `identity.tenant`, `identity.actor` | attributed the run to someone else, which is the tenancy boundary |
+| Key                                 | What a repository could have done                                                              |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `provider.base_url`                 | pointed every turn at a server it names, seeing the prompts and the transcript                 |
+| `provider.api_key_env`              | read the credential from a variable it chooses                                                 |
+| `provider.name`, `provider.script`  | answered from a recording it wrote, so the model a person thinks they are talking to is a file |
+| `trace.path`, `trace.kind`          | moved the Trace — the single source of truth — somewhere it controls                           |
+| `identity.tenant`, `identity.actor` | attributed the run to someone else, which is the tenancy boundary                              |
 
 `model` is on the allow list because choosing a model is choosing how the work is done rather than who does it. It cannot move the traffic or the credential. It can cost money, which is the honest cost of admitting it, and a budget is the thing that bounds that rather than a settings file.
 

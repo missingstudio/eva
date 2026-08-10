@@ -78,12 +78,12 @@ environment variable named on the `env` line and nothing else.
 
 ## Troubleshooting
 
-| What you see | What it means |
-| --- | --- |
-| `No response — the credential was refused` | The key reached the provider and the provider rejected it. Eva names which variable it sent and stops there, because a revoked key, a wrong organisation, and a suspended account are identical from here. |
-| Eva refuses to start, naming a key | A typo in `config.toml`. A settings file that silently ignored what you wrote would be worse. Fix the named key. |
-| `auth status` reports a provider you did not choose | A project `.eva/config.toml` is in play. Run `eva auth status` from outside the repo to compare. |
-| The model name is rejected | Eva keeps no list of valid models, so this came from the provider. Check the name against the provider's own list. |
+| What you see                                        | What it means                                                                                                                                                                                              |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `No response — the credential was refused`          | The key reached the provider and the provider rejected it. Eva names which variable it sent and stops there, because a revoked key, a wrong organisation, and a suspended account are identical from here. |
+| Eva refuses to start, naming a key                  | A typo in `config.toml`. A settings file that silently ignored what you wrote would be worse. Fix the named key.                                                                                           |
+| `auth status` reports a provider you did not choose | A project `.eva/config.toml` is in play. Run `eva auth status` from outside the repo to compare.                                                                                                           |
+| The model name is rejected                          | Eva keeps no list of valid models, so this came from the provider. Check the name against the provider's own list.                                                                                         |
 
 ## Related
 
