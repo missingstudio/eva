@@ -11,17 +11,17 @@ part, and this page says which one to open.
 
 ## Where each thing is written
 
-| Document | Answers | Kind |
-| --- | --- | --- |
-| [tutorial/first-run.md](tutorial/first-run.md) | I have never run Eva. Show me. | Tutorial |
-| [how-to/](how-to/) | I need to do one specific thing. | How-to |
-| [explanation/the-ladder.md](explanation/the-ladder.md) | Why does a factory need five rungs nobody builds? | Explanation |
-| [explanation/the-primitive.md](explanation/the-primitive.md) | What is the one type, and why that shape? | Explanation |
-| [reference/architecture.md](reference/architecture.md) | What is the event schema, the adapter contract, the hook surface? | Reference |
-| [reference/platform.md](reference/platform.md) | How do tenancy, isolation, and billing work? | Reference |
-| [roadmap.md](roadmap.md) | What ships in which order, and what is the exit test? | Roadmap |
-| [../CONTEXT.md](../CONTEXT.md) | What does this word mean? | Glossary |
-| [decisions.md](decisions.md) | What has been decided, and why? | Decisions |
+| Document                                                     | Answers                                                           | Kind        |
+| ------------------------------------------------------------ | ----------------------------------------------------------------- | ----------- |
+| [tutorial/first-run.md](tutorial/first-run.md)               | I have never run Eva. Show me.                                    | Tutorial    |
+| [how-to/](how-to/)                                           | I need to do one specific thing.                                  | How-to      |
+| [explanation/the-ladder.md](explanation/the-ladder.md)       | Why does a factory need five rungs nobody builds?                 | Explanation |
+| [explanation/the-primitive.md](explanation/the-primitive.md) | What is the one type, and why that shape?                         | Explanation |
+| [reference/architecture.md](reference/architecture.md)       | What is the event schema, the adapter contract, the hook surface? | Reference   |
+| [reference/platform.md](reference/platform.md)               | How do tenancy, isolation, and billing work?                      | Reference   |
+| [roadmap.md](roadmap.md)                                     | What ships in which order, and what is the exit test?             | Roadmap     |
+| [../CONTEXT.md](../CONTEXT.md)                               | What does this word mean?                                         | Glossary    |
+| [decisions.md](decisions.md)                                 | What has been decided, and why?                                   | Decisions   |
 
 Open [the ladder](explanation/the-ladder.md) for the argument. Open
 [the roadmap](roadmap.md) for the build order. Open
@@ -32,15 +32,15 @@ Open [the ladder](explanation/the-ladder.md) for the argument. Open
 This page was one document of six numbered Parts until 2026-08-10. Earlier ADRs cite
 those numbers, and nothing in `adr/` is ever rewritten, so the mapping stays here:
 
-| Cited as | Now |
-| --- | --- |
-| Part 0 — The frame | [explanation/the-ladder.md](explanation/the-ladder.md) |
-| Part 1 — The primitive | [explanation/the-primitive.md](explanation/the-primitive.md) |
-| Part 2 — Target architecture | [reference/architecture.md](reference/architecture.md) |
-| Part 3 — Production platform | [reference/platform.md](reference/platform.md) |
-| Part 4 — The build path, and every stage number | [roadmap.md](roadmap.md) |
-| Part 5 — Sequencing rules, and the rule numbers | [explanation/the-ladder.md](explanation/the-ladder.md) |
-| The final-repo-shape section | [reference/architecture.md](reference/architecture.md) |
+| Cited as                                        | Now                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| Part 0 — The frame                              | [explanation/the-ladder.md](explanation/the-ladder.md)       |
+| Part 1 — The primitive                          | [explanation/the-primitive.md](explanation/the-primitive.md) |
+| Part 2 — Target architecture                    | [reference/architecture.md](reference/architecture.md)       |
+| Part 3 — Production platform                    | [reference/platform.md](reference/platform.md)               |
+| Part 4 — The build path, and every stage number | [roadmap.md](roadmap.md)                                     |
+| Part 5 — Sequencing rules, and the rule numbers | [explanation/the-ladder.md](explanation/the-ladder.md)       |
+| The final-repo-shape section                    | [reference/architecture.md](reference/architecture.md)       |
 
 ## What later decisions override here
 
@@ -50,11 +50,11 @@ and now lives in [`adr/0001`](adr/) to `adr/0008`, which own the reasoning.
 
 Three further decisions override this document:
 
-| Decision | What it fixes |
-| --- | --- |
-| [`adr/0009`](adr/0009-config-and-profiles-are-toml.md) | Config and profiles are TOML, decoded strictly |
-| [`adr/0010`](adr/0010-core-is-pure-so-io-lives-beside-it.md) | The layer graph, which differs from the tree in [reference/architecture.md](reference/architecture.md) |
-| [`adr/0021`](adr/0021-the-repository-is-one-module-and-internal-is-the-default.md) | One module, with those layers under `internal/` |
+| Decision                                                                           | What it fixes                                                                                          |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [`adr/0009`](adr/0009-config-and-profiles-are-toml.md)                             | Config and profiles are TOML, decoded strictly                                                         |
+| [`adr/0010`](adr/0010-core-is-pure-so-io-lives-beside-it.md)                       | The layer graph, which differs from the tree in [reference/architecture.md](reference/architecture.md) |
+| [`adr/0021`](adr/0021-the-repository-is-one-module-and-internal-is-the-default.md) | One module, with those layers under `internal/`                                                        |
 
 Where this document and an ADR disagree, the ADR wins.
 
@@ -64,10 +64,7 @@ Where this document and an ADR disagree, the ADR wins.
 with the layers under `internal/`. Keep imports between layers one-way. Every code
 sketch in these documents is Go.
 
-**Name: Eva.** Decided on 2026-08-08. The other candidates collide with names in the
-same niche. **Tau** is twotimespi.dev's educational coding agent (`tau_ai`,
-`tau_agent`, `tau_coding`). **Neo** is owainlewis/neo, an MIT-licensed Go coding
-agent paired with owainlewis/factory. Eva collides with no coding agent and no
+**Name: Eva.** Decided on 2026-08-08. Eva collides with no coding agent and no
 factory. The nearest names are a voice-agent eval framework, a pentest agent, and an
 Emacs assistant. Eva also reads as *eval* and *evidence*, which fits a
 verifier-centric factory.
