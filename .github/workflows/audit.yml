@@ -1,0 +1,128 @@
+name: Audit
+
+# The dependency graph: what Eva inherited rather than what it wrote. gosec, which
+# reads Eva's own code, is security.yml.
+#
+# This is the one workflow in the repository with a schedule, and it is the only
+# one that earns one. A vulnerability is published on somebody else's timetable,
+# so a dependency's verdict changes while the tree does not. Without a clock, a
+# repository that sits quiet for three weeks reports green for three weeks and
+# means "green as of the last time anyone happened to push". The schedule's
+# period sets the worst case: a vulnerability published just after a run goes
+# unseen for one period, unless somebody pushes in the meantime.
+#
+# That is not hypothetical here. The first scan of this repository found two
+# reachable vulnerabilities, and nothing had been watching for them.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Mondays at 07:23 UTC, the morning Dependabot also opens its grouped pull
+    # requests. The week's dependency news then arrives together: what needs
+    # bumping, and what is already known to be exploitable. An odd minute,
+    # because everything scheduled on the hour queues behind everything else
+    # scheduled on the hour.
+    #
+    # This line and the README's workflow table are the only two places the
+    # cadence is written. Everything else says "on a schedule", so changing it
+    # here does not leave a dozen comments claiming otherwise.
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -mod=readonly
+  GOTOOLCHAIN: local
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  audit:
+    name: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Integrity first, and cheaply: a module graph that drifted from the
+      # imports, and a module cache whose content no longer matches go.sum.
+      - run: make tidy-check
+      - run: make mod-verify
+
+      # Then the database. govulncheck reports by reachable symbol rather than by
+      # module version, so a vulnerability in code Eva never calls does not fail
+      # this — which is what makes it a gate instead of a wall of noise.
+      - run: make vuln
+
+  # A scheduled failure emails the last person who committed to the default
+  # branch, which is not a channel anyone watches. This files it where the project
+  # keeps its work instead: GitHub issues, per docs/agents/issue-tracker.md.
+  # Without it a scheduled red is a red square on a page nobody opens, and a gate
+  # that reports to nobody is a gesture.
+  #
+  # Only on the schedule. A failure on a pull request is already in front of the
+  # person who caused it.
+  report:
+    name: report
+    if: failure() && github.event_name == 'schedule'
+    needs: [audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: File the failure where the project keeps its work
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: The scheduled audit is failing
+        run: |
+          set -eu
+
+          # It comments on the open report rather than filing a second one, so a
+          # vulnerability that stays unfixed for a week is one issue with seven
+          # notes. Matched on the exact title rather than through a label,
+          # because a label that does not exist yet would turn this into a
+          # second failure.
+          existing=$(gh issue list --state open --limit 100 --json number,title \
+            --jq "[.[] | select(.title == \"$TITLE\")][0].number // empty")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Still failing: $RUN_URL"
+            echo "commented on #$existing"
+            exit 0
+          fi
+
+          cat > /tmp/audit-failure.md <<BODY
+          The scheduled audit failed.
+
+          $RUN_URL
+
+          Nothing in the tree changed, so this is a vulnerability published
+          against a dependency Eva already had. The run names the advisory and
+          the call path that reaches it.
+
+          The fix is usually a version bump. Where no fixed version exists, the
+          suppression names the ID, the reason, the person, and a review date —
+          a suppression with no date is a permanent silence dressed as a
+          decision.
+          BODY
+
+          gh issue create --title "$TITLE" --body-file /tmp/audit-failure.md
+          echo "opened a new issue"

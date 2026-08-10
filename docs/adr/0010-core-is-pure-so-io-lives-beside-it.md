@@ -24,12 +24,12 @@ status: accepted, packaging superseded by 0021
 
 Everything that does reach outside sits in its own module beside `core`:
 
-| Module | Holds | May import |
-| --- | --- | --- |
-| `events` | the Event schema and its codec | standard library only |
-| `core` | domain types, the loop, Session and turn logic, and the interfaces — including the `TraceSink` **interface** | events, `context` |
-| `config` | TOML loading, key resolution, model selection | events, core, stdlib, toml |
-| `providers` | the `Provider` interface, Anthropic, the fake Provider | events, core, stdlib, the Anthropic SDK, toml |
+| Module      | Holds                                                                                                        | May import                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `events`    | the Event schema and its codec                                                                               | standard library only                         |
+| `core`      | domain types, the loop, Session and turn logic, and the interfaces — including the `TraceSink` **interface** | events, `context`                             |
+| `config`    | TOML loading, key resolution, model selection                                                                | events, core, stdlib, toml                    |
+| `providers` | the `Provider` interface, Anthropic, the fake Provider                                                       | events, core, stdlib, the Anthropic SDK, toml |
 
 The `providers` row is no longer current: the fake Provider was retired and `toml` left that allow list with it, so the layer that reads a file format is once again only the layer that reads the configuration. The rest of the table stands.
 | `trace` | the JSONL sink — the `TraceSink` **implementation** | events, core, stdlib |

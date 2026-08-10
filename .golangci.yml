@@ -11,7 +11,7 @@ version: "2"
 linters:
   enable:
     - depguard
-
+    
   settings:
     depguard:
       rules:
@@ -468,3 +468,60 @@ linters:
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/cli
+
+    # gosec, whose findings on this tree were read one at a time. Two rules are
+    # wrong about this program everywhere, so they are off everywhere. The rest
+    # are dispositioned per file in the exclusions below.
+    gosec:
+      excludes:
+        # Integer overflow on a conversion. Every hit constructs a wire
+        # position in a test, from a loop counter that cannot reach the range
+        # the rule is worried about.
+        - G115
+        # A weak random number generator. The two callers are retry jitter and
+        # picking a caption, and a cryptographic generator would be wrong for
+        # both: one wants a spread, the other wants a word.
+        - G404
+
+  # Exclusions are narrow on purpose. A blanket `gosec: false` would be shorter
+  # and would tell the next reader nothing about which findings were read and
+  # judged. What these buy is the ninth finding, in a file where the first eight
+  # were understood.
+  exclusions:
+    rules:
+      # A test constructs the conditions it needs, including a subprocess, a
+      # temporary file, and a slice index the rule cannot see the bound of.
+      - path: _test\.go$
+        linters: [gosec]
+      - path: internal/trace/tracetest/
+        linters: [gosec]
+
+      # G101 flags the names ANTHROPIC_API_KEY and OPENAI_API_KEY as though they
+      # were the keys. They are the variables a credential is read from, which
+      # is the one place a secret is allowed to enter.
+      #
+      # G703 flags the configuration and trace paths as tainted. Each is built
+      # from the user's own home directory, and each file is written 0o600.
+      - path: internal/config/config\.go$
+        linters: [gosec]
+        text: "G101|G703"
+
+      # The auth store exists to hold a token, and its file is the one place a
+      # subscription Credential lives. See ADR 0032.
+      - path: internal/auth/store\.go$
+        linters: [gosec]
+        text: "G117"
+
+      # One reads .git/HEAD to name the branch. The other opens the Trace the
+      # configuration named, append-only and 0o600, which is the whole job of a
+      # sink. Both are deliberate, and both say so where they are written.
+      - path: (internal/cli/about|internal/trace/sink)\.go$
+        linters: [gosec]
+        text: "G304"
+
+# A capped count understates exactly the rules that fire most, which are the
+# ones a policy has to cover. The first audit of this repository read 19 gosec
+# findings where there were 29, because of the default cap of three per rule.
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0

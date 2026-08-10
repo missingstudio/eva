@@ -55,6 +55,7 @@ USAGE:
   eva login              Log in to an OpenAI ChatGPT/Codex subscription
   eva auth status        Show how each turn authenticates
   eva init               Write a starter configuration
+  eva version            Show the build, the toolchain, and the platform
   eva help               Show this help
 
 FLAGS:
@@ -126,6 +127,9 @@ type options struct {
 	// authStatus says the run reports how a turn would authenticate and
 	// leaves.
 	authStatus bool
+	// version says the run reports what build it is and leaves. A word rather
+	// than a flag, beside init and login, because it is a thing to do.
+	version bool
 	// prompt is one turn asked from the command line. It is empty for the
 	// console, which is what eva is with nothing to answer.
 	prompt string
@@ -157,6 +161,9 @@ func parse(args []string) (options, error) {
 			}
 			opts.authStatus = true
 			args = args[2:]
+		case "version":
+			opts.version = true
+			args = args[1:]
 		}
 	}
 	fs := flag.NewFlagSet("eva", flag.ContinueOnError)
@@ -183,6 +190,13 @@ func parse(args []string) (options, error) {
 // failure the turn itself did not see. A Trace that failed to flush is not a
 // successful run, whatever the turn claimed.
 func run(ctx context.Context, opts options, stdin io.Reader, stdout, stderr io.Writer) (code int, err error) {
+	// First of all, and before any file is read. What build this is has to be
+	// answerable on a machine where nothing else works yet, because that is the
+	// machine whose owner is about to file the report.
+	if opts.version {
+		return versionReport(stdout)
+	}
+
 	// Before the configuration is read, because writing one is what a person
 	// does when they have none — and a starter run that first insisted on a
 	// valid file would be a command nobody could use for its own purpose.

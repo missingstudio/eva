@@ -1,0 +1,160 @@
+name: Release
+
+# A tag is the trigger, and it is the only one. Everything below runs on the
+# tag's own commit.
+#
+# Every gate runs before anything is published. A failed gate leaves no release
+# and no artifact. The tag stays, because a tag is a fact about history and
+# deleting it would rewrite the record — a bad tag is answered by the next tag.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancelled. A release run stopped half way has already published some
+  # of what it built.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOFLAGS: -mod=readonly
+  GOTOOLCHAIN: local
+
+jobs:
+  # Every gate, on the tag's commit, by calling the files that define them rather
+  # than restating them. A release cannot then be the one run that checked less
+  # than a pull request does.
+  #
+  # All three, because a release that skipped the security or the dependency gate
+  # would be a release nobody checked those things on.
+  checks:
+    name: checks
+    uses: ./.github/workflows/ci.yml
+
+  security:
+    name: security
+    uses: ./.github/workflows/security.yml
+
+  audit:
+    name: audit
+    uses: ./.github/workflows/audit.yml
+
+  # What only a release can get wrong.
+  guard:
+    name: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The tag agrees with the constant, or nothing is published.
+      #
+      # The comparison asks the program rather than reading its source, because
+      # what ships is the binary's answer. A grep over a const line would agree
+      # with a file while the built program said something else.
+      - name: Assert the tag matches the version the binary reports
+        run: |
+          set -eu
+          make eva
+          reported=$(./eva version | awk '/^eva:/ { print $2 }')
+          # Strip the build metadata: 0.1.0+abc1234 is the same version as 0.1.0.
+          built="${reported%%+*}"
+          tag="${GITHUB_REF_NAME#v}"
+          echo "tag=$tag  binary=$built  (reported $reported)"
+          if [ "$tag" != "$built" ]; then
+            echo "the tag says $tag and the binary says $built" >&2
+            echo "internal/cli.Version is the source of truth; the tag agrees with it" >&2
+            exit 1
+          fi
+
+      # A tag pointing where the last one did has nothing to release, and an
+      # empty changelog is how that mistake reaches a user.
+      - name: Assert this tag has commits behind it
+        run: |
+          set -eu
+          previous=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          if [ -z "$previous" ]; then
+            echo "no earlier tag, so this is the first release and the range is the history"
+            exit 0
+          fi
+          n=$(git rev-list --count "$previous..${GITHUB_REF_NAME}")
+          echo "$n commit(s) since $previous"
+          if [ "$n" -eq 0 ]; then
+            echo "$GITHUB_REF_NAME points where $previous does, so there is nothing to release" >&2
+            exit 1
+          fi
+
+  release:
+    name: release
+    needs: [checks, security, audit, guard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # To create the release and upload its assets.
+      contents: write
+      # For cosign's keyless signing and the provenance attestation. Both use
+      # this workflow's own OIDC identity, which is why neither needs a secret.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The changelog is a fold over the commits since the previous tag, so
+          # the whole history has to be here for it to be complete.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # syft writes the SBOMs, cosign signs the checksum file. Both are binaries
+      # GoReleaser shells out to, so both are installed before it runs.
+      - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # The same pinned version `make snapshot` runs, so what publishes here is
+      # what a person can build locally without a tag.
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          # Read the pin out of the Makefile rather than restating it here. Two
+          # copies of a version is one of them going stale.
+          version=$(sed -n 's/^GORELEASER_VERSION[[:space:]]*?=[[:space:]]*//p' Makefile)
+          test -n "$version"
+          echo "goreleaser $version"
+          go run "github.com/goreleaser/goreleaser/v2@$version" release --clean
+
+      # Proves which workflow built each archive, from which commit. Verified
+      # with `gh attestation verify <archive> --repo missingstudio/eva`.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+
+      # Kept for the length of a debugging session, separately from the release
+      # itself, so a failed publish still leaves the evidence of what was built.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: dist
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt*
+            dist/*.sbom.json
+          retention-days: 14
+          if-no-files-found: warn
