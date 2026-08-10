@@ -2,6 +2,7 @@
 /eva
 *.test
 *.out
+/dist/
 
 # Local trace and config, which the sink and config loader will write
 .eva/
