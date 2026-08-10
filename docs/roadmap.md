@@ -1,9 +1,5 @@
 # The build path
 
-> **Status: draft.** This describes what Eva will be, not what it is.
-> Only stage 0 is built. Where this and an ADR in [`adr/`](adr/) disagree,
-> the ADR wins. Verification basis: the tip of `main` on 2026-08-09.
-
 Nineteen stages. Each ships a working CLI, adds one primitive, and has an exit
 test it can fail. You may not start stage N+1 until stage N's exit test passes.
 
@@ -313,9 +309,9 @@ This stage is here for two reasons. Hooks need the event stream (stage 6) to sub
 
 ```
 exthost/
-  hooks/        the HookBus: ~12 versioned lifecycle points; observe | decision
-                {allow|deny|ask|defer} | updatedInput | updatedResult;
-                additionalContext on any event
+  hooks/        the Hooks surface: ~12 versioned lifecycle points; observe |
+                decision {allow|deny|ask|defer} | updatedInput |
+                updatedResult; additionalContext on any event
   handlers/     command | http | mcp_tool | model — WHAT a hook is, orthogonal to
                 the runtime tier (HOW it is transported)
   monitors/     background push channel (RegisterMonitor): stdout lines of a

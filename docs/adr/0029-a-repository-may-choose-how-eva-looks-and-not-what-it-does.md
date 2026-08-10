@@ -12,7 +12,7 @@ Look and feel is the thing a team most wants to share and least wants to retype:
 
 ## Why the list is an allow list
 
-`.eva/` in a cloned repository is content from the internet. Product.md puts it in the same category as a fetched web page — a prompt-injection surface, not a convenience feature — and the threat is not hypothetical: a settings file is read before the first prompt, by a process holding a credential.
+`.eva/` in a cloned repository is content from the internet. product.md puts it in the same category as a fetched web page — a prompt-injection surface, not a convenience feature — and the threat is not hypothetical: a settings file is read before the first prompt, by a process holding a credential.
 
 A deny list would admit every key added after it was written. That is the one failure mode a trust boundary cannot have, because the key that gets added is the one nobody thought about. So the question is not which keys are dangerous but which are known to be safe, and a setting added later is refused until someone decides otherwise.
 

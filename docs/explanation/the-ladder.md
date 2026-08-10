@@ -1,44 +1,57 @@
 # The ladder, and the order you climb it
 
-> **Status: draft.** This describes what Eva will be, not what it is.
-> Only stage 0 is built. Where this and an ADR in [`../adr/`](../adr/) disagree,
-> the ADR wins. Verification basis: the tip of `main` on 2026-08-09.
+Why a model does not become a factory by adding agents, what each of the ten
+rungs holds, and what breaks where one of them is not built. Read this before
+the roadmap.
 
-Why a model does not become a factory by adding agents, which five rungs the
-usual story skips, and what each omission breaks. Read this before the roadmap.
+## The ten rungs
 
-## The ladder, with its missing rungs
-
-The usual chain is model → agent → harness → factory → company. This chain skips five rungs. Each omission is a known failure mode. The full ladder is below.
+A model becomes a company across ten rungs, climbed in order.
 
 **model → workflow → agent → environment + verifier → harness → scheduler + spec → factory → learning loop + economics → intent + authority → company**
 
-|     | Rung                                      | What it is                                        |
-| --- | ----------------------------------------- | ------------------------------------------------- |
-| 1   | **Model**                                 | a next-token function, no state                   |
-| 2   | **Workflow** *(missing)*                  | code holds the control flow                       |
-| 3   | **Agent**                                 | model holds the control flow                      |
-| 4   | **Environment + verifier** *(missing)*    | sandbox, tests, a cheap oracle                    |
-| 5   | **Harness**                               | context, tools, policy, budget                    |
-| 6   | **Scheduler + spec format** *(missing)*   | work queue, machine-checkable acceptance criteria |
-| 7   | **Software factory**                      | parallel agents, merge queue                      |
-| 8   | **Learning loop + economics** *(missing)* | evals, cost per merged change                     |
-| 9   | **Intent + authority** *(missing)*        | who decides, who is liable                        |
-| 10  | **Autonomous company**                    | sets and funds its own goals                      |
+|     | Rung                          | What it is                                        |
+| --- | ----------------------------- | ------------------------------------------------- |
+| 1   | **Model**                     | a next-token function, no state                   |
+| 2   | **Workflow**                  | code holds the control flow                       |
+| 3   | **Agent**                     | model holds the control flow                      |
+| 4   | **Environment + verifier**    | sandbox, tests, a cheap oracle                    |
+| 5   | **Harness**                   | context, tools, policy, budget                    |
+| 6   | **Scheduler + spec format**   | work queue, machine-checkable acceptance criteria |
+| 7   | **Software factory**          | parallel agents, merge queue                      |
+| 8   | **Learning loop + economics** | evals, cost per merged change                     |
+| 9   | **Intent + authority**        | who decides, who is liable                        |
+| 10  | **Autonomous company**        | sets and funds its own goals                      |
 
-**Model → Agent skips the workflow.** The difference is not smart against dumb. The difference is *who owns the control flow*. Most agent failures are workflows given to the model too early.
+**1 → 2.** A model holds no state, so something outside it has to hold the sequence. Code holds it first, because code is the cheapest thing to correct.
 
-**Agent → Harness skips the environment and the verifier.** An agent depends on two things: the world it acts in, and the signal that tells it that it is wrong. Agents converge when a cheap oracle exists. Agents fail when no oracle exists, even with a strong model.
+**2 → 3.** The control flow changes hands. The difference between a workflow and an agent is *who owns it*, not smart against dumb, so hand it over only where the steps could not have been written in advance. Most agent failures are a workflow handed over too early.
 
-**Harness → Factory skips the scheduler and the spec format.** A factory is not "more agents". A factory is a durable queue plus a machine-readable work item. A ticket written for a human is not a spec. It has no criteria that a machine can check.
+**3 → 4.** An agent that cannot be told that it is wrong does not converge. The oracle has to be cheap, because it runs on every attempt.
 
-**Factory → Company skips two rungs.** A factory consumes specs. A company generates specs, and answers for them.
+**4 → 5.** A verified agent still has no bounds. The harness is where tokens, dollars, wall clock, and permission stop being good intentions.
+
+**5 → 6.** One bounded run is not a queue. A ticket written for a human is not a spec either — it carries no criteria that a machine can check — so the queue and the spec format arrive together or neither works.
+
+**6 → 7.** Only now is "more agents" worth anything. Parallel work needs a merge queue, because eight branches that never land are just eight branches.
+
+**7 → 8.** A factory that cannot measure itself improves nothing. Evals say whether a change was an improvement, and the cost per merged change says whether it can be sold.
+
+**8 → 9.** The specs still arrive from outside. Someone has to decide which work is worth doing, and answer for it when it was not.
+
+**9 → 10.** The goals stop arriving from outside. A factory consumes specs; a company generates them, and funds them.
 
 ## The law
 
 The whole ladder is one loop. The loop repeats at longer timescales: token (ms) → task (minutes) → session (hours) → change (days) → product (months).
 
-**Every rung is missing the same three things at that rung's timescale: a verifier, a memory, and a delegated authority.**
+**Every rung needs the same three things at its own timescale: a verifier, a memory, and a delegated authority.**
+
+**A verifier** — what says the work at that timescale was right. It is the one thing that does not compose upward. Passing unit tests do not add up to a healthy product, so each rung has to invent its own oracle, which is the real work of climbing ([the primitive](the-primitive.md)).
+
+**A memory** — what the next pass at that timescale reads. The Trace is Eva's, at every timescale, which is why invariant 1 admits no quick path around it.
+
+**A delegated authority** — who may decide at that timescale, and how far. The budget is where that stops being a matter of trust, and `NeedsHuman(reason)` is what happens at the edge of it.
 
 ## Invariants — hold these from the first commit
 
@@ -61,20 +74,19 @@ The schema is now settled: see `docs/adr/0001`–`0008` for the decisions and Pa
 
 ---
 
-1. **Stages 0–2 take one weekend each.** Do not try to make them elegant.
-2. **Over-invest in stage 5.** The verifier sets the ceiling for everything above it. Agents converge where a good oracle exists. Agents fail where no oracle exists, whatever the model.
-3. **Stage 8 feels like overhead.** It is also the reason that stages 9–12 are possible at all.
-4. **Stages 3, 6, and 7 can be shallow, and you can deepen them later. Stages 4, 5, 6.5, 8, and 10 cannot.** For those stages, shallow means that you rebuild them. A shallow stage 6.5 means that you rebuild it *and break the ecosystem*: a published hook API is a promise to other people's code.
-5. **Do not build adapters before stage 8.** You can discover the adapter interface only after you know what a good harness needs. If you start pluralistic, you get the union of everyone's failure modes and the ability to fix none.
-6. **Do not let the dashboard become the source of truth.** Traces are.
-7. **Do not ship remote workers before the sandbox is real.** Stage 4 is a hard prerequisite for 9b.
-8. **Do not normalize what a harness does not emit.** Fabricated cost data or trace data poisons the eval suite, the one instrument that you have. Mark it degraded and exclude it.
-9. **Keep local and remote on one code path.** If local is a special case, half of your system stays untested until the day when you need it most.
-10. **Rent the sandbox layer for the first year.** Your own microVM orchestration is a year of work, and no customer pays extra for it.
-11. **Dogfood the hook API.** Build as an extension every Eva feature that an extension can express. If an extension cannot express it, correct the API, not the feature. And freeze the API only after stage 8 exercises it. This is the same logic as rule 5: you discover interfaces, you do not design them.
-12. **A product concept must earn its place through operator behaviour, not through speculative reuse.** This is factory's rule, learned when they shipped eight nouns and collapsed them to five. The operator-facing vocabulary stays small — spec, run, job, worker, mandate — and attempts, leases, and admission records stay implementation detail inside them.
-13. **Fail closed, fail loud.** Workspace cleanup deletes only the work that is provably clean and published. It keeps dirty, failed, or uncertain work for inspection. A removed config key fails with migration guidance. The system never ignores it silently. When a value hits a bound, the system rejects it visibly. It never truncates silently.
-14. **The docs are part of the factory.** Each design doc carries a status header (implemented | draft | superseded — do not implement) and a verification-basis commit. Each opinion carries a falsifier ("this changes if…"). The repo's AGENTS.md points agents at these docs. It tells them to update the docs in the same commit as a behaviour change. The workers of this factory are agents.
+1. **Over-invest in stage 5.** The verifier sets the ceiling for everything above it. Agents converge where a good oracle exists. Agents fail where no oracle exists, whatever the model.
+2. **Stage 8 feels like overhead.** It is also the reason that stages 9–12 are possible at all.
+3. **Stages 3, 6, and 7 can be shallow, and you can deepen them later. Stages 4, 5, 6.5, 8, and 10 cannot.** For those stages, shallow means that you rebuild them. A shallow stage 6.5 means that you rebuild it *and break the ecosystem*: a published hook API is a promise to other people's code.
+4. **Do not build adapters before stage 8.** You can discover the adapter interface only after you know what a good harness needs. If you start pluralistic, you get the union of everyone's failure modes and the ability to fix none.
+5. **Do not let the dashboard become the source of truth.** Traces are.
+6. **Do not ship remote workers before the sandbox is real.** Stage 4 is a hard prerequisite for 9b.
+7. **Do not normalize what a harness does not emit.** Fabricated cost data or trace data poisons the eval suite, the one instrument that you have. Mark it degraded and exclude it.
+8. **Keep local and remote on one code path.** If local is a special case, half of your system stays untested until the day when you need it most.
+9.  **Rent the sandbox layer for the first year.** Your own microVM orchestration is a year of work, and no customer pays extra for it.
+10. **Dogfood the hook API.** Build as an extension every Eva feature that an extension can express. If an extension cannot express it, correct the API, not the feature. And freeze the API only after stage 8 exercises it. This is the same logic as rule 5: you discover interfaces, you do not design them.
+11. **A product concept must earn its place through operator behaviour, not through speculative reuse.** This is factory's rule, learned when they shipped eight nouns and collapsed them to five. The operator-facing vocabulary stays small — spec, run, job, worker, mandate — and attempts, leases, and admission records stay implementation detail inside them.
+12. **Fail closed, fail loud.** Workspace cleanup deletes only the work that is provably clean and published. It keeps dirty, failed, or uncertain work for inspection. A removed config key fails with migration guidance. The system never ignores it silently. When a value hits a bound, the system rejects it visibly. It never truncates silently.
+13. **The docs are part of the factory.** Every design doc has a status — implemented, draft, or superseded — and a verification-basis commit. Both are written once, in `docs/product.md`, so a stage that ships resets one line rather than six. Each opinion carries a falsifier ("this changes if…"). The repo's AGENTS.md points agents at these docs. It tells them to update the docs in the same commit as a behaviour change. The workers of this factory are agents.
 
 ## Risks, ranked by how badly they end you
 

@@ -1,9 +1,5 @@
 # Production platform
 
-> **Status: draft.** This describes what Eva will be, not what it is.
-> Only stage 0 is built. Where this and an ADR in [`../adr/`](../adr/) disagree,
-> the ADR wins. Verification basis: the tip of `main` on 2026-08-09.
-
 Tenancy, execution isolation, the three compute modes, security and
 compliance, billing, and deployment topology.
 

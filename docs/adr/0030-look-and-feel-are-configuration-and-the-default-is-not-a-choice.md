@@ -14,7 +14,7 @@ Both sentences are true of a *first run*, and neither is an argument against a f
 
 ## Why the policy could not stand
 
-Eva's frontends are an extension point. Product.md's stage 6.5 publishes `RegisterRenderer` and names themes in a package manifest; a harness whose interface is meant to be extended by people who did not write it cannot hold "nothing about that interface is configurable" as a permanent rule.
+Eva's frontends are an extension point. product.md's stage 6.5 publishes `RegisterRenderer` and names themes in a package manifest; a harness whose interface is meant to be extended by people who did not write it cannot hold "nothing about that interface is configurable" as a permanent rule.
 
 The narrower reason is that the policy was already being paid for. `ui.Subdued` exists — exported, with a comment explaining that the console cannot name the grey without importing the fold — because one colour had to be named in two packages. That is the shape of a missing type.
 

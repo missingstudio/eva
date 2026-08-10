@@ -60,15 +60,20 @@ Notice `cost unreported`. Neither Anthropic nor OpenAI returns a dollar figure w
 
 Eva is being built toward a control plane for coding agents. Work arrives as a spec with acceptance criteria a machine can check. Several harnesses race the same spec in isolated environments. A verifier Eva owns decides what actually passed, and the whole race is scored from the same record everything else is scored from.
 
-The reason for building the foundation this carefully first is the ladder in [docs/explanation/the-ladder.md](docs/explanation/the-ladder.md). The usual story goes model → agent → harness → factory. That chain skips five rungs, and each omission is a known way this fails:
+The reason for building the foundation this carefully first is the ladder in [docs/explanation/the-ladder.md](docs/explanation/the-ladder.md): ten rungs from a model to a company, climbed in order. Every step adds the one thing the rung below it cannot do, so every step you don't take is a way this fails.
 
-| The rung that gets skipped    | What breaks without it                                           |
+| Rung                          | What breaks without it                                           |
 | ----------------------------- | ---------------------------------------------------------------- |
+| **Model**                     | —                                                                |
 | **Workflow**                  | Control flow is handed to the model before the model can hold it |
+| **Agent**                     | Nothing adapts. Every path has to be written in advance          |
 | **Environment + verifier**    | Nothing tells the agent it is wrong, so it never converges       |
+| **Harness**                   | A run has no bounds — no budget, no policy, no tools it may use  |
 | **Scheduler + spec format**   | More agents is not a factory. A factory needs a queue and a spec |
+| **Software factory**          | Work stays one at a time                                         |
 | **Learning loop + economics** | No evals, and no cost per merged change                          |
 | **Intent + authority**        | Nobody owns what was decided, and nobody answers for it          |
+| **Autonomous company**        | —                                                                |
 
 Nineteen stages, each with an exit test it can fail. One of them is built. The plan is a draft; the stage that shipped is not.
 
@@ -355,7 +360,7 @@ Tests drive the real Anthropic and OpenAI code against a local server speaking t
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | [docs/tutorial/first-run.md](docs/tutorial/first-run.md)             | Build it, ask one question, then read that question back out of the trace.                |
 | [docs/how-to/](docs/how-to/)                                         | One guide per task: providers, subscriptions, scripting, the trace, repo themes.          |
-| [docs/Product.md](docs/Product.md)                                   | The map to every design document. Start here to find the rest.                            |
+| [docs/product.md](docs/product.md)                                   | The map to every design document. Start here to find the rest.                            |
 | [docs/roadmap.md](docs/roadmap.md)                                   | The plan. Nineteen stages, each with a test it can fail. Draft.                           |
 | [docs/decisions.md](docs/decisions.md)                               | Every decision on one page, grouped by topic. Start here.                                 |
 | [docs/adr/](docs/adr/)                                               | The decisions in full, one file each. The filename is the decision, so `ls` is the index. |
