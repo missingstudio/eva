@@ -15,7 +15,8 @@ A model client with a good terminal.
 
 ```
 go.mod        the module, plus the Makefile and .golangci.yml that gate it.
-              `make check` = fmt, build, vet, lint, test across every package.
+              `make verify` = `make check` (fmt, build, vet, lint, test across
+              every package) plus `make audit` (tidy-check, mod-verify, vuln).
               Ships FIRST, as the prefactor: every later ticket then lands
               against checks that already run. See docs/adr/0021.
 
