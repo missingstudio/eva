@@ -4,9 +4,9 @@ status: accepted
 
 # The Event envelope carries everything needed to fold or filter
 
-Every Event carries `ID`, `Seq`, `At`, `SchemaVersion`, `Kind`, `Tenant`, `Actor`, `Run`, `Session`, and `Parent` on the envelope; per-kind payloads carry only what is specific to the kind. The rule is: anything a projection needs in order to **fold or filter** goes on the envelope, and anything it only needs in order to **display** goes in the payload.
+Every Event carries `ID`, `Seq`, `At`, `SchemaVersion`, `Kind`, `Tenant`, `Actor`, `Run`, `Session`, and `Parent` on the envelope; per-kind payloads carry only what is specific to the kind. The rule is: anything a projection needs to **fold or filter** goes on the envelope, and anything it only needs to **display** goes in the payload.
 
-The draft design put run identity inside the `Started` payload, which would have made every other Event unattributable to a Run without replaying the stream from its start. Timestamps were absent entirely, though latency per step is required later. Tenant was absent, though tenancy must not be retrofitted.
+The draft design put run identity inside the `Started` payload, which would have made every other Event unattributable to a Run without replaying the stream from its start. Timestamps were absent entirely, though latency per step is needed later. Tenant was absent, though tenancy must not be retrofitted.
 
 ## Consequences
 

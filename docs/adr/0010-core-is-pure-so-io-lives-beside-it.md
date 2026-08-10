@@ -38,7 +38,7 @@ The `providers` row is no longer current: the fake Provider was retired and `tom
 Two entries in that table were widened after stage 0's spine landed, and are recorded here rather than left in a comment in the linter config:
 
 - `core` gets `context`, and only `context`. `TraceSink.Append` is a durable write and a durable write is cancellable; an interface that cannot carry cancellation forces every implementation to invent its own way. This is the friction working as intended — the allow list grew by one line, on purpose, for a stated reason.
-- `providers` gets `toml`. The fake Provider replays a recorded turn from a file and therefore reads one. The layer that reads files is `config`, but `config` may not import `providers`, and handing the recording through `core` would put a test fixture's shape into the pure domain. Reading its own recording is the smaller cost. **This widening has since been undone** — the Provider that needed it is gone, and the exception went with it.
+- `providers` gets `toml`. The fake Provider replays a recorded turn from a file and reads one. The layer that reads files is `config`, but `config` may not import `providers`, and handing the recording through `core` would put a test fixture's shape into the pure domain. Reading its own recording is the smaller cost. **This widening has since been undone** — the Provider that needed it is gone, and the exception went with it.
 
 Each module's rule also allows that module's own import path, which reaches nothing but the external test packages (`events_test`, `trace_test`) and the sub-packages of a module (`cli/render`, and the sub-packages of `providers`). A package cannot import itself, so the line widens nothing else.
 
@@ -50,7 +50,7 @@ Each module's rule also allows that module's own import path, which reaches noth
 
 By `depguard` inside golangci-lint, configured in `.golangci.yml`, and run by `make lint`.
 
-Every rule uses `list-mode: strict`, so an import is allowed only if it appears in that layer's allow list. The rules therefore **fail closed**: a dependency nobody considered is rejected rather than quietly permitted. Adding a line to an allow list is a deliberate act, and reviewing that line is how a layer's contract stays true.
+Every rule uses `list-mode: strict`, so an import is allowed only if it appears in that layer's allow list. So the rules **fail closed**: a dependency nobody considered is rejected rather than quietly permitted. Adding a line to an allow list is a deliberate act, and reviewing that line is how a layer's contract stays true.
 
 `core`'s allow list is deliberately almost empty — it does not include the standard library. Each standard-library package `core` comes to need is added on purpose by whoever needs it. That friction is the contract doing its job, and it is what makes "core is pure" checkable rather than aspirational.
 
@@ -81,4 +81,4 @@ Module paths appear in every import written afterwards, so this is expensive to 
 
 An outer module can always be added later without touching `core`. Moving something *out* of `core` later would break every importer, so the bias is to keep `core` smaller than feels necessary.
 
-A new layer must be given a rule in `.golangci.yml`. A layer with no rule falls through to depguard's default, which allows only the standard library — restrictive rather than permissive, so a forgotten rule fails loudly instead of silently. (Under 0021 the `go.work` entry this once also required is gone with the workspace.)
+A new layer must be given a rule in `.golangci.yml`. A layer with no rule falls through to depguard's default, which allows only the standard library — restrictive rather than permissive, so a forgotten rule fails loudly instead of silently. (Under 0021 the `go.work` entry this once also needed is gone with the workspace.)

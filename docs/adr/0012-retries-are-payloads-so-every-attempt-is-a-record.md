@@ -24,7 +24,7 @@ Retryability is decided beside the class rather than derived from it. An auth fa
 
 A server that said `retry-after` raises the wait and never lowers it. It knows what it is recovering from and this client does not, so a longer ask is obeyed — and a shorter one, or the `0` a server sends when it is being polite, must not turn the retry into a second request with no pause in front of it. The floor stays the jittered backoff.
 
-Beyond `Policy.Cap` the retries end and the failure is returned, because a caller that has been told the request failed can decide to come back, and a caller parked inside a Provider for minutes can decide nothing. The cap is therefore sized for what a rate limit actually asks for — a minute — rather than for what the backoff reaches, which is four seconds. A cap under that would have turned the commonest recoverable failure there is into a turn that never retried at all.
+Beyond `Policy.Cap` the retries end and the failure is returned, because a caller that has been told the request failed can decide to come back, and a caller parked inside a Provider for minutes can decide nothing. The cap is sized for what a rate limit actually asks for — a minute — rather than for what the backoff reaches, which is four seconds. A cap under that would have turned the commonest recoverable failure there is into a turn that never retried at all.
 
 ## Usage accumulates and emits once
 

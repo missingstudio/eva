@@ -40,9 +40,9 @@ Multi-context repo (presence of `CONTEXT-MAP.md` at the root):
 
 ## Use the glossary's vocabulary
 
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
+Use the term as defined in `CONTEXT.md` whenever your output names a domain concept. That covers an issue title, a refactor proposal, a hypothesis, and a test name. Don't drift to synonyms the glossary explicitly avoids.
 
-If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
+If the concept you need is not in the glossary yet, that is a signal. Either you are inventing language the project does not use — reconsider. Or there is a real gap: note it for `/domain-modeling`.
 
 ## Flag ADR conflicts
 

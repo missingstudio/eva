@@ -16,7 +16,7 @@ The cost of keeping it was not the two hundred lines. It was that a second imple
 
 A configuration can no longer name a file of recorded turns. What it can still do is point `provider.base_url` at a server of the operator's own, which is the same capability without a second Provider behind it — a gateway, a proxy, or a recording served over HTTP.
 
-`provider.script` is therefore refused by name rather than as a typo. A setting that was real and is gone reads exactly like a misspelling to a strict decoder, and the two want different answers: one person mistyped a setting they meant, the other is carrying a file forward across the version that took the setting away.
+`provider.script` is so refused by name rather than as a typo. A setting that was real and is gone reads exactly like a misspelling to a strict decoder, and the two want different answers: one person mistyped a setting they meant, the other is carrying a file forward across the version that took the setting away.
 
 ## Consequences
 

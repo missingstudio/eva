@@ -49,6 +49,6 @@ The alternative is a figure that outlives the Session it names, which is two con
 
 ## Considered options
 
-- **`Session.Clear()`, emptying the messages in place.** One line, and it keeps one identifier for what a person experiences as one console. Rejected: it is the second source of truth this design exists to prevent, and it would be undetectable — the Trace and the fold each look correct on their own.
+- **`Session.Clear()`, emptying the messages in place.** One line, and it keeps one identifier for what a person experiences as one console. Rejected: it is the second source of truth this design exists to stop, and it would be undetectable — the Trace and the fold each look correct on their own.
 - **A `Cleared` Event the Session folds as "empty from here".** Faithful to the fold, and it keeps the Session identifier. Rejected for now: it puts a console convenience into a settled event schema, and it needs a Run to be recorded against — a Run with no turn in it, which every projection would then have to know about. Worth revisiting if rewind wants a record of what was cut.
 - **Keep the cumulative spend across a clear.** Rejected: the word on the line is "session". A figure that means something else than the word beside it is worse than no figure.

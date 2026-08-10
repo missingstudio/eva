@@ -57,7 +57,7 @@ The larger gain is that a test can name the outside world. A Session opened with
 
 **`NewRecorder` stays exported.** It is the primitive, and `Open` is the deep interface over it. A Unit that one day needs a Recorder whose envelope the Session cannot supply — a Parent Run, at stage 2, when a tool call spawns one — has the primitive to reach for, and that is the moment to decide whether `Open` grows a parent or the Unit builds its own.
 
-**`cli` keeps minting the identifiers.** The prefixes, the entropy, and the monotonic origin are all the frontend's, as ADR 0010 requires. What changed is that it hands them over once instead of on every turn.
+**`cli` keeps minting the identifiers.** The prefixes, the entropy, and the monotonic origin are all the frontend's, as ADR 0010 needs. What changed is that it hands them over once instead of on every turn.
 
 **Falsifier:** this holds while a Run's envelope is a property of its Session. The first Run whose envelope differs from its Session's in something the Session cannot know — a Mandate narrower than the Session's, a tenant a sub-agent runs under — is a Run `Open` cannot stamp, and at that point either `Open` takes what differs or the caller goes back to the primitive. Revisit then rather than widening `Open` a field at a time until it is `RecorderOptions` again.
 

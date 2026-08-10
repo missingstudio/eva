@@ -4,7 +4,7 @@ status: accepted
 
 # Wire position and Trace position are two sequences, named apart
 
-There are two independent sequence numbers, and conflating them is the trap this ADR exists to prevent.
+There are two independent sequence numbers, and conflating them is the trap this ADR exists to stop.
 
 - **`WireSeq`** — assigned by the producer, per connection. It exists so a reconnecting peer can resume from its last acknowledged cursor and have the events after it replayed.
 - **`Seq`** — assigned by the **sink** at commit time, per Session. It is the Trace's own ordering.

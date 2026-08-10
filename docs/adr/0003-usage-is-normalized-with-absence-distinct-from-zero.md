@@ -15,7 +15,7 @@ Usage {
 }
 ```
 
-Two corrections to the draft drove this. The draft had a single `CachedInput` field, but a cache **write** costs more than base input while a cache **read** costs far less, so one field cannot compute cost — and cache-hit rate is the largest single lever on cost per task. The draft also required a reasoning-token field on the grounds that reasoning tokens are a material share of cost; Anthropic's `MessageUsage` reports only `InputTokens`, `OutputTokens`, `CacheCreationInputTokens`, `CacheReadInputTokens`, and `ServerToolUse`, and bills thinking tokens inside `OutputTokens`. The field is real and necessary for OpenAI-compatible providers, and unfillable for our primary one.
+Two corrections to the draft drove this. The draft had a single `CachedInput` field, but a cache **write** costs more than base input while a cache **read** costs far less, so one field cannot compute cost — and cache-hit rate is the largest single lever on cost per task. The draft also needed a reasoning-token field on the grounds that reasoning tokens are a material share of cost; Anthropic's `MessageUsage` reports only `InputTokens`, `OutputTokens`, `CacheCreationInputTokens`, `CacheReadInputTokens`, and `ServerToolUse`, and bills thinking tokens inside `OutputTokens`. The field is real and necessary for OpenAI-compatible providers, and unfillable for our primary one.
 
 ## Consequences
 
@@ -23,4 +23,4 @@ Nullability is load-bearing, not stylistic. `nil` means "the provider did not te
 
 `USD` is never populated with an estimate. Billing meters from provider-reported usage reconciled against invoices, so a self-reported or wall-clock-derived dollar figure in this field would become a financial liability. A Run whose cost is only an estimate is marked Degraded and excluded from precise cost reporting.
 
-Anthropic splits usage across `message_start` (input) and `message_delta` (output), so a single `Usage` Event per turn requires accumulating across the stream before emitting.
+Anthropic splits usage across `message_start` (input) and `message_delta` (output), so a single `Usage` Event per turn needs accumulating across the stream before emitting.

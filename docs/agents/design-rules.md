@@ -20,7 +20,7 @@ The best packages here are already deep. `events` exposes one sealed interface a
 
 ## Interfaces belong to the consumer
 
-Go's idiom, and the repo's best seam, is the interface defined where it is *needed*, not where it is implemented. `tui.Control` (`internal/tui/command.go:43`) is five methods the console needs, defined in `tui`, implemented by `cli` — so the frontend can be tested with a six-line stub and can never reach a Provider or the Trace. `core.TraceSink` is the same inversion: core declares, `trace` implements.
+Go's idiom, and the repo's best seam, is the interface defined where it is *needed*, not where it is implemented. `tui.Control` (`internal/tui/command.go:43`) is five methods the console needs. `tui` defines them and `cli` implements them. So a six-line stub can test the frontend, and the frontend can never reach a Provider or the Trace. `core.TraceSink` is the same inversion: core declares, `trace` implements.
 
 The corollary: **accept interfaces, return structs.** Constructors take the contracts they consume (`render.New(screen Screen, look theme.Theme)`) and return concrete types callers can grow with.
 
@@ -31,17 +31,17 @@ The second corollary: **keep interfaces small.** One to three methods. `Provider
 Go composes by embedding and by passing values — there is no inheritance to lean on, which is the point. Composition has two halves and both are in force:
 
 - The *contract* half: anything can implement `Provider`, `TraceSink`, `Subscriber`.
-- The *selection* half: a registry the implementations put themselves into, the standard library's own answer (`database/sql` drivers, `image` formats). `providers.Open` reads one, `trace.New` reads its own, and `Attach` appends projections rather than assigning one — so the layer that wires a run knows no implementation by name, and the error naming what a person may choose is read from the registry rather than written where it would go stale.
+- The *selection* half: a registry the implementations put themselves into, the standard library's own answer (`database/sql` drivers, `image` formats). `providers.Open` reads one, `trace.New` reads its own, and `Attach` appends projections rather than assigning one. So the layer that wires a run knows no implementation by name. The error naming what a person may choose comes from the registry, rather than from a line that would go stale.
 
-A registry turns "add an implementation" from four edits in three packages into one package that registers itself plus one config line. ADR 0028 holds the reasoning, and its falsifier: selection that needs more than a name and a small struct wants a factory at the composition root, not a wider registry.
+A registry turns "add an implementation" from four edits in three packages into one package that registers itself plus one config line. ADR 0028 holds the reasoning, and its falsifier. Selection that needs more than a name and a small struct wants a factory at the composition root, not a wider registry.
 
 ## Sealed where closed, registered where open
 
-The event kind set is closed and the compiler enforces it (unexported method on `Payload`). The provider set is open and nothing should enforce it. Knowing which of the two a type is — and making the code say so — is most of extensibility. The rule: **kernel vocabulary is sealed; capability is registered.** This is the same kernel/extension boundary Product.md Part 2 draws.
+The event kind set is closed and the compiler enforces it (unexported method on `Payload`). The provider set is open and nothing should enforce it. Knowing which of the two a type is — and making the code say so — is most of extensibility. The rule: **kernel vocabulary is sealed; capability is registered.** This is the same kernel/extension boundary `docs/reference/architecture.md` draws.
 
 ## Config flows inward as domain types, never as config types
 
-`config.Config` is a file format. It stops at the composition root (`cli`). What crosses into a domain package is that package's own type: `theme` and `tui/keymap` define what the interface draws with, and `cli` maps TOML onto them. This is why depguard's `tui` rule holds — the console never imports `config` — while every visual choice is still configurable. A package that imports `config` to read one field has inverted the dependency.
+`config.Config` is a file format. It stops at the composition root (`cli`). What crosses into a domain package is that package's own type. `theme` and `tui/keymap` define what the interface draws with, and `cli` maps TOML onto them. This is why depguard's `tui` rule holds — the console never imports `config` — while every visual choice is still configurable. A package that imports `config` to read one field has inverted the dependency.
 
 ## Comments carry rationale or they go
 

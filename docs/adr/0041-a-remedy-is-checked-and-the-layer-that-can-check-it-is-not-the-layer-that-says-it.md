@@ -6,7 +6,7 @@ status: accepted
 
 A failed turn says what happened and stops. ADR 0038 installed the sentence and argued the stopping: `render` can see that a credential was refused and cannot see whether the fix is a new key, a renewed login, or an account somebody suspended, so it names what happened and leaves the next step to whoever knows which of those it is.
 
-That was right about `render` and wrong as a conclusion about Eva. The layer that wires a run holds the configuration, the auth store, and the environment. It knows the mode is `subscription`, that the store has no login under it, and therefore that `eva login` is the one thing that fixes this — not as a likely guess, but as a fact it just read.
+That was right about `render` and wrong as a conclusion about Eva. The layer that wires a run holds the configuration, the auth store, and the environment. It knows the mode is `subscription`, and that the store has no login under it. So `eva login` is the one thing that fixes this — not as a likely guess, but as a fact it just read.
 
 So the remedy was never forbidden. It was unreachable. This decision makes it reachable without letting the console reach anything else.
 

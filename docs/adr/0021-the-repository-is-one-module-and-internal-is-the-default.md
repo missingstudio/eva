@@ -10,7 +10,7 @@ This supersedes the packaging half of ADR 0010 — six modules tied by `go.work`
 
 ## Why the modules went
 
-A module is the unit of *publication*. Nothing here was ever published. Each of the six required its siblings at `v0.0.0` and then replaced that requirement with a relative path, which is the shape a module takes when it is a directory wearing a module's clothes.
+A module is the unit of *publication*. Nothing here was ever published. Each of the six needed its siblings at `v0.0.0` and then replaced that requirement with a relative path, which is the shape a module takes when it is a directory wearing a module's clothes.
 
 What the six cost was not theoretical:
 
@@ -29,7 +29,7 @@ Promoting a package out of `internal/` later is a deliberate act that makes a pr
 
 ## What it costs
 
-`events` proves its kind set is sealed by compiling a package that tries to break it. That probe used to be a throwaway module named `sealed` with a replace pointing at `events/`. Under `internal/` it cannot be: an internal package is importable only from within the tree rooted at internal's parent, and that is a rule about the importing module's path. The probe therefore takes a path under this one — `github.com/missingstudio/eva/sealedprobe` — and replaces the whole repository rather than one layer of it.
+`events` proves its kind set is sealed by compiling a package that tries to break it. That probe used to be a throwaway module named `sealed` with a replace pointing at `events/`. Under `internal/` it cannot be: an internal package is importable only from within the tree rooted at internal's parent, and that is a rule about the importing module's path. So the probe takes a path under this one — `github.com/missingstudio/eva/sealedprobe` — and replaces the whole repository rather than one layer of it.
 
 The test still proves what it always proved. The seal under test is the unexported method on `Payload`, which is a property of the package, not of the directory. Standing the probe inside the tree is what keeps it testing the seal instead of testing `internal`.
 
