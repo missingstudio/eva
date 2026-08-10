@@ -190,9 +190,6 @@ eva -p "explain this error" > answer.md || echo "that failed"
 
 It exits non-zero when the answer failed, and writes the reason to stderr. That makes it safe to use in a pipeline: stdout is the answer and nothing else.
 
-> [!NOTE]
-> **There is no `--json` output mode, on purpose.** Anything that wants machine-readable data reads the history file instead. It has the same events, in the same format, whether you used the chat or the one-shot flag, and every record in it was written before you saw anything on screen. Parsing stdout would give you less, and would give it to you later.
-
 ### When something fails
 
 ```
@@ -356,9 +353,9 @@ Tests drive the real Anthropic and OpenAI code against a local server speaking t
 
 |                                                                      |                                                                                           |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [docs/tutorial/first-run.md](docs/tutorial/first-run.md)             | Build it, ask one question, then read that question back out of the trace.                 |
-| [docs/how-to/](docs/how-to/)                                         | One guide per task: providers, subscriptions, scripting, the trace, repo themes.           |
-| [docs/Product.md](docs/Product.md)                                   | The map to every design document. Start here to find the rest.                             |
+| [docs/tutorial/first-run.md](docs/tutorial/first-run.md)             | Build it, ask one question, then read that question back out of the trace.                |
+| [docs/how-to/](docs/how-to/)                                         | One guide per task: providers, subscriptions, scripting, the trace, repo themes.          |
+| [docs/Product.md](docs/Product.md)                                   | The map to every design document. Start here to find the rest.                            |
 | [docs/roadmap.md](docs/roadmap.md)                                   | The plan. Nineteen stages, each with a test it can fail. Draft.                           |
 | [docs/decisions.md](docs/decisions.md)                               | Every decision on one page, grouped by topic. Start here.                                 |
 | [docs/adr/](docs/adr/)                                               | The decisions in full, one file each. The filename is the decision, so `ls` is the index. |

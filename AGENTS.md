@@ -1,85 +1,81 @@
 # Eva
-
-Eva is an autonomous, multi-tenant, AI-native software factory. It builds, tests, improves, and maintains software with minimal human intervention.
-
+An autonomous, AI-native software factory.
 The workers of this factory are agents. You are one of them.
 
-## Evidence, not claims
+## Done means verified
 
-A report of success is not success. Eva's whole design turns on that distinction: it re-runs the checks on every harness that claims a green run. The same rule binds you.
+**Evidence, not claims.** A report of success is not success. Eva re-runs the checks
+on every harness that claims a green run, and the same rule binds you.
 
-A task is complete when all four of these are done:
+A task is complete when all four are true:
 
-1. The repo's checks ran.
+1. `make check` ran.
 2. The behaviour the task asked for is verified — not the behaviour you built.
-3. The full diff is read, and every hunk is one you meant to write.
+3. You read the full diff, and meant every hunk.
 4. The diff carries no secret, credential, or tenant data.
 
-When a check does not run, the report is **degraded**: name what did not run, and why. A degraded report is a valid outcome. Presenting an unrun check as a passing one is the failure with no recovery, because it poisons the only instrument the project has.
+`make check` is exactly what CI runs. `make help` lists the targets.
 
-### Checks
+When a check does not run, the report is **degraded**: name what did not run, and
+why. A degraded report is a valid outcome. An unrun check reported as a passing one
+poisons the only instrument this project has, and nothing recovers from that.
 
-Run `make check`. It covers formatting, build, `go vet`, lint, and tests across every package, and it is exactly what CI runs.
+## Never
 
-The layer boundaries are enforced by `depguard` inside golangci-lint, which `make lint` runs. Every rule is an allow list in strict mode, so an import that no rule allows is rejected rather than quietly allowed. Adding a layer means adding a `.golangci.yml` rule — see `docs/adr/0010`.
+These outrank every other rule here.
 
-## Tenant isolation
+- **A secret stays out of the record.** Credentials enter at the env boundary and
+  never reach a trace, a log, or a context window. Tests hold this today; keep them
+  passing.
+- **Tenant and Actor ride on every record**, from commit one, before a second tenant
+  exists.
+- **A layer imports only what its allow list names.** `make lint` runs `depguard` in
+  strict mode, so an unlisted import fails the build. A new layer needs a new
+  `.golangci.yml` rule.
 
-Cross-tenant escape is the one failure that ends the business. It outranks everything else in this file.
+Cross-tenant escape is the one failure that ends the business. No SQL or datastore
+exists yet, so the query-level rules land with the first one — read
+`docs/reference/platform.md` before you write it.
 
-- Bind the tenant to the connection, not to a query argument. A missing `WHERE tenant_id = ?` is not a bug for review to catch; it is a design you do not build.
-- Secrets enter at the env boundary as short-lived scoped credentials. They never enter a trace, a log, or a context window.
-- Tests cover the authorization boundary and the tenant boundary, not only the happy path.
-
-## Changes
+## While you work
 
 - Change only what the task names.
 - Prefer the small reversible change to the large correct-looking one.
-- Reuse the pattern already in the repo. A second way to do one thing is a cost the task must justify.
-- A behaviour change and its doc update land in the same commit. The docs are part of the factory (`docs/explanation/the-ladder.md`, rule 14).
+- Reuse the pattern already in the repo. A second way to do one thing is a cost the
+  task must justify.
+- A behaviour change and its doc update land in the same commit.
+- A comment states its decision in its own words, and names no document. Name the
+  glossary term or the decision, never the file holding it.
 
-## Commits
+Commit with a conventional prefix: `feat`, `fix`, `refactor`, `docs`, `test`,
+`build`, `ci`, `chore`. One logical change per commit. Work spanning several gets
+several commits.
 
-Use conventional prefixes: `feat`, `fix`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`.
+## When you report
 
-One logical change per commit. When the work spans several, make several commits.
-
-## Reports
-
-Write every report in **ASD-STE100 Simplified Technical English**.
-
-Structure it as:
+Write every report in **ASD-STE100 Simplified Technical English**: one topic per
+sentence, active voice, no sentence over 25 words.
 
 1. What changed.
-2. What was verified — and what was not, named as the degraded part.
+2. What you verified — and what you did not, named as the degraded part.
 3. The limitation or follow-up that matters.
 
-Report outcomes. State facts before conclusions, and state failures, risks, and blockers plainly.
+State facts before conclusions.
 
-## The plan
+## Read before you act
 
-`docs/roadmap.md` is the build path: nineteen stages, each with a failable exit test. Status: **draft** — it describes what Eva will be, not what it is. `docs/Product.md` is the map to every design document.
+| Before you                                                                  | Read                                                                   |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| write code in a stage                                                       | that stage in `docs/roadmap.md`                                        |
+| add a package, a layer, or a binary                                         | `docs/agents/project-structure.md`, then `docs/agents/design-rules.md` |
+| add an extension point                                                      | `docs/agents/design-rules.md`                                          |
+| name a domain concept, or contradict an ADR                                 | `docs/agents/domain.md`                                                |
+| create, label, close, or link an issue, or run a `/wayfinder` map operation | `docs/agents/issue-tracker.md`                                         |
+| apply or filter a triage label                                              | `docs/agents/triage-labels.md`                                         |
+| use a word this project defines                                             | `CONTEXT.md`                                                           |
 
-Read the stage you are working in before you write code in it. Work the lowest stage whose exit test has not yet passed.
+Work the lowest stage whose exit test has not yet passed. `docs/roadmap.md` is a
+draft: it describes what Eva will be, not what it is.
 
-## Agent skills
-
-### Issue tracker
-
-**Issues** live on GitHub, driven by `gh`. Read `docs/agents/issue-tracker.md` before you create, read, label, close, or link an issue, or run any `/wayfinder` map operation.
-
-### Triage labels
-
-**Triage labels** map the five canonical roles to this repo's label strings in `docs/agents/triage-labels.md`. Read it before you apply or filter one.
-
-### Project structure
-
-**Layout** is one module, `cmd/` for binaries, `internal/` for layers. Read `docs/agents/project-structure.md` before you add a package, a layer, or a binary.
-
-**Design rules** are in `docs/agents/design-rules.md`. They cover what a package is named for and how deep it should be. They also cover where an interface is declared, and what is a registry rather than a switch. Read it before you add a package or an extension point. It also says which rules a linter holds and which only review does.
-
-### Domain docs
-
-**Domain vocabulary** lives in `CONTEXT.md` and `docs/adr/` at the repo root — the glossary and the recorded decisions. `docs/agents/domain.md` gives the rules for reading them, for naming a domain concept in output, and for flagging an ADR you contradict.
-
-**Source cites no doc path.** A comment states the decision in its own words and references no document. Name the glossary or the decision, never the file that holds it.
+`docs/Product.md` maps every design document. `docs/adr/` holds the decisions, one
+file each, and the filename is the decision — so `ls` is the index.

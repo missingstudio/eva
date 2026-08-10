@@ -7,7 +7,7 @@
 Nineteen stages. Each ships a working CLI, adds one primitive, and has an exit
 test it can fail. You may not start stage N+1 until stage N's exit test passes.
 
-There are nineteen stages, numbered 0 to 14 with a 6.5 and four 9s. Each stage ships a working CLI, adds one primitive, and has an exit test that you can fail. **You may not start stage N+1 until the exit test of stage N passes.** A skipped stage costs five times as much to add later.
+There are nineteen stages. Each stage ships a working CLI, adds one primitive, and has an exit test that you can fail. **You may not start stage N+1 until the exit test of stage N passes.** A skipped stage costs five times as much to add later.
 
 Each stage also declares its **in/out contract**. The contract shows what a user can type at that stage (the `eva >` lines) and what must come back (the `←` lines). If the demo block does not work, the stage is not done, whatever the code says.
 
@@ -71,11 +71,9 @@ Define the `Unit` interface, the event schema, and the trace invariant here, bef
 **Primitive:** context assembly and budget accounting.
 **Exit test:** a multi-turn conversation keeps the correct history, streams the output, and shows the per-turn cost and the cumulative cost. Ctrl-C cancels in mid-stream and does not corrupt the session. The base system prompt has a byte budget, and CI enforces it as a gate (owainlewis/neo's bar is ≤ 2 KiB). So context spend is a reviewed, versioned artifact from the first commit.
 
-This exit test had one more clause: `eva -p --json` emitting the identical turn as typed events with no TTY rendering. Half of it stands. `eva -p <prompt>` answers one turn onto stdout, and exits non-zero when the turn failed. That is what a script needs now that the console takes the screen. An interface drawn in place writes cursor moves to its output, so redirecting it captures cursor movement rather than an answer.
+**One clause of this exit test was withdrawn**, so it did not pass as written. The clause asked for `eva -p --json`, emitting the identical turn as typed events with no TTY rendering. Half of it stands: `eva -p <prompt>` answers one turn onto stdout, and exits non-zero when the turn failed. The machine-readable half is the Trace instead, and ADR 0011 holds the reasoning.
 
-`--json` is gone, and it is not coming back. The Trace carries what it was protecting: the same typed events, by the same schema and sink, committed before anything is shown. A reader that would have parsed stdout reads the file instead, and knows every Event in it was committed rather than printed.
-
-One assertion was lost with it: colour downsampling per terminal. It was read off stdout, and it cannot be read off a screen redrawn in place. The render boundary is unchanged, and the linter still enforces it. The process-level tests still drive a real process, type keys into the console, and assert on the Trace.
+One assertion went with it: colour downsampling per terminal. It was read off stdout, and it cannot be read off a screen redrawn in place. The render boundary is unchanged, and the linter still enforces it. The process-level tests still drive a real process, type keys into the console, and assert on the Trace.
 
 Five assertions come from the settled schema. Each one fails loudly if the sink is wrong. Stage 0 has no tools, so two of them are driven by constructed events rather than by a real turn:
 

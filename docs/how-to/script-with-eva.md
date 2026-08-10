@@ -47,19 +47,14 @@ exit=1
 `out.txt` is empty, and the reason went to stderr. A step that fails this way cannot
 feed a truncated answer into whatever runs next.
 
-## There is no `--json`, on purpose
+## Reading the output as data
 
-Anything that wants machine-readable output reads the trace instead. See
+`-p` gives you the answer as prose. For anything structured, read the trace: see
 [how-to/read-the-trace.md](read-the-trace.md).
 
 The trace holds the same events, in the same format, whether you used the chat or
-`-p`. Every record in it was committed before anything appeared on screen. Parsing
-stdout would give you less, and would give it to you later.
-
-This replaced an earlier `eva -p --json`. The reason is worth knowing if you are
-tempted to add it back: an interface drawn in place writes cursor moves to its
-output, so redirecting the console captures cursor movement rather than an answer.
-The record is the machine-readable surface.
+`-p`. Every record in it was committed before anything appeared on screen. So the
+trace tells you more than stdout could, and tells you sooner.
 
 ## Troubleshooting
 
