@@ -1,0 +1,56 @@
+# Dependencies age out whether or not anybody commits, so they are raised on a
+# schedule rather than on discovery.
+#
+# Grouping is what makes this bearable. Eleven of this module's dependencies are
+# Charm packages that move together, so one grouped pull request replaces eleven
+# that each rebuild the world.
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # The console's whole rendering stack. These release in step with each
+      # other, and a partial bump is the one thing likely to break a build.
+      charm:
+        patterns:
+          - charm.land/*
+          - github.com/charmbracelet/*
+      golang-x:
+        patterns:
+          - golang.org/x/*
+      providers:
+        patterns:
+          - github.com/anthropics/*
+      # Everything else, so a lone dependency still gets raised rather than
+      # waiting for a group that will never match it.
+      rest:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - charm.land/*
+          - github.com/charmbracelet/*
+          - golang.org/x/*
+          - github.com/anthropics/*
+    commit-message:
+      # commit-lint requires a conventional prefix, and Dependabot's commits are
+      # commits. build is the prefix for a dependency change.
+      prefix: build
+
+  # The half people forget. Every action in this repository is pinned to a
+  # commit SHA, and this is what keeps pinned from meaning frozen.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci

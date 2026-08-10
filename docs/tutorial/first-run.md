@@ -158,10 +158,10 @@ last week.
 
 Where to go next:
 
-| If you want to | Read |
-| --- | --- |
+| If you want to                        | Read                                                            |
+| ------------------------------------- | --------------------------------------------------------------- |
 | Use OpenAI, or a ChatGPT subscription | [how-to/connect-a-provider.md](../how-to/connect-a-provider.md) |
-| Call Eva from a script | [how-to/script-with-eva.md](../how-to/script-with-eva.md) |
-| Query the trace properly | [how-to/read-the-trace.md](../how-to/read-the-trace.md) |
-| Know what the words mean | [CONTEXT.md](../../CONTEXT.md) |
-| Know why it is built this way | [explanation/the-ladder.md](../explanation/the-ladder.md) |
+| Call Eva from a script                | [how-to/script-with-eva.md](../how-to/script-with-eva.md)       |
+| Query the trace properly              | [how-to/read-the-trace.md](../how-to/read-the-trace.md)         |
+| Know what the words mean              | [CONTEXT.md](../../CONTEXT.md)                                  |
+| Know why it is built this way         | [explanation/the-ladder.md](../explanation/the-ladder.md)       |

@@ -43,14 +43,14 @@ Past configuration, the quality falls off a cliff.
 
 `unanswered` (`internal/tui/console.go:643`) maps six classes to six sentences. They are honest, they are short, and none of them tells a person anything they can act on. Worse, two of the six are actionable in most real cases and are treated as though they were not:
 
-| Class | What a person reads today | What Eva could have checked |
-| --- | --- | --- |
-| `auth_failed` | the credential was refused | which credential, from where, and whether a login is expired |
-| `rate_limit` | the rate limit was reached | how long the server asked for, and whether Eva gave up because the ask exceeded the cap |
-| `unreachable` | the provider could not be reached | whether `provider.base_url` was overridden, which is the one cause local to this machine |
-| `overloaded` | the provider is overloaded | how many attempts were made, over how long |
-| `server_error` | the provider failed the request | — |
-| *(none)* | No response | — |
+| Class          | What a person reads today         | What Eva could have checked                                                              |
+| -------------- | --------------------------------- | ---------------------------------------------------------------------------------------- |
+| `auth_failed`  | the credential was refused        | which credential, from where, and whether a login is expired                             |
+| `rate_limit`   | the rate limit was reached        | how long the server asked for, and whether Eva gave up because the ask exceeded the cap  |
+| `unreachable`  | the provider could not be reached | whether `provider.base_url` was overridden, which is the one cause local to this machine |
+| `overloaded`   | the provider is overloaded        | how many attempts were made, over how long                                               |
+| `server_error` | the provider failed the request   | —                                                                                        |
+| *(none)*       | No response                       | —                                                                                        |
 
 ### 2. `ErrorOther` is three remedies wearing one name
 
@@ -120,17 +120,17 @@ Remedy(class events.ErrorClass) (Remedy, bool)
 
 `cli` is the composition root and the only layer holding the configuration, the auth store path, and the environment at once. The resolution is a table over the class *and the situation*:
 
-| Class | Situation `cli` can check | Remedy |
-| --- | --- | --- |
-| `auth_failed` | mode is `subscription`, store holds no login | `eva login` |
-| `auth_failed` | mode is `subscription`, login expired with no refresh token | `eva login` |
-| `auth_failed` | mode is `subscription`, login live | fact only: the account it was refused for; `eva auth status` when a key is also set and unused |
-| `auth_failed` | mode is `api_key`, variable set | fact only: which variable, and which provider refused it |
-| `no_such_model` | the model came from a file `cli` can name | fact and path: `model = …` in `~/.eva/config.toml` |
-| `billing` | — | fact only: this provider will not bill the turn |
-| `rate_limit` | the server asked for longer than `retry.Policy.Cap` | fact: the delay asked for, so "wait and ask again" is a figure rather than a mood |
-| `unreachable` | `provider.base_url` is set | fact: the override, and the file it came from |
-| `overloaded`, `server_error`, `unreachable` (no override), `other` | — | fact only |
+| Class                                                              | Situation `cli` can check                                   | Remedy                                                                                         |
+| ------------------------------------------------------------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `auth_failed`                                                      | mode is `subscription`, store holds no login                | `eva login`                                                                                    |
+| `auth_failed`                                                      | mode is `subscription`, login expired with no refresh token | `eva login`                                                                                    |
+| `auth_failed`                                                      | mode is `subscription`, login live                          | fact only: the account it was refused for; `eva auth status` when a key is also set and unused |
+| `auth_failed`                                                      | mode is `api_key`, variable set                             | fact only: which variable, and which provider refused it                                       |
+| `no_such_model`                                                    | the model came from a file `cli` can name                   | fact and path: `model = …` in `~/.eva/config.toml`                                             |
+| `billing`                                                          | —                                                           | fact only: this provider will not bill the turn                                                |
+| `rate_limit`                                                       | the server asked for longer than `retry.Policy.Cap`         | fact: the delay asked for, so "wait and ask again" is a figure rather than a mood              |
+| `unreachable`                                                      | `provider.base_url` is set                                  | fact: the override, and the file it came from                                                  |
+| `overloaded`, `server_error`, `unreachable` (no override), `other` | —                                                           | fact only                                                                                      |
 
 The three fact-only rows are not failures of the design. They are the design. Eva says what it knows and stops, which is what it already does. The difference is that the rows above them now say more.
 

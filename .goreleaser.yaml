@@ -1,0 +1,151 @@
+# The release. `make snapshot` runs this without a tag, which is what makes the
+# release path testable before there is a release.
+#
+# One thing here is deliberately missing: there is no -X flag setting a version.
+# internal/cli.Version is the source of truth, and the release workflow gates on
+# the tag agreeing with it. A version injected at link time would be correct in
+# this one build and absent from every other.
+version: 2
+
+project_name: eva
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: eva
+    main: ./cmd/eva
+    binary: eva
+    env:
+      - CGO_ENABLED=0
+    flags:
+      # trimpath so the binary carries no build machine's paths. Two builds of
+      # one commit are then the same bytes, which is what makes a checksum worth
+      # publishing.
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      # Nothing asks for it, and a console on Windows on ARM is a platform this
+      # project has never run on. It is one line to add when somebody does.
+      - goos: windows
+        goarch: arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: eva
+    ids: [eva]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# One SBOM per archive, so a consumer can audit what they installed without
+# building it. This needs syft, which the release workflow installs and a local
+# snapshot skips.
+sboms:
+  - id: archive
+    artifacts: archive
+
+# Keyless, over the checksum file. The workflow's own OIDC identity is the key,
+# so there is no secret to store and nothing to rotate. Verifying it proves the
+# checksums came from this repository's release workflow.
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+# The body of the release notes, folded over the commits in the tag's range. The
+# prefixes it groups by are the ones AGENTS.md requires and commit-lint enforces,
+# which is what makes this complete rather than remembered.
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Breaking
+      regexp: '^.*?\w+(\([[:word:]]+\))??!:.+$'
+      order: 0
+    - title: Added
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Fixed
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Changed
+      regexp: '^.*?(refactor|perf)(\([[:word:]]+\))??!?:.+$'
+      order: 3
+  filters:
+    # Counted rather than hidden: the release notes carry the number of other
+    # commits, and spend no line on each.
+    exclude:
+      - "^docs"
+      - "^test"
+      - "^build"
+      - "^ci"
+      - "^chore"
+      - "^Merge"
+
+release:
+  # auto reads the tag: v0.3.0-rc.1 is a prerelease and is never marked latest,
+  # v0.3.0 is. This is what keeps the next channel out of the stable one without
+  # a second configuration path.
+  prerelease: auto
+  make_latest: true
+  mode: replace
+  footer: |
+    ---
+
+    ## Verify what you downloaded
+
+    ```bash
+    # the archive matches the checksum this release published
+    sha256sum --check --ignore-missing checksums.txt
+
+    # the checksums came from this repository's release workflow
+    cosign verify-blob checksums.txt \
+      --signature checksums.txt.sig \
+      --certificate checksums.txt.pem \
+      --certificate-identity-regexp 'https://github.com/missingstudio/eva/.*' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+    # the binary was built by that workflow, from this commit
+    gh attestation verify eva_*_linux_amd64.tar.gz --repo missingstudio/eva
+    ```
+
+# A Homebrew tap needs a second repository and a token that can write to it.
+# Neither exists yet, so this stays commented rather than failing the first
+# release. Enabling it is three steps: create missingstudio/homebrew-tap, put a
+# token with contents:write on it in the HOMEBREW_TAP_TOKEN secret, and
+# uncomment this.
+#
+# brews:
+#   - name: eva
+#     ids: [eva]
+#     repository:
+#       owner: missingstudio
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+#     homepage: https://github.com/missingstudio/eva
+#     description: An autonomous, AI-native software factory
+#     license: MIT
+#     skip_upload: auto

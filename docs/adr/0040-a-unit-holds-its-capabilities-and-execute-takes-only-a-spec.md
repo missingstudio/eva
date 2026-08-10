@@ -34,7 +34,7 @@ Adopting the plan's Runtime and amending the code was rejected on the compositio
 
 ## Consequences
 
-**Product.md's Part 1 sketch is superseded on this point.** The rung table, the loop, and the null-implementation rule stand; the signature does not.
+**product.md's Part 1 sketch is superseded on this point.** The rung table, the loop, and the null-implementation rule stand; the signature does not.
 
 **A Unit's fields are its capability list.** What a Unit can reach is read off the type, which is what makes a Unit that could reach something it should not a thing review can see.
 

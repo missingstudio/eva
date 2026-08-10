@@ -58,13 +58,13 @@ You clone a repo from the internet, and Eva reads that file before your first
 question, in a process holding your API key. So what the file may set is a short
 allow-list: appearance and key bindings.
 
-| A repo may set | A repo may not set |
-| --- | --- |
-| `[theme.colors]`, `[theme.symbols]`, and the rest of `[theme]` | The provider |
-| `[keymap.bind]` | `base_url`, or any other destination for traffic |
-| | `api_key_env`, the variable your key is read from |
-| | `auth`, so no repo can select a subscription |
-| | `[trace] path`, so no repo can move your record |
+| A repo may set                                                 | A repo may not set                                |
+| -------------------------------------------------------------- | ------------------------------------------------- |
+| `[theme.colors]`, `[theme.symbols]`, and the rest of `[theme]` | The provider                                      |
+| `[keymap.bind]`                                                | `base_url`, or any other destination for traffic  |
+|                                                                | `api_key_env`, the variable your key is read from |
+|                                                                | `auth`, so no repo can select a subscription      |
+|                                                                | `[trace] path`, so no repo can move your record   |
 
 Anything outside the allow-list is refused **by name**, so you learn which line was
 rejected rather than wondering why nothing happened. See
@@ -87,11 +87,11 @@ terminal's background and what it can display.
 
 ## Troubleshooting
 
-| What you see | What to do |
-| --- | --- |
-| Eva refuses to start, naming a key | A typo, or a key a repo may not set. The message names it. Fix or remove that line. |
-| Your theme did not apply | Check you are inside the repo, and that the file is at the root rather than in a parent above the boundary. |
-| A named setting is called retired rather than a typo | The key existed once. Eva distinguishes the two so you get migration guidance instead of "unknown key". |
+| What you see                                         | What to do                                                                                                  |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Eva refuses to start, naming a key                   | A typo, or a key a repo may not set. The message names it. Fix or remove that line.                         |
+| Your theme did not apply                             | Check you are inside the repo, and that the file is at the root rather than in a parent above the boundary. |
+| A named setting is called retired rather than a typo | The key existed once. Eva distinguishes the two so you get migration guidance instead of "unknown key".     |
 
 ## Related
 

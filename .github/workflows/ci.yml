@@ -1,39 +1,214 @@
 name: CI
 
+# The tree's own correctness: does it build, does it pass, does it respect its
+# layer boundaries. Two concerns live in files of their own beside this one,
+# because they fail for different reasons and want different schedules:
+#
+#   security.yml   gosec, over Eva's own code
+#   audit.yml      the dependency graph, on a schedule as well as per change
+#
+# There is no schedule here. Every job in this file is a pure function of the
+# tree, so its verdict cannot change while the commit does not — a scheduled run
+# would spend runners to confirm the last commit's answer.
 on:
   push:
+    # Tags are absent on purpose. A tag is the release workflow's trigger, and it
+    # calls this file — so naming tags here would run every check twice on the
+    # one push where finishing matters most.
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+# A superseded run is cancelled. Tags are exempt, because a release run that is
+# cancelled half way has already published some of what it built.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: read
 
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+env:
+  # readonly so that no build can edit go.mod to make itself pass. local so a
+  # go directive cannot pull a toolchain nobody pinned, mid-build.
+  GOFLAGS: -mod=readonly
+  GOTOOLCHAIN: local
 
-      - uses: actions/setup-go@v5
+defaults:
+  run:
+    # Windows runners default to pwsh, and the Makefile is written for a shell.
+    shell: bash
+
+jobs:
+  # Fails in seconds, ahead of everything that needs a compile. A misformatted
+  # file should not wait on a race-detector run to be reported.
+  quick:
+    name: quick
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.26"
+          go-version-file: go.mod
           cache: true
 
-      # A check that quietly covered nothing would look identical to one that
-      # passed. One module makes ./... honest, and this step gates on it staying
-      # that way: a go.mod anywhere below the root would cut its whole subtree
-      # out of ./... and every target would still report success.
-      - name: Assert the check covers the repository
+      - run: make fmt
+
+  # build, vet and test share one compile graph, so they share one job. Split
+  # across three, a two-core runner would compile the same dependencies three
+  # times over and finish later than this.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: make build
+      - run: make vet
+      - run: make test
+
+      # Nothing in this repository carries a build constraint, so a target that
+      # stops compiling is a dependency's doing rather than ours. Two targets
+      # cover the dimension where that happens: a different operating system.
+      # The other three are same-OS and are built at release.
+      - name: Cross-compile the platforms this job does not run on
+        env:
+          CGO_ENABLED: "0"
         run: |
           set -eu
-          n=$(go list ./... | wc -l | tr -d ' ')
-          echo "$n package(s)"
-          [ "$n" -gt 0 ] || { echo "go list ./... resolves no packages"; exit 1; }
-          nested=$(find . -mindepth 2 -name go.mod -not -path './.git/*')
-          [ -z "$nested" ] || {
-            echo "a go.mod below the root hides packages from ./...:"
-            echo "$nested"
-            exit 1
-          }
+          for target in windows/amd64 darwin/arm64; do
+            echo "building $target"
+            GOOS="${target%/*}" GOARCH="${target#*/}" go build -o /dev/null ./...
+          done
 
-      - name: Check
-        run: make check
+  # macOS and Windows at merge and at a tag, never on a pull request — where
+  # cross-compilation above catches what a compiler can catch, for seconds.
+  platforms:
+    name: platforms
+    if: github.event_name != 'pull_request'
+    strategy:
+      # "Windows failed" and "Windows and macOS failed" are different bug
+      # reports. Cancelling the second to save a minute costs an hour.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # go directly rather than through make: the race detector needs a C
+      # toolchain that a Windows runner does not reliably have, and make itself
+      # is not part of that image's contract. This is deliberately a subset of
+      # `make test` — the ordering is shuffled, the race detector is the Linux
+      # job's — and naming it here is what keeps that visible.
+      - run: go build ./...
+      - run: go test -shuffle=on ./...
+
+  # Its own job because it has its own binary and its own analysis cache, and
+  # neither is invalidated by what invalidates the Go build cache.
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Keyed on the linter's version and its configuration, because a
+      # .golangci.yml edit invalidates this analysis and a go.sum edit does not.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-${{ runner.os }}-${{ hashFiles('Makefile', '.golangci.yml') }}
+
+      # Uploading these findings to code scanning would want SARIF, and
+      # golangci-lint v2.12.2 does not emit it — the writers it has are text,
+      # json, tab, html, checkstyle, code-climate and junit-xml. So a finding
+      # lives in this job's log until that changes. A step that pretended
+      # otherwise would be worse than the gap.
+      - run: make lint
+
+  gate:
+    name: gate
+    if: always()
+    needs: [quick, test, platforms, lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The Makefile declares what is checked, and the workflows run it. This
+      # asserts that every declared target is invoked by some workflow here, so a
+      # target added to the Makefile and to no job stops the build. That is the
+      # direction worth failing in; the other way round — an extra `make eva` in
+      # the release workflow — is harmless.
+      #
+      # Coverage is read out of the workflow files rather than restated in this
+      # step. That is what lets the checks live in three files without a fourth
+      # list to keep in step with them.
+      #
+      # It is the same shape as the assertion this file used to carry about
+      # `./...` reaching every package.
+      - name: Assert some workflow covers every declared check
+        run: |
+          set -eu
+          make check-list | sort -u > /tmp/declared
+
+          # Only lines whose first token is `make`, or a `- run: make`. A shell
+          # comment mentioning a target begins with #, so it cannot satisfy this.
+          grep -hE '^[[:space:]]*(- run: )?make [a-z]' .github/workflows/*.yml \
+            | sed -E 's/^[[:space:]]*(- run: )?make //' \
+            | awk '{ print $1 }' | sort -u > /tmp/invoked
+
+          echo "declared by the Makefile:"; sed 's/^/  /' /tmp/declared
+          echo "invoked by a workflow:";    sed 's/^/  /' /tmp/invoked
+
+          missing=$(comm -23 /tmp/declared /tmp/invoked)
+          if [ -n "$missing" ]; then
+            echo "these checks are declared and no workflow runs them:" >&2
+            printf '  %s\n' "$missing" >&2
+            exit 1
+          fi
+          echo "$(wc -l < /tmp/declared) declared checks, all covered"
+
+      # A skipped job is not a passing one, which is the whole reason this job
+      # exists rather than branch protection naming the others directly.
+      # platforms is skipped by design on a pull request, and it is the only
+      # result allowed to be anything but success.
+      - name: Assert every needed job succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -eu
+          printf '%s\n' "$RESULTS"
+          printf '%s' "$RESULTS" | jq -e --arg event "$EVENT" '
+            ( if $event == "pull_request" then ["platforms"] else [] end ) as $may_skip
+            | [ to_entries[]
+                | select(.value.result != "success")
+                | select((.value.result == "skipped" and (.key | IN($may_skip[]))) | not)
+              ] as $bad
+            | if ($bad | length) == 0 then true
+              else ($bad | map("\(.key): \(.value.result)") | join(", ") | halt_error(1))
+              end
+          ' > /dev/null
+          echo "every needed job succeeded (trigger: $EVENT)"

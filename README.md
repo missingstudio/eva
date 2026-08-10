@@ -15,6 +15,8 @@
 
 <p align="center">
   <a href="https://github.com/missingstudio/eva/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/missingstudio/eva/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/missingstudio/eva/actions/workflows/security.yml"><img alt="Security" src="https://github.com/missingstudio/eva/actions/workflows/security.yml/badge.svg"></a>
+  <a href="https://github.com/missingstudio/eva/actions/workflows/audit.yml"><img alt="Audit" src="https://github.com/missingstudio/eva/actions/workflows/audit.yml/badge.svg"></a>
   <a href="https://go.dev/"><img alt="Go 1.26" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white"></a>
   <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue"></a>
 </p>
@@ -60,21 +62,26 @@ Notice `cost unreported`. Neither Anthropic nor OpenAI returns a dollar figure w
 
 Eva is being built toward a control plane for coding agents. Work arrives as a spec with acceptance criteria a machine can check. Several harnesses race the same spec in isolated environments. A verifier Eva owns decides what actually passed, and the whole race is scored from the same record everything else is scored from.
 
-The reason for building the foundation this carefully first is the ladder in [docs/explanation/the-ladder.md](docs/explanation/the-ladder.md). The usual story goes model → agent → harness → factory. That chain skips five rungs, and each omission is a known way this fails:
+The reason for building the foundation this carefully first is the ladder in [docs/explanation/the-ladder.md](docs/explanation/the-ladder.md): ten rungs from a model to a company, climbed in order. Every step adds the one thing the rung below it cannot do, so every step you don't take is a way this fails.
 
-| The rung that gets skipped    | What breaks without it                                           |
+| Rung                          | What breaks without it                                           |
 | ----------------------------- | ---------------------------------------------------------------- |
+| **Model**                     | —                                                                |
 | **Workflow**                  | Control flow is handed to the model before the model can hold it |
+| **Agent**                     | Nothing adapts. Every path has to be written in advance          |
 | **Environment + verifier**    | Nothing tells the agent it is wrong, so it never converges       |
+| **Harness**                   | A run has no bounds — no budget, no policy, no tools it may use  |
 | **Scheduler + spec format**   | More agents is not a factory. A factory needs a queue and a spec |
+| **Software factory**          | Work stays one at a time                                         |
 | **Learning loop + economics** | No evals, and no cost per merged change                          |
 | **Intent + authority**        | Nobody owns what was decided, and nobody answers for it          |
+| **Autonomous company**        | —                                                                |
 
 Nineteen stages, each with an exit test it can fail. One of them is built. The plan is a draft; the stage that shipped is not.
 
 ## Install
 
-You need [Go 1.26](https://go.dev/dl/) or newer. Nothing else.
+Nothing is released yet, so building it is the way in. You need [Go 1.26](https://go.dev/dl/) or newer, and nothing else.
 
 ```bash
 git clone git@github.com:missingstudio/eva.git
@@ -82,7 +89,29 @@ cd eva
 go build -o eva ./cmd/eva
 ```
 
-That produces a single binary in the current directory. Put it on your `PATH` if you want it everywhere.
+That produces a single binary in the current directory. Put it on your `PATH` if you want it everywhere. `eva version` says which build you are talking to.
+
+You can also install the newest commit directly, which needs no release:
+
+```bash
+go install github.com/missingstudio/eva/cmd/eva@main
+```
+
+Go resolves `main` to a pseudo-version carrying the commit, so `eva version` still reports something exact. It has passed CI and nothing else — expect a broken day now and then.
+
+Once a release exists, two more paths open:
+
+```bash
+# the newest release
+go install github.com/missingstudio/eva/cmd/eva@latest
+
+# the same, checksum-verified, without needing Go
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh
+```
+
+The script reads your platform, downloads the matching archive, and checks it against the release's published checksums before installing anything — a checksum that doesn't match installs nothing and prints both figures. If you would rather not pipe a URL into a shell, it is [scripts/install.sh](scripts/install.sh) in this repository; read it, then run it.
+
+Both, plus prereleases and how to verify a download's signature, are written up in [how-to/install-eva.md](docs/how-to/install-eva.md).
 
 ## Connect a model
 
@@ -331,21 +360,40 @@ Three decisions do most of the work:
 ## Working on Eva
 
 ```bash
-make check
+make verify
 ```
 
-That is exactly what CI runs: formatting, build, vet, lint, tests, every package.
+That is exactly what CI runs. It splits in two: `make check` needs nothing but this repository, and `make audit` reaches the network — so its answer can change while the tree does not, which is why CI also runs it on a schedule.
 
-| Target       | What it does                                             |
-| ------------ | -------------------------------------------------------- |
-| `make check` | Everything below, in order                               |
-| `make fmt`   | Fails if anything isn't gofmt-clean                      |
-| `make lint`  | golangci-lint, where the package boundaries are enforced |
-| `make test`  | Every package                                            |
-| `make eva`   | Build the binary into the repo root                      |
-| `make tidy`  | Tidy dependencies                                        |
+| Target             | What it does                                                        |
+| ------------------ | ------------------------------------------------------------------- |
+| `make verify`      | `check` and `audit` — everything CI runs                             |
+| `make check`       | fmt, build, vet, lint, test                                          |
+| `make audit`       | tidy-check, mod-verify, vuln                                         |
+| `make fmt`         | Fails if anything isn't gofmt-clean                                  |
+| `make lint`        | golangci-lint, where the package boundaries are enforced             |
+| `make gosec`       | Security patterns in Eva's own code                                  |
+| `make test`        | Every package, under the race detector, in a shuffled order          |
+| `make vuln`        | Known vulnerabilities in code Eva actually calls                     |
+| `make tidy-check`  | Fails if `go.mod` isn't what the imports imply                       |
+| `make eva`         | Build the binary into the repo root                                  |
+| `make snapshot`    | Build every release archive locally, publishing nothing              |
+| `make tidy`        | Tidy dependencies                                                    |
 
-The linter version is pinned and run via `go run`, so you don't install anything and your results match CI.
+Every tool version is pinned and run via `go run`, so you install nothing and your results match CI.
+
+CI is four workflows, split by what makes each one fail:
+
+| Workflow                                        | Runs                                    | When                            |
+| ----------------------------------------------- | --------------------------------------- | ------------------------------- |
+| [ci.yml](.github/workflows/ci.yml)              | fmt, build, vet, test, lint, platforms   | Every change                    |
+| [security.yml](.github/workflows/security.yml)  | gosec                                    | Every change                    |
+| [audit.yml](.github/workflows/audit.yml)        | tidy-check, mod-verify, vuln             | Every change, **and Mondays**   |
+| [release.yml](.github/workflows/release.yml)    | All three, then builds and publishes     | A `v*` tag                      |
+
+Only the audit has a schedule, and it is the only one that needs one: a vulnerability is published on somebody else's timetable, so its answer changes while the tree does not. Everything else is a pure function of the tree.
+
+`ci.yml`'s `gate` job reads `make check-list` and fails when no workflow runs a declared target. Coverage is derived from the workflow files rather than listed a second time, so the three files can't drift from the Makefile.
 
 Tests drive the real Anthropic and OpenAI code against a local server speaking the real protocol. There's no mock provider, because a mock is a second implementation that can disagree with the first and be believed. ([0036](docs/adr/0036-a-replaying-provider-is-not-a-provider-a-person-may-select.md))
 
@@ -355,7 +403,7 @@ Tests drive the real Anthropic and OpenAI code against a local server speaking t
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | [docs/tutorial/first-run.md](docs/tutorial/first-run.md)             | Build it, ask one question, then read that question back out of the trace.                |
 | [docs/how-to/](docs/how-to/)                                         | One guide per task: providers, subscriptions, scripting, the trace, repo themes.          |
-| [docs/Product.md](docs/Product.md)                                   | The map to every design document. Start here to find the rest.                            |
+| [docs/product.md](docs/product.md)                                   | The map to every design document. Start here to find the rest.                            |
 | [docs/roadmap.md](docs/roadmap.md)                                   | The plan. Nineteen stages, each with a test it can fail. Draft.                           |
 | [docs/decisions.md](docs/decisions.md)                               | Every decision on one page, grouped by topic. Start here.                                 |
 | [docs/adr/](docs/adr/)                                               | The decisions in full, one file each. The filename is the decision, so `ls` is the index. |

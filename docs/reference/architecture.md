@@ -1,9 +1,5 @@
 # Target architecture
 
-> **Status: draft.** This describes what Eva will be, not what it is.
-> Only stage 0 is built. Where this and an ADR in [`../adr/`](../adr/) disagree,
-> the ADR wins. Verification basis: the tip of `main` on 2026-08-09.
-
 What Eva owns and what it delegates, the harness adapter contract, the event
 schema, the hook surface, the wire protocols, and the repository layout.
 
@@ -14,7 +10,7 @@ schema, the hook surface, the wire protocols, and the repository layout.
 3. **Daemons advertise their harness inventory.** The capability advertisement includes the installed harnesses and their versions.
 4. **Eva can run any harness.** Eva, Claude Code, Codex, OpenCode, and the next tool to ship all run behind one adapter contract.
 5. **Portable skills and defined protocols.** One skill source of truth compiles per harness. Tools interoperate over MCP. The task graph mediates each agent handoff.
-6. **Community-extensible core.** Events and hooks are part of the harness contract. They are not an afterthought. Skills, tools, checks, commands, and UI compose in from the ecosystem. Anyone can express as an extension what we can express as an extension.
+6. **Community-extensible core.** Events and hooks are part of the harness contract. They are not an afterthought. Skills, tools, checks, commands, and UI compose in from the ecosystem. We build our own skills, tools, checks, and UI through the same extension surface we publish.
 
 ## Architecture in one paragraph
 
@@ -24,14 +20,14 @@ The control plane holds the task graph, the specs, the mandates, the scheduler, 
 
 Eva supports third-party harnesses. So Eva is no longer *a* harness. Eva is the control plane that makes harnesses interchangeable. This works only if Eva never delegates some things.
 
-| Eva owns — never delegated               | Harness owns — swappable             |
-| ---------------------------------------- | ------------------------------------ |
-| Task spec and acceptance criteria        | Prompting strategy                   |
-| Workspace creation, snapshot, rollback   | Context assembly and compaction      |
+| Eva owns — never delegated               | Harness owns — swappable              |
+| ---------------------------------------- | ------------------------------------- |
+| Task spec and acceptance criteria        | Prompting strategy                    |
+| Workspace creation, snapshot, rollback   | Context assembly and compaction       |
 | The verifier and what counts as evidence | Tool-calling loop and retry behaviour |
-| Trace schema and trace store             | Internal subagent decomposition      |
-| Budget enforcement and the mandate       | Edit generation strategy             |
-| Merge authority                          | —                                    |
+| Trace schema and trace store             | Internal subagent decomposition       |
+| Budget enforcement and the mandate       | Edit generation strategy              |
+| Merge authority                          | —                                     |
 
 **When a harness reports success, that report is an unverified claim.** The harness ran inside a sandbox that you created. It ran against criteria that you wrote. You run the checks again.
 
@@ -39,7 +35,7 @@ Eva supports third-party harnesses. So Eva is no longer *a* harness. Eva is the 
 
 The table above governs what Eva delegates to *foreign harnesses*. This table governs what Eva opens to *its own ecosystem*. The logic is the same. Eva never delegates some things.
 
-| Kernel — never pluggable                      | Extension points — pluggable through published interfaces                      |
+| Kernel — never pluggable                      | Extension points — pluggable through published interfaces                  |
 | --------------------------------------------- | -------------------------------------------------------------------------- |
 | Event schema and trace store                  | Providers (`Provider` interface: anthropic, openai-compat, local)          |
 | Spec, budget, and mandate enforcement         | Harnesses (`Harness` interface — below)                                    |
@@ -441,7 +437,7 @@ Use one module, with a directory under `internal/` for each layer. Imports point
 eva/                    # go.mod; cmd/ for binaries, these layers under internal/
 ├── events/             # THE schema: events, trace records, versioning
 │                       #   imports: stdlib only, nothing internal  (stage 0)
-├── core/               # Unit, Spec, Outcome, loop, budget, hooks (HookBus),
+├── core/               # Unit, Spec, Outcome, loop, budget, hooks,
 │   │                   # verifier contract, tool registry
 │   │                   #   imports: events                         (stages 0-2, 5-6)
 │   ├── prompt/ schema/ pipeline/                                 # stage 1
