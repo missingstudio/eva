@@ -229,6 +229,10 @@ func (w *world) run(t *testing.T, args ...string) result {
 func (w *world) converse(t *testing.T, prompts ...string) (result, []events.Event) {
 	t.Helper()
 
+	if runtime.GOOS == "windows" {
+		t.Skip("the console cannot be driven through a pipe here, so a turn is unverifiable")
+	}
+
 	// A Trace this process appends to may already hold turns of an earlier one,
 	// so the turns of this run are counted from where it found the file.
 	base := w.closedRuns(t)
@@ -717,6 +721,14 @@ func TestAChunkHeavyRunProducesOneRecordPerBlock(t *testing.T) {
 // multi-record group is killed in trace/sink_test.go, where a group can be
 // constructed with the tool results stage 0 has no way to produce.
 func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
+	// This drives the console itself rather than through converse, so it needs
+	// the same carve-out for the same reason: no turn starts on Windows, so there
+	// is no mid-stream to kill. It failed there on "the turn never reached 20
+	// records", which is that absence rather than a torn Trace.
+	if runtime.GOOS == "windows" {
+		t.Skip("the console cannot be driven through a pipe here, so a turn is unverifiable")
+	}
+
 	const (
 		blocks = 2000
 		caught = 20
@@ -1045,12 +1057,20 @@ func TestInitWritesAStarterAndWillNotOverwriteIt(t *testing.T) {
 	}
 	// A configuration names the variable a credential is read from, which is
 	// not a thing to leave readable to everyone on a shared machine.
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	if mode := info.Mode().Perm(); mode != 0o600 {
-		t.Errorf("the configuration is mode %o, want 600", mode)
+	//
+	// Windows has no POSIX modes: Perm() reports 0666 for any writable file
+	// whatever was asked for, so the check does not run there and says so. The
+	// same carve-out, for the same reason, guards the auth store's own mode.
+	if runtime.GOOS == "windows" {
+		t.Log("degraded: file modes are not POSIX here, so 0600 went unchecked")
+	} else {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat: %v", err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("the configuration is mode %o, want 600", mode)
+		}
 	}
 
 	// And Eva runs against what it just wrote.
