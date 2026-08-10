@@ -131,6 +131,8 @@ jobs:
       # GoReleaser shells out to, so both are installed before it runs.
       - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.6
 
       # The same pinned version `make snapshot` runs, so what publishes here is
       # what a person can build locally without a tag.

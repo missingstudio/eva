@@ -255,7 +255,7 @@ The size is what a Bubble Tea console with Glamour and Chroma costs. Compression
 | ------------------------------ | ------------------------------------- | --------------------------------------------------- |
 | `eva_0.2.0_darwin_arm64.tar.gz` | The binary, `LICENSE`, `README.md`     | The thing being installed                            |
 | `checksums.txt`                | SHA-256 of every archive               | A download can be checked against the release        |
-| `checksums.txt.sig`, `.pem`    | Cosign keyless signature               | The checksums came from this repository's workflow    |
+| `checksums.txt.sigstore.json`  | Cosign keyless signature bundle        | The checksums came from this repository's workflow    |
 | `*.sbom.spdx.json`             | One SBOM per archive                   | A consumer can audit dependencies without building   |
 | Provenance attestation         | Stored by GitHub, not a release asset  | `gh attestation verify` proves which workflow built it |
 

@@ -65,19 +65,19 @@ sboms:
 # checksums came from this repository's release workflow.
 signs:
   - cmd: cosign
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
     artifacts: checksum
     output: true
 
-# The body of the release notes, folded over the commits in the tag's range. The
-# prefixes it groups by are the ones AGENTS.md requires and commit-lint enforces,
-# which is what makes this complete rather than remembered.
+# The body of the release notes, folded over the commits in the tag's range. It
+# groups by the prefixes AGENTS.md requires. Nothing checks those prefixes, so a
+# commit written without one is omitted here silently — the fold cannot group
+# what does not match.
 changelog:
   use: github
   sort: asc
@@ -128,8 +128,7 @@ release:
 
     # the checksums came from this repository's release workflow
     cosign verify-blob checksums.txt \
-      --signature checksums.txt.sig \
-      --certificate checksums.txt.pem \
+      --bundle checksums.txt.sigstore.json \
       --certificate-identity-regexp 'https://github.com/missingstudio/eva/.*' \
       --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
