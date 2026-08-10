@@ -51,7 +51,7 @@ it. A cache read is one of those later calls hitting the stored copy…
 session 1.2k in / 340 out · cache 2.0k write / 1.1k read · cost unreported
 ```
 
-Notice `cost unreported`. Neither Anthropic nor OpenAI returns a dollar figure with a response, so Eva says so instead of multiplying tokens by a price it looked up somewhere. A number you can argue with a bill about has to come from the bill.
+Notice `cost unreported`. Neither Anthropic nor OpenAI returns a dollar figure with a response. So Eva says so, rather than multiplying tokens by a price it looked up somewhere. A number you can argue with a bill about has to come from the bill.
 
 > [!NOTE]
 > **Eva is early.** Today it is a good terminal chat client with a very carefully built foundation. It can read your question and answer it. It cannot read your files, run your tests, or touch your shell — there are no tools yet.
@@ -60,7 +60,7 @@ Notice `cost unreported`. Neither Anthropic nor OpenAI returns a dollar figure w
 
 Eva is being built toward a control plane for coding agents. Work arrives as a spec with acceptance criteria a machine can check. Several harnesses race the same spec in isolated environments. A verifier Eva owns decides what actually passed, and the whole race is scored from the same record everything else is scored from.
 
-The reason for building the foundation this carefully first is the ladder in [docs/Product.md](docs/Product.md). The usual story goes model → agent → harness → factory. That chain skips five rungs, and each omission is a known way this fails:
+The reason for building the foundation this carefully first is the ladder in [docs/explanation/the-ladder.md](docs/explanation/the-ladder.md). The usual story goes model → agent → harness → factory. That chain skips five rungs, and each omission is a known way this fails:
 
 | The rung that gets skipped    | What breaks without it                                           |
 | ----------------------------- | ---------------------------------------------------------------- |
@@ -70,7 +70,7 @@ The reason for building the foundation this carefully first is the ladder in [do
 | **Learning loop + economics** | No evals, and no cost per merged change                          |
 | **Intent + authority**        | Nobody owns what was decided, and nobody answers for it          |
 
-Twenty stages, each with an exit test it can fail. One of them is built. The plan is a draft; the stage that shipped is not.
+Nineteen stages, each with an exit test it can fail. One of them is built. The plan is a draft; the stage that shipped is not.
 
 ## Install
 
@@ -143,7 +143,7 @@ login:    account acct_1a2b, valid until Mon, 11 Aug 2026 09:14:00 IST
 > [!IMPORTANT]
 > **`auth` decides, and nothing overrides it.** If it says `subscription`, an exported `OPENAI_API_KEY` is ignored, and `eva auth status` will tell you so rather than quietly using it. Most tools try the environment first, which is how people bill the wrong account for a month without noticing. ([why](docs/adr/0031-a-credential-has-a-mode-and-the-mode-alone-decides.md))
 
-Your key is never written to a settings file. It is read from the environment or obtained by logging in, and it never appears in the history file, a log, or anything sent to a model.
+Your key is never written to a settings file. Eva reads it from the environment, or gets it when you log in. It never appears in the history file, a log, or anything sent to a model.
 
 ## Using Eva
 
@@ -328,7 +328,7 @@ Those boundaries are an allow-list per package in [`.golangci.yml`](.golangci.ym
 Three decisions do most of the work:
 
 - **A provider only knows how to dial, read a chunk, and hang up.** Queueing, retrying, and counting are written once and shared. Adding a provider is a few hundred lines, not a copy of the machinery. ([0034](docs/adr/0034-one-driver-pulls-a-turn-and-a-provider-is-a-wire.md))
-- **Things register themselves.** Providers and file writers add themselves to the set that settings choose from, so the wiring layer names no implementation and the error listing your options can't go stale. ([0028](docs/adr/0028-selection-is-a-registry.md))
+- **Things register themselves.** Providers and file writers add themselves to the set that settings choose from. So the wiring layer names no implementation, and the error listing your options cannot go stale. ([0028](docs/adr/0028-selection-is-a-registry.md))
 - **The screen is a read-only view.** It renders records and nothing else. ([0015](docs/adr/0015-the-live-area-shows-the-stream-and-only-the-record-is-kept.md))
 
 ## Working on Eva
@@ -356,7 +356,10 @@ Tests drive the real Anthropic and OpenAI code against a local server speaking t
 
 |                                                                      |                                                                                           |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [docs/Product.md](docs/Product.md)                                   | The plan. Twenty stages, each with a test it can fail. Draft.                             |
+| [docs/tutorial/first-run.md](docs/tutorial/first-run.md)             | Build it, ask one question, then read that question back out of the trace.                 |
+| [docs/how-to/](docs/how-to/)                                         | One guide per task: providers, subscriptions, scripting, the trace, repo themes.           |
+| [docs/Product.md](docs/Product.md)                                   | The map to every design document. Start here to find the rest.                             |
+| [docs/roadmap.md](docs/roadmap.md)                                   | The plan. Nineteen stages, each with a test it can fail. Draft.                           |
 | [docs/decisions.md](docs/decisions.md)                               | Every decision on one page, grouped by topic. Start here.                                 |
 | [docs/adr/](docs/adr/)                                               | The decisions in full, one file each. The filename is the decision, so `ls` is the index. |
 | [CONTEXT.md](CONTEXT.md)                                             | The glossary. One concept, one name.                                                      |

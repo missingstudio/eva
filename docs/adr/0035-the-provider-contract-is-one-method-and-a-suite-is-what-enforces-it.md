@@ -18,7 +18,7 @@ The cost is real and small: a malformed Call is discovered one call later than i
 
 The interface was always wider than its signature. A caller must know that `io.EOF` is the sentinel, that four of the schema's eleven payload kinds cross this seam, that `Degraded` is a caveat the caller folds rather than a record it writes, that `Usage` arrives at most once and last, that a `Retry` precedes its wait, and that every ending is terminal and repeats.
 
-None of that is expressible in Go's type system. `events.Payload` is a sealed interface whose seal lives in `events`, so no narrower interface here can restrict it, and inventing a second sealed set would put the schema in two places — which is the bug ADR-0005 exists to prevent.
+None of that is expressible in Go's type system. `events.Payload` is a sealed interface whose seal lives in `events`, so no narrower interface here can restrict it, and inventing a second sealed set would put the schema in two places — which is the bug ADR-0005 exists to stop.
 
 So the rules stay prose in the doc comment, and the doc comment stops being the only thing holding them.
 

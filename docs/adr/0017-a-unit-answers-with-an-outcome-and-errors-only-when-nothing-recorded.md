@@ -62,5 +62,5 @@ func (b *blocks) commit(ctx context.Context, payloads ...events.Payload) error {
 ## Considered options
 
 - **Return the error and let each caller ignore the Outcome.** The status quo, and it is what produced the duplicated classification. It also makes the Outcome optional in practice, which makes it optional in fact.
-- **Drop the error from `Execute` entirely and add a Result for it.** Rejected: the closed Result set describes the work, and "the Trace would not take this" is not something the work did. It would also put a value in the set that every consumer switching on Result would have to learn in order to ignore.
+- **Drop the error from `Execute` entirely and add a Result for it.** Rejected: the closed Result set describes the work, and "the Trace would not take this" is not something the work did. It would also put a value in the set that every consumer switching on Result would have to learn to ignore.
 - **Have the Recorder report its own failures out of band.** Considered, and it is worse than it looks: the Recorder is shared with future parallel tool groups, so an out-of-band report has no single Unit to reach, and the Unit that most needs to know is the one whose group was refused.

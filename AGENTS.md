@@ -6,7 +6,7 @@ The workers of this factory are agents. You are one of them.
 
 ## Evidence, not claims
 
-A report of success is not success. Eva's whole design turns on that distinction — it re-runs the checks on every harness that claims a green run — and the same rule binds you.
+A report of success is not success. Eva's whole design turns on that distinction: it re-runs the checks on every harness that claims a green run. The same rule binds you.
 
 A task is complete when all four of these are done:
 
@@ -21,7 +21,7 @@ When a check does not run, the report is **degraded**: name what did not run, an
 
 Run `make check`. It covers formatting, build, `go vet`, lint, and tests across every package, and it is exactly what CI runs.
 
-The layer boundaries are enforced by `depguard` inside golangci-lint, which `make lint` runs. Every rule is an allow list in strict mode, so an import that no rule permits is rejected rather than quietly allowed. Adding a layer means adding a `.golangci.yml` rule — see `docs/adr/0010`.
+The layer boundaries are enforced by `depguard` inside golangci-lint, which `make lint` runs. Every rule is an allow list in strict mode, so an import that no rule allows is rejected rather than quietly allowed. Adding a layer means adding a `.golangci.yml` rule — see `docs/adr/0010`.
 
 ## Tenant isolation
 
@@ -36,7 +36,7 @@ Cross-tenant escape is the one failure that ends the business. It outranks every
 - Change only what the task names.
 - Prefer the small reversible change to the large correct-looking one.
 - Reuse the pattern already in the repo. A second way to do one thing is a cost the task must justify.
-- A behaviour change and its doc update land in the same commit. The docs are part of the factory (`docs/Product.md`, rule 13).
+- A behaviour change and its doc update land in the same commit. The docs are part of the factory (`docs/explanation/the-ladder.md`, rule 14).
 
 ## Commits
 
@@ -58,7 +58,7 @@ Report outcomes. State facts before conclusions, and state failures, risks, and 
 
 ## The plan
 
-`docs/Product.md` is the build path: twenty stages, each with a failable exit test. Status: **draft** — it describes what Eva will be, not what it is.
+`docs/roadmap.md` is the build path: nineteen stages, each with a failable exit test. Status: **draft** — it describes what Eva will be, not what it is. `docs/Product.md` is the map to every design document.
 
 Read the stage you are working in before you write code in it. Work the lowest stage whose exit test has not yet passed.
 
@@ -76,7 +76,7 @@ Read the stage you are working in before you write code in it. Work the lowest s
 
 **Layout** is one module, `cmd/` for binaries, `internal/` for layers. Read `docs/agents/project-structure.md` before you add a package, a layer, or a binary.
 
-**Design rules** are in `docs/agents/design-rules.md`: what a package is named for, how deep it should be, where an interface is declared, and what is a registry rather than a switch. Read it before you add a package or an extension point. It also says which rules a linter holds and which only review does.
+**Design rules** are in `docs/agents/design-rules.md`. They cover what a package is named for and how deep it should be. They also cover where an interface is declared, and what is a registry rather than a switch. Read it before you add a package or an extension point. It also says which rules a linter holds and which only review does.
 
 ### Domain docs
 

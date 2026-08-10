@@ -28,7 +28,7 @@ Adding a field is additive and keeps `SchemaVersion` at 1 (ADR 0006). Mid-run us
 
 ## Consequences
 
-**A Recorder belongs to one Run and is safe for concurrent use.** It holds the wire counter, and commits and publishes under one lock so that no Subscriber sees the Trace out of the order the Trace holds. A Subscriber must therefore not call `Record`. Stage 2 runs parallel tool groups against one Recorder, which is why this is decided now rather than found later.
+**A Recorder belongs to one Run and is safe for concurrent use.** It holds the wire counter, and commits and publishes under one lock so that no Subscriber sees the Trace out of the order the Trace holds. A Subscriber must so not call `Record`. Stage 2 runs parallel tool groups against one Recorder, which is why this is decided now rather than found later.
 
 **A Subscriber failure is reported and does not un-commit.** A broken output stream is a real failure. The Trace already holds the record, and the Trace is the source of truth. ADR 0025 later decided what happens to the *other* Subscribers: a failure stops the one that returned it rather than the publishing, and the Run says a projection stopped following.
 
@@ -36,7 +36,7 @@ Adding a field is additive and keeps `SchemaVersion` at 1 (ADR 0006). Mid-run us
 
 **Group boundaries are the caller's.** The Recorder does not guess where a turn's groups end. `cli.Turn` commits a content block at a time: everything already recorded survives the process dying, so buffering a whole turn would trade the property invariant 1 rests on for a smaller file.
 
-**Falsifier:** if a Unit turns up that needs to emit without committing — a dry run, a preview, a speculative branch — then `Record` is the wrong shape and the seam moves. Revisit this ADR rather than reintroducing a second writer, which is what it exists to prevent.
+**Falsifier:** if a Unit turns up that needs to emit without committing — a dry run, a preview, a speculative branch — then `Record` is the wrong shape and the seam moves. Revisit this ADR rather than reintroducing a second writer, which is what it exists to stop.
 
 ## Considered options
 

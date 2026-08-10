@@ -18,7 +18,7 @@ Only the OpenAI Provider has a subscription transport, so `auth = "subscription"
 
 ## Consequences
 
-The defaults follow the Provider, so they are resolved after it: a file that says `name = "openai"` and nothing else runs that Provider's model and reads that Provider's variable, rather than inheriting another's. The compiled defaults therefore leave the model and the key variable empty, and normalization fills them once the name is known — a pre-filled default is indistinguishable from a choice by the time the file is decoded.
+The defaults follow the Provider, so they are resolved after it: a file that says `name = "openai"` and nothing else runs that Provider's model and reads that Provider's variable, rather than inheriting another's. So the compiled defaults leave the model and the key variable empty, and normalization fills them once the name is known — a pre-filled default is indistinguishable from a choice by the time the file is decoded.
 
 A repository may not set `provider.auth`. It decides what a run does, which is the boundary the project-settable allow list already holds.
 

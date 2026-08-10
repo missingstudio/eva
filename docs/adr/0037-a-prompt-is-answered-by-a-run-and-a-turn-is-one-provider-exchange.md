@@ -16,7 +16,7 @@ The intent rides on Started, so a prompt exists in the record only as the openin
 
 Every candidate for divergence collapses into the Run. A refused attempt retries inside the open Run, as a Retry record before a wait. An interrupted Run closes, and continuing needs a new intent, which is a new Run. Budget exhaustion is data inside the transcript, and Exhausted closes the Run. Where an arc genuinely spans executions — a Spec re-run after a failure — the vocabulary already retired the word for that pair: a Spec plus its Runs was Task, and it stays retired.
 
-Two names with one extension is what the glossary exists to prevent. The arc keeps the name that owns the record.
+Two names with one extension is what the glossary exists to stop. The arc keeps the name that owns the record.
 
 ## The word was scheduled to collide with itself
 

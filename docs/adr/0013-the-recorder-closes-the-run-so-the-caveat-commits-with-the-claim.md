@@ -12,7 +12,7 @@ func (r *Recorder) Finish(ctx context.Context, claim events.Claim) error
 
 `Finish` commits `Degraded` and `Finished` as one group, and omits `Degraded` when the Run is clean — its presence is the flag, so a gate reads whether the record is there rather than reading a boolean inside it.
 
-The alternative was to leave it with the Unit: fold the unrecognised kinds in a projection, and have each Unit ask for them before it writes its `Finished`. That is a rule contributors are expected to remember, guarding the one failure the project has no instrument to detect. The Unit that forgets writes a clean-looking claim over a Trace holding a record nobody read — structurally valid, quietly wrong, and indistinguishable from a good Run to everything downstream. The Recorder is the only path an Event takes to the Trace (ADR 0011) and therefore the only thing that sees all of them, so it is the one place the caveat cannot be forgotten.
+The alternative was to leave it with the Unit: fold the unrecognised kinds in a projection, and have each Unit ask for them before it writes its `Finished`. That is a rule contributors are expected to remember, guarding the one failure the project has no instrument to detect. The Unit that forgets writes a clean-looking claim over a Trace holding a record nobody read — structurally valid, quietly wrong, and indistinguishable from a good Run to everything downstream. The Recorder is the only path an Event takes to the Trace (ADR 0011), and the only thing that sees all of them. So it is the one place the caveat cannot be forgotten.
 
 The caveat is first in the group. `Finished` is what closes a Run, so a record behind it is one the close does not cover.
 

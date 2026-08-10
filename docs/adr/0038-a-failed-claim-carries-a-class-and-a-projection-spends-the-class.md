@@ -51,7 +51,7 @@ A failure nothing classified stays unclassified all the way to the record, and t
 
 ## The record holds what the screen spends
 
-The class goes into the Claim, not only into the Outcome. A Unit that reported a reason it did not commit would let a screen say something the Trace cannot account for, which is the one thing an Outcome exists to prevent (ADR 0017).
+The class goes into the Claim, not only into the Outcome. A Unit that reported a reason it did not commit would let a screen say something the Trace cannot account for, which is the one thing an Outcome exists to stop (ADR 0017).
 
 It is an additive field on one schema version, so a Trace written before it still reads — as a failure nobody classified, which is what it is.
 

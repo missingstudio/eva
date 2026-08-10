@@ -17,7 +17,7 @@ The retry policy was the Anthropic Provider's shape restated, on the reasoning t
 Three behaviours are load-bearing and pinned by tests:
 
 - **The subscription backend restates the answer.** Text arrives as deltas and then again as an assembled item, and the terminal frame omits the output array entirely — so the deltas are counted per item and the restatement contributes only what the deltas did not. A turn that streamed everything adds nothing twice; a turn that streamed nothing still answers.
-- **The account rides inside the token.** The backend requires the ChatGPT account id as a header, and the id lives in a claim of the access token itself — the credential's own shape — so the Provider reads it there rather than being handed a second value that could disagree with the first. The header then always names the account of the token being sent, even when the stored one has gone stale under a renewal.
+- **The account rides inside the token.** The backend needs the ChatGPT account id as a header, and the id lives in a claim of the access token itself — the credential's own shape — so the Provider reads it there rather than being handed a second value that could disagree with the first. The header then always names the account of the token being sent, even when the stored one has gone stale under a renewal.
 - **The books close on the terminal frame.** Usage arrives once, on `response.completed` or `response.incomplete`; a truncated answer is marked Degraded where the truncation is learned, a turn nobody priced emits a caveat rather than zeros, and the reasoning figure is recorded as the subset of output tokens it is.
 
 ## The claim reader is written twice, knowingly

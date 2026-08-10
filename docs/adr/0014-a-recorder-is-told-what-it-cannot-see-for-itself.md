@@ -44,6 +44,6 @@ Saying it where it is learned rather than saving it for the end is what keeps th
 
 ## Considered options
 
-- **`Finish(ctx, claim, missing ...string)`.** Fewer methods, and rejected: the degradations are discovered mid-stream, far from the close, so the Turn would have to hold them and hand them over — which is a Unit accumulating a caveat again, one forgotten variable away from the failure ADR 0013 exists to prevent.
+- **`Finish(ctx, claim, missing ...string)`.** Fewer methods, and rejected: the degradations are discovered mid-stream, far from the close, so the Turn would have to hold them and hand them over — which is a Unit accumulating a caveat again, one forgotten variable away from the failure ADR 0013 exists to stop.
 - **Let the Provider's `Degraded` commit as its own record.** Simplest: `Turn.stream` already commits every payload that is not a text chunk, so this needed no code at all. Rejected: a Run with two caveats makes a reader work out which one qualified the claim, and a caveat that is not in the closing group is one a `kill -9` can separate from it.
 - **A new payload kind for truncation.** Rejected: `Degraded` already means "this data is incomplete", which is exactly what a cut-off answer is. A kind per cause would grow the closed set for every new way to be incomplete.
