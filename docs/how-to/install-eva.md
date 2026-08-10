@@ -120,8 +120,7 @@ sha256sum --check --ignore-missing checksums.txt
 
 # the checksums came from this repository's release workflow
 cosign verify-blob checksums.txt \
-  --signature checksums.txt.sig \
-  --certificate checksums.txt.pem \
+  --bundle checksums.txt.sigstore.json \
   --certificate-identity-regexp 'https://github.com/missingstudio/eva/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
