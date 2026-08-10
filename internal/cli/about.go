@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 
@@ -59,12 +62,50 @@ func version() string {
 
 	switch {
 	case revision == "":
-		return Version
+		return Version + module(info)
 	case modified:
 		return Version + "+" + revision[:min(7, len(revision))] + ".dirty"
 	default:
 		return Version + "+" + revision[:min(7, len(revision))]
 	}
+}
+
+// module is what the module graph knows about this build, and is empty when
+// that adds nothing to the constant.
+//
+// A binary the module proxy produced carries no VCS stamps, because a module
+// cache is not a git tree — so `go install` leaves the revision above empty and
+// every installed build reported the same seven characters of nothing. What
+// such a build does have is the version it was resolved at, and for a branch
+// that is a pseudo-version carrying the commit. Reporting it is what stops the
+// installed binary from being the one build nobody can pin down.
+//
+// A version that only repeats the constant is dropped. Printed twice, one fact
+// reads as two.
+func module(info *debug.BuildInfo) string {
+	switch v := info.Main.Version; v {
+	case "", "(devel)", "v" + Version:
+		return ""
+	default:
+		return " (" + v + ")"
+	}
+}
+
+// versionReport writes what build this is, and what built it, then leaves.
+//
+// It is a CLI verb rather than a console Command, for the reason a login is:
+// what a person scripting an upgrade check runs is a process, and a Command is
+// answered inside a Console that is already open.
+//
+// Every line is a fact about the running binary. Nothing here reads a
+// configuration, a network, or a repository, so this answers on a machine where
+// Eva is not yet set up — which is most of the machines that will ask.
+func versionReport(stdout io.Writer) (int, error) {
+	if _, err := fmt.Fprintf(stdout, "eva:      %s\ngo:       %s\nplatform: %s/%s\n",
+		version(), runtime.Version(), runtime.GOOS, runtime.GOARCH); err != nil {
+		return ExitFailure, err
+	}
+	return ExitOK, nil
 }
 
 // branch is the branch of the repository the run is standing in, and is empty
