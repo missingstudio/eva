@@ -106,11 +106,16 @@ changelog:
       - "^Merge"
 
 release:
-  # auto reads the tag: v0.3.0-rc.1 is a prerelease and is never marked latest,
-  # v0.3.0 is. This is what keeps the next channel out of the stable one without
-  # a second configuration path.
+  # auto reads the tag: v0.3.0-rc.1 is a prerelease, v0.3.0 is not. This is what
+  # keeps the next channel out of the stable one without a second configuration
+  # path.
   prerelease: auto
-  make_latest: true
+
+  # And latest follows from the same fact rather than being asserted beside it.
+  # A prerelease that also claimed to be latest would be asking GitHub for two
+  # contradictory things, and "the newest stable release" is the one thing an
+  # installer reads this field for.
+  make_latest: '{{ if .Prerelease }}false{{ else }}true{{ end }}'
   mode: replace
   footer: |
     ---
