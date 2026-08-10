@@ -9,12 +9,16 @@ on every harness that claims a green run, and the same rule binds you.
 
 A task is complete when all four are true:
 
-1. `make check` ran.
+1. `make verify` ran.
 2. The behaviour the task asked for is verified — not the behaviour you built.
 3. You read the full diff, and meant every hunk.
 4. The diff carries no secret, credential, or tenant data.
 
-`make check` is exactly what CI runs. `make help` lists the targets.
+`make verify` is exactly what CI runs. It is `make check`, which needs nothing but
+this repository, plus `make audit`, which reaches the network — so its answer can
+change while the tree does not, and CI runs it on a schedule for that reason. The
+Makefile declares both lists and CI fails when its own jobs do not cover them, so
+neither can quietly check less than the other. `make help` lists the targets.
 
 When a check does not run, the report is **degraded**: name what did not run, and
 why. A degraded report is a valid outcome. An unrun check reported as a passing one

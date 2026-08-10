@@ -12,7 +12,9 @@ One module at the root. `cmd/` holds the binaries, `internal/` holds every layer
 
 **A new binary** — a directory under `cmd/`, holding a `main` that reads its arguments, calls into the frontend, and returns an exit code. Its allow list is the standard library and `internal/cli`. A binary that wants more than the frontend exposes is telling you the frontend should expose it. A second place that knows how a run is wired is a second place for the wiring to drift.
 
-The root holds the module, the Makefile, the linter config, and the docs.
+The root holds the module, the Makefile, the linter config, the release config, and the docs.
+
+**A shell script the pipeline runs** — a file under `scripts/`, POSIX `sh`. `install.sh` lives there, because a script a person pipes from `curl` has to be a file somebody can read before running it. Go is the implementation language for anything a person runs as Eva; `scripts/` is for what runs *around* it, where the alternative is a shell one-liner buried in a Makefile recipe or in a workflow.
 
 ## What the checks will not say out loud
 
