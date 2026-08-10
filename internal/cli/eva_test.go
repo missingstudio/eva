@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,7 +46,16 @@ func TestMain(m *testing.M) {
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	binary = filepath.Join(dir, "eva")
+	// Windows will not execute a file with no extension, and `go build -o` writes
+	// exactly the name it is given — so the name has to carry one. Without this,
+	// every test in this package fails at the exec with "executable file not
+	// found", which reads like a missing binary rather than a missing suffix.
+	name := "eva"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+
+	binary = filepath.Join(dir, name)
 	build := exec.Command("go", "build", "-o", binary, "github.com/missingstudio/eva/cmd/eva")
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build eva: %v\n%s", err, out)

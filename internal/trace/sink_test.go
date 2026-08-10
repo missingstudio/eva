@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -669,9 +670,20 @@ func TestAKilledWriterLeavesNoPartialRecordAndNoPartialGroup(t *testing.T) {
 	// A signal, not an exit: a helper that returned on its own would have closed
 	// the file, and this test would be measuring an orderly shutdown. An exit
 	// code of -1 is what Go reports for a process a signal ended.
+	//
+	// Windows has no signals. Kill there is TerminateProcess, and Go reports its
+	// exit code as 1 — which a helper that failed on its own could also produce.
+	// So the assertion is weaker on that platform, and deliberately: what it
+	// still rules out is the orderly shutdown, which is the one ending that would
+	// make the rest of this test prove nothing.
+	wantExit := -1
+	if runtime.GOOS == "windows" {
+		wantExit = 1
+	}
+
 	var exit *exec.ExitError
-	if err := helper.Wait(); !errors.As(err, &exit) || exit.ExitCode() != -1 {
-		t.Fatalf("the helper ended with %v, want a signal — it was never killed mid-stream", err)
+	if err := helper.Wait(); !errors.As(err, &exit) || exit.ExitCode() != wantExit {
+		t.Fatalf("the helper ended with %v, want a kill (exit %d) — it was never killed mid-stream", err, wantExit)
 	}
 
 	body, err := os.ReadFile(path)
