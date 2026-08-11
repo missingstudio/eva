@@ -22,7 +22,18 @@ MAKE="${MAKE:-make}"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT INT TERM
 
-"$MAKE" check-list | sort -u >"$work/declared"
+# Only bare target names are read. This runs as a sub-make, and GNU make 4
+# turns on --print-directory for those by itself — so `Entering directory` lands
+# on stdout and would otherwise be read as a check nobody runs. macOS ships make
+# 3.81, which does not, which is why this could only fail on a runner.
+"$MAKE" check-list | grep -E '^[a-z][a-z0-9-]*$' | sort -u >"$work/declared"
+
+# An empty list would make every assertion below vacuously true, so the one
+# thing this must never do quietly is read nothing.
+[ -s "$work/declared" ] || {
+	echo "check-coverage: \`$MAKE check-list\` named no targets" >&2
+	exit 1
+}
 
 # A workflow that a commit on a branch reaches: its `on:` block names
 # pull_request, or a push with branches.
