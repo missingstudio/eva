@@ -373,37 +373,33 @@ Three decisions do most of the work:
 make verify
 ```
 
-That is exactly what CI runs. It splits in two: `make check` needs nothing but this repository, and `make audit` reaches the network — so its answer can change while the tree does not, which is why CI also runs it on a schedule.
+That is exactly what CI checks on every change. It splits in two: `make check` needs nothing but this repository, and `make audit` reaches the network — so its answer can change while the tree does not, which is why CI also runs it on a schedule. CI runs one thing beyond it, `make rehearse`, described below.
 
-| Target            | What it does                                                |
-| ----------------- | ----------------------------------------------------------- |
-| `make verify`     | `check` and `audit` — everything CI runs                    |
-| `make check`      | fmt, build, vet, lint, test                                 |
-| `make audit`      | tidy-check, mod-verify, vuln                                |
-| `make fmt`        | Fails if anything isn't gofmt-clean                         |
-| `make lint`       | golangci-lint, where the package boundaries are enforced    |
-| `make gosec`      | Security patterns in Eva's own code                         |
-| `make test`       | Every package, under the race detector, in a shuffled order |
-| `make vuln`       | Known vulnerabilities in code Eva actually calls            |
-| `make tidy-check` | Fails if `go.mod` isn't what the imports imply              |
-| `make eva`        | Build the binary into the repo root                         |
-| `make snapshot`   | Build every release archive locally, publishing nothing     |
-| `make tidy`       | Tidy dependencies                                           |
+There are four entry points. `make help` lists every target with what it does, generated from the Makefile itself — so this page names the ones you choose between rather than repeating a list that would go stale:
+
+| Target          | What it does                                                               |
+| --------------- | -------------------------------------------------------------------------- |
+| `make verify`   | `check` and `audit` — everything CI runs                                   |
+| `make check`    | Everything that needs no network                                           |
+| `make audit`    | The checks that reach the network, so their answer can change on their own |
+| `make rehearse` | The whole release path without a tag: guard, snapshot, and a real install  |
 
 Every tool version is pinned and run via `go run`, so you install nothing and your results match CI.
 
 CI is four workflows, split by what makes each one fail:
 
-| Workflow                                       | Runs                                   | When                          |
-| ---------------------------------------------- | -------------------------------------- | ----------------------------- |
-| [ci.yml](.github/workflows/ci.yml)             | fmt, build, vet, test, lint, platforms | Every change                  |
-| [security.yml](.github/workflows/security.yml) | gosec                                  | Every change                  |
-| [audit.yml](.github/workflows/audit.yml)       | tidy-check, mod-verify, vuln           | Every change, **and Mondays** |
-| [release.yml](.github/workflows/release.yml)   | All three, then builds and publishes   | A `v*` tag                    |
+| Workflow                                       | Runs                                             | When                          |
+| ---------------------------------------------- | ------------------------------------------------ | ----------------------------- |
+| [ci.yml](.github/workflows/ci.yml)             | fmt, build, vet, test, lint, platforms, rehearse | Every change                  |
+| [security.yml](.github/workflows/security.yml) | gosec                                            | Every change                  |
+| [audit.yml](.github/workflows/audit.yml)       | tidy-check, mod-verify, vuln                     | Every change, **and Mondays** |
+| [release.yml](.github/workflows/release.yml)   | All three, then builds and publishes             | A `v*` tag                    |
 
 Only the audit has a schedule, and it is the only one that needs one: a vulnerability is published on somebody else's timetable, so its answer changes while the tree does not. Everything else is a pure function of the tree.
 
-`ci.yml`'s `gate` job reads `make check-list` and fails when no workflow runs a declared target. Coverage is derived from the workflow files rather than listed a second time, so the three files can't drift from the Makefile.
+`make check-coverage` reads `make check-list` and fails when no workflow a commit reaches runs a declared target. Coverage is derived from the workflow files rather than listed a second time, so the three files can't drift from the Makefile. It runs in `ci.yml`'s `gate` job and at a desk, because a script both can call is worth more than a step only CI could.
+
+`make rehearse` is the same idea applied to the release. Nine defects on the first two releases were reachable only by pushing a tag; the rehearsal runs the guard, builds every archive, and installs from what it built — which is also what checks that the name the install script derives is the name the build wrote. Only signing still needs a tag, because keyless signing needs an OIDC token a laptop does not have.
 
 Tests drive the real Anthropic and OpenAI code against a local server speaking the real protocol. There's no mock provider, because a mock is a second implementation that can disagree with the first and be believed. ([0036](docs/adr/0036-a-replaying-provider-is-not-a-provider-a-person-may-select.md))
 

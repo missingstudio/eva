@@ -1,0 +1,19 @@
+{
+  "url": "https://api.github.com/repos/missingstudio/eva/releases/300",
+  "tag_name": "v0.2.0",
+  "name": "v0.2.0",
+  "draft": false,
+  "prerelease": false,
+  "author": {
+    "login": "missingstudio",
+    "id": 1,
+    "site_admin": false
+  },
+  "assets": [
+    {
+      "name": "eva_0.2.0_darwin_arm64.tar.gz",
+      "content_type": "application/gzip",
+      "state": "uploaded"
+    }
+  ]
+}

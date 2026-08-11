@@ -29,8 +29,6 @@ builds:
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     ignore:
-      # Nothing asks for it, and a console on Windows on ARM is a platform this
-      # project has never run on. It is one line to add when somebody does.
       - goos: windows
         goarch: arm64
     mod_timestamp: "{{ .CommitTimestamp }}"
@@ -95,8 +93,6 @@ changelog:
       regexp: '^.*?(refactor|perf)(\([[:word:]]+\))??!?:.+$'
       order: 3
   filters:
-    # Counted rather than hidden: the release notes carry the number of other
-    # commits, and spend no line on each.
     exclude:
       - "^docs"
       - "^test"
@@ -119,22 +115,15 @@ release:
   mode: replace
   footer: |
     ---
-
     ## Verify what you downloaded
 
     ```bash
-    # the archive matches the checksum this release published
     sha256sum --check --ignore-missing checksums.txt
-
-    # the checksums came from this repository's release workflow
-    cosign verify-blob checksums.txt \
-      --bundle checksums.txt.sigstore.json \
-      --certificate-identity-regexp 'https://github.com/missingstudio/eva/.*' \
-      --certificate-oidc-issuer https://token.actions.githubusercontent.com
-
-    # the binary was built by that workflow, from this commit
-    gh attestation verify eva_*_linux_amd64.tar.gz --repo missingstudio/eva
     ```
+
+    The checksums themselves are signed, and each archive carries a provenance
+    attestation naming the workflow and commit that built it. Both commands are
+    in [Verify what you downloaded](https://github.com/missingstudio/eva/blob/{{ .Tag }}/docs/how-to/install-eva.md#verify-what-you-downloaded).
 
 # A Homebrew tap needs a second repository and a token that can write to it.
 # Neither exists yet, so this stays commented rather than failing the first

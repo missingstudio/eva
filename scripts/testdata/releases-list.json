@@ -1,0 +1,45 @@
+[
+  {
+    "url": "https://api.github.com/repos/missingstudio/eva/releases/300",
+    "tag_name": "v0.2.0",
+    "name": "v0.2.0",
+    "draft": false,
+    "prerelease": false,
+    "author": {
+      "login": "missingstudio",
+      "id": 1,
+      "site_admin": false
+    },
+    "assets": [
+      {
+        "name": "eva_0.2.0_linux_amd64.tar.gz",
+        "content_type": "application/gzip",
+        "state": "uploaded"
+      },
+      {
+        "name": "checksums.txt",
+        "content_type": "text/plain",
+        "state": "uploaded"
+      }
+    ]
+  },
+  {
+    "url": "https://api.github.com/repos/missingstudio/eva/releases/299",
+    "tag_name": "v0.3.0-rc.1",
+    "name": "v0.3.0-rc.1",
+    "draft": false,
+    "prerelease": true,
+    "author": {
+      "login": "missingstudio",
+      "id": 1,
+      "site_admin": false
+    },
+    "assets": [
+      {
+        "name": "eva_0.3.0-rc.1_linux_amd64.tar.gz",
+        "content_type": "application/gzip",
+        "state": "uploaded"
+      }
+    ]
+  }
+]

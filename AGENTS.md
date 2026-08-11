@@ -14,11 +14,20 @@ A task is complete when all four are true:
 3. You read the full diff, and meant every hunk.
 4. The diff carries no secret, credential, or tenant data.
 
-`make verify` is exactly what CI runs. It is `make check`, which needs nothing but
-this repository, plus `make audit`, which reaches the network — so its answer can
-change while the tree does not, and CI runs it on a schedule for that reason. The
-Makefile declares both lists and CI fails when its own jobs do not cover them, so
-neither can quietly check less than the other. `make help` lists the targets.
+`make verify` is exactly what CI checks on every change. It is `make check`, which
+needs nothing but this repository, plus `make audit`, which reaches the network — so
+its answer can change while the tree does not, and CI runs it on a schedule for that
+reason. The Makefile declares both lists and `make check-coverage` fails when no
+workflow a commit reaches runs one of them, so neither can quietly check less than
+the other. `make help` lists the targets.
+
+One thing CI runs that `make verify` does not: `make rehearse`, the release path
+without a tag. It builds every archive and installs from what it built, which is
+what proves the install script asks for the name the build wrote. It is not a check because
+it compiles five targets and downloads a release tool, so CI runs it when a change
+can reach the release path. Run it yourself when you touch the Makefile,
+`.goreleaser.yaml`, `scripts/`, or a workflow. Only signing is still tag-time:
+keyless signing needs an OIDC token that no laptop has.
 
 When a check does not run, the report is **degraded**: name what did not run, and
 why. A degraded report is a valid outcome. An unrun check reported as a passing one

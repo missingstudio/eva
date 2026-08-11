@@ -213,7 +213,7 @@ The changelog has two parts, and they fail in opposite directions if merged.
 
 **The highlights are written**, by whoever cuts the release, for user-visible changes only. Three sentences that say what a person can now do, or must now change. A generated list cannot say that, and a release with nothing worth saying gets no highlights rather than filler.
 
-`CHANGELOG.md` follows Keep a Changelog. It is regenerated and committed by the release workflow, so no branch edits it and no two branches conflict in it.
+`CHANGELOG.md` follows Keep a Changelog. **It is written by hand and committed like any other file** — see the departure recorded at the top of this page. An earlier draft had the release workflow regenerate and commit it, which was dropped: committing a regenerated file back to `main` from CI means a pipeline that pushes to the default branch, and that hazard buys nothing the generated release notes do not already give. Nothing gates it, so a tag whose changelog nobody updated still publishes.
 
 ## Prefix to section
 
