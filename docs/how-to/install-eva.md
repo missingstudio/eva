@@ -3,9 +3,8 @@
 Get an `eva` binary onto a machine, and know which build you got. At the end,
 `eva version` will report it.
 
-Nothing is released yet, so two of the paths below work today and three do not.
-[`@main`](#the-newest-commit) and [source](#build-it-from-source) need no release.
-The other three wait for one.
+Every path below works. `v0.1.0` is the current stable release; `v0.1.0-rc.1` is
+the prerelease that proved the pipeline before it.
 
 ## Which path
 

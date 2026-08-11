@@ -10,7 +10,7 @@ Two findings from the tree before this landed drove the shape of it. The vulnera
 
 ## What landed, and where it differs from this plan
 
-All thirteen steps of the sequencing table are addressed. Two are marked `partly` there: step 5 landed `gosec` and not the SARIF upload, and step 12 landed the install script and not the Homebrew tap. Eight things came out differently from what this page proposed, and each is a decision it owes a reason for:
+All thirteen steps of the sequencing table are addressed. Two are marked `partly` there: step 5 landed `gosec` and not the SARIF upload, and step 12 landed the install script and not the Homebrew tap. Ten things came out differently from what this page proposed, and each is a decision it owes a reason for:
 
 | Departure                                                                 | Why                                                                                          |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -22,9 +22,35 @@ All thirteen steps of the sequencing table are addressed. Two are marked `partly
 | **The Homebrew tap config ships commented out.**                           | It needs a second repository and a token that can write to it. Neither exists, and a config that names a missing repository fails the first release. The three steps to enable it are in `.goreleaser.yaml` |
 | **A pull request cross-compiles two targets, not four.**                   | The dimension that breaks is the operating system, so `windows/amd64` and `darwin/arm64` cover it. `linux/arm64` and `darwin/amd64` are same-OS and are built at release |
 | **Windows and macOS run `go test` directly, without the race detector.**   | The race detector needs a C toolchain that a Windows runner does not reliably have, and `make` is not part of that image's contract. The job says out loud that it is a subset of `make test` |
+| **Eighteen console tests are skipped on Windows.**                          | The console answers nothing written to a pipe there, so each one waited out a 30-second deadline. Whether the input reader wants a console handle or `\r` alone is not Enter is unresolved, and answerable only on a Windows machine. The skip names what is unverified rather than implying it works |
+| **The scheduled failure report is a fourth workflow, not a job in the audit.** | As a job it made `audit.yml` un-callable: it asked for `issues: write`, and a caller holding `contents: read` cannot grant that. `audit-report.yml` watches from outside on `workflow_run`, so the gate asks for nothing beyond read |
 | **`version()` prints the module version only when it differs.**            | The plan's table showed `0.1.0 (v0.1.0)` for a proxy install. Printed twice, one fact reads as two — so an exact match is dropped and a pseudo-version is not |
 
-What no local run can reach is the part that needs GitHub: no workflow in this repository has executed, and no tag has been pushed. The workflows are `actionlint`-clean and every shell fragment in them was run by hand, which is a different and weaker claim than a green run. The first tag is where that gets settled.
+All of it has now run. `v0.1.0-rc.1` published on 2026-08-10 and `v0.1.0` followed it, so cosign, syft, the provenance attestation, and the GitHub release have each executed rather than merely been reasoned about. The section below records what that cost, because it is the argument for doing it on purpose.
+
+## What the first releases caught
+
+Nine defects reached a runner that no local check could have reached, and every one of them was in the release path rather than in Eva. They are listed because a plan that only records its intentions is half a record.
+
+| Defect | Where it surfaced | Why nothing local caught it |
+| ------- | ----------------- | ---------------------------- |
+| The tag guard rejected **every** prerelease | Run against `v0.1.0-rc.1` | It stripped build metadata (`+abc1234`) and not the prerelease suffix (`-rc.1`), so the one tag shape worth pushing first was the one shape it refused |
+| `audit.yml` was un-callable | `startup_failure`, no jobs, no log | Its `report` job asked for `issues: write`; a caller holding `contents: read` cannot grant that, and reusable-workflow permissions are validated before anything runs — on a job that would have been skipped |
+| cosign wrote no signature | The `Release` step, after 2m27s | cosign v3 replaced `--output-signature`/`--output-certificate` with `--bundle`; v4 ignores the old pair, writes neither, then fails creating a bundle at the empty path it was never given |
+| The signing tool was unpinned | Same failure | The action's SHA pins the *installer*, not the binary it downloads. A flag contract can then change with no commit here |
+| `--channel next` never worked | Installing from the live release | The releases JSON was split on `{`, and the nested `author` and `assets` objects split it too — so the piece holding `"prerelease": true` held no `tag_name` |
+| `make_latest: true` on a prerelease | Read before it ran | It asks GitHub for two contradictory things. Now it follows from the tag |
+| Windows could not execute the test binary | 36 failures, first Windows run | `go build -o` writes the literal name, and Windows will not run a file with no extension |
+| Windows has no POSIX file modes | The auth store and the config starter | `Perm()` reports 0666 for any writable file, so `0600` is unassertable there |
+| The console answers nothing on Windows | 17 tests, each waiting out 30s | Only visible once the `.exe` fix let those tests run at all |
+
+Two of them are worth more than their line.
+
+**The signing step cannot be exercised without a tag.** `make snapshot` skips it, and has to: keyless signing needs an OIDC token, which a laptop does not have and would try to fetch through a browser. So the cosign contract is only testable at tag time. That is the whole argument for spending a release candidate before spending a release.
+
+**A skipped job still costs its permissions.** The `report` job would not have run on a tag, and it stopped the release anyway. Permissions are checked statically, so "it is skipped" is not a defence — which is why the reporting moved out to `audit-report.yml` and the audit gate now asks for nothing beyond `contents: read`.
+
+What remains unverified is narrower than it was: the Homebrew tap and macOS notarization have no implementation to run, and the console on Windows is skipped rather than fixed.
 
 The one existing invariant this changed: `AGENTS.md` said `make check` is exactly what CI runs, and now says `make verify` is.
 
@@ -527,16 +553,34 @@ jobs:
 
 **Every third-party action is pinned to a commit SHA, never a tag.** This is the same rule the package registry follows in `docs/reference/architecture.md`, applied to the supply chain that builds the releases. Dependabot raises the pins, so pinning does not mean going stale.
 
-## Projected wall clock
+## Observed wall clock
 
-| Scenario                  | Today             | After                          |
-| ------------------------- | ----------------- | ------------------------------ |
-| PR push, warm cache       | ~2.5 min, run twice | ~1.5 min, run once, first failure at ~20s |
-| PR push, cold cache       | ~4 min, run twice | ~2.5 min, run once             |
-| Push to `main`            | ~2.5 min          | ~2.5 min, across three platforms |
-| Tag to published release  | n/a               | ~6 min                         |
+The table this replaced held projections, and said it should be replaced with what was observed. These are the observations, from the runs on 2026-08-10.
 
-These are projections from the measurements above, on two-core runners. They are worth re-measuring once the workflow exists, and this table should be replaced with what was observed.
+| Job                     | Observed                    |
+| ----------------------- | --------------------------- |
+| `quick`                 | 5–9s                        |
+| `platforms` (macOS)     | 27–34s                      |
+| `platforms` (Windows)   | 57s                         |
+| `audit`                 | 36–37s                      |
+| `gosec`                 | 1m17s–1m19s                 |
+| `lint`                  | 1m31s–1m39s                 |
+| `test`                  | 2m12s–2m43s                 |
+| `gate`                  | 4–7s                        |
+| `release` (build, sign, attest, publish) | 4m49s      |
+
+| Scenario                 | Before          | Observed after            |
+| ------------------------ | --------------- | ------------------------- |
+| Push to `main`           | ~40–50s, one job | ~3 min, ten jobs           |
+| Tag to published release | n/a             | **7m18s**                  |
+
+Two things the projections got wrong, both worth recording.
+
+**The estimate of ~6 minutes for a release was close** — 7m18s — but for the wrong reason. Most of it is not the build. `release` itself is 4m49s, and the gates it calls run in parallel ahead of it.
+
+**CI on `main` got slower, not faster: 40s to about three minutes.** The projection said 2.5 minutes and treated that as break-even. It is not break-even, it is a four-fold increase, and it buys the race detector, two more operating systems, a security linter, and a dependency audit that the 40-second job never ran. That is the trade, stated as what it is rather than as a saving.
+
+The wins are elsewhere and real: a pull request no longer runs twice, `quick` reports a formatting mistake in nine seconds instead of behind a compile, and a superseded push is cancelled instead of finishing.
 
 The largest single win is not the parallelism. It is deleting the duplicate run.
 
