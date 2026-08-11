@@ -7,16 +7,33 @@ does not list every commit. The complete list is generated per release from the
 commit range, and it lives in that release's notes on GitHub — the link under
 each version below goes to it.
 
-Nothing is released yet, so every entry is under Unreleased.
-
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 Under 1.0 a minor bump may break something; that is what `0.` means here.
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.1.0 — 2026-08-10
+
+The first release. Eva was buildable before this and installable by nobody.
+
+[Release notes and artifacts](https://github.com/missingstudio/eva/releases/tag/v0.1.0)
+carry the complete commit list; what follows is the part worth a sentence.
+
 ### Added
 
+- **Eva installs.** Releases carry archives for macOS, Linux, and Windows, a
+  SHA-256 checksum for each, an SBOM per archive, a cosign signature over the
+  checksums, and a provenance attestation naming the workflow and commit that
+  built them. `go install github.com/missingstudio/eva/cmd/eva@latest`, or the
+  install script, which refuses to install an archive whose checksum does not
+  match.
+- Two channels. `stable` is the newest release; `next` is the newest prerelease,
+  for somebody who will report what breaks. Both are immutable tags — no tag
+  ever moves, because the module proxy caches the first content it sees under a
+  version forever.
 - `eva version` reports the build, the Go toolchain, and the platform, then
   exits. It reads no configuration, so it answers on a machine where nothing
   else is set up yet.
