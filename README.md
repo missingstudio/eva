@@ -81,7 +81,23 @@ Nineteen stages, each with an exit test it can fail. One of them is built. The p
 
 ## Install
 
-Nothing is released yet, so building it is the way in. You need [Go 1.26](https://go.dev/dl/) or newer, and nothing else.
+The quickest way in, on macOS or Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh
+```
+
+It reads your platform, downloads the matching archive, and checks it against the release's published checksums before installing anything — a checksum that does not match installs nothing and prints both figures. If you would rather not pipe a URL into a shell, it is [scripts/install.sh](scripts/install.sh) in this repository; read it, then run it.
+
+With the Go toolchain instead:
+
+```bash
+go install github.com/missingstudio/eva/cmd/eva@latest
+```
+
+## Build it yourself
+
+You need [Go 1.26](https://go.dev/dl/) or newer, and nothing else.
 
 ```bash
 git clone git@github.com:missingstudio/eva.git
@@ -99,21 +115,13 @@ go install github.com/missingstudio/eva/cmd/eva@main
 
 Go resolves `main` to a pseudo-version carrying the commit, so `eva version` still reports something exact. It has passed CI and nothing else — expect a broken day now and then.
 
-Once a release exists, two more paths open:
+To try a fix before it is released, the install script takes a channel:
 
 ```bash
-# the newest release
-go install github.com/missingstudio/eva/cmd/eva@latest
-
-# the same, checksum-verified, without needing Go
-curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh
-curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh -s -- --channel next  
-curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh -s -- --channel stable
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh -s -- --channel next
 ```
 
-The script reads your platform, downloads the matching archive, and checks it against the release's published checksums before installing anything — a checksum that doesn't match installs nothing and prints both figures. If you would rather not pipe a URL into a shell, it is [scripts/install.sh](scripts/install.sh) in this repository; read it, then run it.
-
-Both, plus prereleases and how to verify a download's signature, are written up in [how-to/install-eva.md](docs/how-to/install-eva.md).
+Every path, plus how to verify a download's signature and provenance, is written up in [how-to/install-eva.md](docs/how-to/install-eva.md).
 
 ## Connect a model
 
