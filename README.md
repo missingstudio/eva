@@ -6,9 +6,6 @@
   </picture>
 </p>
 
-<h1 align="center">Eva</h1>
-
-<p align="center"><strong>Evidence, not claims.</strong></p>
 <p align="center">
   An autonomous, multi-tenant, AI-native software factory
 </p>
@@ -31,29 +28,11 @@ That sounds like a small thing. It is the whole design.
 
 ## What it looks like
 
-```
-$ eva
+<p align="center">
+  <img alt="Eva answering a question in the terminal, with token counts and “cost unreported” in the status line" src="docs/assets/eva-cli.png" width="720">
+</p>
 
- EVA
- Evidence, not claims
-
- version  0.1.0+e839c8a
- model    claude-sonnet-4-5
- branch   main
- cwd      ~/code/eva
-
- type /help for slash commands
-
-› what's the difference between a cache write and a cache read?
-
-A cache write stores your prompt prefix so later calls can skip re-reading
-it. A cache read is one of those later calls hitting the stored copy…
-
-› /cost
-session 1.2k in / 340 out · cache 2.0k write / 1.1k read · cost unreported
-```
-
-Notice `cost unreported`. Neither Anthropic nor OpenAI returns a dollar figure with a response. So Eva says so, rather than multiplying tokens by a price it looked up somewhere. A number you can argue with a bill about has to come from the bill.
+Notice `cost unreported` in the status line. Neither Anthropic nor OpenAI returns a dollar figure with a response. So Eva says so, rather than multiplying tokens by a price it looked up somewhere. A number you can argue with a bill about has to come from the bill.
 
 > [!NOTE]
 > **Eva is early.** Today it is a good terminal chat client with a very carefully built foundation. It can read your question and answer it. It cannot read your files, run your tests, or touch your shell — there are no tools yet.
