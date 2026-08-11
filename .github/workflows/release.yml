@@ -52,12 +52,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-go-tree
 
-      # The tag agrees with the constant, or nothing is published.
+      # Both gates are scripts/release-guard.sh, which has a test beside it and
+      # runs in `make rehearse` before any tag exists. This job is one of its
+      # two callers rather than the only place it lives — which is what it was
+      # when it rejected every prerelease.
       #
       # The comparison asks the program rather than reading its source, because
       # what ships is the binary's answer. A grep over a const line would agree
@@ -67,41 +67,10 @@ jobs:
           set -eu
           make eva
           reported=$(./eva version | awk '/^eva:/ { print $2 }')
+          sh scripts/release-guard.sh version "$GITHUB_REF_NAME" "$reported"
 
-          # Compare base versions: strip build metadata (+abc1234) and any
-          # prerelease suffix (-rc.1). v0.1.0-rc.1 is a candidate for 0.1.0, so
-          # it has to agree with the constant on 0.1.0 and may differ after it.
-          #
-          # Without the second strip this rejects every prerelease, which is the
-          # one kind of tag worth pushing first.
-          base() { v="${1%%+*}"; printf '%s' "${v%%-*}"; }
-
-          built=$(base "$reported")
-          tag=$(base "${GITHUB_REF_NAME#v}")
-          echo "tag=$GITHUB_REF_NAME -> $tag   binary=$reported -> $built"
-
-          if [ "$tag" != "$built" ]; then
-            echo "the tag's version is $tag and the binary's is $built" >&2
-            echo "internal/cli.Version is the source of truth; the tag agrees with it" >&2
-            exit 1
-          fi
-
-      # A tag pointing where the last one did has nothing to release, and an
-      # empty changelog is how that mistake reaches a user.
       - name: Assert this tag has commits behind it
-        run: |
-          set -eu
-          previous=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
-          if [ -z "$previous" ]; then
-            echo "no earlier tag, so this is the first release and the range is the history"
-            exit 0
-          fi
-          n=$(git rev-list --count "$previous..${GITHUB_REF_NAME}")
-          echo "$n commit(s) since $previous"
-          if [ "$n" -eq 0 ]; then
-            echo "$GITHUB_REF_NAME points where $previous does, so there is nothing to release" >&2
-            exit 1
-          fi
+        run: sh scripts/release-guard.sh range "$GITHUB_REF_NAME"
 
   release:
     name: release
@@ -122,10 +91,7 @@ jobs:
           # the whole history has to be here for it to be complete.
           fetch-depth: 0
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-go-tree
 
       # syft writes the SBOMs, cosign signs the checksum file. Both are binaries
       # GoReleaser shells out to, so both are installed before it runs.
@@ -141,9 +107,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          # Read the pin out of the Makefile rather than restating it here. Two
-          # copies of a version is one of them going stale.
-          version=$(sed -n 's/^GORELEASER_VERSION[[:space:]]*?=[[:space:]]*//p' Makefile)
+          # The pin is asked of the Makefile rather than read out of it with a
+          # regex over its assignments. Two copies of a version is one of them
+          # going stale; a regex over another file's syntax is a release that
+          # breaks when that file is reformatted.
+          version=$(make tool-versions | sed -n 's/^GORELEASER_VERSION=//p')
           test -n "$version"
           echo "goreleaser $version"
           go run "github.com/goreleaser/goreleaser/v2@$version" release --clean

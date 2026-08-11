@@ -18,10 +18,16 @@ GORELEASER  = $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION
 # The split is what a check needs, not what it looks at. CHECKS need nothing but
 # this repository. AUDITS reach the network, which is why they are named apart
 # rather than folded in: their answer can change while the tree does not.
-CHECKS = fmt build vet lint test gosec
+CHECKS = fmt build vet lint test gosec guard-test install-test check-coverage
 AUDITS = tidy-check mod-verify vuln
 
-.PHONY: help check audit verify check-list fmt build vet lint gosec test \
+# The flags the release builds with. `make eva` uses them too, because the
+# release guard asks that binary what version it is — a guard that validated a
+# differently-built binary would be validating something that never ships.
+RELEASE_FLAGS = -trimpath -ldflags '-s -w'
+
+.PHONY: help check audit verify check-list tool-versions fmt build vet lint gosec test \
+        guard-test install-test check-coverage rehearse \
         tidy tidy-check mod-verify vuln eva snapshot
 
 ## help: list the targets
@@ -40,6 +46,16 @@ verify: check audit
 ## check-list: the targets CI must cover, one per line
 check-list:
 	@printf '%s\n' $(CHECKS) $(AUDITS)
+
+## tool-versions: the pinned tool versions, one NAME=value per line
+#
+# So a workflow that needs one asks for it, rather than reading this file's
+# syntax with a regex. Reformatting the assignments above then cannot break a
+# release, and the pin still lives in exactly one place.
+tool-versions:
+	@echo "GOLANGCI_VERSION=$(GOLANGCI_VERSION)"
+	@echo "GOVULNCHECK_VERSION=$(GOVULNCHECK_VERSION)"
+	@echo "GORELEASER_VERSION=$(GORELEASER_VERSION)"
 
 ## fmt: fail when any file is not gofmt-clean
 fmt:
@@ -108,9 +124,24 @@ vuln:
 	@$(GOVULNCHECK) ./...
 	@echo "vuln     ok"
 
+## guard-test: the release guard's cases, including the one it shipped wrong
+guard-test:
+	@sh scripts/release-guard_test.sh
+
+## install-test: the install script's cases, against recorded releases
+install-test:
+	@sh scripts/install_test.sh
+
+## check-coverage: fail when a declared check is run by no workflow
+check-coverage:
+	@sh scripts/check-coverage.sh >/dev/null && echo "coverage ok"
+
 ## eva: build the command into the repository root
+#
+# With the flags the release uses, so the guard reads the version off a binary
+# built the way the shipped one is.
 eva:
-	@$(GO) build -o eva ./cmd/eva
+	@CGO_ENABLED=0 $(GO) build $(RELEASE_FLAGS) -o eva ./cmd/eva
 	@echo "eva      ok"
 
 ## snapshot: build every release target locally, publishing nothing
@@ -121,3 +152,12 @@ eva:
 snapshot:
 	@$(GORELEASER) release --snapshot --clean --skip=publish,sign,sbom,announce
 	@echo "snapshot ok"
+
+## rehearse: the whole release path, without a tag
+#
+# Guard, snapshot, artifact contract, and a real install from what was built.
+# Slower than a check and not one: it downloads GoReleaser and compiles five
+# targets, so it runs in a job of its own when the release files change rather
+# than on every push.
+rehearse:
+	@sh scripts/rehearse.sh

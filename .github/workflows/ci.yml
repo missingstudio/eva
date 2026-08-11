@@ -49,13 +49,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-go-tree
 
       - run: make fmt
+      - run: make guard-test
+      - run: make install-test
 
   # build, vet and test share one compile graph, so they share one job. Split
   # across three, a two-core runner would compile the same dependencies three
@@ -66,11 +64,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-go-tree
 
       - run: make build
       - run: make vet
@@ -105,11 +99,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-go-tree
 
       # go directly rather than through make: the race detector needs a C
       # toolchain that a Windows runner does not reliably have, and make itself
@@ -127,18 +117,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - uses: ./.github/actions/setup-go-tree
         with:
-          go-version-file: go.mod
-          cache: true
-
-      # Keyed on the linter's version and its configuration, because a
-      # .golangci.yml edit invalidates this analysis and a go.sum edit does not.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/golangci-lint
-          key: golangci-${{ runner.os }}-${{ hashFiles('Makefile', '.golangci.yml') }}
+          lint-cache: "true"
 
       # Uploading these findings to code scanning would want SARIF, and
       # golangci-lint v2.12.2 does not emit it — the writers it has are text,
@@ -147,48 +128,63 @@ jobs:
       # otherwise would be worse than the gap.
       - run: make lint
 
+  # The release path, run without a tag. It only runs when something it would
+  # catch has changed, because it downloads GoReleaser and compiles five
+  # targets — and everything it asserts about the tree is asserted by the jobs
+  # above on every push regardless.
+  rehearse:
+    name: rehearse
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The guard measures a tag's range, and the changed-file test below
+          # needs the base commit, so the whole history has to be here.
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-go-tree
+
+      # The job runs and decides, rather than being skipped by a condition. A
+      # skipped job is not a passing one, and the gate below would have to be
+      # taught a second exception to tell the two apart.
+      - name: Decide whether this change can reach the release path
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "not a pull request, so the release path is rehearsed"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          printf '%s\n' "$changed" | sed 's/^/  /'
+          if printf '%s\n' "$changed" | grep -qE '^(Makefile|\.goreleaser\.yaml|scripts/|go\.mod|\.github/(workflows/(ci|release)\.yml|actions/))'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing here reaches the release path"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: make rehearse
+        if: steps.scope.outputs.run == 'true'
+
   gate:
     name: gate
     if: ${{ !cancelled() }}
-    needs: [quick, test, platforms, lint]
+    needs: [quick, test, platforms, lint, rehearse]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      # The Makefile declares what is checked, and the workflows run it. This
-      # asserts that every declared target is invoked by some workflow here, so a
-      # target added to the Makefile and to no job stops the build. That is the
-      # direction worth failing in; the other way round — an extra `make eva` in
-      # the release workflow — is harmless.
-      #
-      # Coverage is read out of the workflow files rather than restated in this
-      # step. That is what lets the checks live in three files without a fourth
-      # list to keep in step with them.
-      #
-      # It is the same shape as the assertion this file used to carry about
-      # `./...` reaching every package.
-      - name: Assert some workflow covers every declared check
-        run: |
-          set -eu
-          make check-list | sort -u > /tmp/declared
-
-          # Only lines whose first token is `make`, or a `- run: make`. A shell
-          # comment mentioning a target begins with #, so it cannot satisfy this.
-          grep -hE '^[[:space:]]*(- run: )?make [a-z]' .github/workflows/*.yml \
-            | sed -E 's/^[[:space:]]*(- run: )?make //' \
-            | awk '{ print $1 }' | sort -u > /tmp/invoked
-
-          echo "declared by the Makefile:"; sed 's/^/  /' /tmp/declared
-          echo "invoked by a workflow:";    sed 's/^/  /' /tmp/invoked
-
-          missing=$(comm -23 /tmp/declared /tmp/invoked)
-          if [ -n "$missing" ]; then
-            echo "these checks are declared and no workflow runs them:" >&2
-            printf '  %s\n' "$missing" >&2
-            exit 1
-          fi
-          echo "$(wc -l < /tmp/declared) declared checks, all covered"
+      # The Makefile declares what is checked, and the workflows run it. The
+      # assertion that the two agree is a script rather than a step, so it runs
+      # at a desk as well as here — a difference between the lists was
+      # previously only ever reported by a build.
+      - run: make check-coverage
 
       # A skipped job is not a passing one, which is the whole reason this job
       # exists rather than branch protection naming the others directly.

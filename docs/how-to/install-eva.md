@@ -3,8 +3,9 @@
 Get an `eva` binary onto a machine, and know which build you got. At the end,
 `eva version` will report it.
 
-Every path below works. `v0.1.0` is the current stable release; `v0.1.0-rc.1` is
-the prerelease that proved the pipeline before it.
+Every path below works. What `stable` and `next` currently point at is on the
+[releases page](https://github.com/missingstudio/eva/releases), which is the one
+place that cannot be out of date.
 
 ## Which path
 
@@ -95,7 +96,7 @@ eva version
 ```
 
 ```
-eva:      0.1.0+78a2478
+eva:      0.1.0+e839c8a
 go:       go1.26.5
 platform: darwin/arm64
 ```

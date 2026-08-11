@@ -1,0 +1,19 @@
+{
+  "url": "https://api.github.com/repos/missingstudio/eva/releases/299",
+  "tag_name": "v0.3.0-rc.1",
+  "name": "v0.3.0-rc.1",
+  "draft": false,
+  "prerelease": true,
+  "author": {
+    "login": "missingstudio",
+    "id": 1,
+    "site_admin": false
+  },
+  "assets": [
+    {
+      "name": "eva_0.3.0-rc.1_linux_amd64.tar.gz",
+      "content_type": "application/gzip",
+      "state": "uploaded"
+    }
+  ]
+}
