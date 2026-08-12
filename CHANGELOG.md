@@ -85,6 +85,15 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
   repository's release workflow running on a tag, so a token from any other
   workflow signs a certificate the check rejects.
 
+- **Installing a version you already have does nothing, and says so.** The script
+  reads the binary in the directory it would write to, before it downloads anything.
+  A second install costs one request and no download, against 2.12 seconds and
+  7.88 MB before, which makes the one-line command safe in a Dockerfile or a CI
+  step. `--force` installs
+  anyway. A build from a working tree never counts as the release, so a developer who
+  installs over their own build gets the release rather than a report that there is
+  nothing to do.
+
 ### Fixed
 
 - **A window being dragged no longer freezes the interface.** Every column an edge

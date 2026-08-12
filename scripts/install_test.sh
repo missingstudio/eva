@@ -218,6 +218,48 @@ REQUIRE_SIG=1
 refuses "an unsigned build under --require-signature installs nothing" \
 	verify_signature "$work/checksums.txt" "$work/nothing-here.sigstore.json"
 
+# What is already installed.
+#
+# installed_version runs the binary, so a binary is what it is given. Each stub
+# answers the way one kind of build answers.
+stub() { # <name> <first line of `eva version`>
+	cat >"$work/$1" <<EOF
+#!/bin/sh
+echo "$2"
+echo "go:       go1.26.5"
+EOF
+	chmod 0755 "$work/$1"
+	printf '%s' "$work/$1"
+}
+
+equals "a release build with a revision is that version" \
+	"$(installed_version "$(stub release 'eva:      0.1.1+8c8d116')")" "0.1.1"
+
+equals "a release build from the module proxy is that version" \
+	"$(installed_version "$(stub proxy 'eva:      0.1.1')")" "0.1.1"
+
+equals "a prerelease build is its own version, so next can skip too" \
+	"$(installed_version "$(stub rc 'eva:      0.2.0-rc.1+8c8d116')")" "0.2.0-rc.1"
+
+# The two that must never count as installed. Somebody developing 0.1.1 who
+# installs the released 0.1.1 has to get the release.
+equals "a build from a modified tree is not a release" \
+	"$(installed_version "$(stub dirty 'eva:      0.1.1+8c8d116.dirty')")" ""
+
+equals "a bracketed module version is not a release" \
+	"$(installed_version "$(stub pseudo 'eva:      0.1.1 (v0.1.2-0.20260812-abcdef)')")" ""
+
+# Absent, silent, and unreadable all answer the same way, because all three mean
+# the same thing: install it.
+equals "a binary that is not there reports nothing" \
+	"$(installed_version "$work/nothing-here")" ""
+
+equals "a binary that says nothing reports nothing" \
+	"$(installed_version "$(stub mute '')")" ""
+
+equals "a binary that answers something else reports nothing" \
+	"$(installed_version "$(stub other 'this is not eva')")" ""
+
 if [ "$failures" -ne 0 ]; then
 	echo "$failures install case(s) failed" >&2
 	exit 1

@@ -54,7 +54,7 @@ Install Eva.
 
 USAGE:
   install.sh [--channel stable|next] [--version X.Y.Z] [--dir <path>]
-             [--from-dist <dir>] [--require-signature]
+             [--force] [--from-dist <dir>] [--require-signature]
 
 OPTIONS:
   --channel <name>   stable (default) is the newest release; next is the newest
@@ -62,6 +62,7 @@ OPTIONS:
   --version <X.Y.Z>  install exactly this version, whatever any channel says
   --dir <path>       where the binary goes; default ~/.local/bin, or
                      $EVA_INSTALL_DIR when that is set
+  --force            install even when that version is already installed there
   --from-dist <dir>  install from a local `make snapshot` build rather than a
                      release, reaching no network. This is how the rehearsal
                      runs this script before there is a tag.
@@ -189,6 +190,69 @@ Try --channel stable."
 		;;
 	*) return 1 ;;
 	esac
+}
+
+# What is already installed.
+#
+# installed_version <path to an eva binary> writes the version of a release
+# build, and nothing otherwise.
+#
+# The match is strict on purpose. internal/cli/about.go appends `.dirty` to a
+# build from a modified tree, and prints a bracketed module version only when
+# that version differs from the constant. Either mark means the binary is not
+# the plain release, so either mark fails this match and the install proceeds:
+# somebody developing 0.1.1 who installs the released 0.1.1 must not be told
+# there is nothing to do.
+#
+# A missing binary, one that cannot run, and one that answers with something
+# unreadable all report nothing — which is the same safe answer: install it.
+installed_version() {
+	[ -x "$1" ] || return 0
+	"$1" version 2>/dev/null | head -n 1 |
+		sed -n 's/^eva: *\([0-9][^+ ]*\)\(+[0-9a-f]\{1,\}\)\{0,1\}$/\1/p'
+}
+
+# report_installed <version> <dir> says the work is already done.
+#
+# It names the file it compared, because that is the file an install would
+# replace. When the PATH resolves `eva` to a different file it says so: the
+# person is otherwise told a version is installed while their shell runs
+# another one.
+report_installed() {
+	echo "eva $1 is already at $2/eva. Nothing to do."
+
+	onpath=$(command -v eva 2>/dev/null || true)
+	if [ -n "$onpath" ] && [ "$onpath" != "$2/eva" ]; then
+		# shellcheck disable=SC2016 # the backticks are literal: they quote a command name.
+		printf '`eva` on your PATH is %s, which is a different file.\n' "$onpath"
+	fi
+	echo "Run again with --force to install it anyway."
+}
+
+# The second seam.
+#
+# have_cosign      reports whether a signature can be checked at all
+# cosign_verify    checks one, and reports whether it held
+#
+# Functions for the reason fetch is: a test can neither install cosign nor mint
+# a sigstore bundle, so it replaces the verdict and asserts what this script
+# does with it.
+have_cosign() { command -v cosign >/dev/null 2>&1; }
+
+# cosign_verify <bundle> <subject> <identity regexp> <issuer>
+#
+# The identity and the issuer are given rather than looked up here. A keyless
+# signature with no expected identity says only that somebody signed this, so a
+# verification that pins neither is not a verification.
+#
+# Output is discarded and the exit status is the whole answer. The caller says
+# something better than cosign does, in both directions.
+cosign_verify() {
+	cosign verify-blob "$2" \
+		--bundle "$1" \
+		--certificate-identity-regexp "$3" \
+		--certificate-oidc-issuer "$4" \
+		>/dev/null 2>&1
 }
 
 # Verification.
@@ -338,6 +402,7 @@ install_main() {
 	VERSION=""
 	DIR="${EVA_INSTALL_DIR:-$HOME/.local/bin}"
 	FROM_DIST=""
+	FORCE=""
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -355,6 +420,10 @@ install_main() {
 			[ $# -ge 2 ] || die "--dir needs a path"
 			DIR="$2"
 			shift 2
+			;;
+		--force)
+			FORCE="1"
+			shift
 			;;
 		--from-dist)
 			[ $# -ge 2 ] || die "--from-dist needs a directory"
@@ -397,6 +466,11 @@ install_main() {
 		[ -f "$FROM_DIST/$archive" ] ||
 			die "$FROM_DIST holds no $archive
 The archive names this script derives and the ones the build wrote disagree."
+
+		if [ -z "$FORCE" ] && [ "$(installed_version "$DIR/eva")" = "$VERSION" ]; then
+			report_installed "$VERSION" "$DIR"
+			return 0
+		fi
 		echo "installing eva $VERSION ($os/$arch) from $FROM_DIST"
 
 		cp "$FROM_DIST/$archive" "$tmp/$archive"
@@ -430,6 +504,13 @@ Check it:
 
 	archive=$(archive_name "$VERSION" "$os" "$arch")
 	base="https://github.com/$REPO/releases/download/v${VERSION}"
+
+	# The work this install does not have to do. It is asked after the version is
+	# known and before anything is downloaded.
+	if [ -z "$FORCE" ] && [ "$(installed_version "$DIR/eva")" = "$VERSION" ]; then
+		report_installed "$VERSION" "$DIR"
+		return 0
+	fi
 
 	echo "installing eva $VERSION ($os/$arch) from the $CHANNEL channel"
 

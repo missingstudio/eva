@@ -75,6 +75,25 @@ curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/inst
 macOS may refuse a downloaded binary that nobody notarized. The script prints
 the one command that clears it. Notarized builds are not published yet.
 
+### Running it a second time
+
+The script asks what is already installed before it downloads anything, and it
+compares the binary at the directory it would write to:
+
+```
+eva 0.1.1 is already at ~/.local/bin/eva. Nothing to do.
+Run again with --force to install it anyway.
+```
+
+So the command is safe in a Dockerfile or a CI step: the second run costs one
+request and no download. `--force` installs anyway, which is what to use over a
+binary you built yourself — a build from a working tree never counts as the
+release, so the script installs over that without being asked.
+
+When `eva` on your `PATH` is a different file from the one it compared, it says
+so. Two installs in two directories is the one case where a version report and
+the program your shell runs can disagree.
+
 ## A prerelease
 
 A prerelease is a release Eva has tagged `-rc` and has not promoted. It is for
