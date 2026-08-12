@@ -72,6 +72,18 @@ signs:
     artifacts: checksum
     output: true
 
+# A release candidate is not the previous release, and without this it becomes
+# one. The fold below runs from the previous tag, so v0.1.1 released after
+# v0.1.1-rc.1 would list only what landed between the two — and everything the
+# candidate already carried would be missing from the notes of the release that
+# actually shipped it. Measured, then fixed here.
+#
+# Releasing the candidate itself is unaffected: the current tag comes from the
+# commit being released, not from the search this narrows.
+git:
+  ignore_tags:
+    - "*-rc.*"
+
 # The body of the release notes, folded over the commits in the tag's range. It
 # groups by the prefixes AGENTS.md requires. Nothing checks those prefixes, so a
 # commit written without one is omitted here silently — the fold cannot group

@@ -84,6 +84,7 @@ State facts before conclusions.
 | add an extension point                                                      | `docs/agents/design-rules.md`                                          |
 | name a domain concept, or contradict an ADR                                 | `docs/agents/domain.md`                                                |
 | create, label, close, or link an issue, or run a `/wayfinder` map operation | `docs/agents/issue-tracker.md`                                         |
+| push a tag, or decide whether something is worth releasing                  | `docs/agents/releasing.md`                                             |
 | apply or filter a triage label                                              | `docs/agents/triage-labels.md`                                         |
 | use a word this project defines                                             | `CONTEXT.md`                                                           |
 
