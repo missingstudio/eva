@@ -30,7 +30,7 @@ func TestATurnInFlightIsCaptioned(t *testing.T) {
 	// A Run in flight, without one actually running: what makes the console
 	// busy is holding a way to cancel.
 	_, cancel := context.WithCancel(context.Background())
-	c.cancel = cancel
+	c.shown.hold(cancel)
 	t.Cleanup(cancel)
 
 	c.since = time.Now().Add(-3 * time.Second)

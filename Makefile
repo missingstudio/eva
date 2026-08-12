@@ -26,7 +26,7 @@ AUDITS = tidy-check mod-verify vuln
 # differently-built binary would be validating something that never ships.
 RELEASE_FLAGS = -trimpath -ldflags '-s -w'
 
-.PHONY: help check audit verify check-list tool-versions fmt build vet lint gosec test \
+.PHONY: help check audit verify check-list tool-versions fmt build vet lint gosec test bench \
         guard-test install-test check-coverage rehearse \
         tidy tidy-check mod-verify vuln eva snapshot
 
@@ -97,6 +97,19 @@ gosec:
 test:
 	@$(GO) test -race -shuffle=on ./...
 	@echo "test     ok"
+
+## bench: what a frame of the interface costs
+#
+# Not a check. A wall-clock threshold measures the machine it ran on, so CI
+# gating one would fail for reasons that have nothing to do with the tree. What
+# is gated instead is an allocation count, which `make test` already runs — see
+# the frame test in internal/tui.
+#
+# No race detector: it changes what a nanosecond means, and these are read as
+# nanoseconds. Nothing here runs a turn, so there is no second goroutine for it
+# to have an opinion about.
+bench:
+	@$(GO) test -run '^$$' -bench . -benchmem ./internal/tui/...
 
 ## tidy: reconcile the module's dependencies
 tidy:

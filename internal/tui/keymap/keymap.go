@@ -39,6 +39,18 @@ const (
 	Leave Action = "leave"
 	// Complete finishes the command being typed.
 	Complete Action = "complete"
+	// Palette lists the commands, filtered by what has been typed.
+	Palette Action = "palette"
+	// Editor writes the prompt in the editor a person uses for everything else.
+	Editor Action = "editor"
+	// HistoryBack and HistoryForward recall the prompts already sent.
+	//
+	// They are bound to keys the prompt itself uses, and that is deliberate: the
+	// console gives the key back to the prompt whenever the cursor has a line to
+	// move to. A prompt of one line has nowhere to go, which is the case a person
+	// reaching for the last thing they typed is in.
+	HistoryBack    Action = "history_back"
+	HistoryForward Action = "history_forward"
 	// ScrollUp and ScrollDown move the transcript by a line.
 	ScrollUp   Action = "scroll_up"
 	ScrollDown Action = "scroll_down"
@@ -53,7 +65,8 @@ const (
 // Actions is every action that can be bound, in the order a person reads them.
 func Actions() []Action {
 	return []Action{
-		Submit, Newline, Interrupt, Leave, Complete,
+		Submit, Newline, Interrupt, Leave, Complete, Palette, Editor,
+		HistoryBack, HistoryForward,
 		ScrollUp, ScrollDown, PageUp, PageDown, Top, Follow,
 	}
 }
@@ -71,17 +84,26 @@ type Keymap struct {
 // of this could be configured.
 func Default() Keymap {
 	return Keymap{bound: map[Action][]string{
-		Submit:     {"enter"},
-		Newline:    {"shift+enter", "alt+enter"},
-		Interrupt:  {"ctrl+c"},
-		Leave:      {"ctrl+d"},
-		Complete:   {"tab"},
-		ScrollUp:   {"shift+up"},
-		ScrollDown: {"shift+down"},
-		PageUp:     {"pgup"},
-		PageDown:   {"pgdown"},
-		Top:        {"ctrl+home"},
-		Follow:     {"ctrl+end"},
+		Submit:    {"enter"},
+		Newline:   {"shift+enter", "alt+enter"},
+		Interrupt: {"ctrl+c"},
+		Leave:     {"ctrl+d"},
+		Complete:  {"tab"},
+		// ctrl+p rather than a function key, because it is what a person's hands
+		// already do for a command list. It is a chord the prompt would otherwise
+		// use to move the cursor up a line, and the up key still does that.
+		Palette: {"ctrl+p"},
+		// ctrl+o is free: the prompt binds nothing to it, and no terminal reports
+		// it as something else.
+		Editor:         {"ctrl+o"},
+		HistoryBack:    {"up"},
+		HistoryForward: {"down"},
+		ScrollUp:       {"shift+up"},
+		ScrollDown:     {"shift+down"},
+		PageUp:         {"pgup"},
+		PageDown:       {"pgdown"},
+		Top:            {"ctrl+home"},
+		Follow:         {"ctrl+end"},
 	}}
 }
 

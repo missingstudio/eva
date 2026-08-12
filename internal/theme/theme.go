@@ -40,9 +40,10 @@ type Theme struct {
 	// every adaptive colour below was already resolved against it.
 	Dark bool
 
-	Colors  Colors
-	Symbols Symbols
-	Layout  Layout
+	Colors   Colors
+	Symbols  Symbols
+	Layout   Layout
+	Markdown Markdown
 
 	// Border is the rule drawn above and below the prompt.
 	Border lipgloss.Border
@@ -72,6 +73,52 @@ type Colors struct {
 	// Spinner is the one thing not subdued. A faint spinner is a spinner
 	// nobody can see moving, and its whole job is to be seen moving.
 	Spinner color.Color
+	// Failure is what a turn that produced no answer is written in, and the
+	// checked step that follows it.
+	//
+	// It is the fifth colour, and it earns a place the others did not have to
+	// argue for. Four were right while everything the interface said about itself
+	// was subordinate to the answer — a status line, a cost, a hint. A failure is
+	// not subordinate: it is the one line a person must not miss, and drawn in the
+	// same grey as "ready" it read as one more thing they could skip.
+	//
+	// Nil is the subdued grey, which is what it was before it could be named.
+	Failure color.Color
+}
+
+// Markdown is the colours an answer itself is drawn with.
+//
+// It is most of what is on the screen, and until this existed it was the one
+// thing a person could not change: they could set every colour Eva named and
+// still read code and headings in the palette of the library that draws them.
+//
+// Nil is that library's own choice for the background, which is why a Theme that
+// names none of these draws exactly what it drew before they existed. The set is
+// small on purpose — these are the marks a reader navigates an answer by, and a
+// field per element of a markdown document would be a configuration surface as
+// large as the renderer.
+type Markdown struct {
+	// Plain draws the answer with no colour at all, and with ASCII in place of
+	// the marks a renderer would otherwise draw: a bullet becomes a hyphen, a
+	// rule becomes dashes, and emphasis keeps its asterisks.
+	//
+	// It is one field rather than "leave every colour unset", because the two are
+	// different requests. An unset colour is the renderer's own choice for the
+	// background, which is a colour. This is the absence of one.
+	Plain bool
+
+	// Heading is what the headings of an answer are drawn in.
+	Heading color.Color
+	// Code is inline code, and CodeBlock is a fenced one.
+	Code      color.Color
+	CodeBlock color.Color
+	// Emphasis covers both weights: what is italic and what is bold.
+	Emphasis color.Color
+	// Link is the address, and LinkText the words that carry it.
+	Link     color.Color
+	LinkText color.Color
+	// Quote is a block quotation.
+	Quote color.Color
 }
 
 // Symbols are the marks an interface writes that are not words.
@@ -87,8 +134,47 @@ type Symbols struct {
 	Spinner string
 }
 
+// Space is a number of cells at each of four edges, in the order a person reads
+// them: from the top, clockwise.
+//
+// It is one type used twice rather than two shapes that happen to agree, so
+// whatever reads a margin reads a padding the same way.
+type Space struct {
+	Top    int
+	Right  int
+	Bottom int
+	Left   int
+}
+
 // Layout is the measurements, in cells and in seconds.
 type Layout struct {
+	// Margin is what the interface holds back at each edge of the window.
+	//
+	// It is there because a terminal has no window frame of its own: text against
+	// the first column reads as text against the edge of the screen, and an answer
+	// wrapping at the last column has nothing to wrap against.
+	//
+	// Two columns at each side by default, and no rows at top or bottom. The two
+	// dimensions are not alike and the default says so: columns are plentiful and a
+	// terminal has few rows, so a row given to nothing is a row of the conversation
+	// nobody can read. A person who wants them can have them.
+	//
+	// A window too small to spare a side does not spend it. See where an interface
+	// fits itself.
+	Margin Space
+
+	// Padding is what the interface holds back inside itself, within the margin.
+	//
+	// The two are one inset today and they will not stay that way: a background of
+	// Eva's own fills the padding and stops at the margin, so the first is part of
+	// the interface and the second is the terminal showing through. They are
+	// separate now so that the frame is already built the way that needs, rather
+	// than being taken apart later to make room for it.
+	//
+	// Until then the only way to tell them apart is which one a window gives up
+	// first when it runs out of room, and that is the margin: it is the one that
+	// decorates nothing.
+	Padding Space
 	// PromptRows is how tall the prompt may grow before it scrolls within
 	// itself. A prompt free to grow to the window would push the answer off
 	// the top, and what a person is writing is rarely worth more of the screen
@@ -96,6 +182,22 @@ type Layout struct {
 	PromptRows int
 	// CaptionSeconds is how long one caption stays before another is chosen.
 	CaptionSeconds int
+	// ElapsedSeconds is how long a turn must take before it says how long it
+	// took. Zero says nothing about any turn.
+	//
+	// There is a threshold rather than a figure on every turn because a figure on
+	// every turn is noise on the fast ones, and because the number a person is
+	// looking for is the one that surprised them.
+	ElapsedSeconds int
+	// LiveShare is how much of the clock an interface may spend drawing an
+	// answer that is still arriving, as one part in this many.
+	//
+	// Drawing an answer costs time proportional to its length, and an answer
+	// still arriving is drawn from the start each time. Eight means a drawing
+	// waits until eight times what the last one cost has passed: a long answer
+	// is redrawn less often than a short one, and neither is redrawn at a rate
+	// somebody guessed. One draws on every frame, whatever it costs.
+	LiveShare int
 }
 
 // Default is the complete Theme for a background: exactly what Eva looked like
@@ -112,6 +214,7 @@ func Default(dark bool) Theme {
 			Person:  pick(dark, personOnLight, personOnDark),
 			Eva:     pick(dark, subduedOnLight, subduedOnDark),
 			Spinner: nil,
+			Failure: pick(dark, failureOnLight, failureOnDark),
 		},
 		Symbols: Symbols{
 			Prompt:      "› ",
@@ -120,8 +223,11 @@ func Default(dark bool) Theme {
 			Spinner:     SpinnerMiniDot,
 		},
 		Layout: Layout{
+			Margin:         Space{Right: 2, Left: 2},
 			PromptRows:     10,
 			CaptionSeconds: 8,
+			ElapsedSeconds: 1,
+			LiveShare:      8,
 		},
 		Border: lipgloss.NormalBorder(),
 	}
@@ -139,7 +245,26 @@ var (
 	subduedOnDark  = lipgloss.Color("#9E9E9E")
 	personOnLight  = lipgloss.Color("#2F6FB2")
 	personOnDark   = lipgloss.Color("#7AA6DC")
+	failureOnLight = lipgloss.Color("#A3352A")
+	failureOnDark  = lipgloss.Color("#E8877C")
 )
+
+// Why the default names a failure colour, when the default names so few
+//
+// Every other colour here is the one that was inline before this package existed,
+// because introducing a file must not change what a person sees. This one is new,
+// and it is the one deliberate change to what Eva draws: a turn that produced no
+// answer used to be written in the same grey as "ready" and the cost figure, so
+// the one line a person must not miss looked like one more line they could skip.
+//
+// It is a hue rather than a weight because the argument for the gutter marks is
+// the argument here: a person scanning a screen finds a colour without reading,
+// and finds nothing else that way. And it is muted rather than bright — a failure
+// is not an emergency, it is a fact about one turn, and the next prompt is already
+// waiting.
+//
+// A look that wants none says so: mono names no colour at all, and any Theme can
+// set this back to the grey.
 
 // The spinners a turn in flight may be shown with. They are named rather than
 // described because the frames belong to the library that animates them.
@@ -180,6 +305,25 @@ func (t Theme) Subdued() lipgloss.Style {
 	return lipgloss.NewStyle().Faint(true).Foreground(t.Colors.Subdued)
 }
 
+// Failing is the style a turn that produced no answer is written in.
+//
+// It is not faint. Everything else the interface says about itself is, because
+// the answer is what a person came for — but a turn with no answer has nothing
+// for the faintness to be subordinate to, and the line saying so is the only
+// thing on screen that has to be read.
+//
+// A Theme that names no failure colour gives the subdued style, which is what
+// this line was before the colour existed.
+func (t Theme) Failing() lipgloss.Style {
+	if t.Colors.Failure == nil {
+		return t.Subdued()
+	}
+	return lipgloss.NewStyle().Foreground(t.Colors.Failure)
+}
+
+// hexColor is a colour written the way a person writes one.
+func hexColor(hex string) color.Color { return lipgloss.Color(hex) }
+
 func pick(dark bool, onLight, onDark color.Color) color.Color {
 	if dark {
 		return onDark
@@ -195,11 +339,29 @@ func pick(dark bool, onLight, onDark color.Color) color.Color {
 // answer late about its own colour without undoing a decision: the Theme is
 // rebuilt for the background that arrived, and these are applied over it again.
 type Settings struct {
+	// Name selects one of the looks Eva ships with, and every field below is
+	// applied over it. Empty is the default look.
+	Name string
+
+	Margin  Sides
+	Padding Sides
+
 	Subdued     string
 	Person      string
 	Eva         string
 	Spinner     string
+	Failure     string
 	SpinnerName string
+
+	Plain *bool
+
+	Heading   string
+	Code      string
+	CodeBlock string
+	Emphasis  string
+	Link      string
+	LinkText  string
+	Quote     string
 
 	Prompt      *string
 	Placeholder *string
@@ -209,15 +371,57 @@ type Settings struct {
 
 	PromptRows     *int
 	CaptionSeconds *int
+	ElapsedSeconds *int
+	LiveShare      *int
+}
+
+// Sides is what a person wrote about the four edges of something, with each one
+// optional.
+//
+// Per edge rather than all four together, because a file that names one edge
+// should not have to restate the other three — and because zero is a real answer.
+// A person who wants nothing at the left writes left = 0, and a person who says
+// nothing about the left keeps whatever the look gives it.
+type Sides struct {
+	Top    *int
+	Right  *int
+	Bottom *int
+	Left   *int
+}
+
+// over applies what was written to the space a look already has.
+func (s Sides) over(space Space, name string) (Space, error) {
+	for _, edge := range []struct {
+		written *int
+		into    *int
+		side    string
+	}{
+		{s.Top, &space.Top, "top"},
+		{s.Right, &space.Right, "right"},
+		{s.Bottom, &space.Bottom, "bottom"},
+		{s.Left, &space.Left, "left"},
+	} {
+		if edge.written == nil {
+			continue
+		}
+		if *edge.written < 0 {
+			return Space{}, fmt.Errorf("theme: %s.%s = %d, and nothing can hold back %d cells",
+				name, edge.side, *edge.written, *edge.written)
+		}
+		*edge.into = *edge.written
+	}
+	return space, nil
 }
 
 // Build makes a complete Theme for a background from what a person asked to
 // change. A Settings that says nothing gives exactly Default.
 func Build(dark bool, s Settings) (Theme, error) {
-	t := Default(dark)
+	t, err := Named(s.Name, dark)
+	if err != nil {
+		return Theme{}, err
+	}
 	t.settings = s
 
-	var err error
 	if t.Colors.Subdued, err = hue(s.Subdued, t.Colors.Subdued, "subdued"); err != nil {
 		return Theme{}, err
 	}
@@ -229,6 +433,31 @@ func Build(dark bool, s Settings) (Theme, error) {
 	}
 	if t.Colors.Spinner, err = hue(s.Spinner, t.Colors.Spinner, "spinner"); err != nil {
 		return Theme{}, err
+	}
+	if t.Colors.Failure, err = hue(s.Failure, t.Colors.Failure, "failure"); err != nil {
+		return Theme{}, err
+	}
+
+	if s.Plain != nil {
+		t.Markdown.Plain = *s.Plain
+	}
+
+	for _, m := range []struct {
+		written string
+		into    *color.Color
+		name    string
+	}{
+		{s.Heading, &t.Markdown.Heading, "heading"},
+		{s.Code, &t.Markdown.Code, "code"},
+		{s.CodeBlock, &t.Markdown.CodeBlock, "code_block"},
+		{s.Emphasis, &t.Markdown.Emphasis, "emphasis"},
+		{s.Link, &t.Markdown.Link, "link"},
+		{s.LinkText, &t.Markdown.LinkText, "link_text"},
+		{s.Quote, &t.Markdown.Quote, "quote"},
+	} {
+		if *m.into, err = hue(m.written, *m.into, m.name); err != nil {
+			return Theme{}, err
+		}
 	}
 
 	if s.SpinnerName != "" {
@@ -257,6 +486,12 @@ func Build(dark bool, s Settings) (Theme, error) {
 		t.Symbols.Truncation = *s.Truncation
 	}
 
+	if t.Layout.Margin, err = s.Margin.over(t.Layout.Margin, "margin"); err != nil {
+		return Theme{}, err
+	}
+	if t.Layout.Padding, err = s.Padding.over(t.Layout.Padding, "padding"); err != nil {
+		return Theme{}, err
+	}
 	if s.PromptRows != nil {
 		if *s.PromptRows < 1 {
 			return Theme{}, fmt.Errorf("theme: a prompt cannot be %d rows tall", *s.PromptRows)
@@ -268,6 +503,23 @@ func Build(dark bool, s Settings) (Theme, error) {
 			return Theme{}, fmt.Errorf("theme: a caption cannot stay for %d seconds", *s.CaptionSeconds)
 		}
 		t.Layout.CaptionSeconds = *s.CaptionSeconds
+	}
+	if s.ElapsedSeconds != nil {
+		if *s.ElapsedSeconds < 0 {
+			return Theme{}, fmt.Errorf(
+				"theme: a turn cannot take %d seconds, so no turn would say how long it took", *s.ElapsedSeconds)
+		}
+		t.Layout.ElapsedSeconds = *s.ElapsedSeconds
+	}
+	if s.LiveShare != nil {
+		// One is the whole of the clock, which is what "draw on every frame"
+		// is. Below one is a share of nothing, and it would ask for a drawing
+		// before the last one finished.
+		if *s.LiveShare < 1 {
+			return Theme{}, fmt.Errorf(
+				"theme: an arriving answer cannot be drawn in one part in %d of the clock", *s.LiveShare)
+		}
+		t.Layout.LiveShare = *s.LiveShare
 	}
 	return t, nil
 }
@@ -343,6 +595,12 @@ func known(set []string, want string) bool {
 func Shades(base color.Color, n int) []color.Color {
 	if n < 2 {
 		return []color.Color{base}
+	}
+	// A look that names no colour has no gradient, and asking for one is not a
+	// mistake: the mono look names none on purpose, and what it wants back is n
+	// steps of nothing rather than a refusal or a panic.
+	if base == nil {
+		return make([]color.Color, n)
 	}
 
 	r, g, b, _ := base.RGBA()

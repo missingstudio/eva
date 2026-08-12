@@ -20,8 +20,15 @@ anyone runs it inside that repo.
 2. Set only look and feel in `.eva/config.toml`.
 
    ```toml
+   [theme]
+   name = "contrast"
+
    [theme.colors]
-   person = "#7AA6DC"
+   person  = "#7AA6DC"
+   failure = "#FF9E8A"
+
+   [theme.markdown]
+   heading = "#7AA6DC"
 
    [theme.symbols]
    prompt = "› "
@@ -29,6 +36,13 @@ anyone runs it inside that repo.
    [keymap.bind]
    follow = ["ctrl+g"]
    ```
+
+   `[theme.layout.margin]` and `[theme.layout.padding]` take `top`, `right`,
+   `bottom`, and `left`, and hold cells back at the window's edges.
+
+   `name` is one of the looks Eva ships with — `eva`, `contrast`, or `mono` — and
+   everything under it is applied over that look. `[theme.markdown]` colours the answer
+   itself; leave one out and Eva's renderer chooses it for the terminal's background.
 
 3. Commit it.
 
@@ -61,6 +75,7 @@ allow-list: appearance and key bindings.
 | A repo may set                                                 | A repo may not set                                |
 | -------------------------------------------------------------- | ------------------------------------------------- |
 | `[theme.colors]`, `[theme.symbols]`, and the rest of `[theme]` | The provider                                      |
+| `[theme.markdown]`, the answer's own colours                   | `editor`, which names a program Eva would start   |
 | `[keymap.bind]`                                                | `base_url`, or any other destination for traffic  |
 |                                                                | `api_key_env`, the variable your key is read from |
 |                                                                | `auth`, so no repo can select a subscription      |

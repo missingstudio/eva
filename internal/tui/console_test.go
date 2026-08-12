@@ -32,6 +32,9 @@ type fixed struct {
 	// what the console does with one. The zero value is a machine nothing could
 	// be established about, which is what most failures leave behind.
 	remedy render.Remedy
+	// editor is what this machine names to write a long prompt in. The zero value
+	// is a machine that names none.
+	editor Editor
 }
 
 var _ Control = (*fixed)(nil)
@@ -44,6 +47,7 @@ func (f *fixed) About() About                        { return About{} }
 func (f *fixed) Remedy(events.ErrorClass) render.Remedy {
 	return f.remedy
 }
+func (f *fixed) Editor() Editor        { return f.editor }
 func (f *fixed) Model() string         { return f.model }
 func (f *fixed) UseModel(model string) { f.model = model }
 func (f *fixed) Clear()                {}
@@ -54,10 +58,16 @@ var escapes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
 
 func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 
-// The footer says which model is answering, at the far end of the window.
+// The row under the prompt says what is happening at its near end and which model
+// is answering at its far end.
 //
-// A person who has just used /model should not have to use it again to find
-// out what it did.
+// One row for both, because neither ever fills its own and two rows of grey under
+// the prompt are two rows the transcript does not get. They are read at different
+// moments as well — the left while a turn runs, the right when somebody wonders
+// what a conversation has cost — so they do not compete.
+//
+// A person who has just used /model should not have to use it again to find out
+// what it did.
 func TestTheFooterPutsTheModelAtTheFarEnd(t *testing.T) {
 	// A whole console, because the footer now reads what the Session has spent
 	// and the fold is what knows.
@@ -68,6 +78,9 @@ func TestTheFooterPutsTheModelAtTheFarEnd(t *testing.T) {
 	got := plain(c.footer())
 	if !strings.HasSuffix(got, "claude-sonnet-4-5") {
 		t.Errorf("the footer does not end with the model:\n%q", got)
+	}
+	if !strings.HasPrefix(got, "ready") {
+		t.Errorf("the row does not begin with what is happening:\n%q", got)
 	}
 	if w := lipgloss.Width(got); w != 40 {
 		t.Errorf("the footer is %d columns wide, want the window's 40:\n%q", w, got)
@@ -104,9 +117,9 @@ func TestTheStatusLineSaysHowLongTheTurnHasRun(t *testing.T) {
 		styles: newStyles(theme.Default(true)),
 		spin:   spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 		since:  time.Now().Add(-3 * time.Second),
-		// A Run in flight is one with something to cancel. See busy.
-		cancel: func() {},
 	}
+	// A Run in flight is one with something to cancel. See shown.busy.
+	c.shown.hold(func() {})
 
 	got := plain(c.status())
 	for _, want := range []string{"3s", "ctrl+c to interrupt"} {
@@ -143,7 +156,7 @@ func TestArrivingTextIsShownWithoutBeingKept(t *testing.T) {
 	}
 	c.layout(40, 12)
 
-	c.arriving.WriteString("half an answer")
+	c.live.write("half an answer")
 	c.refresh()
 	if got := plain(c.pane.View()); !strings.Contains(got, "half an answer") {
 		t.Errorf("the pane does not show what is arriving:\n%s", got)
@@ -182,7 +195,7 @@ func TestAnAnsweredTurnIsShownOnce(t *testing.T) {
 	// A turn arrives in chunks, and is then kept as one rendered block. The
 	// words are the same either way, which is the whole difficulty.
 	answer := "the answer"
-	c.arriving.WriteString(answer)
+	c.live.write(answer)
 	c.refresh()
 	if err := c.Show(answer); err != nil {
 		t.Fatalf("show the turn: %v", err)
@@ -212,6 +225,60 @@ func TestTheViewIsExactlyTheWindow(t *testing.T) {
 			if got := lipgloss.Height(c.View().Content); got != size.height {
 				t.Errorf("the view is %d rows in a window of %d:\n%s",
 					got, size.height, plain(c.View().Content))
+			}
+		})
+	}
+}
+
+// The view is never wider than the window, and it is inset from both edges while
+// the window can spare it.
+//
+// A terminal has no window frame of its own, so text against the first column
+// reads as text against the edge of the screen. The margin is what answers that,
+// and it is applied once, to the finished frame — every piece is composed to the
+// width it leaves. Get that wrong in one place and the frame hangs past the
+// right-hand edge of the terminal, which is what happened: three sizings read the
+// window where they had to read what was left of it.
+//
+// The narrow cases are here because a margin is the first thing a small window
+// gives up. Below forty columns every column belongs to the answer.
+func TestTheViewFitsTheWindowAndIsInsetFromItsEdges(t *testing.T) {
+	for _, size := range []struct{ width, height int }{
+		{120, 30}, {88, 24}, {60, 12}, {44, 9}, {40, 8}, {36, 8}, {24, 6}, {20, 4},
+	} {
+		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
+			c := drawn(t)
+			c.layout(size.width, size.height)
+			c.keep(block{text: "an answer with enough words in it to reach the edge of a narrow window", voice: evaVoice})
+
+			for i, line := range strings.Split(plain(c.View().Content), "\n") {
+				if got := lipgloss.Width(line); got > size.width {
+					t.Fatalf("row %d is %d columns wide in a window of %d:\n%q", i, got, size.width, line)
+				}
+			}
+
+			// What the look asks for at the left, and what this window could afford.
+			asked := c.look.Layout.Margin.Left + c.look.Layout.Padding.Left
+			inset := c.edges.margin.Left + c.edges.padding.Left
+
+			if size.width-2*asked < narrowest {
+				if inset != 0 {
+					t.Errorf("a window of %d columns held back %d at the left, and it cannot spare one",
+						size.width, inset)
+				}
+				return
+			}
+			if inset != asked {
+				t.Fatalf("a window of %d columns holds back %d at the left, and the look asks for %d",
+					size.width, inset, asked)
+			}
+			for i, line := range strings.Split(plain(c.View().Content), "\n") {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				if !strings.HasPrefix(line, strings.Repeat(" ", inset)) {
+					t.Errorf("row %d starts at the window's edge:\n%q", i, line)
+				}
 			}
 		})
 	}
@@ -269,7 +336,7 @@ func TestAPromptTypedDuringATurnWaitsForIt(t *testing.T) {
 	// A Run in flight, without one actually running: what makes the console
 	// busy is holding a way to cancel.
 	_, cancel := context.WithCancel(context.Background())
-	c.cancel = cancel
+	c.shown.hold(cancel)
 	t.Cleanup(cancel)
 
 	for _, typed := range "next" {
@@ -280,11 +347,16 @@ func TestAPromptTypedDuringATurnWaitsForIt(t *testing.T) {
 	}
 
 	c.key(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if c.queued != "next" {
-		t.Errorf("the queued prompt is %q, want it held until the turn closes", c.queued)
+	if c.Queued() != "next" {
+		t.Errorf("the queued prompt is %q, want it held until the turn closes", c.Queued())
 	}
-	if got := plain(c.status()); !strings.Contains(got, "next") {
-		t.Errorf("the status line does not show the prompt that is waiting:\n%s", got)
+	// Its own row, under the one that says what the turn is doing: that row shares
+	// its width with the figures at the far end, and a prompt is a sentence.
+	if got := plain(c.queuedLine()); !strings.Contains(got, "next") {
+		t.Errorf("nothing on screen shows the prompt that is waiting:\n%s", got)
+	}
+	if got := plain(c.View().Content); !strings.Contains(got, "next") {
+		t.Errorf("the queued prompt is not in the window:\n%s", got)
 	}
 	// Not echoed yet: the transcript reads in the order the turns happened.
 	if kept := c.kept(); strings.Contains(kept, "next") {
@@ -441,7 +513,7 @@ func TestAResizedWindowRewrapsTheTurnsAlreadyAnswered(t *testing.T) {
 		t.Fatalf("a line is %d columns wide in a window of 100", over)
 	}
 
-	c.layout(50, 20)
+	settle(t, c, 50, 20)
 	if over := widest(plain(c.kept())); over > 50 {
 		t.Errorf("a line is %d columns wide after the window narrowed to 50:\n%s", over, plain(c.kept()))
 	}
@@ -452,6 +524,204 @@ func TestAResizedWindowRewrapsTheTurnsAlreadyAnswered(t *testing.T) {
 	}
 	if c.transcript[0].voice != personVoice {
 		t.Error("an echoed prompt is not in a person's voice, so a resize would redraw it as a turn")
+	}
+}
+
+// Every look Eva ships with draws a whole screen.
+//
+// It is one test because the failure it catches is not a look's own: the masthead
+// draws a gradient from the accent, and a look that names no accent — mono does,
+// on purpose — reached a colour that was not there. Nothing else would have found
+// that, because every test in this file builds the default look.
+//
+// A look is a set of colours and measurements, and the interface reads them in
+// places no reviewer holds in their head at once. So the assertion is the
+// coarsest one available and it is the right one: draw everything, with every
+// look, and require that it draws.
+func TestEveryLookDrawsAWholeScreen(t *testing.T) {
+	for _, name := range theme.Names() {
+		t.Run(name, func(t *testing.T) {
+			look, err := theme.Named(name, true)
+			if err != nil {
+				t.Fatalf("build the %q look: %v", name, err)
+			}
+
+			_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+			if err != nil {
+				t.Fatalf("build the interface: %v", err)
+			}
+			c.Init()
+			c.about = About{Version: "0.1.1", Branch: "main", Dir: "~/eva"}
+			c.layout(80, 24)
+
+			c.keep(block{text: "what I asked", voice: personVoice})
+			c.keep(block{text: "## an answer\n\nwith a paragraph", voice: evaVoice})
+			c.live.write("and one still arriving")
+			c.openPalette()
+			c.refresh()
+			c.close(answered{outcome: core.Outcome{Result: events.ResultFailed, Class: events.ErrorRateLimit}})
+
+			if got := c.View().Content; strings.TrimSpace(plain(got)) == "" {
+				t.Errorf("the %q look drew nothing", name)
+			}
+			if got := lipgloss.Height(c.View().Content); got != 24 {
+				t.Errorf("the %q look drew %d rows in a window of 24", name, got)
+			}
+		})
+	}
+}
+
+// A turn that produced no answer is not drawn in the grey the interface says
+// everything else about itself in.
+//
+// Everything the console says about itself is subdued, because the answer is what
+// a person came for. A failure is the exception, and it has to be: in the same
+// grey as "ready" and the cost figure, the one line a person must not miss read
+// as one more line they could skip.
+//
+// Interruption stays subdued. It is not a failure to be found on a screen — it is
+// the thing the person just did.
+func TestAFailedTurnIsNotDrawnAsAHint(t *testing.T) {
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	// The default look, because that is the one nearly everybody reads. A
+	// configured colour reaching the screen is asserted where a configured Theme
+	// is; what matters here is that a person who configured nothing can find the
+	// line.
+	look := theme.Default(true)
+
+	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+	if err != nil {
+		t.Fatalf("build the interface: %v", err)
+	}
+	c.Init()
+	c.layout(80, 20)
+
+	c.close(answered{outcome: core.Outcome{Result: events.ResultFailed, Class: events.ErrorAuthFailed}})
+
+	failure := c.kept()
+	if !strings.Contains(failure, opens(c.styles.failure)) {
+		t.Errorf("the failure line is not drawn in the failure colour:\n%q", failure)
+	}
+	if strings.Contains(failure, opens(c.styles.hint)) {
+		t.Errorf("the failure line is drawn in the grey the hints use:\n%q", failure)
+	}
+
+	// And the same turn, interrupted, is.
+	c.transcript = nil
+	c.interrupted = true
+	c.close(answered{outcome: core.Outcome{Result: events.ResultFailed}})
+
+	if got := strings.TrimSpace(plain(c.kept())); got != "interrupted" {
+		t.Fatalf("an interrupted turn said %q", got)
+	}
+	if !strings.Contains(c.kept(), opens(c.styles.hint)) {
+		t.Errorf("an interruption is drawn as a failure rather than as the thing a person just did:\n%q", c.kept())
+	}
+}
+
+// opens is the sequence a style begins with, so that a test can ask which style
+// drew a line rather than re-render the line and compare.
+func opens(style lipgloss.Style) string {
+	drawn := style.Render("x")
+	opening, _, _ := strings.Cut(drawn, "x")
+	return opening
+}
+
+// The footer is one row whether or not a person has scrolled.
+//
+// It is an invariant rather than a detail of the drawing. The pane's height is
+// what is left after the chrome, and the footer is the one piece of chrome that
+// reads the pane — so a footer that grew a row when somebody scrolled would take
+// a row from the thing it is reporting on, which would change what it reports.
+// The count of what is below is therefore written to fit a row it already has.
+func TestTheFooterIsOneRowWhetherOrNotSomebodyHasScrolled(t *testing.T) {
+	c := drawn(t)
+	c.layout(60, 12)
+
+	for i := range 20 {
+		c.keep(block{text: fmt.Sprintf("turn %d, with enough words in it to wrap in a narrow window", i), voice: evaVoice})
+	}
+
+	if got := lipgloss.Height(c.footer()); got != 1 {
+		t.Errorf("the footer is %d rows at the end of the transcript", got)
+	}
+
+	c.pane.GotoTop()
+	if got := lipgloss.Height(c.footer()); got != 1 {
+		t.Errorf("the footer is %d rows after somebody scrolled back:\n%s", got, plain(c.footer()))
+	}
+	if !strings.Contains(plain(c.footer()), "more") {
+		t.Errorf("the footer says nothing about what is below, from the top of a transcript of 20:\n%s",
+			plain(c.footer()))
+	}
+}
+
+// settle resizes the window the way the program does, and waits for the turns
+// to be drawn again.
+//
+// A size arrives as a message and the console answers with a command that fires
+// once the window has stopped moving; running it is what the runtime would do.
+// So this is the whole path, including the wait — a test that called layout
+// itself would assert about a resize no window ever performs.
+func settle(t *testing.T, c *Console, width, height int) {
+	t.Helper()
+
+	_, cmd := c.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	if cmd == nil {
+		t.Fatalf("a window of %dx%d asked for nothing to be drawn again", width, height)
+	}
+	if _, cmd = c.Update(cmd()); cmd != nil {
+		t.Fatal("the settled resize answered with something else to run")
+	}
+}
+
+// A window still being dragged is drawn again once, at the width it stopped on.
+//
+// Every column an edge crosses is reported, and re-rendering a conversation's
+// markdown takes tens of milliseconds — so a drag that acted on each of them
+// spent seconds not answering a keystroke, for forty pictures nobody saw. What
+// this asserts is the coalescing: the sizes in the middle of a drag leave the
+// interface fitted and the turns alone, and the last one is the width they are
+// drawn at.
+func TestADraggedWindowIsDrawnAgainOnceAtTheWidthItStopsOn(t *testing.T) {
+	c := drawn(t)
+	c.layout(100, 20)
+
+	long := strings.TrimSpace(strings.Repeat("wrapping is the whole question here. ", 12))
+	for _, e := range []events.Event{
+		{Kind: events.KindStarted, Payload: events.Started{}},
+		{Kind: events.KindText, Payload: events.Text{Chunk: long}},
+		{Kind: events.KindFinished, Payload: events.Finished{}},
+	} {
+		if err := c.renderer.Committed(context.Background(), e); err != nil {
+			t.Fatalf("fold %s: %v", e.Kind, err)
+		}
+	}
+
+	// The drag: every width from 100 down to 60, none of them settled.
+	var last tea.Cmd
+	for width := 100; width >= 60; width-- {
+		_, last = c.Update(tea.WindowSizeMsg{Width: width, Height: 20})
+	}
+
+	if over := widest(plain(c.kept())); over <= 60 {
+		t.Errorf("the turns were re-wrapped during the drag: the widest line is %d columns", over)
+	}
+	// The pane fits the window as the drag happens, less whatever is held back at
+	// its edges. It is the cheap half of a resize and it is the half that has to
+	// keep up.
+	if c.pane.width != c.width || c.width >= 60 {
+		t.Errorf("the pane is %d columns wide during a drag to 60, and the interface draws in %d",
+			c.pane.width, c.width)
+	}
+
+	// The last width settles, and it is the only one that draws anything again.
+	if _, cmd := c.Update(last()); cmd != nil {
+		t.Fatal("the settled resize answered with something else to run")
+	}
+	if over := widest(plain(c.kept())); over > 60 {
+		t.Errorf("a line is %d columns wide after the drag ended at 60:\n%s", over, plain(c.kept()))
 	}
 }
 
@@ -477,7 +747,7 @@ func TestAnAnswerDoesNotMoveWhenItStopsArriving(t *testing.T) {
 
 	const answer = "short enough to stay on one line."
 
-	c.arriving.WriteString(answer)
+	c.live.write(answer)
 	c.refresh()
 	streaming := column(t, plain(c.pane.View()), answer)
 
@@ -500,6 +770,122 @@ func TestAnAnswerDoesNotMoveWhenItStopsArriving(t *testing.T) {
 	if streaming != gutterWidth {
 		t.Errorf("the answer sits at column %d, want the gutter's %d", streaming, gutterWidth)
 	}
+}
+
+// An arriving answer that costs a lot to draw is drawn less often, and it is
+// never left undrawn.
+//
+// The interface draws in the loop that reads the keys, so the cost of drawing a
+// long answer is what a keystroke waits behind. What bounds it is the cost
+// itself: the next drawing waits until a multiple of what the last one took has
+// passed. A cheap answer is therefore unaffected, which is what the first half
+// of this asserts by leaving the recorded cost at nothing.
+//
+// The second half is the part that could go wrong quietly. A frame that declines
+// to draw has to leave the interface knowing it is behind, or the newest text
+// waits for whatever arrives next — and at the end of a turn nothing does.
+func TestAnExpensiveAnswerIsDrawnLessOftenAndIsNotLost(t *testing.T) {
+	c := drawn(t)
+	c.layout(80, 20)
+
+	c.live.write("the first words")
+	c.refresh()
+	if !strings.Contains(plain(c.Screen()), "the first words") {
+		t.Fatalf("a cheap answer was not drawn at all:\n%s", plain(c.Screen()))
+	}
+
+	// A drawing that cost a second, a moment ago. The share is eight, so the
+	// next one is not due for eight seconds.
+	c.live.cost = time.Second
+	c.live.at = time.Now()
+
+	c.live.write(" and the next ones")
+	// Taken, so that what the frame owes afterwards is the frame's own answer
+	// rather than the chunk's.
+	c.live.due()
+	c.refresh()
+
+	if strings.Contains(plain(c.Screen()), "and the next ones") {
+		t.Errorf("an expensive answer was redrawn inside its own cost:\n%s", plain(c.Screen()))
+	}
+	if !c.live.due() {
+		t.Error("the frame declined to draw and did not say it was behind, so the newest text waits for a chunk that may never come")
+	}
+
+	// Long enough that the next drawing is due.
+	c.live.at = time.Now().Add(-time.Minute)
+	c.refresh()
+
+	if !strings.Contains(plain(c.Screen()), "and the next ones") {
+		t.Errorf("the answer was still not drawn once its cost had been paid for:\n%s", plain(c.Screen()))
+	}
+}
+
+// A turn that ends takes the drawing of what was arriving with it.
+//
+// The next turn draws nothing until its own first chunk, and a drawing left
+// behind would be the last turn's words under the new turn's spinner.
+func TestTheDrawingOfAnArrivingAnswerDoesNotOutliveItsTurn(t *testing.T) {
+	c := drawn(t)
+	c.layout(80, 20)
+
+	c.live.write("what the last turn was saying")
+	c.refresh()
+
+	c.live.forget()
+	c.refresh()
+
+	if got := plain(c.Screen()); strings.Contains(got, "what the last turn was saying") {
+		t.Errorf("the drawing outlived the turn that was arriving:\n%s", got)
+	}
+}
+
+// A block kept from an earlier frame draws the same as one drawn now.
+//
+// A frame hands on the rows it drew before rather than splitting the whole
+// transcript again, which is what makes a long conversation cost the same as a
+// short one. What that buys is only worth having if the two can never differ, so
+// this asks the question at each of the three moments a drawing could go stale:
+// after a block is kept, after the window changes width, and after the terminal
+// says what colour it is.
+//
+// It is the falsifier for the whole arrangement. A drawing kept past something
+// that changed it is the interface showing a person a screen that is no longer
+// true, and it would show it silently.
+func TestABlockKeptFromAnEarlierFrameIsStillTrue(t *testing.T) {
+	c := drawn(t)
+	c.layout(80, 20)
+
+	c.keep(block{text: "what I asked", voice: personVoice})
+	c.keep(block{text: "## An answer\n\nwith a paragraph in it", voice: evaVoice})
+	c.keep(block{text: "what the console said", voice: asideVoice})
+
+	// fresh is the transcript drawn with nothing kept, which is what the cached
+	// drawing has to equal.
+	fresh := func() string {
+		for i := range c.transcript {
+			c.transcript[i].lines = nil
+		}
+		return c.compose(c.transcript)
+	}
+
+	at := func(when string) {
+		t.Helper()
+		cached := c.compose(c.transcript)
+		if again := fresh(); cached != again {
+			t.Errorf("%s the kept drawing is not what a fresh one would be:\ncached:\n%s\nfresh:\n%s",
+				when, plain(cached), plain(again))
+		}
+	}
+
+	c.refresh()
+	at("after a block is kept,")
+
+	c.layout(50, 20)
+	at("after the window narrowed,")
+
+	c.background(!c.dark)
+	at("after the terminal answered about its colour,")
 }
 
 // The gutter says whose block it is: a person's mark, Eva's mark, and no mark
@@ -617,7 +1003,7 @@ func TestAnAnswerIsFormattedWhileItArrives(t *testing.T) {
 
 	const answer = "- first bullet\n- second bullet"
 
-	c.arriving.WriteString(answer)
+	c.live.write(answer)
 	c.refresh()
 	streaming := plain(c.pane.View())
 
@@ -765,7 +1151,7 @@ func TestAnInterruptedRunIsStillInHandUntilItCloses(t *testing.T) {
 	// A Run in flight, without one actually running: what makes the console
 	// busy is holding a way to cancel.
 	ctx, cancel := context.WithCancel(context.Background())
-	c.cancel = cancel
+	c.shown.hold(cancel)
 	t.Cleanup(cancel)
 
 	c.key(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})

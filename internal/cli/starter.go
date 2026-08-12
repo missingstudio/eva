@@ -59,6 +59,11 @@ func starter() string {
 # Which model a turn runs against.
 # model = %q
 
+# The program a long prompt is written in, opened by ctrl+o. Left out, Eva reads
+# VISUAL and then EDITOR from your environment. It is not a setting a repository
+# may choose: what it names is a program Eva starts on this machine.
+# editor = ""
+
 [provider]
 # Which Provider answers. This build ships: %s.
 # name = %q
@@ -102,6 +107,12 @@ func starter() string {
 # repository may not set anything above them: a cloned repository is content
 # from the internet, and what it looks like is not what it does.
 [theme]
+# One of the looks Eva ships with: %s. Everything below is applied over the look
+# you name, so you can take one and change a single colour of it. %q is what Eva
+# draws when you name nothing; %q raises the greys for a washed-out terminal or
+# tired eyes, and %q names no colour at all.
+# name = %q
+
 # The rule above and below the prompt: %s.
 # border = %q
 
@@ -112,6 +123,23 @@ func starter() string {
 # person  = ""
 # eva     = ""
 # spinner = ""
+# What a turn that produced no answer is written in. Empty is the subdued grey.
+# failure = ""
+
+[theme.markdown]
+# Draw the answer with no colour at all, and with ASCII in place of the marks
+# Eva would otherwise draw.
+# plain = false
+
+# The answer's own colours. Each is empty by default, which leaves it to the
+# renderer's own choice for your terminal's background.
+# heading    = ""
+# code       = ""
+# code_block = ""
+# emphasis   = ""
+# link       = ""
+# link_text  = ""
+# quote      = ""
 
 [theme.symbols]
 # prompt      = %q
@@ -125,6 +153,34 @@ func starter() string {
 # prompt_rows = %d
 # How long one caption stays while a turn runs.
 # caption_seconds = %d
+# How long a turn must take before it says how long it took. Zero says nothing
+# about any turn.
+# elapsed_seconds = %d
+# How much of the clock drawing an answer that is still arriving may take, as one
+# part in this many. Lower it for smoother streaming on a fast machine; raise it
+# if a long answer makes typing feel late.
+# live_share = %d
+
+# What the interface holds back at each edge of the window, in cells. A terminal
+# draws no window frame of its own, so text against the first column reads as text
+# against the edge of the screen. Rows are scarcer than columns, which is why the
+# top and bottom are nothing by default.
+#
+# A window too small to spare an edge spends it on the answer instead.
+[theme.layout.margin]
+# top    = %d
+# right  = %d
+# bottom = %d
+# left   = %d
+
+# The same, held back inside the margin rather than outside it. The two are one
+# inset today; they part company when Eva draws a background, which will fill the
+# padding and stop at the margin.
+[theme.layout.padding]
+# top    = %d
+# right  = %d
+# bottom = %d
+# left   = %d
 
 [keymap.bind]
 # A binding must be a chord or a key that types nothing. Binding a bare letter
@@ -140,10 +196,16 @@ func starter() string {
 		config.DefaultAPIKeyEnv,
 		config.EnvHome, strings.Join(trace.Kinds(), ", "), trace.JSONL,
 		config.DefaultTenant, config.DefaultActor, string(events.ActorHuman),
+		strings.Join(theme.Names(), ", "), theme.Eva, theme.Contrast, theme.Mono, theme.Eva,
 		strings.Join(theme.Borders(), ", "), theme.BorderNormal,
 		look.Symbols.Prompt, look.Symbols.Placeholder, look.Symbols.Truncation,
 		strings.Join(theme.Spinners(), ", "), look.Symbols.Spinner,
 		look.Layout.PromptRows, look.Layout.CaptionSeconds,
+		look.Layout.ElapsedSeconds, look.Layout.LiveShare,
+		look.Layout.Margin.Top, look.Layout.Margin.Right,
+		look.Layout.Margin.Bottom, look.Layout.Margin.Left,
+		look.Layout.Padding.Top, look.Layout.Padding.Right,
+		look.Layout.Padding.Bottom, look.Layout.Padding.Left,
 		bindings(keys),
 	)
 }

@@ -106,6 +106,15 @@ type Config struct {
 	// Model is which model a turn runs against.
 	Model string `toml:"model"`
 
+	// Editor is the program a long prompt is written in, and is empty when the
+	// environment answers instead.
+	//
+	// It is not a setting a repository may choose. Every other look-and-feel key
+	// is, and this one reads like one — but what it names is a program Eva starts
+	// on this machine, and a cloned repository naming that would be a repository
+	// choosing what runs.
+	Editor string `toml:"editor"`
+
 	// Project is the repository's own settings file, when one was found and
 	// read. It is empty otherwise, and it is not a key any file can set: it
 	// says where something was read from, so an error can name the file a
@@ -154,9 +163,14 @@ type ProviderConfig struct {
 // It is a repository's to set. Nothing here can change what a run does — see
 // projectSettable.
 type ThemeConfig struct {
-	Colors  ColorsConfig  `toml:"colors"`
-	Symbols SymbolsConfig `toml:"symbols"`
-	Layout  LayoutConfig  `toml:"layout"`
+	// Name selects one of the looks Eva ships with. Everything below is applied
+	// over it, so a file may name a look and change one colour of it.
+	Name string `toml:"name"`
+
+	Colors   ColorsConfig   `toml:"colors"`
+	Symbols  SymbolsConfig  `toml:"symbols"`
+	Layout   LayoutConfig   `toml:"layout"`
+	Markdown MarkdownConfig `toml:"markdown"`
 	// Border is the rule above and below the prompt: normal, rounded, thick,
 	// double, or none.
 	Border string `toml:"border"`
@@ -168,6 +182,21 @@ type ColorsConfig struct {
 	Person  string `toml:"person"`
 	Eva     string `toml:"eva"`
 	Spinner string `toml:"spinner"`
+	Failure string `toml:"failure"`
+}
+
+// MarkdownConfig are the colours an answer itself is drawn in. An empty one
+// keeps the colour the interface's own renderer chooses for the background.
+type MarkdownConfig struct {
+	// Plain draws the answer with no colour and with ASCII marks.
+	Plain     *bool  `toml:"plain"`
+	Heading   string `toml:"heading"`
+	Code      string `toml:"code"`
+	CodeBlock string `toml:"code_block"`
+	Emphasis  string `toml:"emphasis"`
+	Link      string `toml:"link"`
+	LinkText  string `toml:"link_text"`
+	Quote     string `toml:"quote"`
 }
 
 // SymbolsConfig are the marks an interface writes that are not words.
@@ -184,8 +213,26 @@ type SymbolsConfig struct {
 
 // LayoutConfig are the measurements.
 type LayoutConfig struct {
-	PromptRows     *int `toml:"prompt_rows"`
-	CaptionSeconds *int `toml:"caption_seconds"`
+	// Margin is what the interface holds back at each edge of the window, and
+	// Padding is what it holds back inside that. Each edge is optional.
+	Margin         SidesConfig `toml:"margin"`
+	Padding        SidesConfig `toml:"padding"`
+	PromptRows     *int        `toml:"prompt_rows"`
+	CaptionSeconds *int        `toml:"caption_seconds"`
+	ElapsedSeconds *int        `toml:"elapsed_seconds"`
+	LiveShare      *int        `toml:"live_share"`
+}
+
+// SidesConfig is a number of cells at each of four edges, each one optional.
+//
+// They are pointers because zero is a real answer here: a person who wants no
+// space at the left writes left = 0, and a person who says nothing about the left
+// keeps whatever the look gives it.
+type SidesConfig struct {
+	Top    *int `toml:"top"`
+	Right  *int `toml:"right"`
+	Bottom *int `toml:"bottom"`
+	Left   *int `toml:"left"`
 }
 
 // KeysConfig is which chords ask for which action, by the action's name.

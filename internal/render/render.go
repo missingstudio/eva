@@ -3,11 +3,14 @@ package render
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/ansi"
 	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"github.com/missingstudio/eva/internal/events"
@@ -53,6 +56,14 @@ type Renderer struct {
 	// right.
 	session spend
 
+	// opened is when the Run in flight opened, taken from the record rather than
+	// from a clock here. What it is for is the figure below.
+	opened events.Timestamp
+	// elapsed is how long the turn took, from the Started record to the Finished
+	// one. It is a fold over two timestamps the Trace holds, which is what makes
+	// it something a person may be shown: nothing here times anything.
+	elapsed time.Duration
+
 	// missing is what the Run did not understand, from the caveat that closes
 	// it. A person is shown it for the same reason the Trace carries it: a cost
 	// line over data known to be incomplete, printed with nothing to say so, is
@@ -74,7 +85,26 @@ type Renderer struct {
 	// look is the colours and glyphs this draws with. It is held so that a
 	// rebuild for a resize keeps what a person configured.
 	look theme.Theme
+
+	// timing is whether a turn says how long it took. See WithTiming.
+	timing bool
 }
+
+// Option is what a caller says about a turn beyond how it looks.
+//
+// It exists because two frontends want different things from one fold. A console
+// draws turns on a screen a person reads, where a figure beside an answer is
+// context. The one-shot command writes the same turn to whatever a script is
+// piping it into, where anything but the answer is something that script has to
+// parse around.
+type Option func(*Renderer)
+
+// WithTiming draws how long a turn took under it.
+//
+// It is the frontend saying its surface can carry something that is not the
+// answer. How long a turn must take before it says anything is the Theme's, and
+// a Theme that names no threshold says nothing however this is set.
+func WithTiming() Option { return func(r *Renderer) { r.timing = true } }
 
 // New builds a Renderer that shows each finished turn on a Screen.
 //
@@ -90,8 +120,11 @@ type Renderer struct {
 //
 // theme.Default(dark) is the whole of what this took before, so a caller with
 // nothing to say passes exactly that and sees exactly what it saw.
-func New(screen Screen, look theme.Theme) (*Renderer, error) {
+func New(screen Screen, look theme.Theme, opts ...Option) (*Renderer, error) {
 	r := &Renderer{screen: screen, dark: look.Dark, look: look}
+	for _, opt := range opts {
+		opt(r)
+	}
 	if err := r.rebuild(); err != nil {
 		return nil, err
 	}
@@ -152,7 +185,12 @@ func (r *Renderer) rebuild() error {
 	// The markdown renderer no longer detects a background for itself and
 	// defaults to dark, so the style is named here rather than left to it.
 	style := styles.LightStyleConfig
-	if r.dark {
+	switch {
+	case r.look.Markdown.Plain:
+		// No colour, and ASCII for the marks. It is the style a destination with
+		// no colour capability would have got anyway, asked for on purpose.
+		style = styles.ASCIIStyleConfig
+	case r.dark:
 		style = styles.DarkStyleConfig
 	}
 
@@ -164,6 +202,8 @@ func (r *Renderer) rebuild() error {
 	// zero and leaves the inset to them.
 	none := uint(0)
 	style.Document.Margin = &none
+
+	paint(&style, r.look.Markdown)
 
 	options := []glamour.TermRendererOption{glamour.WithStyles(style)}
 	if r.width > 0 {
@@ -178,6 +218,69 @@ func (r *Renderer) rebuild() error {
 	r.markdown = markdown
 	r.costStyle = r.look.Subdued()
 	return nil
+}
+
+// paint applies the colours a Theme names for an answer, and leaves the rest to
+// the library that draws it.
+//
+// A colour a Theme does not name is left exactly as the standard style had it,
+// which is what makes a Theme that names none of them draw what Eva drew before
+// any of this could be chosen. That is ADR 0030's rule, held here rather than
+// trusted: the default is not a choice, so it cannot be reconstructed from one.
+//
+// The mapping is here rather than in theme, and this is the seam that matters.
+// theme names the marks a reader navigates an answer by — a heading, code, a
+// quotation — in its own words. This is the one place those words become another
+// package's schema, so a Theme is never a wrapper around a dependency's
+// configuration and a person's file never has that dependency's shape.
+func paint(style *ansi.StyleConfig, look theme.Markdown) {
+	// A heading colour reaches every level, and takes the band of colour behind
+	// the first one with it.
+	//
+	// The standard styles give H1 its own colour on its own background and leave
+	// the other levels to inherit. So a Theme that named a heading colour and set
+	// only the inherited one would change every heading but the largest, which is
+	// the one a person was looking at when they named it. And a chosen colour on a
+	// background nobody chose is a pair that can be unreadable — the point of
+	// naming a colour is to be able to read it.
+	if look.Heading != nil {
+		hex := hexOf(look.Heading)
+		for _, level := range []*ansi.StyleBlock{
+			&style.Heading, &style.H1, &style.H2, &style.H3, &style.H4, &style.H5, &style.H6,
+		} {
+			level.Color = &hex
+			level.BackgroundColor = nil
+		}
+	}
+
+	for _, m := range []struct {
+		want color.Color
+		into **string
+	}{
+		{look.Code, &style.Code.Color},
+		{look.CodeBlock, &style.CodeBlock.Color},
+		{look.Emphasis, &style.Emph.Color},
+		{look.Emphasis, &style.Strong.Color},
+		{look.Link, &style.Link.Color},
+		{look.LinkText, &style.LinkText.Color},
+		{look.Quote, &style.BlockQuote.Color},
+	} {
+		if m.want == nil {
+			continue
+		}
+		hex := hexOf(m.want)
+		*m.into = &hex
+	}
+}
+
+// hexOf writes a colour the way the markdown renderer reads one.
+//
+// It takes the top eight bits of each channel, which is what a terminal is told
+// in any case. The alpha is dropped: a style sheet has no way to say "partly
+// transparent" to a terminal, and a colour arrives here already resolved.
+func hexOf(c color.Color) string {
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 }
 
 // stream is the Screen a byte stream is: it writes the turn out, and that is
@@ -213,6 +316,7 @@ func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 	switch payload := e.Payload.(type) {
 	case events.Started:
 		r.reset()
+		r.opened = e.At
 
 	case events.Text:
 		r.answer.WriteString(payload.Chunk)
@@ -224,6 +328,7 @@ func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 		r.missing = append(r.missing, payload.Missing...)
 
 	case events.Finished:
+		r.elapsed = span(r.opened, e.At)
 		return r.show()
 	}
 	return nil
@@ -270,6 +375,8 @@ func Silent() map[events.Kind]string {
 func (r *Renderer) reset() {
 	r.answer.Reset()
 	r.missing = nil
+	r.elapsed = 0
+	r.opened = events.Timestamp{}
 }
 
 // Cost is what the last turn cost and what the Session has cost so far, for a
@@ -373,6 +480,7 @@ func (r *Renderer) Cleared() {
 // caveat, and the figures are one thing a person reads.
 func (r *Renderer) show() error {
 	kept := turn{
+		took:   r.elapsed,
 		answer: strings.TrimSpace(r.answer.String()),
 		// Frozen here rather than re-read later: it is what this Run failed to
 		// account for, and a turn redrawn at another width must still carry its
@@ -418,6 +526,10 @@ func (r *Renderer) show() error {
 type turn struct {
 	answer string
 	caveat string
+	// took is how long the Run took. It is frozen with the turn for the reason
+	// the caveat is: a turn redrawn at another width is still the turn that took
+	// this long.
+	took time.Duration
 }
 
 // draw is one finished turn at the current width: the answer, the caveat if the
@@ -449,6 +561,18 @@ func (r *Renderer) draw(t turn) (string, error) {
 	// be the one thing on a narrow screen that runs off the edge.
 	if t.caveat != "" {
 		out.WriteString(r.cost().Render(t.caveat))
+		out.WriteString("\n")
+	}
+
+	// How long it took, under the answer it belongs to.
+	//
+	// It is here rather than beside the Session's spend on a frontend's footer,
+	// because it is the one figure about a turn that stops being available the
+	// moment the turn is over: a person watching the status line count up can
+	// read it, and a person scrolling back a week later cannot. The cost is the
+	// opposite — one number that keeps changing — which is why it is not here.
+	if took := r.took(t); took != "" {
+		out.WriteString(r.cost().Render(took))
 		out.WriteString("\n")
 	}
 	return out.String(), nil
@@ -498,6 +622,47 @@ func (r *Renderer) Kept() ([]string, error) {
 		out = append(out, drawn)
 	}
 	return out, nil
+}
+
+// span is how long two records are apart.
+//
+// The monotonic reading is preferred because that is what it is for: a wall
+// clock can step backwards between two records of one Run, and a turn that
+// reported a negative duration would be the interface making an obvious lie out
+// of an ordinary clock correction. The wall clock answers when a record carries
+// no reading — an older Trace, or a producer that did not fill one.
+//
+// A span that still comes out negative is reported as nothing rather than as a
+// number. Two records whose order the clocks disagree about cannot be turned
+// into a duration by choosing a sign for it.
+func span(from, to events.Timestamp) time.Duration {
+	if from.Mono > 0 && to.Mono > 0 {
+		return max(0, time.Duration(to.Mono-from.Mono))
+	}
+	if from.Wall.IsZero() || to.Wall.IsZero() {
+		return 0
+	}
+	return max(0, to.Wall.Sub(from.Wall))
+}
+
+// took is how long a turn took, for a turn that took long enough to say.
+//
+// The threshold is the Theme's, and zero says nothing about any turn. What a
+// figure on every turn would be is noise on the fast ones — and the number a
+// person is looking for is the one that surprised them.
+//
+// It is rounded to a tenth of a second, which is the precision the figure is
+// read at. A turn reported to the microsecond claims a measurement of the
+// network, and this is a fold over two timestamps.
+func (r *Renderer) took(t turn) string {
+	seconds := r.look.Layout.ElapsedSeconds
+	if !r.timing || seconds <= 0 || t.took <= 0 {
+		return ""
+	}
+	if t.took < time.Duration(seconds)*time.Second {
+		return ""
+	}
+	return "took " + t.took.Round(100*time.Millisecond).String()
 }
 
 // segments joins the parts that have something to say.

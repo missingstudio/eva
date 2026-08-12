@@ -28,6 +28,7 @@ will not load.
 
 ```toml
 model = "claude-sonnet-4-5"     # follows the provider if you leave it out
+editor = ""                     # $VISUAL, then $EDITOR, when you leave it out
 
 [provider]
 name        = "anthropic"       # anthropic or openai
@@ -65,8 +66,18 @@ any of it was configurable. Colours follow your terminal's background and what i
 display.
 
 ```toml
+[theme]
+name = "contrast"               # eva, contrast, or mono
+
 [theme.colors]
 person = "#7AA6DC"
+
+[theme.markdown]
+heading = "#7AA6DC"             # the answer's own colours
+
+[theme.layout.margin]
+left = 2                        # cells held back at the window's edges
+right = 2
 
 [theme.symbols]
 prompt = "› "
@@ -74,6 +85,22 @@ prompt = "› "
 [keymap.bind]
 follow = ["ctrl+g"]
 ```
+
+`[theme] name` picks one of the looks Eva ships with, and everything you write is
+applied over it. `eva` is what Eva draws when you name nothing. `contrast` raises the
+greys for a washed-out terminal or tired eyes. `mono` names no colour at all, for a
+terminal that draws none and for anyone who wants none.
+
+`[theme.markdown]` is the answer's own palette — headings, code, emphasis, links,
+quotations. Leave a colour out and the renderer chooses it for your terminal's
+background, which is what Eva did before these existed.
+
+`[theme.layout.margin]` and `[theme.layout.padding]` each take `top`, `right`,
+`bottom`, and `left`. Two columns at each side and no rows at top or bottom, by
+default: a terminal has few rows, and a row held back is a row of the conversation
+nobody can read. The two insets are one today and part company when Eva draws a
+background — that will fill the padding and stop at the margin. A window too small
+to spare an edge spends it on the answer instead, and gives up the margin first.
 
 The full list of colours, symbols, layout values, and bindable actions is in
 [how-to/theme-a-repository.md](../how-to/theme-a-repository.md).
@@ -99,8 +126,9 @@ it may set is an allow list: `model`, and everything under `[theme]` and
 **A repo can change how Eva looks, never who answers.** You clone a repo from the
 internet, and Eva reads that file before your first question, in a process holding
 your API key. So it cannot pick the provider, point traffic at another server, rename
-the variable your key is read from, or move your Trace. Anything else in that file is
-refused by name.
+the variable your key is read from, or move your Trace. Nor can it name your `editor`,
+which reads like a look-and-feel setting and is not one: what it names is a program Eva
+starts on your machine. Anything else in that file is refused by name.
 ([why](../adr/0029-a-repository-may-choose-how-eva-looks-and-not-what-it-does.md))
 
 ## Related

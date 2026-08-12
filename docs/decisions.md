@@ -160,6 +160,12 @@ sequence-numbered Event. There is no second vocabulary anywhere in the system.
   A block handed to the terminal's scrollback is one the program can never reach
   again: no re-wrap on resize, and no real `/clear`. The pane keeps 0015's substance —
   arriving text is stored separately and dropped at close.
+- **The console owns the pane it scrolls** ([0043](adr/0043-the-console-owns-the-pane-it-scrolls.md)).
+  0023's pane was the terminal library's, and it takes a piece of text — so every frame
+  handed it the whole conversation and it measured the display width of every line of
+  it again. Handing it lines it did not have to split saved 2%: the splitting was never
+  the cost. Eva's own pane takes rows, keeps no figure derived from all of them, and
+  measures nothing it is not drawing. A frame now costs what the window shows.
 - **A failed claim carries a class, and a projection spends the class rather than the prose** ([0038](adr/0038-a-failed-claim-carries-a-class-and-a-projection-spends-the-class.md)).
   What went wrong is a value from a fixed set, and how it went wrong is prose. Only
   the second is unsafe to show, so `Claim` carries an `ErrorClass` and a person reads

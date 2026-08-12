@@ -238,7 +238,8 @@ func (r *run) assemble() (func() error, error) {
 		// Where the name came from is written rather than left to the zero
 		// value: it is the fact a remedy turns on, and a fact that is only true
 		// because nobody set it is one an added field could quietly take away.
-		model: selection{name: r.cfg.Model, from: fromFile},
+		model:  selection{name: r.cfg.Model, from: fromFile},
+		editor: r.cfg.Editor,
 		checks: checks{
 			subscription: r.cfg.Subscription(),
 			keyEnv:       r.cfg.Provider.APIKeyEnv,

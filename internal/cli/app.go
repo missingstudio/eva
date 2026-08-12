@@ -8,6 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/missingstudio/eva/internal/auth"
@@ -206,7 +208,17 @@ func parse(args []string) (options, error) {
 // arriving late changes the greys without undoing a decision.
 func appearance(cfg config.Config) (theme.Theme, keymap.Keymap, error) {
 	look, err := theme.Build(true, theme.Settings{
+		Name:           cfg.Theme.Name,
 		Subdued:        cfg.Theme.Colors.Subdued,
+		Failure:        cfg.Theme.Colors.Failure,
+		Plain:          cfg.Theme.Markdown.Plain,
+		Heading:        cfg.Theme.Markdown.Heading,
+		Code:           cfg.Theme.Markdown.Code,
+		CodeBlock:      cfg.Theme.Markdown.CodeBlock,
+		Emphasis:       cfg.Theme.Markdown.Emphasis,
+		Link:           cfg.Theme.Markdown.Link,
+		LinkText:       cfg.Theme.Markdown.LinkText,
+		Quote:          cfg.Theme.Markdown.Quote,
 		Person:         cfg.Theme.Colors.Person,
 		Eva:            cfg.Theme.Colors.Eva,
 		Spinner:        cfg.Theme.Colors.Spinner,
@@ -215,8 +227,12 @@ func appearance(cfg config.Config) (theme.Theme, keymap.Keymap, error) {
 		Placeholder:    cfg.Theme.Symbols.Placeholder,
 		Truncation:     cfg.Theme.Symbols.Truncation,
 		Border:         cfg.Theme.Border,
+		Margin:         sides(cfg.Theme.Layout.Margin),
+		Padding:        sides(cfg.Theme.Layout.Padding),
 		PromptRows:     cfg.Theme.Layout.PromptRows,
 		CaptionSeconds: cfg.Theme.Layout.CaptionSeconds,
+		ElapsedSeconds: cfg.Theme.Layout.ElapsedSeconds,
+		LiveShare:      cfg.Theme.Layout.LiveShare,
 	})
 	if err != nil {
 		return theme.Theme{}, keymap.Keymap{}, fmt.Errorf("%w (in %s)", err, appearanceFile(cfg))
@@ -227,6 +243,21 @@ func appearance(cfg config.Config) (theme.Theme, keymap.Keymap, error) {
 		return theme.Theme{}, keymap.Keymap{}, fmt.Errorf("%w (in %s)", err, appearanceFile(cfg))
 	}
 	return look, keys, nil
+}
+
+// sides maps the four edges a person wrote onto the ones the interface draws with.
+//
+// It is a field-for-field copy of two shapes that mean the same thing, and it is
+// here for the reason every mapping in this function is: a file format is config's
+// and what an interface draws with is theme's, and the layer that reads files is
+// the one that turns the first into the second.
+func sides(written config.SidesConfig) theme.Sides {
+	return theme.Sides{
+		Top:    written.Top,
+		Right:  written.Right,
+		Bottom: written.Bottom,
+		Left:   written.Left,
+	}
 }
 
 // appearanceFile is which file a person has to go and edit. Look and feel is
@@ -327,6 +358,11 @@ type eva struct {
 	// came from.
 	model selection
 
+	// editor is the program a long prompt is written in, as the configuration
+	// named it. It is empty when the configuration named none, and the
+	// environment answers instead — see Editor.
+	editor string
+
 	// checks is what a failed turn's remedy is established from: the
 	// configuration this assembly was opened with, and the store a login lives
 	// in. See Remedy for why the checking lives in this layer and the sentence
@@ -385,6 +421,33 @@ const (
 // eva is what a console drives, and Control is the whole of what a console can
 // reach of it.
 var _ tui.Control = (*eva)(nil)
+
+// Editor is the program a person writes a long prompt in.
+//
+// Three places name one and the most specific wins: the configuration, because a
+// person who wrote it down there meant Eva; then VISUAL, then EDITOR, which is
+// the order every other program on a Unix machine reads them in. A machine that
+// names none gets the zero Editor, and the console says so rather than starting
+// something it guessed at.
+//
+// The command is split on spaces, so "code --wait" works. Nothing more is parsed:
+// a quoted path with a space in it wants a configuration key rather than a shell
+// this layer would have to become.
+func (e *eva) Editor() tui.Editor {
+	named := e.editor
+	for _, envvar := range []string{"VISUAL", "EDITOR"} {
+		if named != "" {
+			break
+		}
+		named = strings.TrimSpace(os.Getenv(envvar))
+	}
+
+	fields := strings.Fields(named)
+	if len(fields) == 0 {
+		return tui.Editor{}
+	}
+	return tui.Editor{Command: fields[0], Args: fields[1:]}
+}
 
 // Model is which model the turns that follow will use.
 func (e *eva) Model() string { return e.model.name }

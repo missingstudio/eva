@@ -23,10 +23,61 @@ type command struct {
 	argument string
 	// about is the one line /help gives this command.
 	about string
-	// run does the thing and says what to show for it. It takes the console
-	// because every command acts on the Session behind one.
-	run func(c *Console, argument string) string
+	// run does the thing and says what to show for it.
+	run func(r reach, argument string) string
 }
+
+// reach is the whole of what a Command may reach of the console it was typed
+// at.
+//
+// It is the move Control makes, one layer in. Control exists so that what a
+// frontend can reach is a list a reader can finish; a Command was then handed the
+// console itself — every field, every method, the pane and the transcript among
+// them — which gave back the discipline one layer down from where it was bought.
+// /clear reached five of them.
+//
+// What is on this list is what a Command is for: the model that answers, what the
+// Session has cost, emptying the transcript, and saying a line about any of it.
+// What is not on it is the pane. ADR 0023's falsifier says the pane holds while
+// every writer to it is downstream of a commit or of a person's own keystroke, and
+// the writer it was aimed at is a future Command that puts something else there.
+// That writer is now impossible to write rather than merely forbidden.
+//
+// Two adapters, so the seam is real: the Console, and a fake in command_test.go.
+//
+// It is named for what it is rather than for what it acts on. A Session is the
+// durable, resumable transcript, and this is not that — it is one console's list
+// of what a Command may touch, which is why the name that would read most
+// naturally here is the one word this project will not spend twice.
+type reach interface {
+	// usingModel is which model answers the turns that follow, and useModel
+	// switches it from the next turn on.
+	usingModel() string
+	useModel(name string)
+
+	// spent is what this Session has cost so far, already drawn. It is a fold over
+	// the Usage records the Trace holds, which is why a Command asks for it rather
+	// than counting.
+	spent() string
+
+	// empty empties the transcript, and the Session behind it. Nothing is
+	// destroyed: see clear, and ADR 0019.
+	empty()
+
+	// aside is a line in the interface's own voice — subdued, because a command's
+	// answer is not part of the conversation.
+	aside(text string) string
+}
+
+var _ reach = (*Console)(nil)
+
+// The console's own half of that list. Each is one line, and each is the reason
+// the list is short: a Command that wanted anything else would have to say so
+// here, where a reader would see it.
+func (c *Console) usingModel() string       { return c.control.Model() }
+func (c *Console) useModel(name string)     { c.control.UseModel(name) }
+func (c *Console) spent() string            { return c.renderer.Cost() }
+func (c *Console) aside(text string) string { return c.styles.hint.Render(text) }
 
 // Control is the whole of what a console may reach of the assembly behind it.
 //
@@ -72,6 +123,14 @@ type Control interface {
 	// by the turn that fails.
 	Remedy(class events.ErrorClass) render.Remedy
 
+	// Editor is the program a person writes a long prompt in, and is the zero
+	// Editor when this machine names none.
+	//
+	// It is asked when the key is pressed rather than told when the console is
+	// built, because a person can export EDITOR in the shell they started Eva
+	// from and expect it to be the one that opens.
+	Editor() Editor
+
 	// Model is which model the turns that follow will use.
 	Model() string
 	// UseModel switches it, from the next turn on.
@@ -91,28 +150,28 @@ func commands() []command {
 		{
 			name:  "help",
 			about: "list these commands",
-			run:   (*Console).help,
+			run:   help,
 		},
 		{
 			name:  "cost",
 			about: "what this Session has cost so far",
-			run:   (*Console).cost,
+			run:   cost,
 		},
 		{
 			name:  "clear",
 			about: "empty the transcript",
-			run:   (*Console).clear,
+			run:   clear,
 		},
 		{
 			name:     "model",
 			argument: "[name]",
 			about:    "report which model answers, or switch to another",
-			run:      (*Console).model,
+			run:      model,
 		},
 		{
 			name:  "login",
 			about: "where to log in to a subscription, which is not here",
-			run:   (*Console).login,
+			run:   login,
 		},
 	}
 }
@@ -121,7 +180,7 @@ func commands() []command {
 //
 // It reads the table rather than a list written beside it, so a command added
 // without a line here is impossible rather than merely undiscoverable.
-func (c *Console) help(string) string {
+func help(r reach, _ string) string {
 	var listed strings.Builder
 	for _, cmd := range commands() {
 		typed := "/" + cmd.name
@@ -130,7 +189,7 @@ func (c *Console) help(string) string {
 		}
 		fmt.Fprintf(&listed, "%-16s %s\n", typed, cmd.about)
 	}
-	return c.styles.hint.Render(strings.TrimRight(listed.String(), "\n"))
+	return r.aside(strings.TrimRight(listed.String(), "\n"))
 }
 
 // model reports which model answers, or switches to another.
@@ -141,13 +200,13 @@ func (c *Console) help(string) string {
 //
 // The Session is untouched either way: what a switch is for is answering the
 // same conversation with something else.
-func (c *Console) model(name string) string {
+func model(r reach, name string) string {
 	if name == "" {
-		return c.styles.hint.Render("model " + c.control.Model())
+		return r.aside("model " + r.usingModel())
 	}
-	was := c.control.Model()
-	c.control.UseModel(name)
-	return c.styles.hint.Render("model " + was + " → " + name)
+	was := r.usingModel()
+	r.useModel(name)
+	return r.aside("model " + was + " → " + name)
 }
 
 // login says where a login happens, and it is not here.
@@ -160,8 +219,8 @@ func (c *Console) model(name string) string {
 // It is a command at all because the alternative is a person typing /login,
 // being told there is no such command, and having no idea what there is
 // instead. An answer that points somewhere is worth more than a refusal.
-func (c *Console) login(string) string {
-	return c.styles.hint.Render(`run "eva login" in a shell — a login opens a browser, and a command opens nothing`)
+func login(r reach, _ string) string {
+	return r.aside(`run "eva login" in a shell — a login opens a browser, and a command opens nothing`)
 }
 
 // cost is what the Session has cost so far.
@@ -174,7 +233,7 @@ func (c *Console) login(string) string {
 // It is the Session and not the last turn. A per-turn figure was reported here
 // too, and it was the one that aged fastest: true for a turn, restated on the
 // next, and never the number anybody is deciding on.
-func (c *Console) cost(string) string { return c.renderer.Cost() }
+func cost(r reach, _ string) string { return r.spent() }
 
 // clear empties the transcript, and the spend with it, because both belong to
 // the Session that is being left behind. Session.Fresh has the argument.
@@ -193,63 +252,9 @@ func (c *Console) cost(string) string { return c.renderer.Cost() }
 // Nothing is destroyed by this. The Trace holds every Event of the Session being
 // left, and holds them after this returns exactly as it held them before —
 // emptying a pane closes a window on evidence rather than touching it.
-func (c *Console) clear(string) string {
-	c.control.Clear()
-	c.renderer.Cleared()
-
-	// Back to the top before the content goes, so that a person who had
-	// scrolled up is not left at an offset into a transcript that no longer
-	// reaches that far.
-	c.transcript = nil
-	c.pane.GotoTop()
-	c.refresh()
-
+func clear(r reach, _ string) string {
+	r.empty()
 	return ""
-}
-
-// complete fills in a command name from however much of it has been typed, and
-// offers the next match each time it is asked again.
-//
-// It reads the same table /help reads, so a command cannot be completable and
-// undocumented, or documented and not completable. That is the whole reason the
-// table is a table.
-//
-// Cycling rather than listing: there are four commands, and a list would have to
-// go somewhere — the transcript, which is for what was answered, or the status
-// line, which is for what a turn is doing. Pressing tab twice is cheaper than
-// either, and it is what a person does anyway to see the next one.
-func (c *Console) complete() {
-	if c.completing == "" {
-		typed := c.input.Value()
-		// A slash and nothing but a name so far. Once there is a space the
-		// person is writing an argument, and no table here knows what a model
-		// is called.
-		if !strings.HasPrefix(typed, "/") || strings.ContainsAny(typed, " \n") {
-			return
-		}
-		c.completing = typed
-		c.completed = -1
-	}
-
-	matches := matching(strings.TrimPrefix(c.completing, "/"))
-	if len(matches) == 0 {
-		c.completing = ""
-		return
-	}
-
-	c.completed = (c.completed + 1) % len(matches)
-	c.input.SetValue("/" + matches[c.completed] + " ")
-}
-
-// matching is every command whose name starts with what has been typed.
-func matching(prefix string) []string {
-	var out []string
-	for _, cmd := range commands() {
-		if strings.HasPrefix(cmd.name, prefix) {
-			out = append(out, cmd.name)
-		}
-	}
-	return out
 }
 
 // obey answers what was typed at the console rather than sending it to the

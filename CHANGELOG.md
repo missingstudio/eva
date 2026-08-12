@@ -13,7 +13,68 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- **The console lists its commands.** <kbd>ctrl</kbd>+<kbd>p</kbd> opens the slash
+  commands and narrows them as you type. <kbd>enter</kbd> writes the one you chose
+  into the prompt, rather than running it, because a command may take an argument.
+- **The prompts you sent come back.** <kbd>↑</kbd> and <kbd>↓</kbd> walk them, and
+  only when the cursor has no line to move to — so a prompt of several lines keeps
+  its own arrows. Walking back past the newest one returns the words you were
+  writing. It is this session's prompts, and it does not survive a restart.
+- **A long prompt can be written in your editor.** <kbd>ctrl</kbd>+<kbd>o</kbd>
+  opens `editor` from your configuration, or `$VISUAL`, or `$EDITOR`. Eva takes back
+  whatever you saved and removes the file. A repository may not set `editor`: what
+  it names is a program Eva starts on your machine.
+- **A turn says how long it took**, under the answer, when it took longer than a
+  second. The figure is a fold over the record rather than something the interface
+  timed. `[theme.layout] elapsed_seconds` moves the threshold, and zero switches it
+  off. `eva -p` never writes it, because its output is a script's input.
+- **A look can be named.** `[theme] name` selects one Eva ships with, and everything
+  you write is applied over it. `eva` is what Eva draws when you name nothing;
+  `contrast` raises the greys for a washed-out terminal or tired eyes; `mono` names
+  no colour at all and draws answers plain.
+- **The answer's own colours are configurable.** `[theme.markdown]` names the
+  heading, code, emphasis, link, and quotation colours — most of what is on the
+  screen, and until now the one part no setting could reach.
+- **`make bench` says what a frame costs.** A frame, a second of an answer
+  arriving, a keystroke, and a window being dragged, each against a short
+  conversation and a long one. One of the figures is a check: `make test` fails when
+  a frame that redraws an unchanged screen starts allocating like one that changed.
+
+### Changed
+
+- **The interface is inset from the edges of the terminal.** Two columns at each
+  side, because a terminal draws no window frame of its own and text against the
+  first column reads as text against the edge of the screen. Nothing at the top or
+  bottom: rows are scarcer than columns, and a row held back is a row of the
+  conversation nobody can read. `[theme.layout.margin]` and
+  `[theme.layout.padding]` each take all four edges — the second will be what a
+  background fills when Eva draws one. A window too small to spare an edge spends it
+  on the answer instead, and gives up the margin first.
+- **What a turn is doing moved under the prompt**, and shares that row with the
+  figures and the model at the far end. It was above the prompt, which put it
+  between the command list and the line being typed, and it left two rows of grey
+  under the prompt where one will do. A prompt waiting behind a running turn keeps
+  its own row below that.
+- **A turn that produced no answer is drawn in its own colour**, rather than in the
+  grey the status line and the cost figure use. It is the one deliberate change to
+  what Eva draws for somebody who has configured nothing: the line a person must not
+  miss looked like one more line they could skip. `[theme.colors] failure` sets it,
+  and `mono` names none.
+- **The interface is faster, and how much is measured.** Against a hundred-block
+  conversation: redrawing a screen that did not change costs 30 µs where it cost
+  1.22 ms, and 80 allocations where it took 2,100; a window dragged across forty
+  columns costs 63 ms where it cost 3.0 s; one keystroke and the frame it causes
+  costs 224 µs where it cost 342 µs. A second of a 32 KB answer arriving costs
+  5.7 ms, against 57 ms for the same second with the new bound switched off.
+  Nothing about what is drawn changed. `make bench` reproduces all of it.
+
+### Fixed
+
+- **A window being dragged no longer freezes the interface.** Every column an edge
+  crossed re-rendered every answer in the conversation. Now the drag fits the window
+  as it moves and re-renders once, at the width it stopped on.
 
 ## 0.1.1 — 2026-08-12
 

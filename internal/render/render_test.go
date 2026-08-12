@@ -6,7 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/render"
 	"github.com/missingstudio/eva/internal/theme"
@@ -66,6 +68,148 @@ func fold(t *testing.T, dark bool, payloads ...events.Payload) (*render.Renderer
 		}
 	}
 	return renderer, &out
+}
+
+// timed folds one whole turn whose records carry the two clocks, and returns what
+// was written. It is what a test about elapsed time uses: the ordinary helper
+// stamps no time, because nothing else in this package reads one.
+func timed(t *testing.T, opened, closed events.Timestamp, opts ...render.Option) string {
+	t.Helper()
+
+	var out bytes.Buffer
+	renderer, err := render.New(render.Stream(&out), theme.Default(true), opts...)
+	if err != nil {
+		t.Fatalf("build a Renderer: %v", err)
+	}
+
+	records := []struct {
+		at      events.Timestamp
+		payload events.Payload
+	}{
+		{opened, events.Started{Intent: "how long did this take"}},
+		{closed, events.Text{Chunk: "an answer"}},
+		{closed, events.Finished{Claim: events.Claim{Result: events.ResultDone}}},
+	}
+	for i, record := range records {
+		e := events.Event{
+			Seq:     uint64(i + 1),
+			At:      record.at,
+			Version: events.SchemaVersion,
+			Run:     "run_test",
+			Session: "sess_test",
+			Payload: record.payload,
+		}
+		e.Kind, _ = events.KindOf(record.payload)
+		if err := renderer.Committed(context.Background(), e); err != nil {
+			t.Fatalf("commit event %d: %v", i+1, err)
+		}
+	}
+	return out.String()
+}
+
+// at is a timestamp with both clocks, the way a run stamps one.
+func at(seconds int) events.Timestamp {
+	return events.Timestamp{
+		Wall: time.Unix(int64(seconds), 0).UTC(),
+		Mono: int64(seconds) * int64(time.Second),
+	}
+}
+
+// A colour a Theme names for an answer reaches the answer.
+//
+// The answer is most of what is on a screen, and until a Theme could name these
+// it was the one part a person could not change: every colour Eva named was
+// chrome. What a Theme does not name is left to the renderer's own choice for the
+// background, which is what keeps a default Theme drawing what it always drew.
+func TestAColourNamedForTheAnswerReachesIt(t *testing.T) {
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	const answer = "# A heading\n\nand a paragraph"
+
+	drawn := func(look theme.Theme) string {
+		t.Helper()
+
+		var out bytes.Buffer
+		renderer, err := render.New(render.Stream(&out), look)
+		if err != nil {
+			t.Fatalf("build a Renderer: %v", err)
+		}
+		for i, payload := range answered(answer, events.Usage{}) {
+			e := events.Event{Seq: uint64(i + 1), Version: events.SchemaVersion, Payload: payload}
+			e.Kind, _ = events.KindOf(payload)
+			if err := renderer.Committed(context.Background(), e); err != nil {
+				t.Fatalf("commit event %d: %v", i+1, err)
+			}
+		}
+		return out.String()
+	}
+
+	named := theme.Default(true)
+	named.Markdown.Heading = lipgloss.Color("#ff00ff")
+
+	// A colour is downsampled to whatever the destination can show, so what is
+	// asserted is that naming one changed the bytes rather than which bytes it
+	// became. The words must not change: this is a colour, and nothing else.
+	with, without := drawn(named), drawn(theme.Default(true))
+	if with == without {
+		t.Error("a heading colour a Theme named changed nothing about the answer")
+	}
+	if plain(with) != plain(without) {
+		t.Errorf("naming a colour changed the words of the answer:\n%q\n%q", plain(with), plain(without))
+	}
+}
+
+// A turn that took a while says how long it took, and a quick one says nothing.
+//
+// The figure is a fold over two records the Trace holds — the one that opened the
+// Run and the one that closed it — rather than something the interface timed. It
+// is worth showing because it is the one fact about a turn that stops being
+// available the moment the turn ends: the status line counts up while a person
+// waits, and then it is gone.
+//
+// The threshold is what keeps it from being noise. A figure under every answer
+// would be a receipt on the fast ones, which is the shape a per-turn cost line
+// already failed at.
+func TestATurnSaysHowLongItTookWhenItTookLongEnough(t *testing.T) {
+	slow := plain(timed(t, at(10), at(14), render.WithTiming()))
+	if !strings.Contains(slow, "took 4s") {
+		t.Errorf("a turn of four seconds does not say how long it took:\n%s", slow)
+	}
+
+	quick := plain(timed(t, at(10), at(10), render.WithTiming()))
+	if strings.Contains(quick, "took") {
+		t.Errorf("a turn under the threshold reported a figure anyway:\n%s", quick)
+	}
+}
+
+// A turn written for a script carries the answer and nothing else.
+//
+// The one-shot command writes into whatever is reading its output, so a figure
+// beside the answer is a line that reader has to parse around. Which surface can
+// carry one is the frontend's to say, and only the console says it.
+func TestATurnWrittenForAScriptSaysNothingButTheAnswer(t *testing.T) {
+	got := plain(timed(t, at(10), at(99)))
+	if strings.Contains(got, "took") {
+		t.Errorf("a turn written to a stream reported how long it took:\n%s", got)
+	}
+	if !strings.Contains(got, "an answer") {
+		t.Errorf("the answer itself did not survive:\n%s", got)
+	}
+}
+
+// The figure is read off the monotonic clock, so a wall clock that steps
+// backwards mid-turn does not make a turn take a negative amount of time.
+//
+// A clock correction during a turn is ordinary. An interface reporting that an
+// answer arrived before it was asked for is not.
+func TestTheElapsedFigureSurvivesAWallClockStep(t *testing.T) {
+	opened := events.Timestamp{Wall: time.Unix(500, 0).UTC(), Mono: 1 * int64(time.Second)}
+	closed := events.Timestamp{Wall: time.Unix(200, 0).UTC(), Mono: 4 * int64(time.Second)}
+
+	got := plain(timed(t, opened, closed, render.WithTiming()))
+	if !strings.Contains(got, "took 3s") {
+		t.Errorf("the figure did not come from the monotonic reading:\n%s", got)
+	}
 }
 
 // escape matches an ANSI style sequence, so that a test can assert on the

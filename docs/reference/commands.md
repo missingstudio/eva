@@ -57,11 +57,28 @@ one. Your old messages stay in the Trace either way.
 | <kbd>ctrl</kbd>+<kbd>c</kbd>                                                | Stop the answer in progress, keep what you typed |
 | <kbd>ctrl</kbd>+<kbd>d</kbd>                                                | Quit                                             |
 | <kbd>tab</kbd>                                                              | Finish a slash command                           |
+| <kbd>ctrl</kbd>+<kbd>p</kbd>                                                | List the slash commands, and narrow as you type  |
+| <kbd>↑</kbd> / <kbd>↓</kbd>                                                 | The prompts you already sent                     |
+| <kbd>ctrl</kbd>+<kbd>o</kbd>                                                | Write the prompt in `$EDITOR`                    |
 | <kbd>shift</kbd>+<kbd>↑</kbd> <kbd>↓</kbd>, <kbd>pgup</kbd> <kbd>pgdn</kbd> | Scroll back                                      |
 | <kbd>ctrl</kbd>+<kbd>home</kbd> / <kbd>ctrl</kbd>+<kbd>end</kbd>            | Jump to the top / back to live                   |
 
 Interrupting is safe. The conversation stays usable, and the Trace records that you
 stopped it.
+
+<kbd>↑</kbd> and <kbd>↓</kbd> recall a prompt only when the cursor has no line to
+move to, so a prompt of several lines keeps its own arrows. Recall is this session's
+prompts; it does not survive a restart.
+
+While the command list is open, <kbd>↑</kbd> and <kbd>↓</kbd> move through it,
+<kbd>enter</kbd> writes the one you chose into the prompt, and <kbd>ctrl</kbd>+<kbd>p</kbd>
+or <kbd>ctrl</kbd>+<kbd>c</kbd> puts it away. Choosing writes the command rather than
+running it, because a command may take an argument.
+
+<kbd>ctrl</kbd>+<kbd>o</kbd> opens the editor named by `editor` in your configuration,
+or by `$VISUAL`, or by `$EDITOR` — in that order. Eva starts it on a copy of what is in
+the prompt, takes back whatever you saved, and removes the file. A machine that names no
+editor is told so rather than having one guessed at.
 
 Every one of these is rebindable under `[keymap.bind]`. See
 [how-to/theme-a-repository.md](../how-to/theme-a-repository.md).
@@ -76,6 +93,26 @@ eva -p "explain this error" > answer.md || echo "that failed"
 ```
 
 More in [how-to/script-with-eva.md](../how-to/script-with-eva.md).
+
+## What a turn says about itself
+
+A turn that took longer than a second says how long it took, under the answer:
+
+```
+› explain the trace format
+
+...the answer...
+
+took 4.2s
+```
+
+The figure is a fold over the record — the timestamp on the record that opened the Run
+and the one that closed it — and it is on screen because it is the one fact about a turn
+that stops being available the moment the turn ends. What a turn cost is not there: the
+footer carries what the whole session has spent, and `/cost` breaks it down.
+
+`[theme.layout] elapsed_seconds` moves the threshold, and zero says nothing about any
+turn. `eva -p` never writes the figure, because its output is a script's input.
 
 ## When something fails
 

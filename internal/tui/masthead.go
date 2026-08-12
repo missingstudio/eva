@@ -108,7 +108,13 @@ func (c *Console) bar(lines []string) string {
 
 	out := make([]string, len(lines))
 	for i, line := range lines {
-		mark := lipgloss.NewStyle().Foreground(shades[i]).Render(barMark)
+		// A look that names no accent draws the bar in the terminal's own
+		// foreground. Styling it with nothing is not the same as not styling it:
+		// the first is a colour instruction with no colour in it.
+		mark := barMark
+		if shades[i] != nil {
+			mark = lipgloss.NewStyle().Foreground(shades[i]).Render(barMark)
+		}
 		out[i] = mark + "  " + line
 	}
 	return strings.Join(out, "\n")

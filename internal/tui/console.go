@@ -12,7 +12,6 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textarea"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
@@ -49,11 +48,15 @@ type Console struct {
 
 	input textarea.Model
 
-	// arriving is the open Run's answer as it streams, and it is what the
-	// live area shows. The rendered turn that replaces it comes from the
-	// Renderer, once the Run has closed — a heading, a list, and a fenced
-	// block are each only meaningful once they are complete.
-	arriving strings.Builder
+	// live is the open Run's answer as it streams, and it is what the live area
+	// shows. The rendered turn that replaces it comes from the Renderer, once the
+	// Run has closed — a heading, a list, and a fenced block are each only
+	// meaningful once they are complete.
+	//
+	// It is a module because what it holds besides the text is a rule: how often
+	// an arriving answer may be folded, decided by what the last fold cost. See
+	// live.go.
+	live live
 
 	// transcript is what has been kept: every rendered turn, every prompt
 	// echoed back, and every command answered, in the order they happened. It
@@ -67,19 +70,19 @@ type Console struct {
 
 	// pane is the window onto the transcript. It scrolls, so the transcript is
 	// not truncated to fit; what a person sees is a position in it.
-	pane viewport.Model
+	pane pane
 
-	// screen is what refresh last composed, and shown guards it. It is read
-	// from outside the update loop by whoever is driving the program — see
-	// Screen — and written inside it, so the two need to agree on a lock.
-	shown  sync.Mutex
-	screen string
-	// cancel ends the Run in flight, and is nil when there is none. It is
-	// under the same lock as the screen because it answers the same question
-	// from two sides: the update loop asks whether a turn is running, and
-	// whoever is driving the program asks from outside it. Two fields for one
-	// fact were two things to keep in step, and nothing made them.
-	cancel context.CancelFunc
+	// shown is what this console has published about the current frame, for
+	// whoever is driving the program rather than typing at it: the rows on screen,
+	// the Run in flight, and the prompt waiting behind it. Every lock this package
+	// takes is inside it — see shown.go.
+	shown shown
+
+	// rowsLastFrame is how many rows the last frame held, and is the capacity
+	// the next one is built at. A frame differs from the one before it by a
+	// block, so the previous count is the best guess available and it costs
+	// nothing to keep.
+	rowsLastFrame int
 
 	// running counts the Runs whose goroutine has not returned. The process
 	// waits on it before it closes the sink, because a Run that is still
@@ -87,13 +90,25 @@ type Console struct {
 	// instrument to detect.
 	running sync.WaitGroup
 
-	// width and height are the window's, and are zero until the program reports
-	// them. The width is what the footer puts the model at the far end of and
-	// what the answer is wrapped to; the height is kept because the pane's own
-	// height is the remainder after the chrome, and the chrome does not have one
-	// fixed size — see fit.
+	// width and height are what the interface draws in, and are zero until the
+	// program reports them. The width is what the footer puts the model at the far
+	// end of and what the answer is wrapped to; the height is kept because the
+	// pane's own height is the remainder after the chrome, and the chrome does not
+	// have one fixed size — see fit.
+	//
+	// The width is the window's less the margin at each side, and everything that
+	// composes anything reads it. That is deliberate: a margin the pieces knew
+	// about would be a margin each of them could get wrong, and there are seven of
+	// them. Only two places know the difference — the one that fits the interface
+	// to a window, and the one that draws the frame into it.
 	width  int
 	height int
+
+	// edges are what this window actually holds back at its sides, which is what
+	// the look asks for less whatever a small window could not spare. The window's
+	// own size is these plus the width and height above, and it is not kept: a
+	// second number for one fact is a second number to keep in step. See edges.go.
+	edges edges
 
 	// spin turns while a Run is in flight. It is the answer to the one question
 	// a live area cannot otherwise answer: an answer that has not started
@@ -116,23 +131,37 @@ type Console struct {
 	// or shares a source of its own.
 	pick func(n int) int
 
-	// queued is the prompt typed while a turn was still running, and is sent
-	// when that turn closes. Only one is held: a person who types a second has
-	// changed their mind about the first, and a console that ran both would be
-	// answering a question nobody has read the answer to yet.
-	//
-	// It is written under the same lock as the two fields beside it, because it
-	// is read from outside the update loop for the same reason: see Queued.
-	queued string
-
 	// leaving is whether an idle ctrl+c has already asked. One key should not
 	// end a Session that took an hour to build, and the second press is the
 	// answer to the question the first one puts on screen.
 	leaving bool
 
-	// pending is whether chunks have arrived that the pane has not been given
-	// yet. See the chunk case in Update for why they wait.
-	pending bool
+	// pieces is the chrome as it was drawn for this frame. drawnChrome says
+	// whether it belongs to this frame at all, and chromeAt which composition of
+	// the pane it was drawn against.
+	//
+	// Two things need the chrome and they need it for different reasons: fit
+	// needs its height, to know what is left for the pane, and the view needs
+	// the pieces themselves. Both were drawing it, so every keystroke rendered
+	// the prompt, the status line, and the footer twice.
+	//
+	// Two conditions retire it, because there are two ways it can stop being
+	// true. A message arrives, which can change anything. Or the pane is
+	// composed again, which changes what the footer says about how much is below
+	// — the one part of the chrome that reads the pane rather than the model.
+	pieces      []string
+	drawnChrome bool
+	chromeAt    int
+
+	// refreshes counts the frames composed into the pane. It is what the chrome
+	// is stamped with, and it exists for one reason: fit draws the chrome before
+	// the pane is composed, so a footer kept from that moment would report the
+	// transcript as it was one composition ago.
+	refreshes int
+
+	// resizes counts the window sizes reported, so that the re-render a resize
+	// asks for can tell whether it is still the one being waited on. See resize.
+	resizes int
 
 	// interrupted is whether this console stopped the Run in flight. It is the
 	// console's own act rather than a reading of the claim that closed the Run,
@@ -141,12 +170,13 @@ type Console struct {
 	// without an answer is owed the same short line as the rest.
 	interrupted bool
 
-	// completing is what had been typed before tab began filling it in, and
-	// completed is how far through the matches that is. Both are held because
-	// a second tab has to offer the next match rather than start again from
-	// what the first one wrote. See complete.
-	completing string
-	completed  int
+	// past is the prompts this Session has sent, and where in them a person is
+	// looking. See recall.
+	past recall
+
+	// palette is the command list, tab completion, and the table both of them
+	// read. See palette.go.
+	palette palette
 
 	// dark is what the terminal answered when it was asked what colour it is.
 	// It starts at the assumption and is corrected by the answer.
@@ -180,6 +210,11 @@ var _ tea.Model = (*Console)(nil)
 type styles struct {
 	said lipgloss.Style
 	hint lipgloss.Style
+	// failure is the line a turn that produced no answer leaves, and the checked
+	// step under it. It is apart from hint because it is the one thing the
+	// interface says about itself that a person must not skip — and in the hint's
+	// grey it read as one more thing they could.
+	failure lipgloss.Style
 	// spin is the one thing here that is not subdued. A faint spinner is a
 	// spinner nobody can see moving, and its whole job is to be seen moving.
 	spin lipgloss.Style
@@ -226,8 +261,9 @@ func newStyles(look theme.Theme) styles {
 		// The same grey the cost line is written in. Both are subordinate to
 		// the answer, and both read it off one Theme, so they cannot be two
 		// decisions that happen to agree.
-		hint: subdued,
-		spin: spinStyle(look),
+		hint:    subdued,
+		failure: look.Failing(),
+		spin:    spinStyle(look),
 		box: lipgloss.NewStyle().
 			Border(look.Border, true, false, true, false).
 			BorderForeground(subdued.GetForeground()),
@@ -260,6 +296,22 @@ func spinStyle(look theme.Theme) lipgloss.Style {
 type block struct {
 	text  string
 	voice voice
+
+	// lines is this block past the mark that says whose it is, one entry per
+	// line. It is the drawing, and text is what it was drawn from.
+	//
+	// It is held because a frame of a streaming turn walks every block in the
+	// transcript, and splitting a long conversation's text and prefixing every
+	// line of it — twelve times a second, for a screen where only the last
+	// block changed — is work whose input has not moved.
+	//
+	// Two things it is derived from can change, and each has exactly one
+	// writer that drops this: the text, which only keep and rewrap write, and
+	// the styles the mark is drawn in, which only a terminal answering about
+	// its own colour changes. The width is not one of them. A block holds text
+	// that was already wrapped to the window, so a resize rewrites the text
+	// and the drop rides along with it.
+	lines []string
 }
 
 // voice is whose a block is, which is what the gutter beside it says.
@@ -447,7 +499,6 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		ctx:     ctx,
 		input:   input,
 		spin:    spinner.New(spinner.WithSpinner(spinnerFor(look))),
-		pane:    viewport.New(),
 		pick:    randomPick,
 		dark:    look.Dark,
 		styles:  newStyles(look),
@@ -455,29 +506,26 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		keys:    keys,
 	}
 
+	// The Live area is given the console's own fold and the share of the clock the
+	// Theme allows it. It reaches nothing else: see live.go.
+	c.live = newLive(c.arriving, look.Layout.LiveShare)
+
 	c.about = backend.About()
 
-	// The pane is given no bindings of its own. Its defaults are a pager's — j,
-	// k, space, f, b, u, d — and every one of them is a character somebody types
-	// into a prompt. What scrolls this pane is the set in scroll, and holding
-	// none here is what keeps that the whole set.
-	c.pane.KeyMap = viewport.KeyMap{}
-	// The pane does not wrap for itself, and refresh wraps what needs it before
-	// handing it over. Asking the pane costs a pass over the whole transcript
-	// on every frame, because a soft-wrapped pane cannot know which line an
-	// offset lands on without measuring every line above it — and a turn that
-	// streams in six thousand chunks redraws six thousand times. That is the
-	// difference between a long answer arriving in ten seconds and in thirty.
-	c.pane.SoftWrap = false
-
-	renderer, err := render.New(c, c.look)
+	// WithTiming because this is a screen a person reads: a turn may say how long
+	// it took. The one-shot command asks for no such thing, because what it draws
+	// a turn into is a script's input.
+	renderer, err := render.New(c, c.look, render.WithTiming())
 	if err != nil {
 		return nil, nil, err
 	}
 	c.renderer = renderer
 
-	// A size to draw at until the window reports its own. See initialWidth.
+	// A size to draw at until the window reports its own. See initialWidth. The
+	// fold is told the same width here rather than on a settle, because there is
+	// no window to wait for yet and nothing kept to redraw.
 	c.layout(initialWidth, initialHeight)
+	c.reflow()
 
 	// The program does not exist until the model does, and the reader has to
 	// be able to end the program it is read by. The closure is what ties the
@@ -532,15 +580,30 @@ func (c *Console) Init() tea.Cmd {
 }
 
 // Update folds one message into the interface.
+//
+// Every message starts a new frame, and the chrome drawn for the last one is
+// dropped here. Anything a message changes — a keystroke, a spinner's frame, a
+// second passing, a turn closing — can change what the chrome says, and nothing
+// here is expensive enough to be worth deciding which.
 func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	c.drawnChrome = false
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		c.layout(msg.Width, msg.Height)
+		return c, c.resize(msg.Width, msg.Height)
+
+	case resized:
+		// Only the newest. A drag leaves one of these behind per column, and
+		// every one but the last is an answer to a question about a window that
+		// has since changed again.
+		if msg.at == c.resizes {
+			c.reflow()
+		}
+		return c, nil
 
 	case tea.MouseWheelMsg:
-		var cmd tea.Cmd
-		c.pane, cmd = c.pane.Update(msg)
-		return c, cmd
+		c.pane.wheel(msg)
+		return c, nil
 
 	case spinner.TickMsg:
 		// Only while a Run is in flight. The spinner schedules its own next
@@ -551,9 +614,8 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return c, nil
 		}
 		// What arrived since the last frame is composed here, once, however
-		// many chunks that was. See the chunk case.
-		if c.pending {
-			c.pending = false
+		// many chunks that was. See the chunk case, and live.due.
+		if c.live.due() {
 			c.refresh()
 		}
 		// The caption rides on this tick rather than on a timer of its own. It
@@ -573,15 +635,10 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return c, c.key(msg)
 
 	case chunk:
-		// Kept, not drawn. A chunk is a few tokens and they arrive in their
-		// thousands, while a screen is redrawn tens of times a second at most —
-		// so composing the pane on every one is work thrown away between
-		// frames, and it is work proportional to the whole transcript each
-		// time. The tick below draws what has piled up. Nothing can be lost by
-		// waiting: a chunk only ever arrives while a Run is open, which is
-		// exactly when that tick is running.
-		c.arriving.WriteString(msg.text)
-		c.pending = true
+		// Kept, not drawn — see live.write. Nothing can be lost by waiting: a
+		// chunk only ever arrives while a Run is open, which is exactly when the
+		// tick above is running.
+		c.live.write(msg.text)
 		return c, nil
 
 	case committed:
@@ -589,6 +646,9 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case answered:
 		return c, c.close(msg)
+
+	case edited:
+		return c, c.wrote(msg)
 	}
 
 	var cmd tea.Cmd
@@ -615,8 +675,8 @@ func (c *Console) View() tea.View {
 		return tea.View{AltScreen: true, MouseMode: tea.MouseModeCellMotion}
 	}
 
-	view := tea.NewView(lipgloss.JoinVertical(lipgloss.Left,
-		append([]string{c.pane.View()}, c.chrome()...)...))
+	view := tea.NewView(c.edges.frame(lipgloss.JoinVertical(lipgloss.Left,
+		append([]string{c.pane.View()}, c.chrome()...)...)))
 	view.AltScreen = true
 	// Cell motion is the least that carries a wheel, which is the only mouse
 	// event this uses. Anything more would take click and drag away from the
@@ -647,36 +707,86 @@ const (
 	initialHeight = 24
 )
 
-// layout fits the interface to the window.
+// resizeSettle is how long a window has to stop changing size before the turns
+// in it are drawn again.
 //
-// The answer is re-wrapped here too. A markdown renderer wraps at the width it
-// was built with, so a window that changed size and a renderer that did not
-// would disagree about where a paragraph ends.
+// A drag reports a new size for every column the edge crosses, and each of those
+// sizes is a picture nobody sees. Eighty milliseconds is under what a person
+// reads as a pause and over the interval a mouse reports at, so a drag of any
+// length costs one re-render at the width it ended on.
+const resizeSettle = 80 * time.Millisecond
+
+// resized says a window has stopped changing size. The count is which resize
+// asked, so that the answer to an earlier one is ignored.
+type resized struct{ at int }
+
+// resize takes a new window size, and asks for the turns to be drawn again once
+// the window stops moving.
+//
+// Everything cheap happens now: the prompt, the pane, and the wrapping the live
+// area falls back on. What waits is the markdown, because re-rendering every
+// turn in a long conversation costs tens of milliseconds — and a person dragging
+// a window edge asks for that on every column they cross. Doing it per column
+// made a drag across forty columns three seconds of a frozen interface.
+//
+// What a person sees during the wait is the last width's answers in the new
+// window: cut off on the right if it narrowed, short of the edge if it widened.
+// Eighty milliseconds of that beats a second of nothing moving at all.
+func (c *Console) resize(width, height int) tea.Cmd {
+	if width <= 0 {
+		return nil
+	}
+	was := c.width
+	c.layout(width, height)
+
+	// Only a width change re-wraps anything. A window dragged taller reports a
+	// new size on every row it passes through, and no answer wraps differently
+	// for it.
+	if was == width {
+		return nil
+	}
+
+	c.resizes++
+	at := c.resizes
+	return tea.Tick(resizeSettle, func(time.Time) tea.Msg { return resized{at: at} })
+}
+
+// reflow draws the turns already answered at the width the window is now.
+//
+// It is the expensive half of a resize, and it runs once the window has stopped
+// moving. The drawing of the arriving answer goes too: it was wrapped by the
+// same fold, so a live area kept across a resize is the one thing on screen
+// still shaped for a window that is gone.
+func (c *Console) reflow() {
+	if err := c.renderer.Width(c.width - gutterWidth); err != nil {
+		c.blame(err)
+	}
+	c.live.stale()
+	c.rewrap()
+	c.refresh()
+}
+
+// layout fits the interface to the window, and draws nothing again that it does
+// not have to.
 func (c *Console) layout(width, height int) {
 	if width <= 0 {
 		return
 	}
-	was := c.width
-	c.width = width
-	c.height = height
+	c.edges = afford(c.look.Layout, width, height)
+	c.width = width - c.edges.wide()
+	c.height = height - c.edges.tall()
 
-	c.input.SetWidth(width - c.styles.box.GetHorizontalFrameSize())
-	c.pane.SetWidth(width)
-	// The wrapping style is built here rather than per line. refresh rewraps
-	// every block of the transcript on each frame of a streaming turn, and a
-	// style allocated inside that loop is one allocation per block per chunk.
-	c.wrapStyle = lipgloss.NewStyle().Width(width - gutterWidth)
+	// Everything below is fitted to c.width, which is the window less the margin.
+	// Reading the window here instead is how the frame came out wider than the
+	// terminal it was drawn in, with every row of it hanging two columns past the
+	// right-hand edge.
+	c.input.SetWidth(c.width - c.styles.box.GetHorizontalFrameSize())
+	c.pane.SetWidth(c.width)
+	// The wrapping style is built here rather than per line, because the live
+	// area falls back on it per frame and a style allocated in that path is an
+	// allocation per frame for a width that did not change.
+	c.wrapStyle = lipgloss.NewStyle().Width(c.width - gutterWidth)
 	c.fit()
-
-	if err := c.renderer.Width(width - gutterWidth); err != nil {
-		c.blame(err)
-	}
-	// Only when the width actually moved. A window dragged taller reports a new
-	// size on every row it passes through, and re-rendering every turn's
-	// markdown on each of those is work for a wrapping that did not change.
-	if was != width {
-		c.rewrap()
-	}
 	c.refresh()
 }
 
@@ -697,6 +807,13 @@ func (c *Console) fit() {
 	if c.width <= 0 || c.height <= 0 {
 		return
 	}
+
+	// The chrome is drawn again here, whatever was drawn before. Fitting happens
+	// exactly when the chrome may have changed shape — a keystroke that grew the
+	// prompt, a window that changed size, a turn that closed and took the status
+	// line's second row with it — and measuring the one drawn before that would
+	// give the pane the rows the last shape left it.
+	c.drawnChrome = false
 
 	left := c.height - rows(c.chrome())
 	if left < 1 {
@@ -722,7 +839,14 @@ func (c *Console) fit() {
 	c.pane.SetYOffset(c.pane.YOffset())
 }
 
-// live is the answer as it arrives, drawn the way the kept turn will be.
+// arriving is the answer so far, folded and written past Eva's mark. It is what
+// the Live area is given at build, and the whole of what that module reaches of
+// this one.
+func (c *Console) arriving(text string) []string {
+	return c.gutterLines(c.folded(text), evaVoice)
+}
+
+// folded is the answer as it arrives, drawn the way the kept turn will be.
 //
 // It goes through the same fold at the same width, so that the moment the Run
 // closes and the record replaces the stream, nothing on screen changes shape. It
@@ -734,7 +858,7 @@ func (c *Console) fit() {
 // Half-written markdown renders as what it is so far, which is what an answer
 // that is half-written is. If the fold cannot make anything of it, the bytes are
 // shown wrapped: a live area is worth having even when it is plain.
-func (c *Console) live(text string) string {
+func (c *Console) folded(text string) string {
 	drawn, err := c.renderer.Arriving(text)
 	if err != nil {
 		return c.wrap(text)
@@ -763,29 +887,67 @@ func (c *Console) wrap(text string) string {
 
 // chrome is everything the view holds but the pane, in the order it is drawn.
 //
-// It sheds from the outside in as the window shrinks, and the order it sheds in
-// is an order of need. The footer goes first: the model's name is a convenience,
-// and a person who wants it can ask. The status line goes second, which costs
-// the spinner and the elapsed figure and is the reason it is not first. What
-// never goes is the prompt, because a console a person cannot type into is not
-// a console.
+// The order down the screen is: the command list, the prompt, what the prompt is
+// doing, and the footer. The list is directly above the prompt because it is
+// filling that prompt in — anything between the two reads as a line the list
+// pushed out of the way. What a turn is doing sits under the prompt for the same
+// reason: it is a fact about the thing above it, and above the prompt it wedged
+// itself between the list and the line a person is typing.
+//
+// It sheds from the outside in as the window shrinks, and that order is an order
+// of need. The list goes first, because everything it offers can be typed. The
+// footer goes next: the model's name is a convenience, and a person who wants it
+// can ask. The status line goes third, which costs the spinner and the elapsed
+// figure and is the reason it is not earlier. What never goes is the prompt,
+// because a console a person cannot type into is not a console.
 //
 // A window under four rows has no room even for that, and keeps the prompt
 // anyway. There is nothing better to do with three rows, and a terminal that
 // small is one somebody is in the middle of resizing.
 func (c *Console) chrome() []string {
-	pieces := []string{c.status(), c.prompt(), c.footer()}
-
-	// One row is kept back for the pane throughout: a view with no transcript
-	// at all is a view that cannot show what it just answered.
-	for len(pieces) > 1 && c.height > 0 && rows(pieces)+1 > c.height {
-		if len(pieces) == 3 {
-			pieces = pieces[:2]
-			continue
-		}
-		pieces = pieces[1:]
+	if c.drawnChrome && c.chromeAt == c.refreshes {
+		return c.pieces
 	}
-	return pieces
+	c.pieces = c.composeChrome()
+	c.drawnChrome = true
+	c.chromeAt = c.refreshes
+	return c.pieces
+}
+
+// composeChrome draws the pieces and gives up the ones that do not fit.
+//
+// Each is named rather than indexed, and shedding empties one rather than cutting
+// the slice. Positions changed once and the arithmetic that shed by position
+// silently shed the wrong piece; a name cannot be off by one.
+func (c *Console) composeChrome() []string {
+	list := c.palette.view(c.input.Value(), c.styles, c.look.Symbols.Prompt)
+	prompt, footer, queued := c.prompt(), c.footer(), c.queuedLine()
+
+	// One row is kept back for the pane throughout: a view with no transcript at
+	// all is a view that cannot show what it just answered.
+	for _, shed := range []*string{&list, &queued, &footer} {
+		pieces := stacked(list, prompt, footer, queued)
+		if c.height <= 0 || rows(pieces)+1 <= c.height {
+			return pieces
+		}
+		*shed = ""
+	}
+	return stacked(list, prompt, footer, queued)
+}
+
+// stacked is the pieces that have something to draw, in the order they are drawn.
+//
+// A piece with nothing to say takes no row. It used to take one: the footer
+// returns nothing in a window too narrow for a model's name, and an empty string
+// is a row a terminal still draws. That row is the transcript's now.
+func stacked(pieces ...string) []string {
+	out := make([]string, 0, len(pieces))
+	for _, piece := range pieces {
+		if piece != "" {
+			out = append(out, piece)
+		}
+	}
+	return out
 }
 
 // rows is how tall a set of drawn pieces is once they are stacked.
@@ -802,14 +964,17 @@ func (c *Console) prompt() string {
 	return c.styles.box.Width(c.width - c.styles.box.GetHorizontalFrameSize()).Render(c.input.View())
 }
 
-// status is what the line above the prompt says: that Eva is waiting for a
-// person, that it is about to be left, or that a turn is running and for how
-// long.
+// status is what the row under the prompt says at its near end: that Eva is
+// waiting for a person, that it is about to be left, or that a turn is running
+// and for how long.
 //
-// It is always at least a line, whether or not a turn is running, so that the
-// prompt does not move when one starts. The elapsed figure is rounded to the
-// second because it is read, not measured, and it comes free with the spinner's
-// own frame rate — nothing else has to wake the interface up to keep it true.
+// It always says something, whether or not a turn is running, so that nothing on
+// the screen moves when a turn starts. The elapsed figure is rounded to the second
+// because it is read, not measured, and it comes free with the spinner's own frame
+// rate — nothing else has to wake the interface up to keep it true.
+//
+// It shares its row with the figures at the far end. See footer, which is what
+// composes the two.
 //
 // The caption beside the spinner claims nothing and is not kept; see caption.go.
 // What carries the meaning is the figure next to it.
@@ -821,15 +986,24 @@ func (c *Console) status() string {
 		return c.styles.hint.Render("ready")
 	}
 
-	line := c.styles.spin.Render(c.spin.View()) + " " +
+	return c.styles.spin.Render(c.spin.View()) + " " +
 		c.styles.hint.Render(c.caption+" "+time.Since(c.since).Round(time.Second).String()+" — ctrl+c to interrupt")
-	if c.queued == "" {
-		return line
-	}
+}
 
-	// The prompt waiting behind this turn, shown because a person who cannot
-	// see it has no way to tell it was taken from one that was dropped.
-	return line + "\n" + c.styles.hint.Render(queuedLabel+oneLine(c.queued, c.width-lipgloss.Width(queuedLabel), c.look.Symbols.Truncation))
+// queuedLine is the prompt waiting behind the turn in flight, and is empty when
+// there is none.
+//
+// It is shown because a person who cannot see it has no way to tell it was taken
+// from one that was dropped. It is a row of its own rather than part of the line
+// above, because that line shares its row with the figures at the far end — and a
+// prompt is a sentence, which would either collide with them or be cut to
+// nothing.
+func (c *Console) queuedLine() string {
+	if c.shown.waiting() == "" {
+		return ""
+	}
+	return c.styles.hint.Render(queuedLabel +
+		oneLine(c.shown.waiting(), c.width-lipgloss.Width(queuedLabel), c.look.Symbols.Truncation))
 }
 
 // oneLine is a prompt as a single row: its line breaks and runs of spaces
@@ -866,34 +1040,56 @@ func oneLine(s string, room int, ellipsis string) string {
 // interface that yanked them to the bottom on the next chunk would be an
 // interface they cannot read at all.
 func (c *Console) refresh() {
-	// The turn still arriving is composed as a block like any other, so that it
-	// is spaced off the prompt above it exactly as the kept turn that replaces
-	// it will be. Composed rather than appended: a person watching one become
-	// the other should see nothing move, and the gap is part of that.
-	blocks := c.transcript
-	if arriving := trimBlank(c.arriving.String()); arriving != "" {
-		blocks = append(blocks[:len(blocks):len(blocks)], block{text: c.live(arriving), voice: evaVoice})
-	}
+	// Lines rather than one piece of text, all the way to the pane. What a
+	// frame is is a list of rows, most of which were drawn on an earlier frame
+	// and are handed on by reference — see block.lines. Joining them into a
+	// string would copy the whole transcript for the sake of a shape nothing
+	// downstream wants.
+	lines := make([]string, 0, c.rowsLastFrame)
 
 	// The masthead leads the transcript and scrolls away with it. It is
 	// composed here rather than kept as a block because it is not one: it is
 	// drawn from facts that do not change and a model name that can, so
 	// composing it per frame is what keeps it true after /model without a
 	// second thing to remember to update.
-	content := strings.TrimRight(c.compose(blocks), "\n")
 	if head := c.masthead(); head != "" {
-		content = head + "\n\n" + content
+		lines = append(lines, strings.Split(head, "\n")...)
+		lines = append(lines, "")
 	}
 
+	lines = append(lines, c.composed(c.transcript)...)
+
+	// The turn still arriving is drawn as a block like any other, so that it is
+	// spaced off the block above it exactly as the kept turn that replaces it
+	// will be. A person watching one become the other should see nothing move,
+	// and the gap is part of that.
+	//
+	// It is the one block with nothing to keep. How often its lines are made
+	// again is the Live area's own decision, and the rule is there rather than
+	// here: see live.rows.
+	if arriving := c.live.rows(); len(arriving) > 0 {
+		if len(c.transcript) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, arriving...)
+	}
+
+	// A trailing blank row is a row of the pane spent on nothing. The blocks
+	// arrive trimmed, so this is only ever the gap this function added above a
+	// transcript that turned out to be empty.
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	c.rowsLastFrame = len(lines)
+	c.refreshes++
+
 	follow := c.pane.AtBottom()
-	c.pane.SetContent(content)
+	c.pane.SetContent(lines)
 	if follow {
 		c.pane.GotoBottom()
 	}
 
-	c.shown.Lock()
-	c.screen = content
-	c.shown.Unlock()
+	c.shown.show(lines)
 }
 
 // Screen is everything the console has put in front of a person: the turns it
@@ -909,11 +1105,7 @@ func (c *Console) refresh() {
 //
 // So the assertion moves to what the interface composed, one step before the
 // terminal. It is the same string the pane is given.
-func (c *Console) Screen() string {
-	c.shown.Lock()
-	defer c.shown.Unlock()
-	return c.screen
-}
+func (c *Console) Screen() string { return c.shown.frame() }
 
 // footer is the model the turns are running against, at the far end of the
 // window.
@@ -935,30 +1127,45 @@ func (c *Console) footer() string {
 		return ""
 	}
 
-	// What the Session has cost, at the far end beside the model.
+	// What is happening, at the near end. What the Session has cost and what is
+	// answering, at the far end.
 	//
-	// It is here rather than under each answer because it is one figure that
-	// keeps changing rather than a series of figures each true for a moment. A
-	// line printed after every turn made a conversation read as a run of
-	// receipts, and stated a cumulative total that the next turn immediately
-	// made stale. On the footer it is simply what the Session has spent, now.
+	// One row for both, because two rows of grey under the prompt is two rows the
+	// transcript does not get, and neither of them ever fills its own. They are
+	// also read at different moments — the left while a turn runs, the right when
+	// somebody wonders what a conversation has cost — so they never compete for
+	// the same attention.
+	//
+	// The figures are here rather than under each answer because they are one
+	// figure that keeps changing rather than a series each true for a moment. A
+	// line printed after every turn made a conversation read as a run of receipts,
+	// and stated a total the next turn immediately made stale.
+	left := c.status()
 	right := model
 	if spent := c.renderer.Session(); spent != "" {
 		right = spent + " · " + model
 	}
 
+	// What does not fit is given up in an order of need: the cost, then how much is
+	// below, then the model, and last of all what is happening. The model goes
+	// before the status because a person can ask for it — a bare /model reports
+	// without switching — and nothing can be asked for the spinner and the elapsed
+	// figure. They are only true now.
 	behind := c.behind()
-	gap := c.width - lipgloss.Width(right) - lipgloss.Width(behind)
-	if gap < 1 {
-		// Not enough window for all of it. The figures go before the count of
-		// what is below, and both go before the model — a person can ask for a
-		// cost and cannot ask what is answering without changing it.
-		right, gap = model, c.width-lipgloss.Width(model)-lipgloss.Width(behind)
+	for _, shed := range []*string{&right, &behind, &right, &left} {
+		if gap := c.width - lipgloss.Width(left) - lipgloss.Width(behind+right); gap >= 1 {
+			// The left is styled already — the spinner is not drawn in the grey
+			// the words beside it are — so only the right is styled here.
+			return left + strings.Repeat(" ", gap) + c.styles.hint.Render(behind+right)
+		}
+		if shed == &right && *shed != model {
+			// The cost goes first and the model stays, rather than the pair going.
+			*shed = model
+			continue
+		}
+		*shed = ""
 	}
-	if gap < 1 {
-		behind, gap = "", c.width-lipgloss.Width(model)
-	}
-	return c.styles.hint.Render(behind + strings.Repeat(" ", gap) + right)
+	return left
 }
 
 // behind is how much of the transcript is below what a person is looking at.
@@ -982,11 +1189,7 @@ func (c *Console) behind() string {
 }
 
 // busy reports whether a Run is in flight.
-func (c *Console) busy() bool {
-	c.shown.Lock()
-	defer c.shown.Unlock()
-	return c.cancel != nil
-}
+func (c *Console) busy() bool { return c.shown.busy() }
 
 // Busy reports whether a Run is in flight, for whoever is driving this program
 // rather than typing at it.
@@ -996,14 +1199,9 @@ func (c *Console) busy() bool {
 // has this problem: they can see the status line. This is the same answer, for a
 // caller that cannot.
 //
-// It is read from outside the update loop, and it reports a field the update
-// loop writes. The lock is the one Screen uses, because the question is the same
-// one — what is on screen right now — asked of a different part of the frame.
-func (c *Console) Busy() bool {
-	c.shown.Lock()
-	defer c.shown.Unlock()
-	return c.cancel != nil
-}
+// It is the same question the update loop asks, so it is the same method: two
+// spellings of one fact were two things to keep in step, and nothing made them.
+func (c *Console) Busy() bool { return c.shown.busy() }
 
 // Queued is the prompt waiting behind the turn in flight, and is empty when
 // there is none.
@@ -1013,25 +1211,7 @@ func (c *Console) Busy() bool {
 // the status line, and a screen drawn in place cannot be read off its own bytes.
 // A driver that could not see a queued prompt would have to guess whether the
 // keys it typed had landed.
-func (c *Console) Queued() string {
-	c.shown.Lock()
-	defer c.shown.Unlock()
-	return c.queued
-}
-
-// queue takes the prompt that will be sent when the turn in flight closes, and
-// hands back the one that was waiting.
-//
-// One function for both because they are the same field under the same lock, and
-// a caller that only ever swaps cannot leave the two out of step.
-func (c *Console) queue(next string) string {
-	c.shown.Lock()
-	defer c.shown.Unlock()
-
-	was := c.queued
-	c.queued = next
-	return was
-}
+func (c *Console) Queued() string { return c.shown.waiting() }
 
 // Wait returns once no Run is still committing.
 //
@@ -1048,33 +1228,17 @@ func (c *Console) Wait() { c.running.Wait() }
 // goroutine that started the program, so by the time that call returns there
 // is nothing else touching this.
 func (c *Console) stop() {
-	c.shown.Lock()
-	cancel := c.cancel
-	c.cancel = nil
-	c.shown.Unlock()
-
-	if cancel != nil {
+	if cancel := c.shown.release(); cancel != nil {
 		cancel()
 	}
 }
 
 // interrupt ends the Run in flight without forgetting it.
 //
-// The difference from stop is the whole of what "busy" means. A cancelled Run
-// is not over: its goroutine is still unwinding and its close has not been
-// folded in yet. Forgetting it here would make the console idle for that
-// window, so the next prompt would open a second Run instead of queueing —
-// and then the first Run's close would arrive and cancel the second one, reset
-// its stream, and drop its queued prompt.
-//
-// So the Run stays in hand until its own close clears it, which is what stop
-// is for and where it is called from.
+// The Run stays in hand until its own close clears it, which is what stop is for
+// and where it is called from. See shown.holding for why the two are not one.
 func (c *Console) interrupt() {
-	c.shown.Lock()
-	cancel := c.cancel
-	c.shown.Unlock()
-
-	if cancel != nil {
+	if cancel := c.shown.holding(); cancel != nil {
 		cancel()
 	}
 }
@@ -1092,8 +1256,13 @@ func (c *Console) background(dark bool) tea.Cmd {
 	c.dark = dark
 	c.look = c.look.For(dark)
 	c.styles = newStyles(c.look)
+	// Re-read rather than assumed to have survived. The Theme is rebuilt here, so
+	// a second copy of anything it holds is a second copy that can disagree with
+	// it.
+	c.live.share = c.look.Layout.LiveShare
 
 	c.input.SetStyles(inputStyles(dark))
+	c.restyle()
 
 	if err := c.renderer.Background(dark); err != nil {
 		c.blame(err)
@@ -1120,6 +1289,16 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		c.leaving = false
 	}
 
+	// The list, while it is open, is what the movement keys and enter mean. It is
+	// the one modal thing in this interface, and it is modal for the length of one
+	// decision: a person looking at a list of commands is choosing from it, and
+	// the same keys walking the list and moving a cursor would do neither well.
+	if c.palette.open {
+		if cmd, answered := c.choosing(pressed, k); answered {
+			return cmd
+		}
+	}
+
 	// Complete offers the next command; any other key means the person is
 	// writing again rather than choosing, so the next one starts from what is
 	// there.
@@ -1127,7 +1306,7 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		c.complete()
 		return nil
 	}
-	c.completing = ""
+	c.palette.typing()
 
 	if c.scroll(pressed) {
 		return nil
@@ -1167,26 +1346,147 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		c.stop()
 		return tea.Quit
 
+	case keymap.Palette:
+		c.openPalette()
+		return nil
+
+	case keymap.Editor:
+		return c.openEditor()
+
+	case keymap.HistoryBack:
+		// Only from the first row. Anywhere else the key belongs to the prompt,
+		// which has a line above the cursor to move to — a recall that took it
+		// would make a prompt of ten lines uneditable.
+		if c.input.Line() > 0 {
+			break
+		}
+		if was, there := c.past.back(c.input.Value()); there {
+			c.input.SetValue(was)
+			c.input.MoveToEnd()
+		}
+		return nil
+
+	case keymap.HistoryForward:
+		if c.input.Line() < c.input.LineCount()-1 {
+			break
+		}
+		if next, there := c.past.forward(); there {
+			c.input.SetValue(next)
+			c.input.MoveToEnd()
+		}
+		return nil
+
 	case keymap.Submit:
 		prompt := strings.TrimSpace(c.input.Value())
 		if prompt == "" {
 			return nil
 		}
 		c.input.Reset()
+		c.past.remember(prompt)
+		c.palette.hide()
 
 		// A turn is already running, so this one waits rather than being lost.
 		// It is echoed when it is sent rather than now, so that the transcript
 		// reads in the order the turns happened.
 		if c.busy() {
-			c.queue(prompt)
+			c.shown.queue(prompt)
 			return nil
 		}
 		return c.send(prompt)
 	}
 
+	// A key the interface has no action for is typing, and typing ends a recall:
+	// what is in the prompt is now this person's sentence rather than a place in
+	// the list of their old ones.
+	c.past.done()
+
 	var cmd tea.Cmd
 	c.input, cmd = c.input.Update(k)
 	return cmd
+}
+
+// choosing answers a key while the command list is open, and reports whether the
+// list took it.
+//
+// Four keys are the list's: the two that walk it, the one that chooses, and the
+// one that puts it away. Everything else goes to the prompt, so a person can go
+// on typing to narrow the list — which is the whole point of it being on screen
+// while they type.
+func (c *Console) choosing(pressed string, k tea.KeyPressMsg) (tea.Cmd, bool) {
+	switch {
+	case c.keys.Is(pressed, keymap.HistoryBack):
+		c.palette.walk(-1, c.input.Value())
+		return nil, true
+	case c.keys.Is(pressed, keymap.HistoryForward):
+		c.palette.walk(1, c.input.Value())
+		return nil, true
+	case c.keys.Is(pressed, keymap.Submit), c.keys.Is(pressed, keymap.Complete):
+		c.chosen()
+		return nil, true
+	case c.keys.Is(pressed, keymap.Palette), c.keys.Is(pressed, keymap.Interrupt):
+		// The key that opened it closes it, and so does the key that stops
+		// anything else. A person who opened a list they did not want should not
+		// have to work out which of the two ends it.
+		c.palette.hide()
+		return nil, true
+	}
+
+	// Anything else narrows the list. The chosen row is clamped, because the
+	// filter may have left fewer matches than the row a person was on.
+	var cmd tea.Cmd
+	c.input, cmd = c.input.Update(k)
+	c.palette.clamp(c.input.Value())
+	return cmd, true
+}
+
+// openPalette shows the list, and chosen writes the choice into the prompt.
+//
+// Both are here rather than in the module for one reason: they touch the prompt,
+// and the list is a module that cannot reach one. Opening puts a slash in an empty
+// prompt — the list is a list of commands, so a person who opened it is typing
+// one, and asking them to type the slash as well is asking them to know that the
+// list they are looking at is filtered by it.
+func (c *Console) openPalette() {
+	c.palette.show()
+	if c.input.Value() == "" {
+		c.input.SetValue("/")
+		c.input.MoveToEnd()
+	}
+}
+
+func (c *Console) chosen() {
+	if filled, there := c.palette.chosen(c.input.Value()); there {
+		c.input.SetValue(filled)
+		c.input.MoveToEnd()
+	}
+	c.palette.hide()
+}
+
+// complete fills the prompt in from the command list, and leaves it alone when
+// there is nothing to fill in.
+func (c *Console) complete() {
+	if filled, there := c.palette.fill(c.input.Value()); there {
+		c.input.SetValue(filled)
+	}
+}
+
+// openEditor writes the prompt in the editor a person uses for everything else.
+//
+// The console owns the terminal, so releasing it and taking it back is the
+// console's to do and nothing else can: the editor draws on the same screen. What
+// the console must not do is decide which editor — that is a configuration and an
+// environment, and this layer can read neither. So the command comes across
+// through Control and the terminal work stays here.
+//
+// A person who edits and saves nothing gets their prompt back unchanged, because
+// the file starts with what was in the prompt.
+func (c *Console) openEditor() tea.Cmd {
+	editor := c.control.Editor()
+	if editor.Command == "" {
+		c.put(c.styles.hint.Render("no editor is set — export EDITOR, or write editor in your configuration"))
+		return nil
+	}
+	return c.edit(editor, c.input.Value())
 }
 
 // send echoes a prompt and either answers it here or opens a Run for it.
@@ -1250,11 +1550,9 @@ func (c *Console) scroll(pressed string) bool {
 // there is no Run the wait can miss.
 func (c *Console) start(prompt string) tea.Cmd {
 	ctx, cancel := context.WithCancel(c.ctx)
-	c.shown.Lock()
-	c.cancel = cancel
-	c.shown.Unlock()
+	c.shown.hold(cancel)
 
-	c.arriving.Reset()
+	c.live.forget()
 	c.since = time.Now()
 	c.interrupted = false
 	c.recaption()
@@ -1298,7 +1596,7 @@ func (c *Console) close(a answered) tea.Cmd {
 	// through. What arrived is dropped rather than kept, because it is not a
 	// record — and the pane is recomposed, because a reset nothing redraws is a
 	// reset nobody sees.
-	c.arriving.Reset()
+	c.live.forget()
 	c.refresh()
 
 	// A turn that did not answer says so in one line, and the line names the
@@ -1325,11 +1623,14 @@ func (c *Console) close(a answered) tea.Cmd {
 	// ended on the first provider failure would throw away a conversation over
 	// something the next prompt might not hit.
 	if a.outcome.Result != events.ResultDone {
-		said := render.Unanswered(a.outcome.Class)
 		if c.interrupted {
-			said = "interrupted"
+			// Interruption keeps the subdued grey. It is not a failure to be found
+			// on a screen — it is the thing the person just did, and they were
+			// looking at the key while they did it.
+			c.put(c.styles.hint.Render("interrupted"))
+		} else {
+			c.put(c.styles.failure.Render(render.Unanswered(a.outcome.Class)))
 		}
-		c.put(c.styles.hint.Render(said))
 
 		// Then what that means on this machine, and the one step that follows.
 		//
@@ -1343,7 +1644,7 @@ func (c *Console) close(a answered) tea.Cmd {
 		// person just did on purpose.
 		if !c.interrupted {
 			if next := c.control.Remedy(a.outcome.Class).Said(); next != "" {
-				c.put(c.styles.hint.Render(next))
+				c.put(c.styles.failure.Render(next))
 			}
 		}
 	}
@@ -1357,13 +1658,34 @@ func (c *Console) close(a answered) tea.Cmd {
 	// The status line has lost the turn it was reporting, and with it the row
 	// that was holding a queued prompt. The pane takes back what they were using
 	// before either is drawn again.
-	next := c.queue("")
+	next := c.shown.queue("")
 	c.fit()
 
 	if next == "" {
 		return c.input.Focus()
 	}
 	return tea.Batch(c.input.Focus(), c.send(next))
+}
+
+// empty empties the transcript, and the Session behind it.
+//
+// It is the console's half of /clear — see clear, which is the Command, and which
+// decides nothing this does. The split is where the seam is: what a Command may
+// ask for is on the reach list, and how a pane is emptied is not a Command's to
+// know.
+//
+// Nothing is destroyed. The Trace holds every Event of the Session being left, and
+// holds them after this returns exactly as it held them before.
+func (c *Console) empty() {
+	c.control.Clear()
+	c.renderer.Cleared()
+
+	// Back to the top before the content goes, so that a person who had scrolled
+	// up is not left at an offset into a transcript that no longer reaches that
+	// far.
+	c.transcript = nil
+	c.pane.GotoTop()
+	c.refresh()
 }
 
 // put adds a block to the transcript, which is what a person keeps.
@@ -1420,11 +1742,51 @@ func (c *Console) kept() string { return c.compose(c.transcript) }
 // other way round: a paragraph break in one answer is not a boundary between
 // two.
 func (c *Console) compose(blocks []block) string {
-	drawn := make([]string, 0, len(blocks))
-	for _, b := range blocks {
-		drawn = append(drawn, c.gutter(b.text, b.voice))
+	return strings.Join(c.composed(blocks), "\n")
+}
+
+// composed is the same set of blocks as the rows they occupy.
+//
+// It is what a frame is built from, and the reason it hands back rows is that
+// almost all of them were drawn on an earlier frame. Each block draws itself
+// once and keeps it; this walks them and appends what they kept.
+//
+// The blocks are addressed rather than ranged over, because what fills the
+// cache has to fill the caller's block and not a copy of it.
+func (c *Console) composed(blocks []block) []string {
+	lines := make([]string, 0, c.rowsLastFrame)
+	for i := range blocks {
+		if i > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, c.drawn(&blocks[i])...)
 	}
-	return strings.Join(drawn, "\n\n")
+	return lines
+}
+
+// drawn is one block past its mark, drawn once and kept.
+func (c *Console) drawn(b *block) []string {
+	if b.lines == nil {
+		b.lines = c.gutterLines(b.text, b.voice)
+	}
+	return b.lines
+}
+
+// restyle drops every drawing, so that the next frame makes them again.
+//
+// It is called when the styles the marks are drawn in change, which happens
+// once, when the terminal answers what colour it is. A drawing kept across that
+// answer would be a gutter in the greys of a background the terminal turned out
+// not to have.
+//
+// The Live area's drawing goes with the transcript's. It is nil in practice —
+// the terminal answers before the first turn — and saying so anyway is what
+// makes this "every drawing" rather than "every drawing anyone remembered".
+func (c *Console) restyle() {
+	for i := range c.transcript {
+		c.transcript[i].lines = nil
+	}
+	c.live.stale()
 }
 
 // gutter writes a block past the mark that says whose it is.
@@ -1434,6 +1796,11 @@ func (c *Console) compose(blocks []block) string {
 // make everything under it look like something else — which is exactly what a
 // multi-line prompt looked like before there was a gutter at all.
 func (c *Console) gutter(text string, v voice) string {
+	return strings.Join(c.gutterLines(text, v), "\n")
+}
+
+// gutterLines is the same, as the rows it occupies. It is what a block keeps.
+func (c *Console) gutterLines(text string, v voice) []string {
 	edge := strings.Repeat(" ", gutterWidth)
 	switch v {
 	case personVoice:
@@ -1447,7 +1814,7 @@ func (c *Console) gutter(text string, v voice) string {
 	for i, line := range lines {
 		lines[i] = edge + line
 	}
-	return strings.Join(lines, "\n")
+	return lines
 }
 
 // rewrap draws the turns already answered at the width the window is now.
@@ -1481,6 +1848,7 @@ func (c *Console) rewrap() {
 			break
 		}
 		c.transcript[i].text = trimBlank(drawn[at])
+		c.transcript[i].lines = nil
 		at++
 	}
 }
@@ -1489,7 +1857,7 @@ func (c *Console) rewrap() {
 // A console that swallowed one would leave a person waiting at a prompt for a
 // turn that is not coming.
 func (c *Console) blame(err error) {
-	c.put(c.styles.hint.Render("eva: " + err.Error()))
+	c.put(c.styles.failure.Render("eva: " + err.Error()))
 }
 
 // Show takes a finished turn from the Renderer. It is the Screen a Renderer
@@ -1502,7 +1870,7 @@ func (c *Console) Show(turn string) error {
 	// Erasing on the later one leaves a frame — and, since nothing recomposed
 	// after it, every frame after that — showing the answer twice: once as the
 	// chunks that arrived, and once as the turn that was kept.
-	c.arriving.Reset()
+	c.live.forget()
 	c.keep(block{text: turn, voice: evaVoice})
 	return nil
 }
