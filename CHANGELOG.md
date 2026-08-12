@@ -15,11 +15,21 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
 
 Nothing yet.
 
-## 0.1.0 — 2026-08-12
+## 0.1.1 — 2026-08-12
 
-The first release. Eva was buildable before this release. Nobody could install it.
+The first release anybody should install. Eva was buildable before this release.
+Nobody could install it.
 
-[Release notes and artifacts](https://github.com/missingstudio/eva/releases/tag/v0.1.0)
+The number is 0.1.1 and not 0.1.0 for a reason worth knowing. `v0.1.0` and
+`v0.1.0-rc.1` were tagged, published, and then withdrawn. Withdrawing a tag does
+not release its version number: `sum.golang.org` records the hashes of a version
+the first time anybody fetches it, and that record is append-only. Re-tagging
+`v0.1.0` on different code would make `go install` report a checksum mismatch,
+which reads as an attack. So the withdrawn numbers stay withdrawn. Do not install
+either one — `@v0.1.0` still resolves from the proxy's cache and serves code no
+tag in this repository points at.
+
+[Release notes and artifacts](https://github.com/missingstudio/eva/releases/tag/v0.1.1)
 carry the complete commit list; what follows is the part worth a sentence.
 
 ### Added

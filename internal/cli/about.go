@@ -18,7 +18,7 @@ import (
 // built from a working tree has no tag and would then have no version — and a
 // version that is sometimes absent is one nobody can quote in a bug report. The
 // revision below is what distinguishes two builds of one version.
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 // About is what the console opens saying about the run behind it.
 //
