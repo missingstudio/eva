@@ -10,7 +10,7 @@ Two findings from the tree before this landed drove the shape of it. The vulnera
 
 ## What landed, and where it differs from this plan
 
-All thirteen steps of the sequencing table are addressed. Two are marked `partly` there: step 5 landed `gosec` and not the SARIF upload, and step 12 landed the install script and not the Homebrew tap. Ten things came out differently from what this page proposed, and each is a decision it owes a reason for:
+All thirteen steps of the sequencing table are addressed. One is marked `partly` there: step 5 landed `gosec` and not the SARIF upload. Nine things came out differently from what this page proposed, and each is a decision it owes a reason for:
 
 | Departure                                                                 | Why                                                                                          |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -19,7 +19,6 @@ All thirteen steps of the sequencing table are addressed. Two are marked `partly
 | **`gosec` is a second invocation of the linter, not a linter inside it.**  | So it can own a workflow without running twice. `make gosec` passes `--default=none --enable=gosec` against the same `.golangci.yml`, which keeps one configuration and its reasons in one file |
 | **No SARIF upload to code scanning.** Findings live in the job log.        | golangci-lint v2.12.2 has no SARIF writer. Its output formats are text, json, tab, html, checkstyle, code-climate and junit-xml. A step that pretended otherwise would be worse than the gap |
 | **`CHANGELOG.md` is written, not generated and committed.**                | The generated fold lives in each release's notes, where GoReleaser puts it. Committing a regenerated file back to `main` from CI means a pipeline that pushes to the default branch, and that hazard buys nothing the release notes do not already give |
-| **The Homebrew tap config ships commented out.**                           | It needs a second repository and a token that can write to it. Neither exists, and a config that names a missing repository fails the first release. The three steps to enable it are in `.goreleaser.yaml` |
 | **A pull request cross-compiles two targets, not four.**                   | The dimension that breaks is the operating system, so `windows/amd64` and `darwin/arm64` cover it. `linux/arm64` and `darwin/amd64` are same-OS and are built at release |
 | **Windows and macOS run `go test` directly, without the race detector.**   | The race detector needs a C toolchain that a Windows runner does not reliably have, and `make` is not part of that image's contract. The job says out loud that it is a subset of `make test` |
 | **Eighteen console tests are skipped on Windows.**                          | The console answers nothing written to a pipe there, so each one waited out a 30-second deadline. Whether the input reader wants a console handle or `\r` alone is not Enter is unresolved, and answerable only on a Windows machine. The skip names what is unverified rather than implying it works |
@@ -50,7 +49,7 @@ Two of them are worth more than their line.
 
 **A skipped job still costs its permissions.** The `report` job would not have run on a tag, and it stopped the release anyway. Permissions are checked statically, so "it is skipped" is not a defence — which is why the reporting moved out to `audit-report.yml` and the audit gate now asks for nothing beyond `contents: read`.
 
-What remains unverified is narrower than it was: the Homebrew tap and macOS notarization have no implementation to run, and the console on Windows is skipped rather than fixed.
+What remains unverified is narrower than it was: macOS notarization has no implementation to run, and the console on Windows is skipped rather than fixed.
 
 The one existing invariant this changed: `AGENTS.md` said `make check` is exactly what CI runs, and now says `make verify` is.
 
@@ -183,7 +182,7 @@ So a channel is resolved, never stored:
 | `stable` | `GET /repos/missingstudio/eva/releases/latest` — GitHub's endpoint excludes prereleases by definition |
 | `next`   | `GET /repos/missingstudio/eva/releases`, newest entry with `prerelease: true` |
 
-**A `channels.json` manifest is deferred.** An earlier draft published one, and with two channels it earns nothing: GitHub's own endpoint already means `stable`, with no file for the release workflow to keep true. Its one remaining advantage is a fetch that is cacheable and free of rate limits, which matters only to an in-binary update check. That is open question 3 below, and the manifest lands with it or not at all.
+**A `channels.json` manifest is deferred.** An earlier draft published one, and with two channels it earns nothing: GitHub's own endpoint already means `stable`, with no file for the release workflow to keep true. Its one remaining advantage is a fetch that is cacheable and free of rate limits, which matters only to an in-binary update check. That is open question 2 below, and the manifest lands with it or not at all.
 
 Unauthenticated GitHub API calls are limited to 60 per hour per address. That is ample for an install script and would not be for a binary that checks on every start — which is the same fact, pointing at the same undecided question.
 
@@ -194,7 +193,7 @@ Unauthenticated GitHub API calls are limited to 60 per hour per address. That is
 | Go toolchain               | `go install github.com/missingstudio/eva/cmd/eva@latest` | `stable`           |
 | Go toolchain, unreleased   | `go install github.com/missingstudio/eva/cmd/eva@main`   | neither, by design |
 | Install script             | `curl -fsSL … \| sh -s -- --channel next`           | both                     |
-| Homebrew tap               | `brew install missingstudio/tap/eva`                | `stable`                 |
+| Homebrew tap               | `brew install --cask missingstudio/tap/eva`         | `stable`                 |
 | GitHub release             | Download the archive by hand                        | both                     |
 
 `go install …@latest` resolves to the newest **non-prerelease** version. That is Go's own rule, and it is why `next` cannot be reached that way: a prerelease needs its exact version, or the script. This is a feature. The lowest-effort install path lands on the safest channel.
@@ -256,7 +255,7 @@ push tag v0.2.0
    ├─ sbom: one SPDX document per archive
    │
    ├─ publish: the GitHub release, prerelease flag set from the tag
-   └─ publish: the Homebrew tap formula, for a stable tag only
+   └─ publish: the Homebrew tap cask, for a stable tag only
 ```
 
 Every gate runs before anything is published. A failed gate leaves no release and no formula. Nothing else needs undoing, because the channels are resolved from the releases rather than recorded anywhere. The tag stays, which is correct: the tag is a fact about history, and deleting it would rewrite the record. A bad tag is answered by the next tag.
@@ -291,7 +290,7 @@ Cosign keyless signing and provenance attestation both use the workflow's OIDC i
 
 macOS notarization and Windows code signing are **deferred, and their cost is named**. Notarization needs an Apple Developer account and two secrets. Without it, a downloaded archive is quarantined, and a person must clear it by hand.
 
-Homebrew is the recommended macOS path in the meantime, because a tap install does not set the quarantine attribute. The install script prints the manual step when it detects macOS. That is honest, and it costs nothing until there is a reason to pay Apple.
+Homebrew is the recommended macOS path in the meantime, because the cask clears the quarantine attribute as it installs. The install script prints the manual step when it detects macOS. That is honest, and it costs nothing until there is a reason to pay Apple.
 
 ## Tooling: GoReleaser, pinned and run the way the linter is
 
@@ -738,7 +737,7 @@ Each step ships on its own and has a test that can fail. This is the roadmap's r
 | 9 | Add `.goreleaser.yaml` and `make snapshot`                | `make snapshot` produces five archives locally, with no tag               | done |
 | 10 | Add the release workflow: gates, checksums, SBOM, attestation, cosign | Tagging `v0.1.1-rc.1` publishes a prerelease; `gh attestation verify` passes | done |
 | 11 | Add `CHANGELOG.md`, generated, with written highlights   | The release notes for a tag list its `feat` and `fix` commits, grouped     | done |
-| 12 | Add the install script and the Homebrew tap               | `curl … \| sh` installs `stable`; `--channel next` installs the prerelease  | partly |
+| 12 | Add the install script and the Homebrew tap               | `curl … \| sh` installs `stable`; `--channel next` installs the prerelease  | done |
 | 13 | Document `go install …@main` in the how-to guides          | A person following it gets an unreleased build that reports its own SHA     | done |
 
 Steps 1 and 2 are worth doing today, whatever happens to the rest. One closes a real vulnerability; the other halves the CI bill with a one-line change.
@@ -767,7 +766,7 @@ Steps 1 through 8 need no new tool and no secret. Nothing before step 9 can brea
 
 - **Full automation, as `release-please` does.** Rejected for now. It decides the version bump from the commits and opens a release pull request. Under 1.0, where a minor bump may break, the bump is a judgement rather than a derivation. Revisit at 1.0.
 
-- **Hand-rolled release scripts instead of GoReleaser.** Rejected. It would reimplement the archive matrix, checksums, SBOMs, prerelease detection, and the Homebrew formula. GoReleaser is pinned and run through `go run`, which is the pattern the linter already uses, so it adds no system dependency.
+- **Hand-rolled release scripts instead of GoReleaser.** Rejected. It would reimplement the archive matrix, checksums, SBOMs, prerelease detection, and the Homebrew cask. GoReleaser is pinned and run through `go run`, which is the pattern the linter already uses, so it adds no system dependency.
 
 - **`osv-scanner` instead of `govulncheck`.** Rejected as the gate, useful as a supplement. It covers more ecosystems and reports by version rather than by reachable symbol, so as a gate it fails on code the binary never calls. This repository is one Go module, which is exactly `govulncheck`'s case.
 
@@ -793,7 +792,6 @@ The recurring cost is small and real. A grouped Dependabot pull request each wee
 
 # Open questions
 
-1. **Who owns the Homebrew tap?** A `missingstudio/homebrew-tap` repository needs a cross-repository token. That is the first stored secret this design requires, and the only one before macOS signing.
-2. **When is notarization worth paying for?** Probably at the first non-Homebrew macOS user who reports a quarantine dialog rather than working around it.
-3. **Should `eva` check for updates itself?** This is the question the deferred `channels.json` waits on. A CLI that phones home needs a decision recorded before it is written, not after, and this document does not make it. If the answer is yes, the manifest lands with it, because 60 unauthenticated API calls an hour will not serve a binary that checks on every start.
-4. **Does a release deserve an ADR?** The tag-agrees-with-the-constant decision and the no-moving-tags decision both look like ADRs to this author. `docs/adr/` is the ledger, and this page is a plan.
+1. **When is notarization worth paying for?** Probably at the first non-Homebrew macOS user who reports a quarantine dialog rather than working around it.
+2. **Should `eva` check for updates itself?** This is the question the deferred `channels.json` waits on. A CLI that phones home needs a decision recorded before it is written, not after, and this document does not make it. If the answer is yes, the manifest lands with it, because 60 unauthenticated API calls an hour will not serve a binary that checks on every start.
+3. **Does a release deserve an ADR?** The tag-agrees-with-the-constant decision and the no-moving-tags decision both look like ADRs to this author. `docs/adr/` is the ledger, and this page is a plan.
