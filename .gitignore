@@ -3,6 +3,7 @@
 *.test
 *.out
 /dist/
+.DS_Store
 
 # Local trace and config, which the sink and config loader will write
 .eva/

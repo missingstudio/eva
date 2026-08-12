@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/eva-banner-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/eva-banner-light.png">
-    <img alt="Eva — an autonomous, multi-tenant, AI-native software factory" src="docs/assets/eva-banner-dark.png" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/eva-logo-white.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/eva-logo-black.svg">
+    <img alt="Eva — an autonomous, multi-tenant, AI-native software factory" src="docs/assets/eva-logo-black.svg" width="36%">
   </picture>
 </p>
 
@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Eva answering a question in the terminal, with token counts in the status line" src="docs/assets/eva-cli.png" width="720">
+  <img alt="Eva answering a question in the terminal, with token counts in the status line" src="docs/assets/eva-cli.png" width="100%">
 </p>
 
 ---
@@ -94,15 +94,15 @@ else. See [theme a repository](docs/how-to/theme-a-repository.md).
 
 ### Documentation
 
-|                                                        |                                            |
-| ------------------------------------------------------ | ------------------------------------------ |
-| [tutorial/first-run.md](docs/tutorial/first-run.md)                   | Build it, ask one question, read it back      |
-| [how-to/](docs/how-to/)                                               | One guide per task                            |
-| [reference/commands.md](docs/reference/commands.md)                   | Every command, flag, slash command, and key   |
-| [reference/configuration.md](docs/reference/configuration.md)         | Every setting, and what it defaults to        |
-| [docs/Product.md](docs/Product.md)                                    | The map to every design document              |
-| [docs/decisions.md](docs/decisions.md)                                | Every decision on one page                    |
-| [CONTEXT.md](CONTEXT.md)                                              | The glossary. One concept, one name           |
+|                                                               |                                             |
+| ------------------------------------------------------------- | ------------------------------------------- |
+| [tutorial/first-run.md](docs/tutorial/first-run.md)           | Build it, ask one question, read it back    |
+| [how-to/](docs/how-to/)                                       | One guide per task                          |
+| [reference/commands.md](docs/reference/commands.md)           | Every command, flag, slash command, and key |
+| [reference/configuration.md](docs/reference/configuration.md) | Every setting, and what it defaults to      |
+| [docs/Product.md](docs/Product.md)                            | The map to every design document            |
+| [docs/decisions.md](docs/decisions.md)                        | Every decision on one page                  |
+| [CONTEXT.md](CONTEXT.md)                                      | The glossary. One concept, one name         |
 
 ### Contributing
 
