@@ -136,6 +136,20 @@ equals "windows is a zip and the rest are tarballs" \
 	"$(archive_name 0.2.0 linux amd64) $(archive_name 0.2.0 windows amd64)" \
 	"eva_0.2.0_linux_amd64.tar.gz eva_0.2.0_windows_amd64.zip"
 
+# The bar's denominator, which comes out of the same document and costs no
+# request of its own.
+equals "an asset's size is read from the release document" \
+	"$(asset_size eva_0.2.0_linux_amd64.tar.gz <"$FIXTURES/release-v0.2.0.json")" \
+	"8157021"
+
+equals "a second asset in the same document is read" \
+	"$(asset_size checksums.txt <"$FIXTURES/release-v0.2.0.json")" "1002"
+
+# An asset the release does not hold reports nothing, and nothing is what makes
+# the bar stand down rather than guess a total.
+equals "an asset nobody published has no size" \
+	"$(asset_size eva_0.2.0_darwin_arm64.tar.gz <"$FIXTURES/release-v0.2.0.json")" ""
+
 # The signature.
 #
 # A bundle to point at. Its contents are never read: cosign is the thing that
@@ -259,6 +273,48 @@ equals "a binary that says nothing reports nothing" \
 
 equals "a binary that answers something else reports nothing" \
 	"$(installed_version "$(stub other 'this is not eva')")" ""
+
+# The bar.
+#
+# stderr here is whatever runs the tests, and a CI log is the case that matters:
+# no bar, and no escape character at all.
+fetch_to() { printf 'the archive' >"$2"; }
+
+EVA_INSTALL_NO_PROGRESS=1
+export EVA_INSTALL_NO_PROGRESS
+download_with_progress "https://example.invalid/eva.tar.gz" "$work/quiet" 4096 2>"$work/quiet.err"
+unset EVA_INSTALL_NO_PROGRESS
+
+equals "a download with the bar turned off writes nothing to stderr" \
+	"$(wc -c <"$work/quiet.err" | tr -d ' ')" "0"
+equals "and it still wrote the file" "$(cat "$work/quiet")" "the archive"
+
+# An unknown size stands the bar down even on a terminal, so a half-published
+# release whose document names no archive downloads without one.
+download_with_progress "https://example.invalid/eva.tar.gz" "$work/nosize" 0 2>"$work/nosize.err"
+equals "an unknown size draws no bar" \
+	"$(wc -c <"$work/nosize.err" | tr -d ' ')" "0"
+
+# The trap runs on every exit, including the paths that draw nothing. It once
+# wrote the cursor-show escape unconditionally, which put six bytes on the
+# stderr of every piped run.
+progress_stop 2>"$work/stop.err"
+equals "the cursor is not restored where no bar hid it" \
+	"$(wc -c <"$work/stop.err" | tr -d ' ')" "0"
+
+# The drawing itself, without a download. The percentage is what a person reads,
+# and the arithmetic is in kibibytes to survive a 32-bit shell.
+filled=''
+drawn=0
+equals "a bar at half of eight megabytes reads 50%" \
+	"$(progress_draw 4194304 8388608 2>&1 | tr -d '\r')" \
+	"####################....................  50%"
+
+filled=''
+drawn=0
+equals "a bar past its total is capped at 100%" \
+	"$(progress_draw 9000000 8388608 2>&1 | tr -d '\r')" \
+	"######################################## 100%"
 
 if [ "$failures" -ne 0 ]; then
 	echo "$failures install case(s) failed" >&2

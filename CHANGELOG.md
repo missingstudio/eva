@@ -85,6 +85,14 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
   repository's release workflow running on a tag, so a token from any other
   workflow signs a certificate the check rejects.
 
+- **The install script shows the download.** A bar fills as the archive arrives, and
+  the percentage is real: the total comes from the size the release document already
+  publishes for that asset, so it costs no extra request. It draws only where there
+  is a terminal to draw on, so a CI log gets no carriage returns and no escape
+  characters at all. `EVA_INSTALL_NO_PROGRESS=1` turns it off anywhere. Until now a
+  seven-megabyte download printed nothing, and one measured fetch on a cold
+  connection took 77 seconds with nothing on the screen.
+
 - **Installing a version you already have does nothing, and says so.** The script
   reads the binary in the directory it would write to, before it downloads anything.
   A second install costs one request and no download, against 2.12 seconds and

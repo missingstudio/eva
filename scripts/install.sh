@@ -43,6 +43,10 @@ REQUIRE_SIG="${EVA_REQUIRE_SIGNATURE:-0}"
 # job, and it is written here rather than passed in because a caller who could
 # name a different issuer could name their own.
 SIG_ISSUER="https://token.actions.githubusercontent.com"
+
+# The bar is 40 cells, so it and its percentage fit a 48-column terminal.
+PROGRESS_WIDTH=40
+
 die() {
 	echo "install: $*" >&2
 	exit 1
@@ -78,6 +82,10 @@ VERIFICATION:
   workflow; the checksum proves the archive matches them. A bad signature or a
   bad checksum installs nothing, whatever the flags say.
 
+PROGRESS:
+  A download draws a bar when it has a terminal to draw on, and draws nothing
+  when its output is a file or a log. EVA_INSTALL_NO_PROGRESS turns it off.
+
 Eva reports what it is with `eva version`.
 EOF
 }
@@ -89,6 +97,9 @@ EOF
 #
 # Defined from whichever tool is present, and replaced wholesale by the tests.
 # Everything that reaches the network goes through these two.
+#
+# curl keeps -s, which silences its own progress meter, because this script
+# draws its own. -S stays with it, so a failure is still audible.
 install_choose_fetch() {
 	if command -v curl >/dev/null 2>&1; then
 		fetch() { curl -fsSL "$1"; }
@@ -133,8 +144,9 @@ detect_arch() {
 
 # Channels.
 #
-# Every path resolves one release document and then reads it, rather than asking
-# a different endpoint per path and then asking again per release.
+# Every path resolves one release document and then reads it. The document names
+# the tag, and it names each asset's size — which is where the progress bar gets
+# its total, at the cost of no extra request.
 #
 # The parsers are dependency-free, because jq is not on every machine that will
 # run this. They are anchored on the indentation, which is what replaces the
@@ -159,6 +171,20 @@ next_tag() {
 		/^    "tag_name":/         { tag=$0; sub(/^[^:]*: *"/,"",tag); sub(/".*$/,"",tag) }
 		/^    "prerelease": *true/ { pre=1 }
 		/^  \}/                    { if (pre && tag != "") { print tag; exit } }
+	'
+}
+
+# asset_size <name> reads one named asset's size from one release document.
+#
+# Empty when the document names no such asset, which is what a half-published
+# release looks like. The bar treats an empty total as unknown and does not
+# draw, rather than guessing one.
+asset_size() {
+	awk -v want="$1" '
+		/^    \{/        { name=""; size="" }
+		/^      "name":/ { name=$0; sub(/^[^:]*: *"/,"",name); sub(/".*$/,"",name) }
+		/^      "size":/ { size=$0; sub(/^[^0-9]*/,"",size); sub(/[^0-9].*$/,"",size) }
+		/^    \}/        { if (name == want && size != "") { print size; exit } }
 	'
 }
 
@@ -227,6 +253,116 @@ report_installed() {
 		printf '`eva` on your PATH is %s, which is a different file.\n' "$onpath"
 	fi
 	echo "Run again with --force to install it anyway."
+}
+
+# Progress.
+#
+# The bar watches the file the download writes. It asks the downloader nothing,
+# so it serves curl and wget alike, and the seam above stays the only thing that
+# reaches the network. A test that replaces fetch_to is not a terminal, so none
+# of this runs there.
+
+# progress_supported is true when there is a terminal to draw on.
+#
+# A script piped into sh has a pipe on stdin and a terminal on stderr, so stderr
+# is the one to ask. This is what keeps a carriage return every tenth of a
+# second out of a CI log.
+progress_supported() {
+	[ -t 2 ] && [ -z "${EVA_INSTALL_NO_PROGRESS:-}" ]
+}
+
+# progress_stop shows the cursor again, and writes nothing where no bar hid it.
+#
+# The trap calls this on every exit, including the paths that never draw. An
+# unconditional escape here put six bytes on the stderr of every piped run,
+# which is the thing progress_supported exists to prevent.
+progress_stop() {
+	if progress_supported; then
+		printf '\033[?25h' >&2
+	fi
+	return 0
+}
+
+# progress_delay is the smallest interval this sleep accepts.
+#
+# POSIX sleep takes whole seconds. Nearly every sleep this will meet accepts a
+# fraction, and the one that does not gets a bar that steps once a second rather
+# than an error inside the loop.
+progress_delay() {
+	if sleep 0.1 2>/dev/null; then printf '0.1'; else printf '1'; fi
+}
+
+# progress_draw <bytes> <total>
+#
+# The filled part is appended to and never rebuilt, because the bar only grows.
+# That keeps the whole of the drawing inside the shell: the one process a frame
+# costs is the one that read the size.
+#
+# The arithmetic is in kibibytes. Bytes times a hundred overflows a 32-bit shell
+# at 21 MB, and an archive will reach that.
+progress_draw() {
+	total_kb=$(($2 / 1024))
+	[ "$total_kb" -gt 0 ] || total_kb=1
+	pct=$((($1 / 1024) * 100 / total_kb))
+	[ "$pct" -gt 100 ] && pct=100
+	on=$((pct * PROGRESS_WIDTH / 100))
+
+	while [ "$drawn" -lt "$on" ]; do
+		filled="$filled#"
+		drawn=$((drawn + 1))
+	done
+
+	empty=''
+	n=$drawn
+	while [ "$n" -lt "$PROGRESS_WIDTH" ]; do
+		empty="$empty."
+		n=$((n + 1))
+	done
+
+	printf '\r%s%s %3d%%' "$filled" "$empty" "$pct" >&2
+}
+
+# progress_watch <path> <total> <pid>
+#
+# It stops when the file is whole, and when the process writing it is gone. The
+# first of those is what makes it stop on every shell: a child that has exited
+# and has not been reaped still answers kill -0.
+#
+# The last frame draws the size the file reached. A download that failed at 43%
+# says 43%, because a bar that ends at 100% over a failure is a bar that lies.
+progress_watch() {
+	filled=''
+	drawn=0
+	delay=$(progress_delay)
+
+	printf '\033[?25l' >&2
+	while kill -0 "$3" 2>/dev/null; do
+		size=$(wc -c <"$1" 2>/dev/null || echo 0)
+		progress_draw "$size" "$2"
+		[ "$size" -ge "$2" ] && break
+		sleep "$delay"
+	done
+
+	size=$(wc -c <"$1" 2>/dev/null || echo 0)
+	progress_draw "$size" "$2"
+	printf '\033[?25h\n' >&2
+}
+
+# download_with_progress <url> <path> <expected bytes>
+#
+# The plain fetch when there is no terminal, and when the size is unknown. A bar
+# with a guessed denominator is worse than no bar.
+download_with_progress() {
+	if ! progress_supported || [ "${3:-0}" -le 0 ]; then
+		fetch_to "$1" "$2"
+		return $?
+	fi
+
+	: >"$2"
+	fetch_to "$1" "$2" &
+	dl_pid=$!
+	progress_watch "$2" "$3" "$dl_pid"
+	wait "$dl_pid"
 }
 
 # The second seam.
@@ -453,7 +589,7 @@ install_main() {
 
 	tmp=$(mktemp -d)
 	# shellcheck disable=SC2064 # tmp is expanded now on purpose: it cannot change.
-	trap "rm -rf '$tmp'" EXIT INT TERM
+	trap "rm -rf '$tmp'; progress_stop" EXIT INT TERM
 
 	# A local snapshot build, reaching no network. Everything past this point
 	# is the same for a release and for a rehearsal.
@@ -514,17 +650,19 @@ Check it:
 
 	echo "installing eva $VERSION ($os/$arch) from the $CHANNEL channel"
 
-	fetch_to "$base/$archive" "$tmp/$archive" ||
-		die "no archive at $base/$archive
-Check the version, or the release page: https://github.com/$REPO/releases"
-	fetch_to "$base/checksums.txt" "$tmp/checksums.txt" ||
-		die "the release has no checksums.txt, so nothing can be verified"
-
 	# The bundle is optional, so a release published before signing began still
 	# installs — on the checksum alone, and saying so. The file is removed on a
 	# failed fetch because curl and wget both leave one behind, and an empty file
 	# would reach cosign as a bundle rather than as an absence.
 	bundle="$tmp/checksums.txt.sigstore.json"
+
+	size=$(asset_size "$archive" <"$release")
+	download_with_progress "$base/$archive" "$tmp/$archive" "${size:-0}" ||
+		die "no archive at $base/$archive
+Check the version, or the release page: https://github.com/$REPO/releases"
+
+	fetch_to "$base/checksums.txt" "$tmp/checksums.txt" ||
+		die "the release has no checksums.txt, so nothing can be verified"
 	fetch_to "$base/checksums.txt.sigstore.json" "$bundle" || rm -f "$bundle"
 
 	# The signature first, because it is what makes the checksums Eva's. Checking

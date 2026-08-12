@@ -66,6 +66,10 @@ and **checks the archive against the checksums the release published before
 installing anything**. A checksum that does not match installs nothing and says
 both figures.
 
+The download draws a progress bar when it has a terminal to draw on. A run whose
+output goes to a file or to a CI log writes no bar and no escape character.
+`EVA_INSTALL_NO_PROGRESS=1` turns it off anywhere.
+
 The binary goes to `~/.local/bin` by default. To choose:
 
 ```bash
