@@ -15,6 +15,17 @@ import (
 	"github.com/missingstudio/eva/internal/providers"
 )
 
+const (
+	// errorSnippetBytes is enough of a refused body to say what happened, and
+	// never all of it: an error page from a proxy can be any size at all.
+	errorSnippetBytes = 8 * 1024
+
+	// The subscription backend restates a whole output item in one frame, so
+	// the line budget is sized for an answer rather than for a delta.
+	frameStartBytes = 64 * 1024
+	frameMaxBytes   = 8 * 1024 * 1024
+)
+
 type wire struct {
 	provider *Provider
 	body     []byte
@@ -59,18 +70,14 @@ func (w *wire) Dial(ctx context.Context) *providers.Refusal {
 		return refused(0, err.Error(), 0)
 	}
 	if resp.StatusCode != http.StatusOK {
-		// Enough of the body to say what happened, never all of it: an error
-		// page from a proxy can be any size at all.
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 8*1024))
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, errorSnippetBytes))
 		asked := retryAfter(resp)
 		_ = resp.Body.Close()
 		return refused(resp.StatusCode, strings.TrimSpace(string(snippet)), asked)
 	}
 
 	frames := bufio.NewScanner(resp.Body)
-	// The subscription backend restates a whole output item in one frame, so
-	// the line budget is sized for an answer rather than for a delta.
-	frames.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	frames.Buffer(make([]byte, 0, frameStartBytes), frameMaxBytes)
 	w.resp, w.frames = resp, frames
 	return nil
 }
