@@ -38,7 +38,7 @@ masthead:
  EVA
  Evidence, not claims
 
- version  0.1.0+e839c8a
+ version  0.1.0+abc1234
  model    claude-sonnet-4-5
  branch   main
  cwd      ~/code/eva

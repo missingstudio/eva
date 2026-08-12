@@ -96,7 +96,7 @@ eva version
 ```
 
 ```
-eva:      0.1.0+e839c8a
+eva:      0.1.0+abc1234
 go:       go1.26.5
 platform: darwin/arm64
 ```

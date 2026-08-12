@@ -114,10 +114,10 @@ This keeps one number in one place. It also rejects the usual alternative, `-ldf
 
 | How the binary was made               | `version()` today       | After this change        |
 | ------------------------------------- | ----------------------- | ------------------------ |
-| `make eva` in a clean checkout         | `0.1.0+78a2478`         | unchanged                |
-| `make eva` in a dirty tree             | `0.1.0+78a2478.dirty`   | unchanged                |
+| `make eva` in a clean checkout         | `0.1.0+abc1234`         | unchanged                |
+| `make eva` in a dirty tree             | `0.1.0+abc1234.dirty`   | unchanged                |
 | `go install ...@v0.1.0`                | `0.1.0` — **no revision** | `0.1.0 (v0.1.0)`       |
-| A release artifact                     | n/a                     | `0.1.0+78a2478`          |
+| A release artifact                     | n/a                     | `0.1.0+abc1234`          |
 
 Row three is a real gap. A proxy-installed binary has no VCS stamps, because the module cache is not a git tree. It does have `info.Main.Version`, which the current code ignores. The fix is four lines in `version()`: when `vcs.revision` is empty and `Main.Version` is neither empty nor `(devel)`, report the module version. Then a `go install` user can quote something exact, which is the whole purpose of the function.
 
