@@ -58,11 +58,11 @@ type Renderer struct {
 	// already on screen with it; see Kept.
 	kept []turn
 
-	// dark and width are what the markdown renderer is built against. They are
-	// held because either can change after a Renderer exists — a terminal
-	// answers late about its colour, and a window is resized — and rebuilding
-	// for one must not discard the other.
-	dark  bool
+	// bg and width are what the markdown renderer is built against. Either can
+	// change after a Renderer exists — a terminal answers late about its
+	// colour, and a window is resized — and rebuilding for one must not
+	// discard the other.
+	bg    theme.Background
 	width int
 
 	// look is the colours and glyphs this draws with. It is held so that a
@@ -77,7 +77,7 @@ type Option func(*Renderer)
 func WithTiming() Option { return func(r *Renderer) { r.timing = true } }
 
 func New(screen Screen, look theme.Theme, opts ...Option) (*Renderer, error) {
-	r := &Renderer{screen: screen, dark: look.Dark, look: look}
+	r := &Renderer{screen: screen, bg: look.Background, look: look}
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -89,15 +89,15 @@ func New(screen Screen, look theme.Theme, opts ...Option) (*Renderer, error) {
 
 func Stream(out io.Writer) Screen { return stream{out: out} }
 
-func (r *Renderer) Background(dark bool) error {
-	r.dark = dark
+func (r *Renderer) Background(bg theme.Background) error {
+	r.bg = bg
 	// For rather than Default: the answer corrects the colours nobody chose and
 	// leaves alone the ones somebody did. Rebuilding from the default here
 	// would drop a configured grey the moment the terminal answered, and the
 	// console — which keeps its own copy — would go on using it. One colour
 	// named in two places, disagreeing, which is what this package's Subdued
 	// exists to prevent.
-	r.look = r.look.For(dark)
+	r.look = r.look.For(bg)
 	return r.rebuild()
 }
 
@@ -122,7 +122,7 @@ func (r *Renderer) rebuild() error {
 		// No colour, and ASCII for the marks. It is the style a destination with
 		// no colour capability would have got anyway, asked for on purpose.
 		style = styles.ASCIIStyleConfig
-	case r.dark:
+	case r.bg == theme.Dark:
 		style = styles.DarkStyleConfig
 	}
 

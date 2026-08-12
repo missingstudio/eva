@@ -15,7 +15,7 @@ const (
 )
 
 // Build makes one look for a background.
-type Builder func(dark bool) Theme
+type Builder func(bg Background) Theme
 
 var (
 	mu    sync.RWMutex
@@ -45,9 +45,9 @@ func init() {
 	Register(Mono, mono)
 }
 
-func Named(name string, dark bool) (Theme, error) {
+func Named(name string, bg Background) (Theme, error) {
 	if name == "" {
-		return Default(dark), nil
+		return Default(bg), nil
 	}
 
 	mu.RLock()
@@ -58,7 +58,7 @@ func Named(name string, dark bool) (Theme, error) {
 		return Theme{}, fmt.Errorf("theme: %q is not a look Eva draws (it draws: %s)",
 			name, strings.Join(Names(), ", "))
 	}
-	return build(dark), nil
+	return build(bg), nil
 }
 
 // Names is the registered set, sorted so that the order is the same on every
@@ -75,19 +75,19 @@ func Names() []string {
 	return out
 }
 
-func contrast(dark bool) Theme {
-	t := Default(dark)
-	t.Colors.Subdued = pick(dark, contrastSubduedOnLight, contrastSubduedOnDark)
-	t.Colors.Person = pick(dark, contrastPersonOnLight, contrastPersonOnDark)
+func contrast(bg Background) Theme {
+	t := Default(bg)
+	t.Colors.Subdued = pick(bg, contrastSubduedOnLight, contrastSubduedOnDark)
+	t.Colors.Person = pick(bg, contrastPersonOnLight, contrastPersonOnDark)
 	t.Colors.Eva = t.Colors.Subdued
-	t.Colors.Failure = pick(dark, contrastFailureOnLight, contrastFailureOnDark)
-	t.Markdown.Heading = pick(dark, contrastPersonOnLight, contrastPersonOnDark)
+	t.Colors.Failure = pick(bg, contrastFailureOnLight, contrastFailureOnDark)
+	t.Markdown.Heading = pick(bg, contrastPersonOnLight, contrastPersonOnDark)
 	return t
 }
 
 // mono names no hue at all.
-func mono(dark bool) Theme {
-	t := Default(dark)
+func mono(bg Background) Theme {
+	t := Default(bg)
 	t.Colors = Colors{}
 	t.Markdown = Markdown{Plain: true}
 	return t

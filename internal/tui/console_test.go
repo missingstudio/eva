@@ -87,7 +87,7 @@ func TestTheFooterKeepsQuietWhenItHasNoRoom(t *testing.T) {
 		{name: "the model is wider than the window", width: 6},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			console := &Console{control: &fixed{model: "claude-sonnet-4-5"}, width: c.width, styles: newStyles(theme.Default(true))}
+			console := &Console{control: &fixed{model: "claude-sonnet-4-5"}, width: c.width, styles: newStyles(theme.Default(theme.Dark))}
 			if got := console.footer(); got != "" {
 				t.Errorf("the footer drew %q, want nothing", got)
 			}
@@ -97,7 +97,7 @@ func TestTheFooterKeepsQuietWhenItHasNoRoom(t *testing.T) {
 
 func TestTheStatusLineSaysHowLongTheTurnHasRun(t *testing.T) {
 	c := &Console{
-		styles: newStyles(theme.Default(true)),
+		styles: newStyles(theme.Default(theme.Dark)),
 		spin:   spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 		since:  time.Now().Add(-3 * time.Second),
 	}
@@ -119,7 +119,7 @@ func TestTheStatusLineSaysHowLongTheTurnHasRun(t *testing.T) {
 // status line that came and went would move the prompt under a person's hands
 // every time a turn started.
 func TestTheStatusLineIsStillALineWhenNothingIsRunning(t *testing.T) {
-	c := &Console{styles: newStyles(theme.Default(true)), spin: spinner.New()}
+	c := &Console{styles: newStyles(theme.Default(theme.Dark)), spin: spinner.New()}
 
 	if got := plain(c.status()); got != "ready" {
 		t.Errorf("the status line reads %q, want %q", got, "ready")
@@ -455,7 +455,7 @@ func TestAResizedWindowRewrapsTheTurnsAlreadyAnswered(t *testing.T) {
 func TestEveryLookDrawsAWholeScreen(t *testing.T) {
 	for _, name := range theme.Names() {
 		t.Run(name, func(t *testing.T) {
-			look, err := theme.Named(name, true)
+			look, err := theme.Named(name, theme.Dark)
 			if err != nil {
 				t.Fatalf("build the %q look: %v", name, err)
 			}
@@ -494,7 +494,7 @@ func TestAFailedTurnIsNotDrawnAsAHint(t *testing.T) {
 	// configured colour reaching the screen is asserted where a configured Theme
 	// is; what matters here is that a person who configured nothing can find the
 	// line.
-	look := theme.Default(true)
+	look := theme.Default(theme.Dark)
 
 	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
 	if err != nil {
@@ -734,7 +734,7 @@ func TestABlockKeptFromAnEarlierFrameIsStillTrue(t *testing.T) {
 	c.layout(50, 20)
 	at("after the window narrowed,")
 
-	c.background(!c.dark)
+	c.background(theme.Light)
 	at("after the terminal answered about its colour,")
 }
 
@@ -873,7 +873,7 @@ func TestAnAnswerIsFormattedWhileItArrives(t *testing.T) {
 // terminal.
 func TestAConfiguredThemeReachesTheScreen(t *testing.T) {
 	prompt, placeholder := "» ", "say the thing"
-	look, err := theme.Build(true, theme.Settings{
+	look, err := theme.Build(theme.Dark, theme.Settings{
 		Prompt:      &prompt,
 		Placeholder: &placeholder,
 		Person:      "#ABCDEF",
@@ -1048,7 +1048,7 @@ func TestTheMastheadFollowsTheModel(t *testing.T) {
 }
 
 func TestTheMastheadBarIsTheChosenAccent(t *testing.T) {
-	look, err := theme.Build(true, theme.Settings{Person: "#FF00FF"})
+	look, err := theme.Build(theme.Dark, theme.Settings{Person: "#FF00FF"})
 	if err != nil {
 		t.Fatalf("build the Theme: %v", err)
 	}

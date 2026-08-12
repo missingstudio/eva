@@ -120,7 +120,7 @@ func TestNoCaptionClaimsEvaActedOnAnything(t *testing.T) {
 // set it had every sign that it had worked.
 func TestHowLongACaptionStaysIsConfigured(t *testing.T) {
 	seconds := 30
-	look, err := theme.Build(true, theme.Settings{CaptionSeconds: &seconds})
+	look, err := theme.Build(theme.Dark, theme.Settings{CaptionSeconds: &seconds})
 	if err != nil {
 		t.Fatalf("build the Theme: %v", err)
 	}

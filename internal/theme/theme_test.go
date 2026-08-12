@@ -12,7 +12,7 @@ import (
 // could be configured. That is what the policy this package replaced was
 // protecting, and it is the one property that must not slip.
 func TestSettingNothingIsTheDefault(t *testing.T) {
-	for _, dark := range []bool{true, false} {
+	for _, dark := range []theme.Background{theme.Dark, theme.Light} {
 		built, err := theme.Build(dark, theme.Settings{})
 		if err != nil {
 			t.Fatalf("build: %v", err)
@@ -34,7 +34,7 @@ func TestSettingNothingIsTheDefault(t *testing.T) {
 // The default is complete: every field has a value, so a Theme is never partly
 // filled in and a file overrides fields of a whole one.
 func TestTheDefaultIsComplete(t *testing.T) {
-	for _, dark := range []bool{true, false} {
+	for _, dark := range []theme.Background{theme.Dark, theme.Light} {
 		d := theme.Default(dark)
 
 		if d.Colors.Subdued == nil || d.Colors.Person == nil || d.Colors.Eva == nil {
@@ -53,7 +53,7 @@ func TestEverySettingReachesTheTheme(t *testing.T) {
 	prompt, placeholder, truncation := "» ", "type here", "..."
 	rows, seconds := 4, 20
 
-	built, err := theme.Build(true, theme.Settings{
+	built, err := theme.Build(theme.Dark, theme.Settings{
 		Subdued:        "#111111",
 		Person:         "#222222",
 		Eva:            "#333333",
@@ -79,7 +79,7 @@ func TestEverySettingReachesTheTheme(t *testing.T) {
 	if built.Layout.PromptRows != rows || built.Layout.CaptionSeconds != seconds {
 		t.Errorf("layout = %+v, want what was written", built.Layout)
 	}
-	if built.Border == theme.Default(true).Border {
+	if built.Border == theme.Default(theme.Dark).Border {
 		t.Error("the border is the default after a different one was named")
 	}
 	for name, got := range map[string]any{
@@ -90,7 +90,7 @@ func TestEverySettingReachesTheTheme(t *testing.T) {
 			t.Errorf("%s is unset after being written", name)
 		}
 	}
-	if built.Colors.Subdued == theme.Default(true).Colors.Subdued {
+	if built.Colors.Subdued == theme.Default(theme.Dark).Colors.Subdued {
 		t.Error("subdued is the default colour after a different one was written")
 	}
 }
@@ -99,7 +99,7 @@ func TestEverySettingReachesTheTheme(t *testing.T) {
 // writes one, and a person who wants the default leaves the line out.
 func TestAnEmptySymbolIsAChoiceRatherThanAnAbsence(t *testing.T) {
 	empty := ""
-	built, err := theme.Build(true, theme.Settings{Prompt: &empty})
+	built, err := theme.Build(theme.Dark, theme.Settings{Prompt: &empty})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestWhatCannotBeDrawnIsRefusedByName(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := theme.Build(true, c.settings)
+			_, err := theme.Build(theme.Dark, c.settings)
 			if err == nil {
 				t.Fatal("it was accepted")
 			}
@@ -142,13 +142,13 @@ func TestWhatCannotBeDrawnIsRefusedByName(t *testing.T) {
 // undo what a person chose.
 func TestABackgroundArrivingLateKeepsWhatWasChosen(t *testing.T) {
 	prompt := "» "
-	built, err := theme.Build(true, theme.Settings{Person: "#ABCDEF", Prompt: &prompt})
+	built, err := theme.Build(theme.Dark, theme.Settings{Person: "#ABCDEF", Prompt: &prompt})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
 
-	corrected := built.For(false)
-	if corrected.Dark {
+	corrected := built.For(theme.Light)
+	if corrected.Background == theme.Dark {
 		t.Error("the Theme still says dark after a light terminal answered")
 	}
 	if corrected.Symbols.Prompt != prompt {
@@ -166,7 +166,7 @@ func TestABackgroundArrivingLateKeepsWhatWasChosen(t *testing.T) {
 // A gradient is the accent in n steps, so a person who chose a colour gets
 // their colour rather than a second one they never named.
 func TestShadesAreTheAccentLightenedTowardsTheTop(t *testing.T) {
-	base := theme.Default(true).Colors.Person
+	base := theme.Default(theme.Dark).Colors.Person
 	got := theme.Shades(base, 8)
 
 	if len(got) != 8 {
@@ -185,7 +185,7 @@ func TestShadesAreTheAccentLightenedTowardsTheTop(t *testing.T) {
 }
 
 func TestOneShadeIsTheColourItself(t *testing.T) {
-	base := theme.Default(true).Colors.Person
+	base := theme.Default(theme.Dark).Colors.Person
 	for _, n := range []int{-1, 0, 1} {
 		if got := theme.Shades(base, n); len(got) != 1 {
 			t.Errorf("Shades(base, %d) gave %d colours, want 1", n, len(got))

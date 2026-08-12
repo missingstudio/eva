@@ -11,11 +11,26 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Background is what a Theme was built against. It is the terminal's own
+// answer rather than a preference, and every adaptive colour is resolved
+// against it.
+type Background int
+
+const (
+	Light Background = iota
+	Dark
+)
+
+// BackgroundOf is the one crossing from the boolean a terminal reports.
+func BackgroundOf(dark bool) Background {
+	if dark {
+		return Dark
+	}
+	return Light
+}
+
 type Theme struct {
-	// Dark says which background this Theme was built for. It is not a
-	// preference — it is the terminal's own answer — and it is here because
-	// every adaptive colour below was already resolved against it.
-	Dark bool
+	Background Background
 
 	Colors   Colors
 	Symbols  Symbols
@@ -88,15 +103,15 @@ type Layout struct {
 	LiveShare      int
 }
 
-func Default(dark bool) Theme {
+func Default(bg Background) Theme {
 	return Theme{
-		Dark: dark,
+		Background: bg,
 		Colors: Colors{
-			Subdued: pick(dark, subduedOnLight, subduedOnDark),
-			Person:  pick(dark, personOnLight, personOnDark),
-			Eva:     pick(dark, subduedOnLight, subduedOnDark),
+			Subdued: pick(bg, subduedOnLight, subduedOnDark),
+			Person:  pick(bg, personOnLight, personOnDark),
+			Eva:     pick(bg, subduedOnLight, subduedOnDark),
 			Spinner: nil,
-			Failure: pick(dark, failureOnLight, failureOnDark),
+			Failure: pick(bg, failureOnLight, failureOnDark),
 		},
 		Symbols: Symbols{
 			Prompt:      "› ",
@@ -173,8 +188,8 @@ func (t Theme) Failing() lipgloss.Style {
 
 func hexColor(hex string) color.Color { return lipgloss.Color(hex) }
 
-func pick(dark bool, onLight, onDark color.Color) color.Color {
-	if dark {
+func pick(bg Background, onLight, onDark color.Color) color.Color {
+	if bg == Dark {
 		return onDark
 	}
 	return onLight
@@ -247,8 +262,8 @@ func (s Sides) over(space Space, name string) (Space, error) {
 
 // Build makes a complete Theme for a background from what a person asked to
 // change. A Settings that says nothing gives exactly Default.
-func Build(dark bool, s Settings) (Theme, error) {
-	t, err := Named(s.Name, dark)
+func Build(bg Background, s Settings) (Theme, error) {
+	t, err := Named(s.Name, bg)
 	if err != nil {
 		return Theme{}, err
 	}
@@ -356,10 +371,10 @@ func Build(dark bool, s Settings) (Theme, error) {
 	return t, nil
 }
 
-func (t Theme) For(dark bool) Theme {
+func (t Theme) For(bg Background) Theme {
 	// The settings were accepted when this Theme was built, so they cannot fail
 	// now. A background is not one of the things they can be wrong about.
-	rebuilt, err := Build(dark, t.settings)
+	rebuilt, err := Build(bg, t.settings)
 	if err != nil {
 		return t
 	}

@@ -11,7 +11,7 @@ import (
 // What a window affords is asked of the arithmetic rather than of a console.
 
 func TestARoomyWindowHoldsBackWhatTheLookAsks(t *testing.T) {
-	look := theme.Default(true)
+	look := theme.Default(theme.Dark)
 
 	e := afford(look.Layout, 120, 40)
 	if e.margin != look.Layout.Margin {
@@ -73,7 +73,7 @@ func TestEachAxisDecidesOnItsOwn(t *testing.T) {
 }
 
 func TestAnInsetIsAllOrNothing(t *testing.T) {
-	look := theme.Default(true).Layout
+	look := theme.Default(theme.Dark).Layout
 
 	for width := 1; width <= 60; width++ {
 		e := afford(look, width, 40)

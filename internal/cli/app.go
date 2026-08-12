@@ -164,7 +164,7 @@ func parse(args []string) (options, error) {
 }
 
 func appearance(cfg config.Config) (theme.Theme, keymap.Keymap, error) {
-	look, err := theme.Build(true, theme.Settings{
+	look, err := theme.Build(theme.Dark, theme.Settings{
 		Name:           cfg.Theme.Name,
 		Subdued:        cfg.Theme.Colors.Subdued,
 		Failure:        cfg.Theme.Colors.Failure,

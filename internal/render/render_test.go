@@ -27,21 +27,21 @@ func answered(answer string, usage events.Usage) []events.Payload {
 	}
 }
 
-func show(t *testing.T, dark bool, payloads ...events.Payload) string {
+func show(t *testing.T, bg theme.Background, payloads ...events.Payload) string {
 	t.Helper()
 
-	_, out := fold(t, dark, payloads...)
+	_, out := fold(t, bg, payloads...)
 	return out.String()
 }
 
 // fold folds the payloads into a Renderer and returns it, along with what it
 // wrote. It is what a test that asks a Renderer something uses, rather than one
 // that only reads the bytes.
-func fold(t *testing.T, dark bool, payloads ...events.Payload) (*render.Renderer, *bytes.Buffer) {
+func fold(t *testing.T, bg theme.Background, payloads ...events.Payload) (*render.Renderer, *bytes.Buffer) {
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := render.New(render.Stream(&out), theme.Default(dark))
+	renderer, err := render.New(render.Stream(&out), theme.Default(bg))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -68,7 +68,7 @@ func timed(t *testing.T, opened, closed events.Timestamp, opts ...render.Option)
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := render.New(render.Stream(&out), theme.Default(true), opts...)
+	renderer, err := render.New(render.Stream(&out), theme.Default(theme.Dark), opts...)
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -128,13 +128,13 @@ func TestAColourNamedForTheAnswerReachesIt(t *testing.T) {
 		return out.String()
 	}
 
-	named := theme.Default(true)
+	named := theme.Default(theme.Dark)
 	named.Markdown.Heading = lipgloss.Color("#ff00ff")
 
 	// A colour is downsampled to whatever the destination can show, so what is
 	// asserted is that naming one changed the bytes rather than which bytes it
 	// became. The words must not change: this is a colour, and nothing else.
-	with, without := drawn(named), drawn(theme.Default(true))
+	with, without := drawn(named), drawn(theme.Default(theme.Dark))
 	if with == without {
 		t.Error("a heading colour a Theme named changed nothing about the answer")
 	}
@@ -195,7 +195,7 @@ func usd(v float64) *float64 { return &v }
 func TestTheAnswerIsRenderedRatherThanEchoed(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
-	got := show(t, true, answered("Eva is a `factory`, and it is **autonomous**.", events.Usage{})...)
+	got := show(t, theme.Dark, answered("Eva is a `factory`, and it is **autonomous**.", events.Usage{})...)
 	words := plain(got)
 
 	for _, want := range []string{"Eva is a", "factory", "and it is", "autonomous"} {
@@ -219,8 +219,8 @@ func TestTheStyleFollowsTheTerminalBackground(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
 	const answer = "Eva is a software factory."
-	dark := show(t, true, answered(answer, events.Usage{})...)
-	light := show(t, false, answered(answer, events.Usage{})...)
+	dark := show(t, theme.Dark, answered(answer, events.Usage{})...)
+	light := show(t, theme.Light, answered(answer, events.Usage{})...)
 
 	if dark == light {
 		t.Error("a light terminal and a dark one are shown the same bytes")
@@ -326,7 +326,7 @@ func TestASessionThatIsPartlyPricedReportsNoDollarFigure(t *testing.T) {
 // what was committed, and a cost line over data known to be incomplete,
 // printed with nothing to say so, reads as a measurement.
 func TestACaveatIsShownAndNotOnlyRecorded(t *testing.T) {
-	got := plain(show(t, true,
+	got := plain(show(t, theme.Dark,
 		events.Started{Intent: "what is this project"},
 		events.Text{Chunk: "an answer"},
 		events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)},
@@ -377,7 +377,7 @@ func TestACaveatDoesNotSurviveIntoTheNextTurn(t *testing.T) {
 	)
 	payloads = append(payloads, answered("second", events.Usage{InputTokens: events.Tokens(100)})...)
 
-	got := plain(show(t, true, payloads...))
+	got := plain(show(t, theme.Dark, payloads...))
 	if strings.Count(got, "degraded") != 1 {
 		t.Errorf("the caveat is shown %d times, want once — on the Run that carried it:\n%s",
 			strings.Count(got, "degraded"), got)
@@ -401,7 +401,7 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
 	var out bytes.Buffer
-	renderer, err := render.New(render.Stream(&out), theme.Default(true))
+	renderer, err := render.New(render.Stream(&out), theme.Default(theme.Dark))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -420,7 +420,7 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	commit(answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)})...)
 	dark := out.String()
 
-	if err := renderer.Background(false); err != nil {
+	if err := renderer.Background(theme.Light); err != nil {
 		t.Fatalf("take the terminal's answer: %v", err)
 	}
 	out.Reset()
@@ -445,7 +445,7 @@ func costs(t *testing.T, payloads ...events.Payload) []string {
 	t.Helper()
 
 	var out bytes.Buffer
-	renderer, err := render.New(render.Stream(&out), theme.Default(true))
+	renderer, err := render.New(render.Stream(&out), theme.Default(theme.Dark))
 	if err != nil {
 		t.Fatalf("build a Renderer: %v", err)
 	}
@@ -476,7 +476,7 @@ func costs(t *testing.T, payloads ...events.Payload) []string {
 // A Renderer answers what a turn cost after the turn is over, so that a person
 // can ask rather than scroll back for the line the turn wrote.
 func TestTheCostIsAnsweredOnDemandAfterTheTurnIsOver(t *testing.T) {
-	renderer, _ := fold(t, true,
+	renderer, _ := fold(t, theme.Dark,
 		append(
 			answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)}),
 			answered("second", events.Usage{InputTokens: events.Tokens(800), OutputTokens: events.Tokens(60)})...,
@@ -495,7 +495,7 @@ func TestTheCostIsAnsweredOnDemandAfterTheTurnIsOver(t *testing.T) {
 // figure that outlived the Session it names would be two conversations summed
 // and reported as one.
 func TestClearingStartsTheAccountingOver(t *testing.T) {
-	renderer, _ := fold(t, true, answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)})...)
+	renderer, _ := fold(t, theme.Dark, answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)})...)
 
 	renderer.Cleared()
 
@@ -510,7 +510,7 @@ func TestClearingStartsTheAccountingOver(t *testing.T) {
 // that reads as a measurement — which is the reason the end of a turn writes the
 // caveat above the cost line in the first place.
 func TestTheCostAnsweredOnDemandCarriesTheCaveat(t *testing.T) {
-	renderer, _ := fold(t, true,
+	renderer, _ := fold(t, theme.Dark,
 		events.Started{Intent: "what is this project"},
 		events.Text{Chunk: "partly"},
 		events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)},
@@ -534,7 +534,7 @@ func TestTheSessionSpendIsTheSumOfEveryTurn(t *testing.T) {
 	payloads = append(payloads, answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340), USD: usd(0.0030)})...)
 	payloads = append(payloads, answered("second", events.Usage{InputTokens: events.Tokens(800), OutputTokens: events.Tokens(60), USD: usd(0.0062)})...)
 
-	renderer, _ := fold(t, true, payloads...)
+	renderer, _ := fold(t, theme.Dark, payloads...)
 
 	spent := plain(renderer.Session())
 	for _, want := range []string{"2.0k in", "400 out", "$0.0092"} {
@@ -556,7 +556,7 @@ func TestTheSessionSpendIsTheSumOfEveryTurn(t *testing.T) {
 // usage reported · cost unreported" tells a person about the absence of
 // something they have not asked for yet.
 func TestASessionThatHasSpentNothingReportsNothing(t *testing.T) {
-	renderer, _ := fold(t, true)
+	renderer, _ := fold(t, theme.Dark)
 
 	if spent := renderer.Session(); spent != "" {
 		t.Errorf("a Session with no turns reports %q, want nothing", spent)
@@ -564,7 +564,7 @@ func TestASessionThatHasSpentNothingReportsNothing(t *testing.T) {
 }
 
 func TestADegradedSessionSaysSoInTheFooterFigures(t *testing.T) {
-	renderer, _ := fold(t, true,
+	renderer, _ := fold(t, theme.Dark,
 		events.Started{Intent: "first"},
 		events.Text{Chunk: "an answer"},
 		events.Usage{InputTokens: events.Tokens(100)},
@@ -579,7 +579,7 @@ func TestADegradedSessionSaysSoInTheFooterFigures(t *testing.T) {
 
 // A Run that produced neither an answer nor a caveat shows nothing.
 func TestATurnWithNothingToShowShowsNothing(t *testing.T) {
-	got := show(t, true,
+	got := show(t, theme.Dark,
 		events.Started{Intent: "what is this project"},
 		events.Finished{Claim: events.Claim{Result: events.ResultFailed, Summary: "the provider refused"}},
 	)
@@ -666,7 +666,7 @@ func TestASilentKindPutsNothingOnTheScreen(t *testing.T) {
 		}
 		t.Run(string(kind), func(t *testing.T) {
 			var out bytes.Buffer
-			renderer, err := render.New(render.Stream(&out), theme.Default(true))
+			renderer, err := render.New(render.Stream(&out), theme.Default(theme.Dark))
 			if err != nil {
 				t.Fatalf("build a Renderer: %v", err)
 			}
@@ -710,7 +710,7 @@ func payloadFor(t *testing.T, kind events.Kind) events.Payload {
 func TestABackgroundAnsweringLateKeepsTheConfiguredColour(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
-	look, err := theme.Build(true, theme.Settings{Subdued: "#FF00FF"})
+	look, err := theme.Build(theme.Dark, theme.Settings{Subdued: "#FF00FF"})
 	if err != nil {
 		t.Fatalf("build the Theme: %v", err)
 	}
@@ -722,7 +722,7 @@ func TestABackgroundAnsweringLateKeepsTheConfiguredColour(t *testing.T) {
 	}
 
 	before := renderer.Cost()
-	if err := renderer.Background(false); err != nil {
+	if err := renderer.Background(theme.Light); err != nil {
 		t.Fatalf("the background answer: %v", err)
 	}
 	if after := renderer.Cost(); after != before {
@@ -738,7 +738,7 @@ func TestAnAnswerDoesNotLeakIntoTheNextTurn(t *testing.T) {
 	payloads = append(payloads, answered("the first answer", events.Usage{})...)
 	payloads = append(payloads, answered("the second answer", events.Usage{})...)
 
-	renderer, _ := fold(t, true, payloads...)
+	renderer, _ := fold(t, theme.Dark, payloads...)
 	kept, err := renderer.Kept()
 	if err != nil {
 		t.Fatalf("kept: %v", err)

@@ -24,7 +24,7 @@ func initialise(path string, stdout io.Writer) error {
 }
 
 func starter() string {
-	look, keys := theme.Default(true), keymap.Default()
+	look, keys := theme.Default(theme.Dark), keymap.Default()
 
 	return fmt.Sprintf(`# Eva — configuration
 #

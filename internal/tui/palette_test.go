@@ -237,7 +237,7 @@ func TestTabLeavesEverythingThatIsNotACommandName(t *testing.T) {
 // A closed list draws nothing, and a filter that matches nothing says so rather
 // than drawing an empty box.
 func TestAClosedListDrawsNothingAndAnEmptyOneSaysSo(t *testing.T) {
-	s := newStyles(theme.Default(true))
+	s := newStyles(theme.Default(theme.Dark))
 
 	var closed palette
 	if got := closed.view("/", s, "›"); got != "" {

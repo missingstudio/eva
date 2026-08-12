@@ -9,7 +9,7 @@ import (
 
 // A look can be named, and a name Eva does not know says what it does know.
 func TestAnUnknownLookNamesTheOnesEvaDraws(t *testing.T) {
-	_, err := theme.Named("solarised", true)
+	_, err := theme.Named("solarised", theme.Dark)
 	if err == nil {
 		t.Fatal("a look Eva does not draw was accepted")
 	}
@@ -23,11 +23,11 @@ func TestAnUnknownLookNamesTheOnesEvaDraws(t *testing.T) {
 // Naming no look is the default look, because a person who named nothing has
 // chosen nothing.
 func TestNamingNoLookIsTheDefault(t *testing.T) {
-	got, err := theme.Named("", true)
+	got, err := theme.Named("", theme.Dark)
 	if err != nil {
 		t.Fatalf("the empty name was refused: %v", err)
 	}
-	if got.Colors.Subdued != theme.Default(true).Colors.Subdued {
+	if got.Colors.Subdued != theme.Default(theme.Dark).Colors.Subdued {
 		t.Error("naming nothing did not give the default look")
 	}
 }
@@ -36,12 +36,12 @@ func TestNamingNoLookIsTheDefault(t *testing.T) {
 // look and change one colour of it.
 func TestSettingsAreAppliedOverTheNamedLook(t *testing.T) {
 	person := "#ff0000"
-	got, err := theme.Build(true, theme.Settings{Name: theme.Contrast, Person: person})
+	got, err := theme.Build(theme.Dark, theme.Settings{Name: theme.Contrast, Person: person})
 	if err != nil {
 		t.Fatalf("build the contrast look with one colour changed: %v", err)
 	}
 
-	contrast, err := theme.Named(theme.Contrast, true)
+	contrast, err := theme.Named(theme.Contrast, theme.Dark)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestSettingsAreAppliedOverTheNamedLook(t *testing.T) {
 // The mono look names no colour at all, which is what a terminal that draws none
 // needs and what anyone who wants none asks for.
 func TestTheMonoLookNamesNoColour(t *testing.T) {
-	got, err := theme.Named(theme.Mono, true)
+	got, err := theme.Named(theme.Mono, theme.Dark)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,10 +86,10 @@ func TestTheMonoLookNamesNoColour(t *testing.T) {
 	// It is still a whole Theme. Everything that is not a colour is what Eva
 	// draws, because a look that named no glyphs and no measurements would be a
 	// partly filled Theme, which is the thing this package refuses to have.
-	if got.Symbols.Prompt != theme.Default(true).Symbols.Prompt {
+	if got.Symbols.Prompt != theme.Default(theme.Dark).Symbols.Prompt {
 		t.Error("the mono look changed the prompt glyph, which is not a colour")
 	}
-	if got.Layout.PromptRows != theme.Default(true).Layout.PromptRows {
+	if got.Layout.PromptRows != theme.Default(theme.Dark).Layout.PromptRows {
 		t.Error("the mono look changed a measurement, which is not a colour")
 	}
 }
@@ -97,7 +97,7 @@ func TestTheMonoLookNamesNoColour(t *testing.T) {
 // A default Theme names no colour for the answer itself, so an answer is drawn
 // exactly as it was before a Theme could name one. ADR 0030's rule, checked.
 func TestTheDefaultLookLeavesTheAnswersOwnColoursAlone(t *testing.T) {
-	got := theme.Default(true)
+	got := theme.Default(theme.Dark)
 	if got.Markdown != (theme.Markdown{}) {
 		t.Errorf("the default look names colours for the answer: %+v", got.Markdown)
 	}

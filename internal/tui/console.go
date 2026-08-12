@@ -143,7 +143,7 @@ type Console struct {
 
 	palette palette
 
-	dark   bool
+	bg     theme.Background
 	styles styles
 
 	// look and keys are what a person configured, or the complete defaults when
@@ -196,8 +196,8 @@ type styles struct {
 	eva    lipgloss.Style
 }
 
-func inputStyles(dark bool) textarea.Styles {
-	s := textarea.DefaultStyles(dark)
+func inputStyles(bg theme.Background) textarea.Styles {
+	s := textarea.DefaultStyles(bg == theme.Dark)
 	s.Focused.CursorLine = s.Focused.CursorLine.UnsetBackground()
 	s.Blurred.CursorLine = s.Blurred.CursorLine.UnsetBackground()
 	return s
@@ -342,7 +342,7 @@ func pollable(file *os.File) bool {
 
 // newConsole builds the interactive program, and the interface behind it.
 func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Writer, opts ...Option) (*tea.Program, *Console, error) {
-	look, keys := theme.Default(true), keymap.Default()
+	look, keys := theme.Default(theme.Dark), keymap.Default()
 	for _, opt := range opts {
 		opt(&look, &keys)
 	}
@@ -369,7 +369,7 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	// cannot report shift+enter report alt+enter, and the ones that can report
 	// both.
 	input.KeyMap.InsertNewline.SetKeys(keys.Chords(keymap.Newline)...)
-	input.SetStyles(inputStyles(true))
+	input.SetStyles(inputStyles(look.Background))
 
 	c := &Console{
 		control: backend,
@@ -377,7 +377,7 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 		input:   input,
 		spin:    spinner.New(spinner.WithSpinner(spinnerFor(look))),
 		pick:    randomPick,
-		dark:    look.Dark,
+		bg:      look.Background,
 		styles:  newStyles(look),
 		look:    look,
 		keys:    keys,
@@ -489,7 +489,7 @@ func (c *Console) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return c, cmd
 
 	case tea.BackgroundColorMsg:
-		return c, c.background(msg.IsDark())
+		return c, c.background(theme.BackgroundOf(msg.IsDark()))
 
 	case tea.KeyPressMsg:
 		return c, c.key(msg)
@@ -875,22 +875,22 @@ func (c *Console) interrupt() {
 	}
 }
 
-func (c *Console) background(dark bool) tea.Cmd {
-	if dark == c.dark {
+func (c *Console) background(bg theme.Background) tea.Cmd {
+	if bg == c.bg {
 		return nil
 	}
-	c.dark = dark
-	c.look = c.look.For(dark)
+	c.bg = bg
+	c.look = c.look.For(bg)
 	c.styles = newStyles(c.look)
 	// Re-read rather than assumed to have survived. The Theme is rebuilt here, so
 	// a second copy of anything it holds is a second copy that can disagree with
 	// it.
 	c.live.share = c.look.Layout.LiveShare
 
-	c.input.SetStyles(inputStyles(dark))
+	c.input.SetStyles(inputStyles(bg))
 	c.restyle()
 
-	if err := c.renderer.Background(dark); err != nil {
+	if err := c.renderer.Background(bg); err != nil {
 		c.blame(err)
 	}
 	c.refresh()
