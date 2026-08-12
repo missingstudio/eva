@@ -43,7 +43,6 @@ REQUIRE_SIG="${EVA_REQUIRE_SIGNATURE:-0}"
 # job, and it is written here rather than passed in because a caller who could
 # name a different issuer could name their own.
 SIG_ISSUER="https://token.actions.githubusercontent.com"
-
 die() {
 	echo "install: $*" >&2
 	exit 1
@@ -133,58 +132,63 @@ detect_arch() {
 
 # Channels.
 #
-# resolve_tag <channel> writes the tag to stdout, or returns 1.
+# Every path resolves one release document and then reads it, rather than asking
+# a different endpoint per path and then asking again per release.
 #
-# Dependency-free, because jq is not on every machine that will run this, and
-# one object at a time. Splitting the whole releases list on `{` split the
-# nested author and assets objects too, and --channel next found nothing.
-resolve_tag() {
-	case "${1:-}" in
+# The parsers are dependency-free, because jq is not on every machine that will
+# run this. They are anchored on the indentation, which is what replaces the
+# walk that cost a request per release: splitting the whole releases list on `{`
+# split the nested author and assets objects too, and --channel next found
+# nothing. A release's own fields are indented four spaces in the list and an
+# asset's are indented eight, so nothing nested can be read as a release's own
+# flag.
+
+# release_tag reads the tag from one release document.
+release_tag() {
+	awk '/^  "tag_name":/ { sub(/^[^:]*: *"/,""); sub(/".*$/,""); print; exit }'
+}
+
+# next_tag reads the newest prerelease from one releases list.
+#
+# The fields are buffered and the decision is taken at the end of each record,
+# so the order GitHub writes them in does not matter.
+next_tag() {
+	awk '
+		/^  \{/                    { tag=""; pre=0 }
+		/^    "tag_name":/         { tag=$0; sub(/^[^:]*: *"/,"",tag); sub(/".*$/,"",tag) }
+		/^    "prerelease": *true/ { pre=1 }
+		/^  \}/                    { if (pre && tag != "") { print tag; exit } }
+	'
+}
+
+# release_doc <channel> <version> <path> writes the release document to <path>.
+#
+# One request for a named version, and one for the stable channel. Two for next,
+# because the list says which release is the prerelease and the release itself
+# says how big its assets are.
+release_doc() {
+	if [ -n "$2" ]; then
+		fetch "$API/releases/tags/v${2#v}" >"$3" 2>/dev/null ||
+			die "v${2#v} is not a release of $REPO
+The releases page lists what is: https://github.com/$REPO/releases"
+		return 0
+	fi
+
+	case "$1" in
 	stable)
-		tag=$(fetch "$API/releases/latest" |
-			sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
-		[ -n "$tag" ] || return 1
-		printf '%s' "$tag"
+		fetch "$API/releases/latest" >"$3" 2>/dev/null ||
+			die "no stable release found for $REPO
+A prerelease may exist: try --channel next."
 		;;
 	next)
-		for candidate in $(fetch "$API/releases?per_page=20" |
-			sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p'); do
-			if fetch "$API/releases/tags/$candidate" |
-				grep -q '"prerelease": *true'; then
-				printf '%s' "$candidate"
-				return 0
-			fi
-		done
-		return 1
+		tag=$(fetch "$API/releases?per_page=20" 2>/dev/null | next_tag)
+		[ -n "$tag" ] || die "no prerelease found for $REPO
+Try --channel stable."
+		fetch "$API/releases/tags/$tag" >"$3" 2>/dev/null ||
+			die "the release $tag cannot be read"
 		;;
 	*) return 1 ;;
 	esac
-}
-
-# The second seam.
-#
-# have_cosign      reports whether a signature can be checked at all
-# cosign_verify    checks one, and reports whether it held
-#
-# Functions for the reason fetch is: a test can neither install cosign nor mint
-# a sigstore bundle, so it replaces the verdict and asserts what this script
-# does with it.
-have_cosign() { command -v cosign >/dev/null 2>&1; }
-
-# cosign_verify <bundle> <subject> <identity regexp> <issuer>
-#
-# The identity and the issuer are given rather than looked up here. A keyless
-# signature with no expected identity says only that somebody signed this, so a
-# verification that pins neither is not a verification.
-#
-# Output is discarded and the exit status is the whole answer. The caller says
-# something better than cosign does, in both directions.
-cosign_verify() {
-	cosign verify-blob "$2" \
-		--bundle "$1" \
-		--certificate-identity-regexp "$3" \
-		--certificate-oidc-issuer "$4" \
-		>/dev/null 2>&1
 }
 
 # Verification.
@@ -416,17 +420,13 @@ Check it:
 
 	install_choose_fetch
 
-	# The version, from the channel, unless one was named.
-	if [ -z "$VERSION" ]; then
-		if [ "$CHANNEL" = "stable" ]; then
-			tag=$(resolve_tag stable) || die "no stable release found for $REPO
-A prerelease may exist: try --channel next."
-		else
-			tag=$(resolve_tag next) || die "no prerelease found for $REPO
-Try --channel stable."
-		fi
-		VERSION="${tag#v}"
-	fi
+	# One document, whichever path asked for it. It carries the tag, and it
+	# carries the size the bar counts to.
+	release="$tmp/release.json"
+	release_doc "$CHANNEL" "$VERSION" "$release"
+	tag=$(release_tag <"$release")
+	[ -n "$tag" ] || die "the release document names no tag"
+	VERSION="${tag#v}"
 
 	archive=$(archive_name "$VERSION" "$os" "$arch")
 	base="https://github.com/$REPO/releases/download/v${VERSION}"

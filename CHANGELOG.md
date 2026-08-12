@@ -91,6 +91,13 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
   crossed re-rendered every answer in the conversation. Now the drag fits the window
   as it moves and re-renders once, at the width it stopped on.
 
+- **`--channel next` no longer costs a request for every release.** It read the
+  releases list and then asked GitHub about each release in turn, up to twenty-one
+  requests against an hourly limit of sixty. It now reads the list in one pass and
+  costs two. The guarantee that walk was written for is kept: each release's own
+  fields are read within their own record, so nothing nested can be mistaken for a
+  release's own flag.
+
 ## 0.1.1 — 2026-08-12
 
 The first release anybody should install. Eva was buildable before this release.

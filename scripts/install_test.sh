@@ -69,7 +69,7 @@ contains() { # <name> <haystack> <needle>
 
 # The seam, serving what GitHub actually returns. A URL nothing recorded is an
 # error rather than an empty body, so a test cannot pass by reading nothing.
-fetch() {
+fixture_fetch() {
 	case "$1" in
 	*/releases/latest) cat "$FIXTURES/releases-latest.json" ;;
 	*/releases\?per_page=*) cat "$FIXTURES/releases-list.json" ;;
@@ -81,12 +81,54 @@ fetch() {
 	esac
 }
 
-equals "stable is the latest endpoint's tag" "$(resolve_tag stable)" "v0.2.0"
+# It counts as well as serves, because the number of requests a channel costs is
+# one of the things under test.
+fetch() {
+	echo request >>"$work/requests"
+	fixture_fetch "$1"
+}
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT INT TERM
+
+equals "stable is the latest endpoint's tag" \
+	"$(release_tag <"$FIXTURES/releases-latest.json")" "v0.2.0"
 
 # The list holds a stable release ahead of the prerelease, so this only passes
-# if the walk reads each release's own flag rather than the list's shape.
-equals "next walks past a stable release to the prerelease" \
-	"$(resolve_tag next)" "v0.3.0-rc.1"
+# if the parse reads each release's own flag rather than the list's shape.
+equals "next reads past a stable release to the prerelease" \
+	"$(next_tag <"$FIXTURES/releases-list.json")" "v0.3.0-rc.1"
+
+# A list with no prerelease resolves to nothing rather than to the newest
+# release. Installing a stable build from the next channel would be silent and
+# wrong.
+equals "next finds nothing in a list of stable releases" \
+	"$(next_tag <"$FIXTURES/releases-stable-only.json")" ""
+
+# The request count, which is the point of the parse above. The walk this
+# replaced cost one request per release, up to twenty-one against an hourly
+# limit of sixty.
+#
+# The tally is a file and not a variable: a fetch inside a command substitution
+# runs in a subshell, and a variable it increments there is lost.
+requests_reset() { : >"$work/requests"; }
+requests_since_reset() { wc -l <"$work/requests" | tr -d ' '; }
+
+requests_reset
+release_doc stable "" "$work/stable.json"
+equals "stable costs one request" "$(requests_since_reset)" "1"
+
+requests_reset
+release_doc next "" "$work/next.json"
+equals "next costs two requests" "$(requests_since_reset)" "2"
+equals "and it resolved the prerelease document" \
+	"$(release_tag <"$work/next.json")" "v0.3.0-rc.1"
+
+requests_reset
+release_doc stable "0.2.0" "$work/pinned.json"
+equals "a named version costs one request" "$(requests_since_reset)" "1"
+equals "and it resolves its own tag" \
+	"$(release_tag <"$work/pinned.json")" "v0.2.0"
 
 # What .goreleaser.yaml names an archive, stated once here and used by the
 # rehearsal to install what the build wrote.
@@ -98,8 +140,6 @@ equals "windows is a zip and the rest are tarballs" \
 #
 # A bundle to point at. Its contents are never read: cosign is the thing that
 # reads a bundle, and cosign is the seam.
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT INT TERM
 : >"$work/checksums.txt"
 : >"$work/checksums.txt.sigstore.json"
 
