@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/missingstudio/eva/internal/config"
@@ -12,6 +13,21 @@ import (
 	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui/keymap"
 )
+
+// initialise writes a starter configuration and says where it went.
+//
+// A file that is already there is refused rather than replaced, and the refusal
+// is the command line's mistake rather than a fault: a person who has a
+// configuration asked for something Eva must not do, and a script is owed that
+// distinction before it decides whether to try again.
+func initialise(path string, stdout io.Writer) error {
+	written, err := config.Init(path, starter())
+	if err != nil {
+		return rejected(err)
+	}
+	_, err = fmt.Fprintf(stdout, "wrote %s\n\nEvery setting in it is commented out, so Eva behaves exactly as it\ndoes now until you uncomment one. Set %s in your environment\nand run eva.\n", written, config.DefaultAPIKeyEnv)
+	return err
+}
 
 // starter is the configuration a first run is given.
 //

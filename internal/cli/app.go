@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/missingstudio/eva/internal/auth"
@@ -24,20 +23,8 @@ import (
 	_ "github.com/missingstudio/eva/internal/providers/anthropic"
 	_ "github.com/missingstudio/eva/internal/providers/openai"
 	"github.com/missingstudio/eva/internal/render"
-	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui"
 	"github.com/missingstudio/eva/internal/tui/keymap"
-)
-
-// Exit codes. They are part of the contract a script reads, so they are named
-// rather than written as literals at the point of return.
-const (
-	// ExitOK is a turn that ran and claimed Done.
-	ExitOK = 0
-	// ExitFailure is a turn that started and did not finish.
-	ExitFailure = 1
-	// ExitUsage is a command line or a configuration Eva would not act on.
-	ExitUsage = 2
 )
 
 // usage is the command surface a shell sees. The console answers /help, which
@@ -87,9 +74,15 @@ leaves, and /help lists the commands.
 // the same conclusion from the same cancelled Context, so what a signal means
 // is decided once, here, rather than by whichever library a frontend happens
 // to be built on. See listen.
+//
+// It is the only function in the package that deals in exit codes. Everything
+// below returns an error and nothing else, and what an error costs is code's
+// answer — see exit.go for why that is one decision rather than fourteen.
 func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	// A failure to write help or a diagnostic is not something the process
-	// can report anywhere else, so the exit code carries what it can.
+	// A refused command line is answered with the usage beside it, which is the
+	// one diagnostic that is worth more than the sentence alone: a person who
+	// got the words wrong is holding the list of the right ones before they can
+	// ask for it.
 	opts, err := parse(args)
 	switch {
 	case errors.Is(err, errHelp):
@@ -100,15 +93,19 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 
-	// Before run, so that a signal arriving during the first read of a file is
-	// caught by Eva rather than by the runtime.
+	// Before the run, so that a signal arriving during the first read of a file
+	// is caught by Eva rather than by the runtime.
 	ctx, asked, release := listen(context.Background())
 	defer release()
 
-	code, err := run(ctx, opts, stdin, stdout, stderr)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "eva: %v\n", err)
-	}
+	// stdout goes to the run and stderr does not, which is the whole of where a
+	// diagnostic may be written. Commands write answers; what a failure costs
+	// and what a person reads of it is decided here, and a command holding
+	// stderr would be a command that could decide it too.
+	answering := &run{opts: opts, stdin: stdin, stdout: stdout}
+
+	err = answering.perform(ctx)
+	report(stderr, err)
 
 	// A signal outranks whatever the run made of it. The run reports what
 	// happened to the turn; this reports what happened to the process, and a
@@ -118,7 +115,7 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if s := asked(); s != nil {
 		return stopCode(s)
 	}
-	return code
+	return code(err)
 }
 
 // errHelp is the request for help, which is a successful command rather than
@@ -127,62 +124,47 @@ var errHelp = errors.New("help requested")
 
 // options is the whole of what a command line can say.
 //
-// It is one field, and that is the shape the command surface was cut back to:
-// eva is the console, and a turn is something a person types rather than
-// something a process is started with. Configuration is the exception because
-// it has to be — a file has to be found before it can say anything.
+// The words are one field rather than a flag each. A flag per word can say
+// version and login at once, and the program then decides which of two things a
+// person asked for by the order it happened to check them in — a decision
+// nobody made, held nowhere anybody could read it. One field cannot say two
+// things, so there is nothing to decide.
 type options struct {
 	config string
-	// initialise says the run writes a starter configuration and leaves. It is
-	// a word rather than a flag for the reason help is: it is a thing to do, not
-	// a way of doing the thing.
-	initialise bool
-	// login says the run obtains a subscription Credential and leaves, and
-	// loginProvider is whose — empty means the one Provider that has a login.
-	// A word for the reason init is: a Login reaches the network, which is
-	// what a console Command must never do, so it lives on this surface.
-	login         bool
+	// command is the word eva was asked with, and is empty for a turn — which
+	// is what eva is with no word at all.
+	command string
+	// loginProvider is whose subscription a login is for, and is empty for the
+	// one Provider that has a login.
 	loginProvider string
-	// authStatus says the run reports how a turn would authenticate and
-	// leaves.
-	authStatus bool
-	// version says the run reports what build it is and leaves. A word rather
-	// than a flag, beside init and login, because it is a thing to do.
-	version bool
 	// prompt is one turn asked from the command line. It is empty for the
 	// console, which is what eva is with nothing to answer.
 	prompt string
 }
 
+// parse turns a command line into the whole of what it said.
+//
+// The words come from the command table, so a word that parses here is a word
+// perform can dispatch. Two lists would let a word be accepted by one and
+// unknown to the other, which is a command that exists until it is run.
 func parse(args []string) (options, error) {
 	if len(args) > 0 && args[0] == "help" {
 		return options{}, errHelp
 	}
 
 	var opts options
-	if len(args) > 0 {
-		switch args[0] {
-		case "init":
-			opts.initialise = true
-			args = args[1:]
-		case "login":
-			opts.login = true
-			args = args[1:]
-			if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-				opts.loginProvider = args[0]
-				args = args[1:]
+	// The empty word belongs to the turn and is not something anybody types, so
+	// `eva ""` stays what it was: an argument Eva does not know.
+	if len(args) > 0 && args[0] != "" {
+		if cmd, found := lookup(args[0]); found {
+			opts.command, args = cmd.name, args[1:]
+			if cmd.parse != nil {
+				rest, err := cmd.parse(args, &opts)
+				if err != nil {
+					return options{}, err
+				}
+				args = rest
 			}
-		case "auth":
-			// One word under auth today. The refusal spells the whole command
-			// so a person who typed half of it is handed the other half.
-			if len(args) < 2 || args[1] != "status" {
-				return options{}, errors.New(`auth is asked with a word: "eva auth status"`)
-			}
-			opts.authStatus = true
-			args = args[2:]
-		case "version":
-			opts.version = true
-			args = args[1:]
 		}
 	}
 	fs := flag.NewFlagSet("eva", flag.ContinueOnError)
@@ -202,99 +184,14 @@ func parse(args []string) (options, error) {
 	if rest := fs.Args(); len(rest) > 0 {
 		return options{}, fmt.Errorf("unexpected argument %q", rest[0])
 	}
+
+	// A word and a prompt are two things to do, and eva does one. Taken
+	// together the word won and the prompt was dropped in silence, which is a
+	// person watching Eva answer something they did not ask.
+	if opts.command != "" && opts.prompt != "" {
+		return options{}, fmt.Errorf("eva %s and -p are two things to do, and eva does one", opts.command)
+	}
 	return opts, nil
-}
-
-// run is written with named results so that closing the Trace can report a
-// failure the turn itself did not see. A Trace that failed to flush is not a
-// successful run, whatever the turn claimed.
-func run(ctx context.Context, opts options, stdin io.Reader, stdout, stderr io.Writer) (code int, err error) {
-	// First of all, and before any file is read. What build this is has to be
-	// answerable on a machine where nothing else works yet, because that is the
-	// machine whose owner is about to file the report.
-	if opts.version {
-		return versionReport(stdout)
-	}
-
-	// Before the configuration is read, because writing one is what a person
-	// does when they have none — and a starter run that first insisted on a
-	// valid file would be a command nobody could use for its own purpose.
-	if opts.initialise {
-		path, err := config.Init(opts.config, starter())
-		if err != nil {
-			return ExitUsage, err
-		}
-		_, _ = fmt.Fprintf(stdout, "wrote %s\n\nEvery setting in it is commented out, so Eva behaves exactly as it\ndoes now until you uncomment one. Set %s in your environment\nand run eva.\n", path, config.DefaultAPIKeyEnv)
-		return ExitOK, nil
-	}
-
-	// Like init: logging in is what a person does when nothing else works
-	// yet, so it does not first insist on a valid configuration.
-	if opts.login {
-		return login(ctx, opts.loginProvider, stdout)
-	}
-
-	cfg, err := config.Load(opts.config)
-	if err != nil {
-		return ExitUsage, err
-	}
-
-	// After the configuration and before the Provider: a status report must
-	// answer for the credential that is missing, so it cannot require one.
-	if opts.authStatus {
-		return authStatus(cfg, stdout)
-	}
-
-	provider, err := open(cfg)
-	if err != nil {
-		return ExitUsage, err
-	}
-
-	sink, err := trace.New(cfg.Trace.Kind, trace.Options{Path: cfg.Trace.Path})
-	if err != nil {
-		return ExitFailure, err
-	}
-	defer func() {
-		if cerr := sink.Close(); cerr != nil && err == nil {
-			code, err = ExitFailure, cerr
-		}
-	}()
-
-	e := &eva{
-		provider:     provider,
-		providerName: cfg.Provider.Name,
-		sink:         sink,
-		session:      core.NewSession(events.SessionID(newID("sess")), cfg.Tenant(), cfg.Actor(), origin()),
-		model:        cfg.Model,
-		checks: checks{
-			subscription: cfg.Subscription(),
-			keyEnv:       cfg.Provider.APIKeyEnv,
-			baseURL:      cfg.Provider.BaseURL,
-			configPath:   cfg.Path,
-			login:        storedLogin,
-		},
-	}
-
-	// How it looks is resolved before either path is chosen, so that a file a
-	// person got wrong is reported whichever way they ran Eva. A theme that was
-	// only read when the console opened would make a broken configuration a
-	// thing that depends on how you started the program.
-	look, keys, err := appearance(cfg)
-	if err != nil {
-		return ExitUsage, err
-	}
-
-	// The assembly is built once and handed to the frontend that drives it. It
-	// attaches through eva's own door, which is the only place a Run learns who
-	// is watching it and what it may claim.
-	if opts.prompt != "" {
-		return once(ctx, e, opts.prompt, stdout, stderr, look)
-	}
-
-	if err := tui.Run(ctx, e, stdin, stdout, tui.WithTheme(look), tui.WithKeymap(keys)); err != nil {
-		return ExitFailure, err
-	}
-	return ExitOK, nil
 }
 
 // appearance maps what a person wrote onto the types the interface draws with.
@@ -352,8 +249,7 @@ func appearanceFile(cfg config.Config) string {
 // site takes the guarantee with it and says nothing.
 var _ core.Subscriber = (*render.Renderer)(nil)
 
-// once answers one prompt onto a byte stream and returns the code that says how
-// it went.
+// once answers one prompt onto a byte stream.
 //
 // It exists because the console took the screen. An interface drawn in place
 // writes cursor moves to its output, so redirecting it captures the movements
@@ -381,16 +277,14 @@ var _ core.Subscriber = (*render.Renderer)(nil)
 // because it stays open; this does not stay open, so the claim the Trace holds
 // is also the process's answer to whoever ran it.
 //
-// The why goes to stderr, in the same words the console uses and for the same
-// reason: a person is owed the fact that changes what they do next, and is owed
-// none of the provider's account of it. It is stderr rather than stdout because
-// stdout is the answer, and a pipeline that captured a failure line as though
-// it were one would be a pipeline acting on a sentence about a credential.
-//
-// It exited in silence before this, which was the worst of the three: a script
-// got a code with no reason, and a person got a shell prompt back and nothing
-// at all.
-func once(ctx context.Context, e *eva, prompt string, stdout, stderr io.Writer, look theme.Theme) (int, error) {
+// Neither the code nor the saying happens here. A turn that did not answer is
+// returned as one, carrying the class and what was checked about this machine,
+// and Main prices it and writes it — because a reason written where it is
+// discovered is a reason every other path that discovers one writes in its own
+// words. It exited in silence before any of this, which was the worst of the
+// three: a script got a code with no reason, and a person got a shell prompt
+// back and nothing at all.
+func once(ctx context.Context, e *eva, prompt string, stdout io.Writer, look theme.Theme) error {
 	// The Theme is the one a person configured, built for a dark terminal
 	// because this path does not ask. Asking means writing a query to a
 	// terminal and reading it back, and this path may have no terminal at all —
@@ -398,26 +292,18 @@ func once(ctx context.Context, e *eva, prompt string, stdout, stderr io.Writer, 
 	// assumption costs nothing.
 	renderer, err := render.New(render.Stream(stdout), look)
 	if err != nil {
-		return ExitFailure, err
+		return err
 	}
 	e.Attach(renderer, WithInterrupt())
 
 	outcome, err := e.Answer(ctx, prompt)
 	if err != nil {
-		return ExitFailure, err
+		return err
 	}
 	if outcome.Result != events.ResultDone {
-		_, _ = fmt.Fprintln(stderr, render.Unanswered(outcome.Class))
-		// Then what that means here. This path is the one a script reads, and a
-		// script's author is the person most likely to be looking at a machine
-		// they did not configure — so the checked fact is worth as much here as
-		// it is in the console, and it is the same one.
-		if next := e.Remedy(outcome.Class).Said(); next != "" {
-			_, _ = fmt.Fprintln(stderr, next)
-		}
-		return ExitFailure, nil
+		return unanswered{class: outcome.Class, remedy: e.Remedy(outcome.Class)}
 	}
-	return ExitOK, nil
+	return nil
 }
 
 // eva is one Session's worth of assembly: the Provider that answers, the sink
@@ -436,21 +322,16 @@ type eva struct {
 	providerName string
 	sink         core.TraceSink
 	session      *core.Session
-	model        string
+
+	// model is which model the turns of this Session use, and where the name
+	// came from.
+	model selection
 
 	// checks is what a failed turn's remedy is established from: the
 	// configuration this assembly was opened with, and the store a login lives
 	// in. See Remedy for why the checking lives in this layer and the sentence
 	// does not.
 	checks checks
-
-	// chosen says the model came from /model rather than from a file. It is
-	// remembered rather than worked out, because there is nothing to work it
-	// out from afterwards — a name switched in a Session and a name read from
-	// a file are the same string by the time a turn fails, and telling somebody
-	// to edit a file that does not hold the model they are running is the kind
-	// of confident wrongness a remedy exists to avoid.
-	chosen bool
 
 	// interrupt says whether whoever is driving these turns listens for a
 	// cancellation and closes the Run, rather than letting the process die
@@ -463,18 +344,50 @@ type eva struct {
 	// reads the turn in.
 	subs []core.Subscriber
 
-	// arriving is who is watching the turn happen, and is nil when nobody is.
-	// See loop.Loop.Arriving for why that is a different thing from a
-	// Subscriber.
-	arriving func(chunk string)
+	// arriving are who is watching the turn happen, and is empty when nobody
+	// is. See loop.Loop.Arriving for why that is a different thing from a
+	// Subscriber, and watching for why a Loop is still told exactly one.
+	//
+	// It is a slice for the reason subs is: a field admits one watcher, so the
+	// second to attach replaced the first in silence and nothing anywhere said
+	// the first had stopped being fed.
+	arriving []func(chunk string)
 }
+
+// selection is which model a Session's turns use, and where the name came from.
+//
+// The provenance is remembered rather than worked out, because there is nothing
+// to work it out from afterwards: a name switched with /model and a name read
+// from a file are the same string by the time a turn fails, and telling
+// somebody to edit a file that does not hold the model they are running is the
+// kind of confident wrongness a remedy exists to avoid.
+//
+// It is a type rather than a string beside a bool because the bool answered a
+// question nobody asked it in those words. What a remedy needs to know is where
+// the name came from, and a source says that where a `chosen` said only that
+// something had happened once.
+type selection struct {
+	name string
+	from source
+}
+
+// source is where a model name came from.
+type source uint8
+
+const (
+	// fromFile is the name a configuration holds, which is the one a person can
+	// open and edit. It is the zero value because it is where every name starts.
+	fromFile source = iota
+	// fromSession is a name /model put in this Session, and is in no file.
+	fromSession
+)
 
 // eva is what a console drives, and Control is the whole of what a console can
 // reach of it.
 var _ tui.Control = (*eva)(nil)
 
 // Model is which model the turns that follow will use.
-func (e *eva) Model() string { return e.model }
+func (e *eva) Model() string { return e.model.name }
 
 // UseModel switches the model, from the next turn on. The Session is not
 // disturbed: what a model change is for is answering the same conversation with
@@ -487,7 +400,7 @@ func (e *eva) Model() string { return e.model }
 // It also records that the name is this Session's rather than the file's, so
 // that a model the Provider will not serve is reported against the place it was
 // actually chosen.
-func (e *eva) UseModel(model string) { e.model, e.chosen = model, true }
+func (e *eva) UseModel(model string) { e.model = selection{name: model, from: fromSession} }
 
 // Clear empties the transcript by opening a new Session over the same identity,
 // the same sink, and the same Provider. Session.Fresh has why it is a new one.
@@ -540,8 +453,33 @@ type WatchOption func(*eva)
 // WithArriving says the frontend shows a turn while it happens. See
 // loop.Loop.Arriving for why that is a different thing from being a
 // Subscriber.
+//
+// It appends, for the reason Attach does. A nil one is not a watcher and is
+// dropped, so that a frontend which passes what it has can pass nothing.
 func WithArriving(arriving func(chunk string)) WatchOption {
-	return func(e *eva) { e.arriving = arriving }
+	return func(e *eva) {
+		if arriving != nil {
+			e.arriving = append(e.arriving, arriving)
+		}
+	}
+}
+
+// watching is the one function a Loop tells each chunk to, and is nil when
+// nobody is watching.
+//
+// Nil rather than a closure over an empty slice, and that is the whole reason
+// this exists: a Loop with an Arriving set has a live area to erase, and ADR
+// 0015 turns on there being none when nothing is watching. A fan-out that was
+// always non-nil would tell every run it had an audience.
+func (e *eva) watching() func(chunk string) {
+	if len(e.arriving) == 0 {
+		return nil
+	}
+	return func(chunk string) {
+		for _, watcher := range e.arriving {
+			watcher(chunk)
+		}
+	}
 }
 
 // WithInterrupt claims that whoever is driving these turns listens for a
@@ -574,13 +512,13 @@ func (e *eva) Answer(ctx context.Context, intent string) (core.Outcome, error) {
 		ProviderName: e.providerName,
 		Recorder:     recorder,
 		Session:      e.session,
-		Model:        e.model,
+		Model:        e.model.name,
 		// The base system prompt is the same for every turn of this build, and
 		// its size is gated in CI, so what every Run of Eva spends before the
 		// first word of the transcript is a figure the repository states.
 		SystemPrompt: prompt.Base(),
 		Interrupt:    e.interrupt,
-		Arriving:     e.arriving,
+		Arriving:     e.watching(),
 	}
 
 	return unit.Execute(ctx, core.Spec{

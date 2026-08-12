@@ -130,18 +130,18 @@ func TestAnUnreadableStoreEstablishesNothing(t *testing.T) {
 func TestAModelIsReportedAgainstWhereItWasChosen(t *testing.T) {
 	e := &eva{
 		providerName: "openai",
-		model:        "gpt-nonexistent",
+		model:        selection{name: "gpt-nonexistent"},
 		checks:       checks{configPath: "/home/p/.eva/config.toml"},
 	}
 
-	fromFile := e.Remedy(events.ErrorNoSuchModel)
+	named := e.Remedy(events.ErrorNoSuchModel)
 	for _, want := range []string{"gpt-nonexistent", "/home/p/.eva/config.toml"} {
-		if !strings.Contains(fromFile.Because, want) {
-			t.Errorf("the fact does not say %q: %q", want, fromFile.Because)
+		if !strings.Contains(named.Because, want) {
+			t.Errorf("the fact does not say %q: %q", want, named.Because)
 		}
 	}
-	if fromFile.Do != "" {
-		t.Errorf("a model name Eva cannot supply came with %q to type", fromFile.Do)
+	if named.Do != "" {
+		t.Errorf("a model name Eva cannot supply came with %q to type", named.Do)
 	}
 
 	e.UseModel("gpt-also-nonexistent")
@@ -203,7 +203,7 @@ func TestABilledTurnNamesTheAccountOrTheVariable(t *testing.T) {
 func TestTheClassesWithNoLocalCauseSayNothing(t *testing.T) {
 	// A fully configured machine, so that anything said would be said because
 	// the class allowed it rather than because there was nothing to read.
-	e := &eva{providerName: "openai", model: "gpt-5", checks: checks{
+	e := &eva{providerName: "openai", model: selection{name: "gpt-5"}, checks: checks{
 		subscription: true,
 		baseURL:      "http://localhost:1234/v1",
 		keyEnv:       "OPENAI_API_KEY",

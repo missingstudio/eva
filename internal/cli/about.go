@@ -100,12 +100,10 @@ func module(info *debug.BuildInfo) string {
 // Every line is a fact about the running binary. Nothing here reads a
 // configuration, a network, or a repository, so this answers on a machine where
 // Eva is not yet set up — which is most of the machines that will ask.
-func versionReport(stdout io.Writer) (int, error) {
-	if _, err := fmt.Fprintf(stdout, "eva:      %s\ngo:       %s\nplatform: %s/%s\n",
-		version(), runtime.Version(), runtime.GOOS, runtime.GOARCH); err != nil {
-		return ExitFailure, err
-	}
-	return ExitOK, nil
+func versionReport(stdout io.Writer) error {
+	_, err := fmt.Fprintf(stdout, "eva:      %s\ngo:       %s\nplatform: %s/%s\n",
+		version(), runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	return err
 }
 
 // branch is the branch of the repository the run is standing in, and is empty

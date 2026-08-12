@@ -258,7 +258,7 @@ func begin(t *testing.T, script ...recording) *dialogue {
 		provider: provider,
 		sink:     sink,
 		session:  newTestSession(),
-		model:    "test-model",
+		model:    selection{name: "test-model"},
 	}
 
 	out := &heard{}
@@ -802,7 +802,7 @@ func TestEveryAttachedProjectionSeesEveryEvent(t *testing.T) {
 		provider: &driven{script: []recording{{chunks: []string{"answered"}}}},
 		sink:     &collecting{},
 		session:  newTestSession(),
-		model:    "test-model",
+		model:    selection{name: "test-model"},
 	}
 
 	var first, second int
@@ -836,6 +836,46 @@ func TestAttachingAProjectionClaimsNoCapability(t *testing.T) {
 	e.Attach(nil, WithInterrupt())
 	if !e.interrupt {
 		t.Error("WithInterrupt did not claim the capability")
+	}
+}
+
+// Every watcher attached is told what is arriving.
+//
+// This was the half of the fan-out that stayed a field after the other half
+// stopped being one: a second frontend saying it watches a turn replaced the
+// first in silence, and nothing anywhere said the first had stopped being told.
+func TestEveryAttachedWatcherIsToldWhatIsArriving(t *testing.T) {
+	e := &eva{}
+
+	var first, second int
+	e.Attach(nil, WithArriving(func(string) { first++ }))
+	e.Attach(nil, WithArriving(func(string) { second++ }))
+
+	watching := e.watching()
+	if watching == nil {
+		t.Fatal("two watchers attached, and a Loop is told nobody is watching")
+	}
+	watching("a chunk")
+
+	if first != 1 || second != 1 {
+		t.Errorf("the watchers were told %d and %d chunks, want both told once", first, second)
+	}
+}
+
+// Nobody watching is nil, and not a fan-out over nothing.
+//
+// A Loop with an Arriving set has a live area to erase, and ADR 0015 turns on
+// there being none when nothing is watching — so a fan-out that was always
+// there would tell every Run it had an audience.
+func TestNobodyWatchingIsToldNothing(t *testing.T) {
+	e := &eva{}
+	if e.watching() != nil {
+		t.Error("a Loop is told a turn is being watched when nothing is")
+	}
+
+	e.Attach(nil, WithArriving(nil))
+	if e.watching() != nil {
+		t.Error("a watcher that is nothing counted as somebody watching")
 	}
 }
 

@@ -35,16 +35,18 @@ func authStore() (*auth.Store, error) {
 // what a person does when nothing else works yet — and it ends by printing
 // the configuration lines that put the login to work, so the next step is on
 // the screen rather than in a document.
-func login(ctx context.Context, provider string, stdout io.Writer) (int, error) {
+func login(ctx context.Context, provider string, stdout io.Writer) error {
 	switch provider {
 	case "", auth.ProviderOpenAI:
 	default:
-		return ExitUsage, fmt.Errorf("%q is not a subscription Eva can log in to — only %q is today", provider, auth.ProviderOpenAI)
+		// A word Eva does not know is the command line's mistake, not the
+		// network's, and a script is owed that distinction before it retries.
+		return rejected(fmt.Errorf("%q is not a subscription Eva can log in to — only %q is today", provider, auth.ProviderOpenAI))
 	}
 
 	store, err := authStore()
 	if err != nil {
-		return ExitFailure, err
+		return err
 	}
 
 	creds, err := loginOpenAI(ctx, auth.LoginOptions{
@@ -55,10 +57,10 @@ func login(ctx context.Context, provider string, stdout io.Writer) (int, error) 
 		},
 	})
 	if err != nil {
-		return ExitFailure, err
+		return err
 	}
 	if err := store.Set(auth.ProviderOpenAI, creds); err != nil {
-		return ExitFailure, err
+		return err
 	}
 
 	// What is printed is where the login lives and who it is — never the
@@ -66,13 +68,13 @@ func login(ctx context.Context, provider string, stdout io.Writer) (int, error) 
 	_, _ = fmt.Fprintf(stdout,
 		"\nLogged in to OpenAI as account %s.\nThe credential is stored in %s.\n\nTo answer turns with it, set in your configuration:\n\n    [provider]\n    name = %q\n    auth = %q\n",
 		creds.AccountID, store.Path(), auth.ProviderOpenAI, config.AuthSubscription)
-	return ExitOK, nil
+	return nil
 }
 
 // authStatus reports how each turn would authenticate: the mode, and whether
 // the credential that mode needs is there. It names accounts, expiries, files,
 // and variables — never token or key material.
-func authStatus(cfg config.Config, stdout io.Writer) (int, error) {
+func authStatus(cfg config.Config, stdout io.Writer) error {
 	say := func(format string, a ...any) { _, _ = fmt.Fprintf(stdout, format, a...) }
 
 	say("provider: %s\n", cfg.Provider.Name)
@@ -84,18 +86,18 @@ func authStatus(cfg config.Config, stdout io.Writer) (int, error) {
 			state = "is set"
 		}
 		say("key:      $%s %s\n", cfg.Provider.APIKeyEnv, state)
-		return ExitOK, nil
+		return nil
 	}
 
 	store, err := authStore()
 	if err != nil {
-		return ExitFailure, err
+		return err
 	}
 	say("store:    %s\n", store.Path())
 
 	creds, ok, err := store.Get(cfg.Provider.Name)
 	if err != nil {
-		return ExitFailure, err
+		return err
 	}
 	switch {
 	case !ok:
@@ -114,7 +116,7 @@ func authStatus(cfg config.Config, stdout io.Writer) (int, error) {
 	if os.Getenv(cfg.Provider.APIKeyEnv) != "" {
 		say("note:     $%s is set and unused — provider.auth decides, and it says %q\n", cfg.Provider.APIKeyEnv, cfg.Provider.Auth)
 	}
-	return ExitOK, nil
+	return nil
 }
 
 // subscriptionCredential resolves the login's access token, renewing it when

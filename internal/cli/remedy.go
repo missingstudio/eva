@@ -59,16 +59,27 @@ type checks struct {
 // configuration or its own auth store. None of them reads the provider's
 // account of the failure, which stays in the Trace where the class already
 // leaves it.
+//
+// The assembly hands over what it knows and establishes nothing itself. What a
+// remedy is made of is the machine and the model this Session is answering
+// with, and a dispatch that read half of each from a field of its own would be
+// a second copy of a fact that could disagree with the first.
 func (e *eva) Remedy(class events.ErrorClass) render.Remedy {
+	return e.checks.remedy(class, e.providerName, e.model)
+}
+
+// remedy is the whole of the checking, so that what a failed turn establishes
+// can be put in front of a test without an assembly around it.
+func (c checks) remedy(class events.ErrorClass, provider string, model selection) render.Remedy {
 	switch class {
 	case events.ErrorAuthFailed:
-		return e.checks.credential(e.providerName)
+		return c.credential(provider)
 	case events.ErrorNoSuchModel:
-		return e.namedModel()
+		return c.namedModel(model)
 	case events.ErrorBilling:
-		return e.checks.billing(e.providerName)
+		return c.billing(provider)
 	case events.ErrorUnreachable:
-		return e.checks.reached(e.providerName)
+		return c.reached(provider)
 	default:
 		return render.Remedy{}
 	}
@@ -131,19 +142,20 @@ func (c checks) credential(provider string) render.Remedy {
 // namedModel names the model the Provider would not serve, and where a model is
 // chosen.
 //
-// Which of the two it says is checked rather than assumed. A Session that used
-// /model is running a name that is in no file, and sending that person to edit
-// one would send them to change a line that is not what answered.
-func (e *eva) namedModel() render.Remedy {
-	if e.chosen {
+// Which of the two it says is read from the selection rather than assumed. A
+// Session that used /model is running a name that is in no file, and sending
+// that person to edit one would send them to change a line that is not what
+// answered.
+func (c checks) namedModel(model selection) render.Remedy {
+	if model.from == fromSession {
 		return render.Remedy{
 			Because: fmt.Sprintf("the model is %q, chosen with /model in this Session rather than named in %s",
-				e.model, e.checks.configPath),
+				model.name, c.configPath),
 		}
 	}
 	return render.Remedy{
 		Because: fmt.Sprintf("the model is %q, and %s is the file that names one",
-			e.model, e.checks.configPath),
+			model.name, c.configPath),
 	}
 }
 
