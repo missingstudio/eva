@@ -1,5 +1,7 @@
 # An install shows its work, and repeats none of it
 
+Status: **landed**, except where "What came out differently" below says otherwise.
+
 How to make `scripts/install.sh` visible while it downloads, and silent when there is
 nothing to do. Four changes, about 55 lines of POSIX `sh`, none of which moves the seam
 `scripts/install_test.sh` replaces.
@@ -399,15 +401,37 @@ skip and the force.
 | A bracketed module version is not treated as installed | `install_test.sh` |
 | A prerelease build parses, so `next` can skip too | `install_test.sh` |
 | A run with stderr on a pipe writes no escape byte | `install_test.sh` |
-| A second install of the same version downloads nothing | `rehearse.sh`, step 5 |
-| `--force` installs over a matching version | `rehearse.sh`, step 5 |
+| The cursor is not restored where no bar hid it | `install_test.sh` |
+| The signing identity names the release workflow and the tag | `install_test.sh` |
+| A required signature that cannot be checked refuses | `install_test.sh` |
+| An install from a snapshot build still works | `rehearse.sh`, step 5 |
 
 Write the non-TTY case first. It is what keeps a carriage return every 100 ms out of a CI
 log, and it is asserted by counting the bytes on stderr.
 
-Two things no case covers, and a report on this work says so rather than implying
-otherwise. No automated case proves a terminal shows a growing bar, so a person looks at
-a real one once. And the script does not cover Windows, which this changes in no way.
+**`rehearse.sh` cannot cover the skip, and it was wrong to say it could.** Step 5 installs
+from a snapshot, and a snapshot binary reports the version constant while the archive is
+named after a snapshot version — so the two never match and the skip never fires there. A
+snapshot built from a working tree also reports `.dirty`, which the predicate refuses by
+design. The skip is covered by the unit cases above, and by a real install run twice
+against the live release.
+
+Two things no case covers. No automated case proves a terminal shows a growing bar, so a
+person looks at a real one once. And the script does not cover Windows, which this changes
+in no way.
+
+## What came out differently
+
+| Departure | Why |
+| --- | --- |
+| The signature is untouched | This page was written against a tree with no signature check. One landed first, with two seams of its own and sixteen cases. Nothing here changes it: the small files it fetches are now overlapped, and that is all |
+| `progress_stop` exists, and the trap calls it | The trap printed the cursor-show escape unconditionally, which put six bytes of stderr into every piped run — the exact thing the terminal test is for. Found by counting the bytes, not by reading the code |
+| The test counts requests in a file, not a variable | A `fetch` inside a command substitution runs in a subshell, so a variable it increments is lost. The counter reported one request for the two `next` makes |
+| The skip applies to `--from-dist` too | One rule rather than two. It never fires there, because a snapshot archive is named after a snapshot version and the binary inside it reports the constant |
+
+One thing the measurements did not support. The 0.55 s estimate for a second install came
+out at **1.19 s** on the same machine, against 2.12 s before. The API request is the floor,
+and it varies more than the estimate allowed for.
 
 ## Sequencing
 

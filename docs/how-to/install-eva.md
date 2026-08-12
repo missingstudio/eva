@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/inst
 ```
 
 It reads your operating system and architecture, downloads the matching archive,
-and **checks the archive against the checksums the release published before
+and **checks the signature and then the checksums the release published before
 installing anything**. A checksum that does not match installs nothing and says
 both figures.
 

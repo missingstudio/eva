@@ -650,20 +650,28 @@ Check it:
 
 	echo "installing eva $VERSION ($os/$arch) from the $CHANNEL channel"
 
+	# The two small files ride inside the archive's transfer, so their connection
+	# cost disappears into it. The seam stays one URL at a time, which a curl
+	# given both URLs would not be, and which wget could not serve.
+	#
 	# The bundle is optional, so a release published before signing began still
 	# installs — on the checksum alone, and saying so. The file is removed on a
 	# failed fetch because curl and wget both leave one behind, and an empty file
 	# would reach cosign as a bundle rather than as an absence.
 	bundle="$tmp/checksums.txt.sigstore.json"
+	fetch_to "$base/checksums.txt" "$tmp/checksums.txt" &
+	sums_pid=$!
+	fetch_to "$base/checksums.txt.sigstore.json" "$bundle" &
+	bundle_pid=$!
 
 	size=$(asset_size "$archive" <"$release")
 	download_with_progress "$base/$archive" "$tmp/$archive" "${size:-0}" ||
 		die "no archive at $base/$archive
 Check the version, or the release page: https://github.com/$REPO/releases"
 
-	fetch_to "$base/checksums.txt" "$tmp/checksums.txt" ||
+	wait "$sums_pid" ||
 		die "the release has no checksums.txt, so nothing can be verified"
-	fetch_to "$base/checksums.txt.sigstore.json" "$bundle" || rm -f "$bundle"
+	wait "$bundle_pid" || rm -f "$bundle"
 
 	# The signature first, because it is what makes the checksums Eva's. Checking
 	# the archive against a file of unknown origin and then asking where the file
