@@ -60,14 +60,40 @@ exists yet, so the query-level rules land with the first one — read
 - A comment states its decision in its own words, and names no document. Name the
   glossary term or the decision, never the file holding it.
 
-Commit with a conventional prefix: `feat`, `fix`, `refactor`, `docs`, `test`,
-`build`, `ci`, `chore`. One logical change per commit. Work spanning several gets
-several commits.
+## How you write
+
+Every word this repository ships is **ASD-STE100 Simplified Technical English**. It
+binds commit messages, documents, code comments, CLI text, and your reports alike.
+The rules that carry the weight here:
+
+- One topic per sentence. No sentence runs over 25 words.
+- Active voice. Name the thing that acts.
+- Keep the articles. Never delete a word to make a line shorter.
+- One word carries one meaning. A word means what it says, never what it evokes.
+- A Technical Name is exempt from the vocabulary rule: `Event`, `Trace`,
+  `Provider`, `Recorder`, `cask`, `epoll`.
+
+A commit subject obeys that rule, and three limits of its own:
+
+- A conventional prefix opens it: `feat`, `fix`, `refactor`, `docs`, `test`,
+  `build`, `ci`, `chore`. An optional scope follows in brackets. Conventional
+  Commits specifies that grammar and nothing else. The mood below is this
+  repository's own rule.
+- 72 characters at most. No full stop at the end.
+- One topic. An `and` that joins two clauses means the commit holds two changes,
+  so split the commit.
+
+A subject states what the code now does, never what you did to it. It carries a
+subject, a present-tense verb, and the behaviour: `fix: the coverage check reads
+target names` — never `fix: read target names`. The imperative drops the actor,
+and this log names it.
+
+A machine keeps its own wording. A merge commit and a Dependabot commit stay as
+the tool wrote them.
+
+One logical change per commit. Work spanning several gets several commits.
 
 ## When you report
-
-Write every report in **ASD-STE100 Simplified Technical English**: one topic per
-sentence, active voice, no sentence over 25 words.
 
 1. What changed.
 2. What you verified — and what you did not, named as the degraded part.
