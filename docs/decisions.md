@@ -146,6 +146,15 @@ sequence-numbered Event. There is no second vocabulary anywhere in the system.
 - **Look and feel are configuration, and the default is not a choice** ([0030](adr/0030-look-and-feel-are-configuration-and-the-default-is-not-a-choice.md)).
   Every colour, glyph, and binding is a value a person may set. A person who sets
   nothing sees exactly what Eva looked like before any of it was configurable.
+- **An install checks the signature, and says what it could not check** ([0044](adr/0044-an-install-checks-the-signature-and-says-what-it-could-not-check.md)).
+  The checksum is fetched from the same host as the archive, so it establishes the
+  download and not the release. The signature over `checksums.txt` is what
+  establishes the release, and it is checked first, because the checksum is spent
+  against a file whose origin is then known. A signature that does not hold installs
+  nothing. One that cannot be checked — no cosign, an unsigned build — installs on
+  the checksum and says what that leaves unproven, because an installer that refused
+  on a bare machine is one nobody runs. `--require-signature` removes the
+  degradation.
 
 ## The console
 

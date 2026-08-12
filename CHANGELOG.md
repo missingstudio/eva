@@ -70,6 +70,21 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
   5.7 ms, against 57 ms for the same second with the new bound switched off.
   Nothing about what is drawn changed. `make bench` reproduces all of it.
 
+- **The install script checks the release's signature**, not only its checksum. The
+  release has signed `checksums.txt` since the first tag, and nothing automatic read
+  the signature — so the installer was checking that the archive matched a file it
+  fetched from the same host as the archive. That establishes the download; the
+  signature is what establishes the release. It is checked first, and a signature
+  that does not hold installs nothing.
+
+  It needs [cosign](https://github.com/sigstore/cosign) on the machine. Without it
+  the install goes ahead on the checksum alone and says on stderr what that leaves
+  unproven, because an installer that refused on a bare machine is one nobody runs.
+  `--require-signature`, or `EVA_REQUIRE_SIGNATURE=1`, makes it a refusal instead —
+  which is what a CI job wants. The expected identity is pinned to this
+  repository's release workflow running on a tag, so a token from any other
+  workflow signs a certificate the check rejects.
+
 ### Fixed
 
 - **A window being dragged no longer freezes the interface.** Every column an edge

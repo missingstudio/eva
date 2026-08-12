@@ -140,6 +140,45 @@ on different commits, and this is what tells them apart.
 An archive from a release carries more than a checksum. Each one is signed by the
 workflow that built it, with no key anybody had to store.
 
+The two checks answer different questions, and the difference is the point:
+
+| Check | What it proves |
+| --- | --- |
+| checksum | the archive is the one `checksums.txt` names |
+| signature | `checksums.txt` came from Eva's release workflow |
+
+The checksum alone proves the download is intact. It cannot prove the release is
+Eva's, because it is fetched from the same host as the archive — anybody serving
+you a bad archive can serve you a matching `checksums.txt`. The signature is what
+closes that, because the signing certificate names the workflow, the repository,
+and the tag, and no key was stored anywhere for somebody to steal.
+
+**The install script does both.** It checks the signature first, then the
+checksum against the file the signature established. A bad signature or a bad
+checksum installs nothing.
+
+It needs [cosign](https://github.com/sigstore/cosign) on the machine for the
+signature. Without it the install goes ahead on the checksum alone and says so:
+
+```
+warning: cosign is not installed, so the signature was not checked
+         the checksum proves the download is intact, not that the release is Eva's
+```
+
+That is a deliberate default — an installer that refused on a machine with no
+cosign is an installer nobody runs. To make it a refusal instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh \
+  | sh -s -- --require-signature
+```
+
+or set `EVA_REQUIRE_SIGNATURE=1` to decide it once for every install on a
+machine. Either way, nothing is installed unless the signature is checked and
+matches. This is what a CI job or a hardened machine wants.
+
+### By hand
+
 ```bash
 # the archive matches the checksums the release published
 sha256sum --check --ignore-missing checksums.txt
@@ -147,15 +186,20 @@ sha256sum --check --ignore-missing checksums.txt
 # the checksums came from this repository's release workflow
 cosign verify-blob checksums.txt \
   --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp 'https://github.com/missingstudio/eva/.*' \
+  --certificate-identity-regexp '^https://github\.com/missingstudio/eva/\.github/workflows/release\.yml@refs/tags/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # the binary was built by that workflow, from the commit it names
 gh attestation verify eva_*_linux_amd64.tar.gz --repo missingstudio/eva
 ```
 
-The install script does the first of these for you. The other two are for
-somebody who wants to know that the release is Eva's and not somebody else's.
+The identity is pinned to the workflow and to a tag, not to the account. A token
+from any other workflow in this repository signs a certificate this rejects, and
+so does one from a repository whose name merely looks like this one. The install
+script builds the same expression, from the repository it is installing from.
+
+The attestation is the third check and the script does not make it: it needs `gh`
+and an authenticated GitHub session, which an install path cannot assume.
 
 ## Troubleshooting
 
@@ -180,6 +224,14 @@ xattr -d com.apple.quarantine "$(command -v eva)"
 **The checksum does not match.** Nothing was installed, which is the correct
 outcome. Download it again. If it fails a second time, open an issue with the two
 figures the script printed.
+
+**The signature is not this repository's release workflow.** Nothing was
+installed, and this one does not mean try again. It means the `checksums.txt` you
+were served was not signed by Eva's release workflow — so do not install those
+bytes, and open an issue with the identity the script printed. The most likely
+innocent cause is a fork or a mirror: `EVA_REPO` pointing somewhere else makes the
+script expect that repository's workflow, and a release copied from elsewhere
+carries the original's signature rather than the copy's.
 
 ## Related
 
