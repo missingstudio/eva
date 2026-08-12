@@ -924,14 +924,9 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 		}
 	}
 
-	// Complete offers the next command; any other key means the person is
-	// writing again rather than choosing, so the next one starts from what is
-	// there.
-	if c.keys.Is(pressed, keymap.Complete) {
-		c.complete()
+	if c.completing(pressed) {
 		return nil
 	}
-	c.palette.typing()
 
 	if c.scroll(pressed) {
 		return nil
@@ -939,92 +934,129 @@ func (c *Console) key(k tea.KeyPressMsg) tea.Cmd {
 
 	action, bound := c.keys.Action(pressed)
 	if !bound {
-		var cmd tea.Cmd
-		c.input, cmd = c.input.Update(k)
+		return c.typed(k)
+	}
+	if cmd, answered := c.act(action); answered {
 		return cmd
 	}
 
+	// A key the interface has an action for and did not act on is typing, and
+	// typing ends a recall: what is in the prompt is now this person's sentence
+	// rather than a place in the list of their old ones.
+	c.past.done()
+	return c.typed(k)
+}
+
+// completing offers the next command. Any other key means the person is writing
+// rather than choosing, so the next offer starts from what is there.
+func (c *Console) completing(pressed string) bool {
+	if c.keys.Is(pressed, keymap.Complete) {
+		c.complete()
+		return true
+	}
+	c.palette.typing()
+	return false
+}
+
+// act runs the action a key is bound to, and says whether it acted. A false
+// answer means the key belongs to the prompt after all.
+func (c *Console) act(action keymap.Action) (tea.Cmd, bool) {
 	switch action {
 	case keymap.Interrupt:
-		// During a turn this cancels it and gives the prompt back, rather
-		// than ending the Session. A long wrong answer should cost seconds,
-		// and the Session is a fold over what was committed — so the part of
-		// the answer that did arrive is part of the transcript, and the next
-		// turn is conditioned on it.
-		if c.busy() {
-			c.interrupted = true
-			c.interrupt()
-			return nil
-		}
-
-		// Idle, it asks first. A Session is an hour of somebody's work by the
-		// time it is worth keeping, and one key next to the one that interrupts
-		// a turn should not be able to end it. ctrl+d stays a single press,
-		// because nobody types it by accident.
-		if !c.leaving {
-			c.leaving = true
-			return nil
-		}
-		return tea.Quit
+		return c.interrupting(), true
 
 	case keymap.Leave:
 		c.stop()
-		return tea.Quit
+		return tea.Quit, true
 
 	case keymap.Palette:
 		c.openPalette()
-		return nil
+		return nil, true
 
 	case keymap.Editor:
-		return c.openEditor()
+		return c.openEditor(), true
 
 	case keymap.HistoryBack:
-		// Only from the first row. Anywhere else the key belongs to the prompt,
-		// which has a line above the cursor to move to — a recall that took it
-		// would make a prompt of ten lines uneditable.
-		if c.input.Line() > 0 {
-			break
-		}
-		if was, there := c.past.back(c.input.Value()); there {
-			c.input.SetValue(was)
-			c.input.MoveToEnd()
-		}
-		return nil
+		return c.recallBack()
 
 	case keymap.HistoryForward:
-		if c.input.Line() < c.input.LineCount()-1 {
-			break
-		}
-		if next, there := c.past.forward(); there {
-			c.input.SetValue(next)
-			c.input.MoveToEnd()
-		}
-		return nil
+		return c.recallForward()
 
 	case keymap.Submit:
-		prompt := strings.TrimSpace(c.input.Value())
-		if prompt == "" {
-			return nil
-		}
-		c.input.Reset()
-		c.past.remember(prompt)
-		c.palette.hide()
+		return c.submitted(), true
+	}
+	return nil, false
+}
 
-		// A turn is already running, so this one waits rather than being lost.
-		// It is echoed when it is sent rather than now, so that the transcript
-		// reads in the order the turns happened.
-		if c.busy() {
-			c.shown.queue(prompt)
-			return nil
-		}
-		return c.send(prompt)
+func (c *Console) interrupting() tea.Cmd {
+	// During a turn this cancels it and gives the prompt back, rather than
+	// ending the Session. A long wrong answer should cost seconds, and the
+	// Session is a fold over what was committed — so the part of the answer
+	// that did arrive is part of the transcript, and the next turn is
+	// conditioned on it.
+	if c.busy() {
+		c.interrupted = true
+		c.interrupt()
+		return nil
 	}
 
-	// A key the interface has no action for is typing, and typing ends a recall:
-	// what is in the prompt is now this person's sentence rather than a place in
-	// the list of their old ones.
-	c.past.done()
+	// Idle, it asks first. A Session is an hour of somebody's work by the time
+	// it is worth keeping, and one key next to the one that interrupts a turn
+	// should not be able to end it. ctrl+d stays a single press, because nobody
+	// types it by accident.
+	if !c.leaving {
+		c.leaving = true
+		return nil
+	}
+	return tea.Quit
+}
 
+// recallBack walks back through the prompts already sent, and only from the
+// first row. Anywhere else the key belongs to the prompt, which has a line
+// above the cursor to move to — a recall that took it would make a prompt of
+// ten lines uneditable.
+func (c *Console) recallBack() (tea.Cmd, bool) {
+	if c.input.Line() > 0 {
+		return nil, false
+	}
+	if was, there := c.past.back(c.input.Value()); there {
+		c.input.SetValue(was)
+		c.input.MoveToEnd()
+	}
+	return nil, true
+}
+
+func (c *Console) recallForward() (tea.Cmd, bool) {
+	if c.input.Line() < c.input.LineCount()-1 {
+		return nil, false
+	}
+	if next, there := c.past.forward(); there {
+		c.input.SetValue(next)
+		c.input.MoveToEnd()
+	}
+	return nil, true
+}
+
+func (c *Console) submitted() tea.Cmd {
+	prompt := strings.TrimSpace(c.input.Value())
+	if prompt == "" {
+		return nil
+	}
+	c.input.Reset()
+	c.past.remember(prompt)
+	c.palette.hide()
+
+	// A turn is already running, so this one waits rather than being lost. It is
+	// echoed when it is sent rather than now, so that the transcript reads in
+	// the order the turns happened.
+	if c.busy() {
+		c.shown.queue(prompt)
+		return nil
+	}
+	return c.send(prompt)
+}
+
+func (c *Console) typed(k tea.KeyPressMsg) tea.Cmd {
 	var cmd tea.Cmd
 	c.input, cmd = c.input.Update(k)
 	return cmd
