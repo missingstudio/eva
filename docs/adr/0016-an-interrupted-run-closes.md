@@ -30,6 +30,8 @@ It gets no caveat. ADR 0014 settled that a claim of failure is already the reaso
 
 So `Turn.Interrupt` is told by whoever drives the Turn. A capability that is missing degrades a Run; a capability that is claimed and absent corrupts it, and a scheduler that routed work here on a false claim would have no way to find out.
 
+ADR 0042 later gave the process surface the signal, which makes the second sentence of the first paragraph no longer true: a signal now cancels the Context the one-shot turn runs under, so that Run closes here like any other and claims `Interrupt` because it can honour it. Nothing else in this ADR changed — being told rather than assumed is exactly what let one path start claiming it without the other saying anything new.
+
 ## Consequences
 
 **Cancellation stops the provider, not the record.** The context the Provider streams under is cancellable. The two commits that close the Run out are not. A caller who wanted to stop Eva writing to disk has no way to ask for that, which is correct: the Trace is the instrument, and an instrument that can be switched off from outside measures nothing.

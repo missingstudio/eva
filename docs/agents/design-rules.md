@@ -43,6 +43,12 @@ The event kind set is closed and the compiler enforces it (unexported method on 
 
 `config.Config` is a file format. It stops at the composition root (`cli`). What crosses into a domain package is that package's own type. `theme` and `tui/keymap` define what the interface draws with, and `cli` maps TOML onto them. This is why depguard's `tui` rule holds — the console never imports `config` — while every visual choice is still configurable. A package that imports `config` to read one field has inverted the dependency.
 
+## The process belongs to the composition root
+
+Exit codes and the signal handler are `cli`'s, and a frontend never installs one. What reaches the layers below is a cancelled context, which they already act on — so a signal is understood identically by the console and by `-p` without either knowing a signal exists.
+
+The rule exists because it was broken by omission. Nothing installed a handler, so the console inherited a working shutdown from the terminal library it draws with, and `-p` — which builds no program — inherited nothing and died mid-record. A capability that one path can honour and another cannot, decided by which dependency a frontend happens to hold, is not a decision anybody made. ADR 0042 has it.
+
 ## Comments carry rationale or they go
 
 The repo's own rule (`AGENTS.md`): a comment states a decision in its own words, cites no document, and never narrates the next line. The test for every comment: *could the reader have written this comment themselves after reading the code?* If yes, delete it. If it names an invariant, a trap, or a rejected alternative — keep it, that is what comments are for.

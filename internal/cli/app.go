@@ -82,6 +82,11 @@ leaves, and /help lists the commands.
 // through the passed streams rather than through the process's own is what
 // lets a test drive this with nothing attached, because a terminal is the
 // thing CI does not have.
+//
+// This is also where being asked to stop is owned. Every layer below reaches
+// the same conclusion from the same cancelled Context, so what a signal means
+// is decided once, here, rather than by whichever library a frontend happens
+// to be built on. See listen.
 func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// A failure to write help or a diagnostic is not something the process
 	// can report anywhere else, so the exit code carries what it can.
@@ -95,9 +100,23 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 
-	code, err := run(context.Background(), opts, stdin, stdout, stderr)
+	// Before run, so that a signal arriving during the first read of a file is
+	// caught by Eva rather than by the runtime.
+	ctx, asked, release := listen(context.Background())
+	defer release()
+
+	code, err := run(ctx, opts, stdin, stdout, stderr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "eva: %v\n", err)
+	}
+
+	// A signal outranks whatever the run made of it. The run reports what
+	// happened to the turn; this reports what happened to the process, and a
+	// process that stopped because it was told to did not succeed at staying
+	// open however cleanly it went. Left to the frontend, a terminated console
+	// exited zero and a supervisor read that as a job that finished.
+	if s := asked(); s != nil {
+		return stopCode(s)
 	}
 	return code
 }
@@ -350,6 +369,14 @@ var _ core.Subscriber = (*render.Renderer)(nil)
 // which is what ADR 0015 already says of a run with no live area: there is
 // nothing to erase, so the answer is written when it is whole.
 //
+// It does claim the Interrupt capability, which it could not before. The claim
+// is true because Main owns the signal: a person or a supervisor stopping this
+// cancels the Context the turn runs under, and the Run then closes with a claim
+// the same way a cancelled console turn does. Before that, a signal killed the
+// process between two records and left a Run that opened and never closed —
+// which is why ADR 0016 had this path disclaiming the capability, and why the
+// disclaimer was honest rather than pessimistic.
+//
 // A failed turn exits non-zero and says why. The console has no exit code
 // because it stays open; this does not stay open, so the claim the Trace holds
 // is also the process's answer to whoever ran it.
@@ -373,7 +400,7 @@ func once(ctx context.Context, e *eva, prompt string, stdout, stderr io.Writer, 
 	if err != nil {
 		return ExitFailure, err
 	}
-	e.Attach(renderer)
+	e.Attach(renderer, WithInterrupt())
 
 	outcome, err := e.Answer(ctx, prompt)
 	if err != nil {

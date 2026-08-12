@@ -491,7 +491,23 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 			in = endedFile{Reader: file, quit: quit}
 		}
 	}
-	program = tea.NewProgram(c, tea.WithContext(ctx), tea.WithInput(in), tea.WithOutput(out))
+	// WithoutSignalHandler because the process surface owns being asked to
+	// stop, and two owners is one too many. The library installs its own
+	// handler by default and turns a signal into a message of its own, which
+	// made the console's ability to stop cleanly a property of this dependency
+	// rather than of Eva — true for the console, absent for the one-shot
+	// command, and asserted nowhere. What arrives here instead is the cancelled
+	// Context, which is the same thing every layer below already acts on.
+	//
+	// Ctrl-C is untouched by this. A terminal in raw mode delivers it as a key
+	// rather than as a signal, which is why it ends a turn instead of the
+	// process, and no handler on either side is involved in that.
+	program = tea.NewProgram(c,
+		tea.WithContext(ctx),
+		tea.WithInput(in),
+		tea.WithOutput(out),
+		tea.WithoutSignalHandler(),
+	)
 
 	// Two supplies, one doorway. The Recorder publishes to the feed and the
 	// turn tells the second what is arriving; both reach the interface as a
