@@ -16,5 +16,7 @@ not, start there or with [tutorial/first-run.md](../tutorial/first-run.md).
 ## Related
 
 - [../tutorial/first-run.md](../tutorial/first-run.md) — build it and read your first trace
+- [../reference/commands.md](../reference/commands.md) — every command, flag, slash command, and key
+- [../reference/configuration.md](../reference/configuration.md) — every setting, and what it defaults to
 - [../reference/architecture.md](../reference/architecture.md) — the event schema and contracts
 - [../../CONTEXT.md](../../CONTEXT.md) — what each word means

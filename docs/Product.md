@@ -15,6 +15,8 @@ part, and this page says which one to open.
 | [how-to/](how-to/)                                           | I need to do one specific thing.                                  | How-to      |
 | [explanation/the-ladder.md](explanation/the-ladder.md)       | Why does a factory need ten rungs, and in what order?             | Explanation |
 | [explanation/the-primitive.md](explanation/the-primitive.md) | What is the one type, and why that shape?                         | Explanation |
+| [reference/commands.md](reference/commands.md)               | What can I type, and what key does what?                          | Reference   |
+| [reference/configuration.md](reference/configuration.md)     | What can I set, and what does it default to?                      | Reference   |
 | [reference/architecture.md](reference/architecture.md)       | What is the event schema, the adapter contract, the hook surface? | Reference   |
 | [reference/platform.md](reference/platform.md)               | How do tenancy, isolation, and billing work?                      | Reference   |
 | [roadmap.md](roadmap.md)                                     | What ships in which order, and what is the exit test?             | Roadmap     |
