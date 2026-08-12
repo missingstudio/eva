@@ -15,9 +15,9 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
 
 Nothing yet.
 
-## 0.1.0 — 2026-08-10
+## 0.1.0 — 2026-08-12
 
-The first release. Eva was buildable before this and installable by nobody.
+The first release. Eva was buildable before this release. Nobody could install it.
 
 [Release notes and artifacts](https://github.com/missingstudio/eva/releases/tag/v0.1.0)
 carry the complete commit list; what follows is the part worth a sentence.
@@ -30,6 +30,9 @@ carry the complete commit list; what follows is the part worth a sentence.
   built them. `go install github.com/missingstudio/eva/cmd/eva@latest`, or the
   install script, which refuses to install an archive whose checksum does not
   match.
+- A Homebrew cask. `brew install missingstudio/tap/eva` installs the same archive
+  the release published, and the release writes the cask itself. `make rehearse`
+  reads that cask before a tag exists, so the tap cannot drift from the build.
 - Two channels. `stable` is the newest release; `next` is the newest prerelease,
   for somebody who will report what breaks. Both are immutable tags — no tag
   ever moves, because the module proxy caches the first content it sees under a
