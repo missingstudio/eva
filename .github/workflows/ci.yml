@@ -52,6 +52,7 @@ jobs:
       - uses: ./.github/actions/setup-go-tree
 
       - run: make fmt
+      - run: make comment-budget
       - run: make guard-test
       - run: make install-test
 

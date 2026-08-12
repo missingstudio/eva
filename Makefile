@@ -18,7 +18,7 @@ GORELEASER  = $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION
 # The split is what a check needs, not what it looks at. CHECKS need nothing but
 # this repository. AUDITS reach the network, which is why they are named apart
 # rather than folded in: their answer can change while the tree does not.
-CHECKS = fmt build vet lint test gosec guard-test install-test check-coverage
+CHECKS = fmt build vet lint test gosec guard-test install-test comment-budget check-coverage
 AUDITS = tidy-check mod-verify vuln
 
 # The flags the release builds with. `make eva` uses them too, because the
@@ -27,7 +27,7 @@ AUDITS = tidy-check mod-verify vuln
 RELEASE_FLAGS = -trimpath -ldflags '-s -w'
 
 .PHONY: help check audit verify check-list tool-versions fmt build vet lint gosec test bench \
-        guard-test install-test check-coverage rehearse \
+        guard-test install-test comment-budget check-coverage rehearse \
         tidy tidy-check mod-verify vuln eva snapshot
 
 ## help: list the targets
@@ -144,6 +144,10 @@ guard-test:
 ## install-test: the install script's cases, against recorded releases
 install-test:
 	@sh scripts/install_test.sh
+
+## comment-budget: fail when a comment argues at length in a code file
+comment-budget:
+	@sh scripts/comment-budget.sh >/dev/null && echo "comments ok"
 
 ## check-coverage: fail when a declared check is run by no workflow
 check-coverage:
