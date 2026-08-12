@@ -8,15 +8,6 @@ import (
 
 // A driver reading the frame while the update loop composes it reads no torn
 // answer, and the race detector says so.
-//
-// This is the test the old shape could not have. The locking was seven methods on
-// the console, one of which took the lock without saying so in its signature, and
-// asserting on it meant driving a whole program from two goroutines. Here the
-// module is the surface, so the assertion is the module: one goroutine writes what
-// the update loop writes, and one reads what a driver reads.
-//
-// Run under -race, which every package here is. Without the lock this fails; with
-// it there is nothing to see, which is the point.
 func TestTheFrameIsReadWhileItIsWritten(t *testing.T) {
 	var s shown
 
@@ -61,11 +52,6 @@ func TestTheFrameIsReadWhileItIsWritten(t *testing.T) {
 }
 
 // A Run held is a Run in flight, and only releasing it ends that.
-//
-// The distinction is the whole of what "busy" means: an interrupted Run is
-// cancelled and still in hand, because its close has not been folded in yet. A
-// console that called itself idle for that window would open a second Run, and the
-// first one's close would then cancel it.
 func TestAnInterruptedRunIsStillHeld(t *testing.T) {
 	var s shown
 
@@ -103,11 +89,6 @@ func TestAnInterruptedRunIsStillHeld(t *testing.T) {
 	}
 }
 
-// Queueing swaps: it takes the prompt that will be sent and hands back the one
-// that was waiting.
-//
-// One method for both, because a caller that only ever swaps cannot leave a
-// dropped prompt and a queued one out of step.
 func TestQueueingSwapsThePromptThatWasWaiting(t *testing.T) {
 	var s shown
 

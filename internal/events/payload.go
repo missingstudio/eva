@@ -7,38 +7,9 @@ import (
 	"sort"
 )
 
-// Payload is what an Event carries beyond its envelope.
-//
-// The single method is unexported, so no package outside this one can declare
-// a payload and the closed kind set is enforced by the compiler rather than by
-// review. The alternative — one struct with an optional pointer per payload —
-// makes "which pointer is set" and "what Kind says" able to disagree, which is
-// an invariant you must then write tests to defend.
-//
-// isPayload looks like dead code and invites removal. It is the mechanism, not
-// decoration: deleting it opens the kind set to every importing package.
-//
-// # Where the compiler stops
-//
-// Go has one hole in this and it cannot be closed by a signature: a type that
-// embeds Payload has isPayload promoted to it, so it satisfies the interface
-// without declaring anything. The compiler cannot tell that apart from a
-// legitimate wrapper.
-//
-// The codec closes it instead, and closes it shut: such a value is not in the
-// registry below, so KindOf does not recognise it and Event.MarshalJSON
-// refuses to encode it rather than writing a record with no kind. So a forged
-// payload cannot reach a Trace — the guarantee holds, but at the codec rather
-// than at the compiler, and the distinction is worth knowing before someone
-// relies on the wrong one.
 type Payload interface{ isPayload() }
 
 // The registry is the one place a Kind and its payload type are tied together.
-//
-// Before it there were two switches — one to name a payload, one to read it
-// back — and nothing made them agree. A payload missing from the second
-// encoded fine and decoded as Unknown, which is a Trace that is structurally
-// valid and quietly wrong. One table cannot half-agree with itself.
 var (
 	// kindByType names the Kind a payload's dynamic type belongs to.
 	kindByType = map[reflect.Type]Kind{}
@@ -46,13 +17,6 @@ var (
 	decoderByKind = map[Kind]func(json.RawMessage) (Payload, error){}
 )
 
-// register ties a Kind to its payload type. It is called from init below, once
-// per kind, beside the type it names.
-//
-// A duplicate registration panics at init rather than at the first Event that
-// meets it: two kinds sharing a type, or two types sharing a kind, is a schema
-// that cannot round-trip, and a program that cannot round-trip its own Trace
-// has nothing to run.
 func register[T Payload](kind Kind) {
 	var zero T
 	typ := reflect.TypeOf(zero)
@@ -79,32 +43,19 @@ func register[T Payload](kind Kind) {
 // missing MCP server — changes what a Run can do. Feature-detect on this;
 // never compare version strings to infer capability.
 type Capabilities struct {
-	// Resume continues an interrupted Run.
-	Resume bool `json:"resume"`
-	// CostReport emits real token and dollar usage.
+	Resume     bool `json:"resume"`
 	CostReport bool `json:"cost_report"`
 	// StructuredEvents means every step is recorded as a typed Event, rather
 	// than as output an adapter has to scrape.
 	StructuredEvents bool `json:"structured_events"`
-	// ToolPolicy honours an external allowlist.
-	ToolPolicy bool `json:"tool_policy"`
-	// MCP speaks the Model Context Protocol.
-	MCP bool `json:"mcp"`
-	// Subagents decomposes in parallel internally.
-	Subagents bool `json:"subagents"`
-	// Interrupt cancels cleanly.
-	Interrupt bool `json:"interrupt"`
+	ToolPolicy       bool `json:"tool_policy"`
+	MCP              bool `json:"mcp"`
+	Subagents        bool `json:"subagents"`
+	Interrupt        bool `json:"interrupt"`
 }
 
-// KindStarted opens a Run.
 const KindStarted Kind = "started"
 
-// Started opens a Run.
-//
-// It carries the Spec's intent because the Trace is the single source of
-// truth, and a transcript whose first message is missing is one a Trace cannot
-// reconstruct. Without this field the prompt exists only in the process that
-// answered it, and resume, branch, and rewind have nothing to resume from.
 type Started struct {
 	// Intent is what the Spec asked for: the first message of the transcript.
 	// It is absent on a Run opened by something other than a Spec, which is
@@ -115,15 +66,8 @@ type Started struct {
 
 func (Started) isPayload() {}
 
-// KindText names one chunk of one content block.
 const KindText Kind = "text"
 
-// Text is one chunk of one content block.
-//
-// Chunks stream one at a time on the wire, and the Trace sink folds
-// consecutive chunks of one block into a single record when it commits, so a
-// Trace record corresponds to a unit of meaning rather than to a token. Block
-// is what the fold folds on.
 type Text struct {
 	Block int    `json:"block"`
 	Chunk string `json:"chunk"`
@@ -131,19 +75,10 @@ type Text struct {
 
 func (Text) isPayload() {}
 
-// KindToolCall names a request to run a tool.
 const KindToolCall Kind = "tool_call"
 
 // ToolCall is a request to run a tool. Args stay raw because a tool's schema is
 // the tool's, and Redacted says the arguments held something a Trace must not.
-//
-// ID is what the result of this call answers, and it is the provider's own
-// identifier rather than one Eva mints: the next request has to name the call
-// in the words the provider used, so an identifier of our own would have to be
-// translated back at the wire and would be a second identity for one call.
-// Without it a fold could put a call and a result in one transcript and still
-// not say which answered which, and a turn with two calls in flight is the
-// ordinary case rather than the exotic one.
 type ToolCall struct {
 	ID       string          `json:"id"`
 	Name     string          `json:"name"`
@@ -180,26 +115,11 @@ const (
 	DispositionBudgetDenied Disposition = "budget_denied"
 )
 
-// KindToolResult names how a tool call ended.
 const KindToolResult Kind = "tool_result"
 
 // ToolResult is how a tool call ended. A tool call always has one, whatever
 // happened to it, so the transcript stays structurally valid for the next
 // provider call.
-//
-// Call names the ToolCall this answers, and Content is what the model is shown
-// of the outcome. Both are here because the transcript is a fold and nothing
-// else: a record that said only that a call ended would leave the fold able to
-// rebuild that something happened and unable to rebuild the conversation, and
-// the next request would carry a call with no answer — which every provider
-// rejects. Bytes stays beside Content because what a projection shows and what
-// a model is sent are different sizes once a result is elided for display.
-//
-// Content is a string rather than raw JSON: what goes back to the provider is
-// what the model reads, and a tool that answers in JSON answers with JSON in
-// it. Redaction happens before a result reaches here, for the reason it happens
-// at the sink rather than after — written then scrubbed is a breach with extra
-// steps.
 type ToolResult struct {
 	Call        string      `json:"call"`
 	Name        string      `json:"name"`
@@ -210,22 +130,9 @@ type ToolResult struct {
 
 func (ToolResult) isPayload() {}
 
-// KindUsage names what a turn cost.
 const KindUsage Kind = "usage"
 
 // Usage is normalized, rather than mirroring any one provider's shape.
-//
-// Nullability here is load-bearing, not stylistic: nil means the provider did
-// not tell us, and 0 means none were used. Collapsing the two is how a cost
-// report becomes confidently wrong.
-//
-// Every counter is nullable, including the four a turn almost always reports.
-// They were plain integers until the distinction they most needed was the one
-// they could not make: a provider that reported nothing produced a record of
-// zeros, which reads as a turn that cost nothing rather than a turn nobody
-// measured. One provider rebuilt the distinction beside the schema and the
-// next one to arrive would have had to know to. It is in the type now, so a
-// provider that says nothing cannot say zero by accident.
 type Usage struct {
 	InputTokens  *uint64 `json:"input_tokens"`
 	OutputTokens *uint64 `json:"output_tokens"`
@@ -247,28 +154,10 @@ type Usage struct {
 
 func (Usage) isPayload() {}
 
-// Tokens is a reported counter, for the caller that has a figure to state.
-//
-// The absent counter is the zero value and needs no constructor. This exists so
-// that stating a figure is one expression rather than a local variable and its
-// address, which is the shape that makes a caller reach for a plain zero
-// instead.
 func Tokens(n uint64) *uint64 { return &n }
 
 // ErrorClass is why an attempt failed, from a fixed set, so that a rejected
 // credential can be told apart from a rate limit without parsing prose.
-//
-// It rides on a Retry, which is where it started, and on the Claim a failed Run
-// closes with. The two are the same question asked about different attempts —
-// why did this one not work — and answering it twice in two vocabularies would
-// leave a reader unable to compare an attempt that was retried with the one
-// that ended the turn.
-//
-// The empty class is a failure nobody classified, and is not a member of the
-// set. It is distinct from ErrorOther, which is a failure something looked at
-// and could not place: a reader that treated the two alike would report "we
-// examined this and it fits nowhere" for every failure that reached it from a
-// path with no opinion at all.
 type ErrorClass string
 
 const (
@@ -300,13 +189,6 @@ const (
 // ErrorClasses is the set, so that anything which has to answer for every
 // member can be checked against it rather than against a list somebody
 // remembered to update.
-//
-// It exists for the same reason Kinds does. A projection that turns a class
-// into a sentence for a person is exhaustive or it is silently not, and a class
-// added without one would ship showing nothing — which is the failure this
-// whole distinction was added to end.
-//
-// The empty class is not in it. It is the absence of a member, not a member.
 func ErrorClasses() []ErrorClass {
 	return []ErrorClass{
 		ErrorRateLimit,
@@ -334,7 +216,6 @@ type Retry struct {
 
 func (Retry) isPayload() {}
 
-// KindEdit names a change to a file.
 const KindEdit Kind = "edit"
 
 // Edit is a change to a file. It carries the shape of the change rather than
@@ -347,7 +228,6 @@ type Edit struct {
 
 func (Edit) isPayload() {}
 
-// KindNeedsHuman names an escalation.
 const KindNeedsHuman Kind = "needs_human"
 
 // NeedsHuman is escalation, which is an Outcome rather than an error. Resume
@@ -359,7 +239,6 @@ type NeedsHuman struct {
 
 func (NeedsHuman) isPayload() {}
 
-// Result is how a Unit ended.
 type Result string
 
 const (
@@ -382,25 +261,17 @@ type Claim struct {
 	// ErrorClass is why the work failed, in the fixed set, and is absent on a
 	// Claim nobody classified — a success, an interruption, a failure that
 	// arrived from a path with no opinion about it.
-	//
-	// It is what makes a failure legible without the Summary. Told apart here,
-	// a rejected credential and a network that dropped can be reported to a
-	// person as the two different things they are, and neither report has to
-	// quote the provider at them to do it.
 	ErrorClass ErrorClass `json:"error_class,omitempty"`
 }
 
-// KindFinished names the close of a Run.
 const KindFinished Kind = "finished"
 
-// Finished closes a Run with a claim, not a verdict.
 type Finished struct {
 	Claim Claim `json:"claim"`
 }
 
 func (Finished) isPayload() {}
 
-// KindDegraded names incomplete data.
 const KindDegraded Kind = "degraded"
 
 // Degraded says that some data is incomplete, estimated, or unreported.

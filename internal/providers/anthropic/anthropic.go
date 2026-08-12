@@ -12,7 +12,6 @@ import (
 	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
-// Name is what configuration selects this Provider by.
 const Name = "anthropic"
 
 // This Provider puts itself in the set configuration can select. The layer that
@@ -28,7 +27,6 @@ func init() {
 // returning a truncated answer that looks whole.
 const DefaultMaxTokens int64 = 8192
 
-// Provider answers turns from the Anthropic Messages API.
 type Provider struct {
 	client    sdk.Client
 	maxTokens int64
@@ -38,13 +36,6 @@ type Provider struct {
 var _ providers.Provider = (*Provider)(nil)
 
 // New builds a Provider, or reports what it cannot be built without.
-//
-// The credential is resolved here rather than per attempt, because the one mode
-// this Provider serves is an API key and an API key does not renew. A
-// subscription is refused rather than tried: this vendor's login is not a thing
-// Eva can obtain today, and a Provider that accepted the mode and then sent the
-// token as an `x-api-key` would fail on the wire with a sentence about the key
-// rather than about the mode that was never going to work.
 func New(o providers.Options) (*Provider, error) {
 	if !o.Credential.Present() {
 		return nil, errors.New("anthropic: no API key")
@@ -82,13 +73,6 @@ func New(o providers.Options) (*Provider, error) {
 	}, nil
 }
 
-// Stream begins one turn.
-//
-// Nothing is sent here. The request is made on the first read, because an
-// attempt that failed is reported as a payload, and a caller that never read
-// the Stream would never see the retries that preceded the answer. A Call this
-// Provider cannot send fails from that first read too, so a turn has one place
-// it goes wrong.
 func (p *Provider) Stream(_ context.Context, call providers.Call) providers.Stream {
 	params, err := request(call, p.maxTokens)
 	if err != nil {
@@ -97,12 +81,6 @@ func (p *Provider) Stream(_ context.Context, call providers.Call) providers.Stre
 	return providers.Drive(&wire{provider: p, params: params}, p.retry)
 }
 
-// request maps the transcript onto the API's own shape.
-//
-// The word this API uses for who said a Message is "role", which the glossary
-// retires in favour of Author; the mapping between them lives here and nowhere
-// else. A system Message is not a turn in the conversation, so it becomes the
-// system prompt rather than a message with a third role.
 func request(call providers.Call, maxTokens int64) (sdk.MessageNewParams, error) {
 	if call.Model == "" {
 		return sdk.MessageNewParams{}, errors.New("anthropic: the turn names no model")
@@ -149,16 +127,6 @@ func request(call providers.Call, maxTokens int64) (sdk.MessageNewParams, error)
 	return params, nil
 }
 
-// content maps one entry's blocks onto the API's content list.
-//
-// A block this Provider cannot send fails the turn here rather than being left
-// out. A transcript with a tool call dropped from it is a transcript the model
-// is asked to continue without knowing what it did, and the answer to that is a
-// confident invention — where a refusal is a turn that failed and said why.
-//
-// The tool blocks are the ones no wire sends today: nothing yet calls a tool,
-// so a mapping written here would be one nothing exercises and nobody could
-// trust. It lands with the tool registry that produces them.
 func content(blocks []core.Block) ([]sdk.ContentBlockParamUnion, error) {
 	out := make([]sdk.ContentBlockParamUnion, 0, len(blocks))
 	for _, block := range blocks {

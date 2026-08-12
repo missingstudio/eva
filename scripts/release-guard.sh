@@ -5,11 +5,8 @@
 #   release-guard.sh version <tag> <reported>   the tag agrees with the binary
 #   release-guard.sh range   <tag>              the tag has commits behind it
 #
-# These two checks lived as shell inside release.yml, where the only way to run
-# them was to push a tag. Both shipped broken that way: the version check
-# rejected every prerelease, which is the one tag shape worth pushing first.
-# Here they are functions with a test beside them, and the workflow is one of
-# two callers rather than the only one.
+# Both shipped broken as shell inside release.yml, where a tag was the only way
+# to run them. Here they are functions with a test beside them.
 #
 # Sourcing this file with EVA_GUARD_LIB=1 defines the functions and runs
 # nothing, which is how release-guard_test.sh reaches them.

@@ -344,10 +344,6 @@ func TestTheFoldIsConsecutiveOnlyAndNeverReorders(t *testing.T) {
 // without its result. That is a property of the writer rather than of the
 // caller: the assistant message and every result belonging to it are one
 // group, and a group is written whole or not at all.
-//
-// Stage 0 builds no tools, so the group is constructed here rather than
-// produced by a run. Testing it now is the point — stage 2 inherits a
-// guarantee that is already measured.
 func TestAGroupCarryingToolResultsIsWrittenAsOneUnit(t *testing.T) {
 	sink, path := open(t)
 
@@ -401,16 +397,6 @@ func TestAGroupCarryingToolResultsIsWrittenAsOneUnit(t *testing.T) {
 // it arrived with. Dropping it would produce a Trace that is structurally
 // valid and quietly wrong, and the Trace is the only instrument the project
 // has.
-//
-// The path here is the one a foreign Harness takes: a record arrives as bytes,
-// is decoded into an Event this build cannot name, and is committed. Eva's own
-// loop cannot produce one, so the record is written out by hand — which is the
-// only way to drive this at stage 0.
-//
-// What is stored is the preserving envelope: the record is kept under the
-// unknown kind, holding the kind it arrived as and its payload untouched. A
-// later build that does know quantum_flux can read both back out of a Trace
-// written by this one.
 func TestAnUnrecognisedKindReachesTheTraceWithItsBytes(t *testing.T) {
 	sink, path := open(t)
 	payload := `{"nested":{"b":[1,2]},"a":1}`
@@ -461,13 +447,6 @@ func TestAnUnrecognisedKindReachesTheTraceWithItsBytes(t *testing.T) {
 	}
 }
 
-// The stage-0 assertion in full: an unrecognised kind survives the JSONL sink
-// with its bytes intact, and the Run that committed it says so when it closes.
-//
-// The two halves are asserted together and against a real Trace file, because
-// separately they are two facts about two packages and neither is the promise:
-// the promise is that a Run cannot end up claiming a clean finish while its
-// Trace holds a record nobody understood.
 func TestARunThatCommittedAnUnrecognisedKindIsDegradedInTheTrace(t *testing.T) {
 	sink, path := open(t)
 	ctx := context.Background()
@@ -531,8 +510,6 @@ func TestARunThatCommittedAnUnrecognisedKindIsDegradedInTheTrace(t *testing.T) {
 	}
 }
 
-// Degraded is absent when the Run is clean, so its presence in a Trace is on
-// its own the flag a gate reads.
 func TestACleanRunLeavesNoDegradedRecordInTheTrace(t *testing.T) {
 	sink, path := open(t)
 	ctx := context.Background()
@@ -627,16 +604,11 @@ func TestGroupsFromManyGoroutinesAreNeverInterleaved(t *testing.T) {
 // an edge.
 const groupSize = 4
 
-// helperTrace names the Trace the crash helper below writes to. Its presence in
-// the environment is also what tells the helper that it is the helper.
 const helperTrace = "EVA_CRASH_HELPER_TRACE"
 
 // A process that is killed outright cannot flush, cannot close, and cannot run
 // a deferred anything. What is in the Trace at that moment is what the Trace
 // keeps, so this is the test that says what "durable" means here.
-//
-// It runs against a real process and a real signal, because a fake one would
-// only prove that the fake stops where the test says it stops.
 func TestAKilledWriterLeavesNoPartialRecordAndNoPartialGroup(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "killed.jsonl")
 
@@ -670,12 +642,6 @@ func TestAKilledWriterLeavesNoPartialRecordAndNoPartialGroup(t *testing.T) {
 	// A signal, not an exit: a helper that returned on its own would have closed
 	// the file, and this test would be measuring an orderly shutdown. An exit
 	// code of -1 is what Go reports for a process a signal ended.
-	//
-	// Windows has no signals. Kill there is TerminateProcess, and Go reports its
-	// exit code as 1 — which a helper that failed on its own could also produce.
-	// So the assertion is weaker on that platform, and deliberately: what it
-	// still rules out is the orderly shutdown, which is the one ending that would
-	// make the rest of this test prove nothing.
 	wantExit := -1
 	if runtime.GOOS == "windows" {
 		wantExit = 1
@@ -793,12 +759,6 @@ func TestTheFoldDoesNotAbsorbAMalformedChunk(t *testing.T) {
 	}
 }
 
-// A Session resumed in a second process continues where the Trace left off.
-//
-// The counter used to start at 1 in every process, so a second sink over one
-// file gave a Session positions it had already used. Nothing failed and nothing
-// said so: the file held two records at Seq 1, and every projection that reads
-// position as identity was quietly wrong from there on.
 func TestASecondSinkContinuesTheSeqTheTraceReached(t *testing.T) {
 	first, path := open(t)
 
@@ -842,8 +802,6 @@ func TestASecondSinkContinuesTheSeqTheTraceReached(t *testing.T) {
 	}
 }
 
-// A Trace whose last write was cut short still opens, and the Session it
-// belongs to still continues past the records that did survive.
 func TestATornTailDoesNotStopTheTraceBeingContinued(t *testing.T) {
 	sink, path := open(t)
 

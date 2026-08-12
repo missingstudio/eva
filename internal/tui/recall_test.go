@@ -8,14 +8,6 @@ import (
 	"github.com/missingstudio/eva/internal/tui/keymap"
 )
 
-// The prompts a person sent come back, newest first, and what they were writing
-// comes back after them.
-//
-// Retyping a prompt is the commonest thing anybody does at this console: the one
-// that failed, the one that needed a word changed. What makes recall safe to put
-// on the arrow keys is the last assertion here — a person who walked back and
-// changed their mind is returned to their own unsent words rather than left
-// holding somebody else's sentence.
 func TestThePromptsAlreadySentComeBack(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 20)
@@ -52,11 +44,6 @@ func TestThePromptsAlreadySentComeBack(t *testing.T) {
 	}
 }
 
-// A prompt of more than one line keeps its own arrow keys.
-//
-// Recall is bound to the keys the prompt uses to move the cursor between lines,
-// and the rule that makes that safe is the cursor's position: a line above means
-// the key is the prompt's. Without it a ten-line prompt would be uneditable.
 func TestRecallLeavesAMultiLinePromptItsOwnArrows(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 20)
@@ -81,7 +68,6 @@ func TestRecallLeavesAMultiLinePromptItsOwnArrows(t *testing.T) {
 	}
 }
 
-// The same prompt sent twice is one thing to walk back through.
 func TestAPromptSentTwiceIsRememberedOnce(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 20)

@@ -13,8 +13,6 @@ import (
 // person reading the file can tell which login is whose.
 const ProviderOpenAI = "openai"
 
-// Credentials is one stored login: the token that authenticates, the token
-// that renews it, and what the first one said about itself.
 type Credentials struct {
 	AccessToken  string    `json:"access_token"`
 	RefreshToken string    `json:"refresh_token"`
@@ -29,10 +27,6 @@ type Credentials struct {
 // Expired reports whether the access token is past its expiry, treating a
 // token within skew of it as already expired — a request racing the boundary
 // would authenticate with a token that dies mid-flight.
-//
-// A zero expiry is expired rather than eternal. The one way to get one is a
-// record something else wrote, and a credential of unknown age is a credential
-// to renew, not to trust.
 func (c Credentials) Expired(skew time.Duration) bool {
 	if c.ExpiresAt.IsZero() {
 		return true
@@ -40,15 +34,6 @@ func (c Credentials) Expired(skew time.Duration) bool {
 	return time.Now().Add(skew).After(c.ExpiresAt)
 }
 
-// Store persists Credentials to one JSON file, keyed by the Provider name they
-// authenticate.
-//
-// The file holds bearer and refresh tokens, so it is created 0600 in a 0700
-// directory and every write goes through a temporary file and a rename — a
-// crash mid-write leaves the old file whole rather than half of the new one.
-// Mutation is read-modify-write with no cross-process lock, which is enough
-// for one interactive process and is stated here so the day it is not, the
-// limitation is a sentence to find rather than a race to diagnose.
 type Store struct {
 	path string
 }
@@ -58,10 +43,8 @@ type Store struct {
 // credential file must be written.
 func NewStore(path string) *Store { return &Store{path: path} }
 
-// Path is the file backing this Store, for the status report that names it.
 func (s *Store) Path() string { return s.path }
 
-// Get returns the Credentials stored for key, and whether any were.
 func (s *Store) Get(key string) (Credentials, bool, error) {
 	all, err := s.load()
 	if err != nil {

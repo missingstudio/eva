@@ -49,7 +49,6 @@ func TestTheDefaultIsComplete(t *testing.T) {
 	}
 }
 
-// Every setting a person can write reaches the Theme the interface draws with.
 func TestEverySettingReachesTheTheme(t *testing.T) {
 	prompt, placeholder, truncation := "» ", "type here", "..."
 	rows, seconds := 4, 20
@@ -185,7 +184,6 @@ func TestShadesAreTheAccentLightenedTowardsTheTop(t *testing.T) {
 	}
 }
 
-// A caller with one step to draw gets the colour, not a division by zero.
 func TestOneShadeIsTheColourItself(t *testing.T) {
 	base := theme.Default(true).Colors.Person
 	for _, n := range []int{-1, 0, 1} {

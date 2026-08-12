@@ -2,36 +2,19 @@ package events
 
 import "time"
 
-// SchemaVersion versions the whole schema, and rides on every envelope.
-//
-// Adding a Kind or a nullable field is additive and keeps this number.
-// Removing a field, retyping one, renaming one, or narrowing an enum
-// increments it. Readers migrate old records on read; stored Traces are never
-// rewritten.
-//
-// Version 2 made Usage's four counters nullable. Version 1 could not say "the
-// provider did not report this" about the figures a cost report is built from,
-// so a silence and a zero were one value. A version 1 record still decodes: a
-// figure it carries becomes a figure, and the zero it may have meant either way
-// reads as none used, which is the most a record written without the
-// distinction can be asked to say.
 const SchemaVersion uint32 = 2
 
 type (
-	// EventID identifies one Event.
 	EventID string
 	// TenantID identifies the tenant an Event belongs to. It is populated
 	// from commit one, long before a second tenant exists, because adding it
 	// later would touch every stored record, query, cache key, and object
 	// path.
-	TenantID string
-	// RunID identifies one execution of a Unit against a Session.
-	RunID string
-	// SessionID identifies the durable, resumable transcript.
+	TenantID  string
+	RunID     string
 	SessionID string
 )
 
-// ActorKind is what sort of thing an Identity is.
 type ActorKind string
 
 const (
@@ -40,7 +23,6 @@ const (
 	ActorSystem ActorKind = "system"
 )
 
-// Identity is who or what an Event is attributed to.
 type Identity struct {
 	ID   string    `json:"id"`
 	Kind ActorKind `json:"kind"`
@@ -66,27 +48,13 @@ type Timestamp struct {
 // Kind names the payload an Event carries. The set is closed: a kind that is
 // not listed arrives as KindUnknown with its bytes intact, and the Run is
 // marked Degraded rather than the record being dropped.
-//
-// Every kind is declared in payload.go, in one block beside the payload it
-// names: the constant, the struct, its isPayload method, and its registration.
-// Adding a kind is therefore four adjacent lines in one file rather than four
-// edits in three, and the registration is what KindOf and the codec read — so
-// there is no second switch that can silently disagree with the first.
-//
-// Kinds reports the registered set at run time, which is what makes the
-// round-trip test exhaustive by construction rather than by a hand-typed list.
 type Kind string
 
 // Event is the one typed, versioned, sequence-numbered record that every
 // observable thing in Eva is an instance of. There is no second vocabulary:
 // Eva's own loop emits these, and an adapter for a foreign Harness normalizes
 // into them.
-//
-// The envelope carries everything a projection needs in order to fold or
-// filter. The payload carries only what a projection needs in order to
-// display.
 type Event struct {
-	// ID identifies this record.
 	ID EventID
 
 	// Seq is the Trace position: per Session, assigned by the sink at commit.
@@ -98,21 +66,17 @@ type Event struct {
 	// so a reconnecting peer can resume from its last acknowledged cursor.
 	WireSeq uint64
 
-	// At is when the Event was produced.
 	At Timestamp
 
-	// Version is the SchemaVersion this record was written under.
 	Version uint32
 
 	// Kind names the payload. It is derived from the payload when the Event
 	// is encoded, so the two cannot disagree.
 	Kind Kind
 
-	// Tenant and Actor are on every record from commit one.
 	Tenant TenantID
 	Actor  Identity
 
-	// Run and Session attribute the record without replaying the stream.
 	Run     RunID
 	Session SessionID
 

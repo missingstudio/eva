@@ -43,12 +43,6 @@ type envelope struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
-// MarshalJSON encodes an Event.
-//
-// Kind is derived from the payload rather than copied from the field, so the
-// two cannot disagree in a stored record. A Kind that contradicts its payload
-// is rejected rather than silently corrected, because a caller that set it is
-// telling us something, and one of the two is a bug.
 func (e Event) MarshalJSON() ([]byte, error) {
 	if e.Payload == nil {
 		return nil, ErrNoPayload

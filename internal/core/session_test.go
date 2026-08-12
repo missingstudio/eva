@@ -169,7 +169,6 @@ func TestASessionWithNoOriginReportsWhatItCannotOpenARunWithout(t *testing.T) {
 	}
 }
 
-// collected is a TraceSink that keeps what it was appended.
 type collected struct {
 	events []events.Event
 	seq    uint64
@@ -209,7 +208,6 @@ func TestStartedWithNoIntentAddsNoMessage(t *testing.T) {
 	}
 }
 
-// Text records of one Run are one thing said, so they fold into one Message.
 func TestTextOfOneRunFoldsIntoOneAssistantMessage(t *testing.T) {
 	s := session()
 	fold(t, s,
@@ -223,8 +221,6 @@ func TestTextOfOneRunFoldsIntoOneAssistantMessage(t *testing.T) {
 	}
 }
 
-// A Session that is resumed twice has one Session and several Runs, and each
-// Run is its own exchange.
 func TestASecondRunIsASecondExchange(t *testing.T) {
 	s := session()
 	fold(t, s,
@@ -258,8 +254,6 @@ func TestAPartialAnswerIsInTheTranscript(t *testing.T) {
 	}
 }
 
-// Usage is a cost and a retry is an attempt. Both are recorded, and neither is
-// something the next provider call is conditioned on.
 func TestKindsThatAreNotMessagesAddNoMessage(t *testing.T) {
 	s := session()
 	fold(t, s,
@@ -290,7 +284,6 @@ func TestANonTextRecordDoesNotSplitTheAnswer(t *testing.T) {
 	}
 }
 
-// One Subscriber can sit on a Trace that carries more than one Session.
 func TestEventsOfAnotherSessionAreIgnored(t *testing.T) {
 	s := session()
 
@@ -352,14 +345,6 @@ func TestASessionIsFedByTheRecorder(t *testing.T) {
 	}
 }
 
-// A fresh Session is the same identity with an empty transcript, and it can
-// open Runs of its own.
-//
-// That is what emptying a transcript is here. A Session that deleted its own
-// messages would leave the fold and the Trace disagreeing about one
-// conversation from that moment on; a new identifier diverges from nothing,
-// because the Events already committed are stamped with the old one and no
-// fold over the new one will ever take them.
 func TestAFreshSessionKeepsTheIdentityAndEmptiesTheTranscript(t *testing.T) {
 	s := opened(t)
 	fold(t, s,

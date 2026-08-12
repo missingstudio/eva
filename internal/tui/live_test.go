@@ -10,11 +10,6 @@ import (
 // a console, a window, or a Renderer: what the module needs of any of them is one
 // function, so what a test needs to give it is one function.
 
-// folds is a drawing that takes as long as it is told to, and counts how often it
-// was asked.
-//
-// The cost is what the rule under test reads, so a test that could not choose it
-// would be a test of whatever the machine happened to be doing.
 type folds struct {
 	took  time.Duration
 	asked int
@@ -32,10 +27,6 @@ func (f *folds) draw(text string) []string {
 
 // An answer that costs nothing to draw is drawn on every frame, and one that
 // costs is drawn less often — by a multiple of what it actually cost.
-//
-// This is the whole of the rule, and it is the one thing in this package that
-// trades what a person sees against what a keystroke waits for. The share is the
-// multiple: at four, a fold that took a millisecond is not due again for four.
 func TestAnArrivingAnswerIsDrawnAsOftenAsItsCostAllows(t *testing.T) {
 	const share = 4
 	fold := &folds{}
@@ -86,11 +77,6 @@ func TestAnArrivingAnswerIsDrawnAsOftenAsItsCostAllows(t *testing.T) {
 	}
 }
 
-// The cost the rule reads is the one this machine measured, not a number written
-// beside it.
-//
-// It is what makes the rule portable: the same answer on a slower machine waits
-// longer, and neither figure was guessed.
 func TestTheCostThatBoundsTheNextDrawingIsTheOneMeasured(t *testing.T) {
 	fold := &folds{took: 5 * time.Millisecond}
 	l := newLive(fold.draw, 1)
@@ -103,11 +89,6 @@ func TestTheCostThatBoundsTheNextDrawingIsTheOneMeasured(t *testing.T) {
 	}
 }
 
-// A turn that ends takes the answer and its drawing with it.
-//
-// The next turn draws nothing until its own first chunk. A drawing left behind
-// would be the last turn's words under the new turn's spinner, and an answer left
-// behind would be committed text a second time.
 func TestATurnThatEndsLeavesNoLiveArea(t *testing.T) {
 	fold := &folds{}
 	l := newLive(fold.draw, 8)
@@ -124,12 +105,6 @@ func TestATurnThatEndsLeavesNoLiveArea(t *testing.T) {
 	}
 }
 
-// A width or a style that changed makes the drawing stale without making the
-// answer stale.
-//
-// The cost goes with the drawing, because what it recorded was the price of
-// drawing at a width that is gone — and a bound taken from that measurement is a
-// bound on the wrong thing.
 func TestAStaleDrawingIsMadeAgainAndTheAnswerSurvivesIt(t *testing.T) {
 	fold := &folds{}
 	l := newLive(fold.draw, 8)
@@ -152,9 +127,6 @@ func TestAStaleDrawingIsMadeAgainAndTheAnswerSurvivesIt(t *testing.T) {
 
 // A console with no Run in flight has no Live area to draw, and asking costs
 // nothing.
-//
-// It is the frame a person spends most of their time looking at. It is also the
-// zero value: a console built without a fold must not reach for one.
 func TestNothingArrivingDrawsNothing(t *testing.T) {
 	var l live
 	if got := l.rows(); got != nil {
@@ -165,11 +137,6 @@ func TestNothingArrivingDrawsNothing(t *testing.T) {
 	}
 }
 
-// Chunks pile up between frames, and one frame draws all of them.
-//
-// A chunk is a few tokens and they arrive in their thousands; a screen is redrawn
-// tens of times a second. Folding per chunk is work thrown away between frames,
-// and it is work proportional to the whole answer each time.
 func TestChunksPileUpAndOneFrameDrawsThemAll(t *testing.T) {
 	fold := &folds{}
 	l := newLive(fold.draw, 8)

@@ -29,16 +29,7 @@ import (
 // terminal to run would be an interface CI cannot test, and the one thing this
 // stage promises about interruption cannot be observed from outside a process
 // that is not driving the keys.
-//
-// What they assert on is what an outside reader could: the bytes a person
-// would have read, the transcript the Provider was called with, and the
-// records in the Trace. Nothing reaches into the model to ask what it thinks.
 
-// driven is a Provider the test drives.
-//
-// It keeps the transcript each call was conditioned on, which is the only way
-// to observe that a second prompt was answered in the light of the first: a
-// Provider that replays a recording answers the same way either way.
 type driven struct {
 	mu     sync.Mutex
 	script []recording
@@ -46,7 +37,6 @@ type driven struct {
 	calls  []providers.Call
 }
 
-// recording is one turn this Provider replays.
 type recording struct {
 	// refusal, when it is not nil, is a turn that fails instead of answering,
 	// carrying the class a real Provider would have classified it as. It is a
@@ -56,9 +46,7 @@ type recording struct {
 	refusal *providers.Fault
 
 	// chunks is the answer, split the way a stream would deliver it.
-	chunks []string
-	// degraded is what this turn's Provider could not tell Eva, and is empty
-	// for a turn that was whole.
+	chunks   []string
 	degraded []string
 	// gate, when it is not nil, is where the turn stops once its last chunk
 	// is out — so that a test can look at a stream while it is still in
@@ -86,7 +74,6 @@ func (d *driven) Stream(_ context.Context, call providers.Call) providers.Stream
 	return &drivenStream{rec: rec}
 }
 
-// transcripts is the transcript of every call so far.
 func (d *driven) transcripts() [][]core.Message {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -98,7 +85,6 @@ func (d *driven) transcripts() [][]core.Message {
 	return out
 }
 
-// models is the model of every call so far.
 func (d *driven) models() []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -110,13 +96,6 @@ func (d *driven) models() []string {
 	return out
 }
 
-// conversation is what a call was conditioned on beyond the base system
-// prompt, having first asserted that the prompt is what heads it.
-//
-// Every turn carries it, so a test about a transcript would otherwise restate
-// a kilobyte of prose in order to say something about three messages. The
-// assertion stays here rather than being skipped: it is what proves the
-// frontend hands the prompt to every turn it opens.
 func conversation(t *testing.T, call []core.Message) []core.Message {
 	t.Helper()
 
@@ -178,11 +157,6 @@ func (s *drivenStream) Close() error { return nil }
 
 // newTestSession opens a Session for the turns under test, on a clock that does
 // not move and identifiers that count.
-//
-// Both are the Session's rather than the process's, which is the point of
-// handing them in: a timestamp nothing chose is a field a test can only check
-// the shape of, and a Run named by eight random bytes is one no failure can
-// name back.
 func newTestSession() *core.Session {
 	var runs, records uint64
 	return core.NewSession("sess_test", "tenant_test",
@@ -200,8 +174,6 @@ func newTestSession() *core.Session {
 		})
 }
 
-// heard is a buffer two goroutines touch: the program renders into it and the
-// test reads it.
 type heard struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -219,7 +191,6 @@ func (h *heard) String() string {
 	return h.buf.String()
 }
 
-// dialogue is one interactive Session under test.
 type dialogue struct {
 	program  *tea.Program
 	console  *tui.Console
@@ -233,12 +204,6 @@ type dialogue struct {
 // the words a person reads rather than on the bytes that place them.
 var escapes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][0-9A-B]|\x1b[=>]`)
 
-// read is what the console has put in front of a person.
-//
-// It comes from the console rather than from the bytes it wrote. A console that
-// draws a screen in place emits cursor moves and overwrites, so those bytes
-// with their escapes stripped are the fragments of a transcript in the order
-// the cursor visited them, not the transcript. See tui.Console.Screen.
 func (d *dialogue) read() string { return escapes.ReplaceAllString(d.console.Screen(), "") }
 
 // begin builds the interface with input disabled and output redirected, and
@@ -275,17 +240,6 @@ func begin(t *testing.T, script ...recording) *dialogue {
 
 	// A window size, as a terminal would send one, until the first frame comes
 	// back.
-	//
-	// Two things make this a loop rather than one call. A program takes
-	// messages only once it is running, and nothing says when that is — so a
-	// size sent too early is dropped. And with no terminal on the output, this
-	// message is the only way the renderer learns how big the screen is: until
-	// it has one it draws nothing at all, so there is no first key to wait for
-	// either. Sending it until something is drawn settles both.
-	// The prompt character is what says a frame has been drawn. It is looked
-	// for in the bytes rather than through read, because read is the transcript
-	// and a console that has drawn its first frame has an empty one — there is
-	// nothing to keep until somebody says something.
 	d.settle(t, func() bool {
 		d.program.Send(tea.WindowSizeMsg{Width: 80, Height: 24})
 		return strings.Contains(d.out.String(), "›")
@@ -295,13 +249,6 @@ func begin(t *testing.T, script ...recording) *dialogue {
 	return d
 }
 
-// say types a prompt and sends it.
-//
-// It waits for the console to be idle first. A console answers one turn at a
-// time and takes no keys while it is answering, so a key typed a moment too
-// early is a key that is dropped — and a prompt missing its first character is
-// a slash command that goes to the model instead. A person waits by reading the
-// status line; this is the same wait.
 func (d *dialogue) say(t *testing.T, prompt string) {
 	t.Helper()
 	d.settle(t, func() bool { return !d.console.Busy() })
@@ -312,12 +259,10 @@ func (d *dialogue) say(t *testing.T, prompt string) {
 	d.program.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 }
 
-// interrupt is Ctrl-C.
 func (d *dialogue) interrupt() {
 	d.program.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 }
 
-// leave ends the Session and waits for the process to be done with it.
 func (d *dialogue) leave(t *testing.T) {
 	t.Helper()
 
@@ -358,7 +303,6 @@ func (d *dialogue) settle(t *testing.T, done func() bool) {
 	t.Fatalf("waited 5s and it did not happen\nread:\n%s\ntrace:\n%s", d.read(), d.stored(t))
 }
 
-// closed waits until the Trace holds count Runs that have been closed.
 func (d *dialogue) closed(t *testing.T, count int) {
 	t.Helper()
 	d.settle(t, func() bool { return len(d.of(t, events.KindFinished)) >= count })
@@ -377,7 +321,6 @@ func (d *dialogue) stored(t *testing.T) string {
 	return string(body)
 }
 
-// records is every Event the Trace holds, decoded.
 func (d *dialogue) records(t *testing.T) []events.Event {
 	t.Helper()
 
@@ -412,7 +355,6 @@ func (d *dialogue) of(t *testing.T, kind events.Kind) []events.Event {
 	return out
 }
 
-// A prompt is answered, and the answer is shown.
 func TestTheInterfaceRunsWithInputDisabledAndOutputRedirected(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"Eva is a ", "software factory."}})
 
@@ -474,8 +416,6 @@ func TestASecondPromptIsAnsweredInTheLightOfTheFirst(t *testing.T) {
 	}
 }
 
-// Ctrl-C during a stream gives the prompt back, and the Session is a Session
-// the next turn can still use.
 func TestCtrlCDuringAStreamReturnsThePromptAndLeavesTheSessionUsable(t *testing.T) {
 	d := begin(t,
 		recording{chunks: []string{"a long answer nobody wanted"}, gate: make(chan struct{})},
@@ -509,8 +449,6 @@ func TestCtrlCDuringAStreamReturnsThePromptAndLeavesTheSessionUsable(t *testing.
 	}
 }
 
-// A cancelled turn is a closed Run. The part of the answer that arrived is in
-// the Trace, the claim that closes it is too, and every record parses.
 func TestATurnCancelledByCtrlCLeavesATraceThatParses(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"half an ", "answer"}, gate: make(chan struct{})})
 
@@ -554,12 +492,6 @@ func TestATurnCancelledByCtrlCLeavesATraceThatParses(t *testing.T) {
 	}
 }
 
-// A Run driven from here can be cancelled cleanly, and says so.
-//
-// The claim is made by the frontend that does the listening rather than by the
-// Loop, so it is a claim and not a constant: a frontend that let the process
-// die under a Run would not make it. The console is the only frontend Eva has
-// today, which is why this is the only place the claim is asserted.
 func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"answered."}})
 
@@ -580,20 +512,6 @@ func TestTheInteractiveRunClaimsThatItCanBeInterrupted(t *testing.T) {
 }
 
 // A turn nothing classified says only that nothing came back.
-//
-// The provider's words used to go on screen. They are written for whoever is
-// debugging the provider rather than for whoever asked the question, and a
-// person who typed a prompt and got back a sentence about how many turns a
-// recording holds has been handed the program's internals in place of an
-// answer.
-//
-// So both halves are asserted here, and the second is the one that makes the
-// first safe: the screen says only that nothing came back, and the claim the
-// Trace holds still carries the provider's words verbatim. Losing the reason
-// rather than moving it is what this test exists to catch.
-//
-// This Provider fails without classifying why, which is the case that has
-// nothing more to say. The turn that does is the test below it.
 func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 	// No recording at all, so the Provider refuses the call.
 	d := begin(t)
@@ -627,20 +545,6 @@ func TestATurnThatBrokeShowsTheClaimTheTraceHolds(t *testing.T) {
 	d.closed(t, 2)
 }
 
-// A turn that broke on something classified says which, and still quotes
-// nobody.
-//
-// The two halves are one test on purpose, because each one alone is a state
-// this console has already been in. Saying only that nothing came back made a
-// credential to fix and a network to wait out read identically. Fixing that by
-// printing the claim's summary would hand the vendor's account of it — a status
-// line, a request identifier — to somebody who asked a question about their own
-// work.
-//
-// What makes both possible at once is that the class is a field on the claim
-// rather than something to be recovered from its prose. So this asserts all
-// three: the record carries the class, the screen spends it, and the prose the
-// record also carries stays off the screen.
 func TestATurnThatBrokeNamesWhyWithoutQuotingTheProvider(t *testing.T) {
 	// A credential the API rejected, in the shape a real one arrives in: the
 	// class this Provider classified it as, and a message written for whoever
@@ -729,12 +633,6 @@ func TestWhatIsShownIsWhatTheTraceHolds(t *testing.T) {
 	}
 }
 
-// A prompt typed while a turn is running is answered when that turn closes.
-//
-// The keys used to be dropped, silently: a person watched the characters appear,
-// pressed enter, and had nothing to show for either. What makes the queue worth
-// the state it costs is the second assertion — the turn it opens is conditioned
-// on the one it waited for, so waiting is the whole of what the queue does.
 func TestAPromptTypedDuringATurnIsAnsweredAfterIt(t *testing.T) {
 	gate := make(chan struct{})
 	d := begin(t,
@@ -792,11 +690,6 @@ func TestTheShippedProvidersAreSelectable(t *testing.T) {
 	}
 }
 
-// Every projection attached sees every committed Event.
-//
-// Attaching used to assign a slice of one, so a second projection silently
-// replaced the first: no metrics tap beside a console, no second screen, and
-// nothing anywhere to say the first had stopped being fed.
 func TestEveryAttachedProjectionSeesEveryEvent(t *testing.T) {
 	e := &eva{
 		provider: &driven{script: []recording{{chunks: []string{"answered"}}}},
@@ -839,11 +732,6 @@ func TestAttachingAProjectionClaimsNoCapability(t *testing.T) {
 	}
 }
 
-// Every watcher attached is told what is arriving.
-//
-// This was the half of the fan-out that stayed a field after the other half
-// stopped being one: a second frontend saying it watches a turn replaced the
-// first in silence, and nothing anywhere said the first had stopped being told.
 func TestEveryAttachedWatcherIsToldWhatIsArriving(t *testing.T) {
 	e := &eva{}
 
@@ -863,10 +751,6 @@ func TestEveryAttachedWatcherIsToldWhatIsArriving(t *testing.T) {
 }
 
 // Nobody watching is nil, and not a fan-out over nothing.
-//
-// A Loop with an Arriving set has a live area to erase, and ADR 0015 turns on
-// there being none when nothing is watching — so a fan-out that was always
-// there would tell every Run it had an audience.
 func TestNobodyWatchingIsToldNothing(t *testing.T) {
 	e := &eva{}
 	if e.watching() != nil {
@@ -903,11 +787,3 @@ func (c *collecting) Close() error { return nil }
 
 // The console says where the provider's own account of a failure went, once per
 // Session.
-//
-// Without it, keeping the vendor's words off the screen reads as having
-// destroyed them. Nothing said the Trace existed, so a person who wanted the
-// status line had no way to learn there was one to want.
-//
-// Once, because a line repeated after every failure is a line nobody finishes
-// reading, and somebody told where the Trace is does not stop knowing between
-// two turns.

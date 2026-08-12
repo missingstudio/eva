@@ -8,28 +8,6 @@ import (
 
 // shown is what the console has published about the frame in front of a person,
 // for whoever is driving the program rather than typing at it.
-//
-// Three facts, and one lock over them. They have nothing in common but that: the
-// rows on screen, whether a Run is in flight, and the prompt waiting behind it.
-// What makes them one module is the goroutine — every one of them is written in
-// the update loop and read from outside it, and a console drawn in place cannot be
-// read off its own bytes, so a driver has to ask.
-//
-// # Why this is a module and not three fields
-//
-// The locking was the console's, spread over seven methods. Two of them were the
-// same method twice, two more differed by one assignment, and the one that
-// mattered was invisible: refresh publishes the frame, and nothing in its
-// signature says it takes a lock to do it. An eighth accessor written without one
-// is the failure this shape prevents rather than documents.
-//
-// So every lock and unlock in this package is in this file, and there is no way to
-// reach the fields without one.
-//
-// The reader is real, and it is not hypothetical: the dialogue in
-// internal/cli/console_test.go runs the program on its own goroutine and polls all
-// three of these while a turn is in flight. That is what the race detector is
-// pointed at, and shown_test.go asserts the same thing here without a program.
 type shown struct {
 	mu sync.Mutex
 
@@ -59,11 +37,6 @@ func (s *shown) show(rows []string) {
 	s.rows = rows
 }
 
-// frame is everything the console has put in front of a person: the turns it kept,
-// and the one arriving if there is one.
-//
-// It is joined here rather than held joined, because the reader wants a transcript
-// and the writer has rows.
 func (s *shown) frame() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -85,15 +58,6 @@ func (s *shown) busy() bool {
 
 // holding is how to end the Run in flight without forgetting it, and release is
 // how to end it and let go.
-//
-// The difference between them is the whole of what "busy" means. A cancelled Run
-// is not over: its goroutine is still unwinding and its close has not been folded
-// in yet. Letting go here would make the console idle for that window, so the next
-// prompt would open a second Run instead of queueing — and then the first Run's
-// close would arrive and cancel the second one, reset its stream, and drop its
-// queued prompt.
-//
-// So an interrupt holds on, and the Run's own close releases.
 func (s *shown) holding() context.CancelFunc {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -111,9 +75,6 @@ func (s *shown) release() context.CancelFunc {
 
 // queue takes the prompt that will be sent when the turn in flight closes, and
 // hands back the one that was waiting.
-//
-// One method for both because they are the same field under the same lock, and a
-// caller that only ever swaps cannot leave the two out of step.
 func (s *shown) queue(next string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

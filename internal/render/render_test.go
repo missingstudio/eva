@@ -17,15 +17,7 @@ import (
 // These tests feed committed Events to a Renderer and read what it wrote.
 // That is the whole of its interface: a Renderer takes Events and produces
 // bytes, and there is nothing else to reach for.
-//
-// The colour is forced on, because a Renderer writing to a buffer is writing
-// to something that is not a terminal, and the terminal-capability adaptation
-// this stage builds would then correctly strip every escape — leaving the two
-// styles indistinguishable. What the adaptation does with a real capability is
-// asserted against the process, in cli/eva_test.go.
 
-// answered is one whole turn: the prompt, the answer, what it cost, and the
-// claim that closes it.
 func answered(answer string, usage events.Usage) []events.Payload {
 	return []events.Payload{
 		events.Started{Intent: "what is this project"},
@@ -35,7 +27,6 @@ func answered(answer string, usage events.Usage) []events.Payload {
 	}
 }
 
-// show folds the payloads into a Renderer and returns what it wrote.
 func show(t *testing.T, dark bool, payloads ...events.Payload) string {
 	t.Helper()
 
@@ -107,7 +98,6 @@ func timed(t *testing.T, opened, closed events.Timestamp, opts ...render.Option)
 	return out.String()
 }
 
-// at is a timestamp with both clocks, the way a run stamps one.
 func at(seconds int) events.Timestamp {
 	return events.Timestamp{
 		Wall: time.Unix(int64(seconds), 0).UTC(),
@@ -115,12 +105,6 @@ func at(seconds int) events.Timestamp {
 	}
 }
 
-// A colour a Theme names for an answer reaches the answer.
-//
-// The answer is most of what is on a screen, and until a Theme could name these
-// it was the one part a person could not change: every colour Eva named was
-// chrome. What a Theme does not name is left to the renderer's own choice for the
-// background, which is what keeps a default Theme drawing what it always drew.
 func TestAColourNamedForTheAnswerReachesIt(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
@@ -160,16 +144,6 @@ func TestAColourNamedForTheAnswerReachesIt(t *testing.T) {
 }
 
 // A turn that took a while says how long it took, and a quick one says nothing.
-//
-// The figure is a fold over two records the Trace holds — the one that opened the
-// Run and the one that closed it — rather than something the interface timed. It
-// is worth showing because it is the one fact about a turn that stops being
-// available the moment the turn ends: the status line counts up while a person
-// waits, and then it is gone.
-//
-// The threshold is what keeps it from being noise. A figure under every answer
-// would be a receipt on the fast ones, which is the shape a per-turn cost line
-// already failed at.
 func TestATurnSaysHowLongItTookWhenItTookLongEnough(t *testing.T) {
 	slow := plain(timed(t, at(10), at(14), render.WithTiming()))
 	if !strings.Contains(slow, "took 4s") {
@@ -183,10 +157,6 @@ func TestATurnSaysHowLongItTookWhenItTookLongEnough(t *testing.T) {
 }
 
 // A turn written for a script carries the answer and nothing else.
-//
-// The one-shot command writes into whatever is reading its output, so a figure
-// beside the answer is a line that reader has to parse around. Which surface can
-// carry one is the frontend's to say, and only the console says it.
 func TestATurnWrittenForAScriptSaysNothingButTheAnswer(t *testing.T) {
 	got := plain(timed(t, at(10), at(99)))
 	if strings.Contains(got, "took") {
@@ -199,9 +169,6 @@ func TestATurnWrittenForAScriptSaysNothingButTheAnswer(t *testing.T) {
 
 // The figure is read off the monotonic clock, so a wall clock that steps
 // backwards mid-turn does not make a turn take a negative amount of time.
-//
-// A clock correction during a turn is ordinary. An interface reporting that an
-// answer arrived before it was asked for is not.
 func TestTheElapsedFigureSurvivesAWallClockStep(t *testing.T) {
 	opened := events.Timestamp{Wall: time.Unix(500, 0).UTC(), Mono: 1 * int64(time.Second)}
 	closed := events.Timestamp{Wall: time.Unix(200, 0).UTC(), Mono: 4 * int64(time.Second)}
@@ -264,12 +231,6 @@ func TestTheStyleFollowsTheTerminalBackground(t *testing.T) {
 	}
 }
 
-// The figure reported is the Session's, and it is the sum of every turn.
-//
-// A per-turn figure was reported beside it and is gone: it was the figure that
-// aged fastest — true for one turn, restated on the next, and never the number a
-// person is deciding on. What a conversation has cost is one number that keeps
-// changing, and it is the one worth asking for.
 func TestTheCostReportsTheWholeSessionRatherThanTheLastTurn(t *testing.T) {
 	var payloads []events.Payload
 	payloads = append(payloads, answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340)})...)
@@ -327,7 +288,6 @@ func TestAnUnreportedDollarFigureIsNamedRatherThanEstimated(t *testing.T) {
 	}
 }
 
-// And when the provider does report one, it is shown and it is summed.
 func TestAReportedDollarFigureIsShownAndAccumulated(t *testing.T) {
 	var payloads []events.Payload
 	payloads = append(payloads, answered("first", events.Usage{InputTokens: events.Tokens(100), USD: usd(0.0030)})...)
@@ -365,9 +325,6 @@ func TestASessionThatIsPartlyPricedReportsNoDollarFigure(t *testing.T) {
 // the Trace carries it. A person is shown it too: the screen is a fold over
 // what was committed, and a cost line over data known to be incomplete,
 // printed with nothing to say so, reads as a measurement.
-//
-// The caveat is committed in the group Finished closes on, and before it,
-// which is the order folded here.
 func TestACaveatIsShownAndNotOnlyRecorded(t *testing.T) {
 	got := plain(show(t, true,
 		events.Started{Intent: "what is this project"},
@@ -484,13 +441,6 @@ func TestALateAnswerAboutTheBackgroundKeepsTheSessionSpend(t *testing.T) {
 	}
 }
 
-// costs folds the payloads and returns what Cost reported after each turn.
-//
-// The figures used to be scraped out of the rendered turns, which is where a
-// Renderer wrote them. They are not written there any more — a turn is an
-// answer, and what a Session has spent belongs to a frontend that can show it
-// continuously — so the same fold is asked for them directly. What is being
-// tested is unchanged: these are the same records added the same way.
 func costs(t *testing.T, payloads ...events.Payload) []string {
 	t.Helper()
 
@@ -525,9 +475,6 @@ func costs(t *testing.T, payloads ...events.Payload) []string {
 
 // A Renderer answers what a turn cost after the turn is over, so that a person
 // can ask rather than scroll back for the line the turn wrote.
-//
-// Two turns, so the two figures cannot be confused: the turn is the second
-// alone and the Session is both.
 func TestTheCostIsAnsweredOnDemandAfterTheTurnIsOver(t *testing.T) {
 	renderer, _ := fold(t, true,
 		append(
@@ -582,9 +529,6 @@ func TestTheCostAnsweredOnDemandCarriesTheCaveat(t *testing.T) {
 
 // Session is what the whole conversation has cost, for a frontend that shows it
 // continuously rather than restating it under every answer.
-//
-// It is the same fold as the cost line, so the two cannot disagree about one
-// Session — which is the only reason it is worth having a second way to ask.
 func TestTheSessionSpendIsTheSumOfEveryTurn(t *testing.T) {
 	var payloads []events.Payload
 	payloads = append(payloads, answered("first", events.Usage{InputTokens: events.Tokens(1200), OutputTokens: events.Tokens(340), USD: usd(0.0030)})...)
@@ -619,8 +563,6 @@ func TestASessionThatHasSpentNothingReportsNothing(t *testing.T) {
 	}
 }
 
-// A degraded Session says so beside its figures, in the one word a footer has
-// room for. The full caveat names what was missed and goes under the turn.
 func TestADegradedSessionSaysSoInTheFooterFigures(t *testing.T) {
 	renderer, _ := fold(t, true,
 		events.Started{Intent: "first"},
@@ -636,12 +578,6 @@ func TestADegradedSessionSaysSoInTheFooterFigures(t *testing.T) {
 }
 
 // A Run that produced neither an answer nor a caveat shows nothing.
-//
-// Showing nothing is not the same as showing an empty thing. A frontend that
-// marks each turn down its left-hand side would otherwise draw a mark against no
-// text — a band on the screen standing for a turn that said nothing. What
-// happened to that turn is the frontend's to report, and the record of why is
-// committed either way.
 func TestATurnWithNothingToShowShowsNothing(t *testing.T) {
 	got := show(t, true,
 		events.Started{Intent: "what is this project"},
@@ -684,12 +620,6 @@ func TestASessionOnlyPartlyCountedStatesNoTokenFigure(t *testing.T) {
 	}
 }
 
-// Every kind the schema knows is either shown or deliberately silent.
-//
-// The schema is open: a kind can be added to events, and a fold that met a new
-// one by falling off the end of a type switch would show a person nothing and
-// tell nobody it had decided to. This is what makes that decision explicit —
-// adding a kind fails here until someone says which of the two it is.
 func TestEveryKindIsEitherShownOrDeliberatelySilent(t *testing.T) {
 	shown := map[events.Kind]bool{}
 	for _, kind := range render.Shown() {
@@ -777,11 +707,6 @@ func payloadFor(t *testing.T, kind events.Kind) events.Payload {
 
 // A terminal answering late about its own colour must not discard what a person
 // configured.
-//
-// The Renderer rebuilt from the compiled default here, so a configured grey
-// survived on the console's status line and vanished from the cost line the
-// moment the terminal answered — one colour named in two places, disagreeing,
-// which is the split one shared Theme exists to prevent.
 func TestABackgroundAnsweringLateKeepsTheConfiguredColour(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 

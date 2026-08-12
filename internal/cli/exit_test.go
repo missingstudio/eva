@@ -11,14 +11,6 @@ import (
 	"github.com/missingstudio/eva/internal/render"
 )
 
-// What a failure costs a script is derived from the failure, and this is the
-// derivation.
-//
-// None of it could be asserted before. The code travelled beside the error as a
-// second return and was decided at fourteen places, so reaching any one of them
-// meant running the whole program against a machine put into the state that
-// provokes it — and two of those places disagreed with each other in a way
-// nothing could see.
 func TestWhatAFailureCostsAScript(t *testing.T) {
 	cases := []struct {
 		name string
@@ -76,10 +68,6 @@ func TestNothingRejectedIsNothing(t *testing.T) {
 
 // A turn that ran and did not answer is reported in this project's own words,
 // and without the prefix that would say the program failed.
-//
-// It did not fail. It reached the provider, the provider declined, and the
-// Trace holds the whole of it — so "eva:" would send a person to look at Eva
-// for something Eva has nothing to do with.
 func TestATurnThatDidNotAnswerIsNotReportedAsAFaultInEva(t *testing.T) {
 	var stderr bytes.Buffer
 	report(&stderr, unanswered{
@@ -110,12 +98,6 @@ func TestAFailureWithNothingCheckedIsOneSentence(t *testing.T) {
 	}
 }
 
-// A run that failed twice reports both failures.
-//
-// The turn that did not answer is what the person asked about; the Trace that
-// did not reach the disk is what they did not ask about and most need to know,
-// and it is the fact nothing else can tell them. Reporting either one alone was
-// how the second came to be swallowed by the first.
 func TestARunThatFailedTwiceSaysBoth(t *testing.T) {
 	var stderr bytes.Buffer
 	report(&stderr, errors.Join(

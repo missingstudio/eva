@@ -5,17 +5,6 @@ import (
 	"github.com/missingstudio/eva/internal/theme"
 )
 
-// edges are what a window holds back at its sides: what the look asks for, less
-// whatever a small window could not spare.
-//
-// Two insets rather than one sum, because they will stop being one: a background
-// fills the padding and stops at the margin.
-//
-// It is a module because the arithmetic is the fiddly part and it was inline. Two
-// rules decide what a narrow window gives up, and both are easy to write the wrong
-// way round — the margin goes before the padding, and each axis decides on its own.
-// Inline, the only way to ask what a forty-column window affords was to build a
-// console, give it a window, and read two fields back.
 type edges struct {
 	margin  theme.Space
 	padding theme.Space
@@ -23,29 +12,11 @@ type edges struct {
 
 // narrowest and shortest are the least the interface will draw in before it stops
 // holding cells back at its edges.
-//
-// Under forty columns the figures under the prompt and the model's name are
-// already competing for room, and two columns of nothing at each side is the first
-// thing worth giving up.
-//
-// Rows are the scarce dimension of a terminal, which is why the two figures are
-// not alike: six rows is a prompt and one line of the answer above it, and a
-// window that small has nothing to spare for an edge.
 const (
 	narrowest = 40
 	shortest  = 6
 )
 
-// afford works out what edges a window of this size can hold back, and what it
-// gives up.
-//
-// The margin goes before the padding, because the margin decorates nothing while
-// the padding is part of the interface — it is what a background will fill. Each
-// axis decides on its own: a window can be wide enough for its columns and too
-// short for its rows, and rows are the scarce dimension.
-//
-// It is all of an inset or none of it, per axis. A window losing one column at a
-// time would be an interface whose edges depended on a width nobody chose.
 func afford(layout theme.Layout, width, height int) edges {
 	e := edges{margin: layout.Margin, padding: layout.Padding}
 
@@ -67,24 +38,9 @@ func afford(layout theme.Layout, width, height int) edges {
 
 // wide and tall are how many columns and rows these edges take, which is what the
 // interface is drawn in less.
-//
-// They are asked for rather than added up at the call site, because the sum was
-// written out in three places and the interface came out wider than the terminal
-// the one time it was written out wrong.
 func (e edges) wide() int { return e.margin.Left + e.margin.Right + e.padding.Left + e.padding.Right }
 func (e edges) tall() int { return e.margin.Top + e.margin.Bottom + e.padding.Top + e.padding.Bottom }
 
-// frame puts the composed interface in the window, with its edges held back.
-//
-// It is the one place either inset is applied, and both are applied to the
-// finished frame rather than to the pieces. Every piece is composed to what they
-// leave, so none of them knows an edge exists — which is what keeps seven pieces
-// from having seven chances to get one inset wrong.
-//
-// The right-hand edges are held back although only the left ones are visible. A
-// right-hand pad is what makes every row the full width of the window, and a row
-// that stops short is a row whose remaining cells hold whatever the terminal had
-// there before.
 func (e edges) frame(view string) string {
 	// Inside first, then outside, which is what makes them two things rather than
 	// one sum. The inner one is where a background will go, and it will stop
@@ -98,7 +54,6 @@ func (e edges) frame(view string) string {
 	return view
 }
 
-// pad is a style that holds cells back at four edges.
 func pad(s theme.Space) lipgloss.Style {
 	return lipgloss.NewStyle().Padding(s.Top, s.Right, s.Bottom, s.Left)
 }

@@ -2,21 +2,16 @@
 #
 # The install script's cases, against recorded releases.
 #
-# `fetch` is the only thing in install.sh that reaches the network, so replacing
-# it here is what makes channel resolution testable at a desk. That is the part
-# that shipped broken: --channel next read the releases list by splitting it on
-# '{', which the nested author and assets objects split too.
+# `fetch` is replaced here, which makes channel resolution testable at a desk.
+# That is the part that shipped broken.
 #
-# The signature is the second seam, and it is here for a reason the first is not:
-# `make rehearse` cannot cover it. Keyless signing needs an OIDC token a laptop
-# does not have, so a snapshot build is unsigned and the rehearsal exercises the
-# unsigned path only. What a bad signature does, and what a missing cosign does,
-# would otherwise be reachable only by publishing a release — which is where the
-# release path's last nine defects were found.
+# The signature is the second seam, and `make rehearse` cannot cover it: keyless
+# signing needs an OIDC token a laptop does not have, so a snapshot build is
+# unsigned. A bad signature and a missing cosign would otherwise be reachable
+# only by publishing a release.
 #
-# Everything else install.sh does — checksums, unpacking, installing — is run
-# for real by `make rehearse` against a snapshot build, so it is not repeated
-# here.
+# Everything else install.sh does is run for real by `make rehearse`, so it is
+# not repeated here.
 set -eu
 
 cd "$(dirname "$0")/.."

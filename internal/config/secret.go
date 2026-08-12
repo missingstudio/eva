@@ -2,20 +2,12 @@ package config
 
 // Secret is a credential that must not reach a Trace, a log, or a context
 // window.
-//
-// The type exists because "do not print the API key" is not a rule a codebase
-// can keep by intention. String, GoString, and MarshalJSON are the three ways
-// a value leaks into output by accident — through %s, through %#v, and through
-// a struct being encoded — and all three are closed here. Reading the value
-// takes a call named Reveal, which is greppable and visible in review.
 type Secret string
 
 const redacted = "<redacted>"
 
-// String redacts. This is what %s and %v print.
 func (Secret) String() string { return redacted }
 
-// GoString redacts. This is what %#v prints.
 func (Secret) GoString() string { return redacted }
 
 // MarshalJSON redacts, so that a Secret inside an encoded struct cannot reach

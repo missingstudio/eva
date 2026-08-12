@@ -14,13 +14,6 @@ import (
 // starter on at once.
 var setting = regexp.MustCompile(`(?m)^# ([a-z_]+ +=)`)
 
-// Every setting the starter documents is one Eva actually has.
-//
-// Decoding is strict, so a key that does not exist is an error naming the key —
-// which means a starter file that documented a setting Eva had renamed would
-// hand a person a file that fails the moment they uncomment the line it was
-// written to teach them. Uncommenting all of it and loading it is the only
-// assertion that covers every line.
 func TestEverySettingTheStarterDocumentsIsReal(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

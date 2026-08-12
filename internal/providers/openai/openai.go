@@ -15,7 +15,6 @@ import (
 	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
-// Name is what configuration selects this Provider by.
 const Name = "openai"
 
 // This Provider puts itself in the set configuration can select. The layer
@@ -25,7 +24,6 @@ func init() {
 	providers.Register(Name, func(o providers.Options) (providers.Provider, error) { return New(o) })
 }
 
-// Provider answers turns from the Responses API.
 type Provider struct {
 	credential providers.Credential
 	transport  transport
@@ -37,12 +35,6 @@ type Provider struct {
 var _ providers.Provider = (*Provider)(nil)
 
 // New builds a Provider, or reports what it cannot be built without.
-//
-// A missing credential — an empty variable, a login that never happened —
-// fails here, at startup, in a sentence naming the fix rather than on the first
-// turn a person asks. What it holds is not resolved here: an access token
-// renews under a long session, so the value is obtained per attempt and a copy
-// taken now would be the wrong one within the hour.
 func New(o providers.Options) (*Provider, error) {
 	if !o.Credential.Present() {
 		return nil, errors.New("openai: no credential")
@@ -69,13 +61,6 @@ func New(o providers.Options) (*Provider, error) {
 	}, nil
 }
 
-// Stream begins one turn.
-//
-// Nothing is sent here. The request is made on the first read, because an
-// attempt that failed is reported as a payload, and a caller that never read
-// the Stream would never see the retries that preceded the answer. A Call this
-// Provider cannot send fails from that first read too, so a turn has one place
-// it goes wrong.
 func (p *Provider) Stream(_ context.Context, call providers.Call) providers.Stream {
 	body, err := request(call, p.maxTokens, p.transport.instructions)
 	if err != nil {
@@ -84,12 +69,6 @@ func (p *Provider) Stream(_ context.Context, call providers.Call) providers.Stre
 	return providers.Drive(&wire{provider: p, body: body}, p.retry)
 }
 
-// request maps the transcript onto the API's own shape.
-//
-// The Responses API takes the system prompt as one instructions string and
-// the rest of the transcript as input items, with the word "role" for what
-// the glossary calls an Author; the mapping between the two vocabularies
-// lives here and nowhere else.
 func request(call providers.Call, maxTokens int64, fallback string) ([]byte, error) {
 	if call.Model == "" {
 		return nil, errors.New("openai: the turn names no model")
@@ -158,11 +137,6 @@ func request(call providers.Call, maxTokens int64, fallback string) ([]byte, err
 	return json.Marshal(req)
 }
 
-// sendable is one entry's words, or the block that stopped it being sent.
-//
-// This API takes a message's content as parts, so words are gathered into one
-// rather than mapped block for block. A block that is not words has no part to
-// become and is reported instead.
 func sendable(blocks []core.Block) (string, error) {
 	var words string
 	for _, block := range blocks {
@@ -199,18 +173,12 @@ type wirePart struct {
 	Text string `json:"text"`
 }
 
-// tokenClaims is the part of a login's access token this Provider reads.
 type tokenClaims struct {
 	Auth struct {
 		ChatGPTAccountID string `json:"chatgpt_account_id"`
 	} `json:"https://api.openai.com/auth"`
 }
 
-// claims reads the payload of a login's access token.
-//
-// The token is a JWT and this reads one claim out of it; it does not verify a
-// signature, because this is not the party the token is presented to. What the
-// claim is used for is written where it is used.
 func claims(token string) (tokenClaims, error) {
 	var out tokenClaims
 

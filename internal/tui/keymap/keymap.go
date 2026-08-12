@@ -1,17 +1,4 @@
 // Package keymap is which keys do what.
-//
-// It holds no terminal. What it knows is the names of the things an interface
-// can be asked to do and the chords that ask for them, so a console looks up an
-// action rather than matching a string.
-//
-// # The invariant this package exists to hold
-//
-// A console is a prompt. Every binding must therefore be a chord or a named
-// key, because a binding on a bare printable key is a character a person cannot
-// type. That rule lived in a comment beside a switch, where it bound whoever
-// read the comment. Here it is Parse's to enforce, so a keymap that would eat
-// the letter j is a configuration error at startup rather than a console that
-// silently will not say "just".
 package keymap
 
 import (
@@ -20,11 +7,6 @@ import (
 	"strings"
 )
 
-// Action is something an interface can be asked to do.
-//
-// The set is closed and small. A frontend that grows an action adds one here,
-// beside the others, so that what can be bound is a list a person can read
-// rather than whatever the switch happened to match.
 type Action string
 
 const (
@@ -44,11 +26,6 @@ const (
 	// Editor writes the prompt in the editor a person uses for everything else.
 	Editor Action = "editor"
 	// HistoryBack and HistoryForward recall the prompts already sent.
-	//
-	// They are bound to keys the prompt itself uses, and that is deliberate: the
-	// console gives the key back to the prompt whenever the cursor has a line to
-	// move to. A prompt of one line has nowhere to go, which is the case a person
-	// reaching for the last thing they typed is in.
 	HistoryBack    Action = "history_back"
 	HistoryForward Action = "history_forward"
 	// ScrollUp and ScrollDown move the transcript by a line.
@@ -62,7 +39,6 @@ const (
 	Follow Action = "follow"
 )
 
-// Actions is every action that can be bound, in the order a person reads them.
 func Actions() []Action {
 	return []Action{
 		Submit, Newline, Interrupt, Leave, Complete, Palette, Editor,
@@ -71,17 +47,10 @@ func Actions() []Action {
 	}
 }
 
-// Keymap is which chords ask for which action.
-//
-// One action may have several chords, because a terminal that cannot send
-// shift+enter can usually send alt+enter, and a person should not have to know
-// which of the two theirs is.
 type Keymap struct {
 	bound map[Action][]string
 }
 
-// Default is the complete Keymap: exactly the keys Eva answered to before any
-// of this could be configured.
 func Default() Keymap {
 	return Keymap{bound: map[Action][]string{
 		Submit:    {"enter"},
@@ -107,13 +76,6 @@ func Default() Keymap {
 	}}
 }
 
-// Parse builds a Keymap from what a person wrote, over the defaults.
-//
-// An action they did not name keeps its default binding, so a file that rebinds
-// one key is a file with one line in it. An action they did name replaces its
-// defaults entirely rather than adding to them — a person who writes a binding
-// means that binding, and a rebind that quietly kept the old chord as well
-// would be a rebind that did not.
 func Parse(bindings map[string][]string) (Keymap, error) {
 	known := map[Action]bool{}
 	for _, action := range Actions() {
@@ -146,12 +108,6 @@ func Parse(bindings map[string][]string) (Keymap, error) {
 	return out, nil
 }
 
-// usable rejects a chord a prompt could not survive.
-//
-// A console is a prompt, so a binding on a bare printable key takes that
-// character away from whoever is typing: bind j to scroll down and a person
-// cannot write "just". Every binding must therefore carry a modifier or be a
-// key that types nothing.
 func usable(chord string) error {
 	if chord == "" {
 		return fmt.Errorf("a binding needs a key")
@@ -183,12 +139,6 @@ func usable(chord string) error {
 	return nil
 }
 
-// holds checks a chord's two halves.
-//
-// A modifier this cannot name is one no terminal reports, and a chord with
-// nothing after it is a modifier held on its own. Both were accepted before,
-// because "contains a plus" was the whole of the test — so "a+b" and "ctrl+"
-// bound an action to a key that could never arrive.
 func holds(chord, held, key string) error {
 	if held == "" {
 		return fmt.Errorf("%q begins with a plus, so it names no modifier and no terminal reports it", chord)
@@ -214,7 +164,6 @@ func holds(chord, held, key string) error {
 	return nil
 }
 
-// modifiers are what a terminal can report as held.
 var modifiers = func() map[string]bool {
 	out := map[string]bool{}
 	for _, m := range modifierNames() {
@@ -243,10 +192,6 @@ func namedKeys() []string {
 	}
 }
 
-// distinct refuses one chord bound to two actions.
-//
-// Which of the two happened would depend on the order a switch tested them,
-// which is not something a person can read off their own configuration.
 func (k Keymap) distinct() error {
 	by := map[string]Action{}
 	for _, action := range Actions() {
@@ -261,8 +206,6 @@ func (k Keymap) distinct() error {
 	return nil
 }
 
-// Action names what a chord was bound to, and reports false for a chord that
-// was not bound to anything.
 func (k Keymap) Action(chord string) (Action, bool) {
 	for _, action := range Actions() {
 		for _, bound := range k.bound[action] {
@@ -274,17 +217,11 @@ func (k Keymap) Action(chord string) (Action, bool) {
 	return "", false
 }
 
-// Is reports whether a chord asks for an action.
 func (k Keymap) Is(chord string, action Action) bool {
 	got, bound := k.Action(chord)
 	return bound && got == action
 }
 
-// Chords is what an action is bound to, for a hint that has to name a key.
-//
-// A footer that said "ctrl+end to follow" while ctrl+end did nothing would be a
-// help text and a behaviour that had drifted apart. Reading the binding is what
-// stops that being possible.
 func (k Keymap) Chords(action Action) []string {
 	return append([]string(nil), k.bound[action]...)
 }

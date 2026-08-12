@@ -6,46 +6,21 @@
 #   curl -fsSL … | sh -s -- --channel next
 #   curl -fsSL … | sh -s -- --version 0.2.0 --dir /usr/local/bin
 #
-# A channel is resolved here rather than stored anywhere: stable is what
-# GitHub's own latest-release endpoint returns, because that endpoint excludes
-# prereleases by definition, and next is the newest release marked prerelease.
-# Nothing in this script can move a version, and nothing it downloads is
-# installed before its checksum matches.
+# A channel is resolved here rather than stored anywhere. Nothing in this script
+# can move a version.
 #
-# # What the two checks prove, and what they do not
-#
-# The checksum is fetched from the same host as the archive. That makes it a
-# check on the download rather than on the release: it catches a truncated
-# transfer, a half-published release whose assets and checksums disagree, and the
-# wrong asset for the platform. It catches nothing an attacker serving both files
-# would do, because such an attacker serves a matching checksums.txt — and this
-# script itself, which arrives from the same host.
-#
-# The signature is the check that answers the other question. The release signs
-# checksums.txt with cosign's keyless flow, so the signing certificate names the
-# workflow, the repository, and the tag that produced it; verifying it proves the
-# checksums came from this repository's release workflow and not from whoever is
-# serving the bytes. So the signature is checked first, and the checksum is
-# checked against a file that has been established as Eva's.
-#
-# It degrades rather than refusing, because cosign is not on the machine of
-# somebody running one curl to try Eva out, and an installer that refused there
-# would be an installer nobody runs. What it does instead is say which of the two
-# checks it managed, on stderr, in the words of what that leaves unproven.
-# `--require-signature` turns the degradation into a refusal, which is what a CI
-# job or a hardened machine wants.
+# The signature is checked first, then the checksum against the file the
+# signature established. The checksum alone proves the download is intact, not
+# that the release is Eva's — whoever serves a bad archive serves a matching
+# checksums.txt. Without cosign the install goes ahead on the checksum and says
+# what that leaves unproven; --require-signature makes it a refusal instead.
 #
 # Windows is not covered. Use the archive from the release page, or `go install`.
 #
-# This file is written as functions around two seams. `fetch` is how bytes
-# arrive, and it is the only thing that reaches the network — so the tests in
-# install_test.sh replace it with recorded releases and exercise the channel
-# resolution that once shipped broken. `cosign_verify` and `have_cosign` are the
-# second: a test cannot mint a sigstore bundle and cannot install cosign, so what
-# it substitutes is the verdict, and what it asserts is what this script does with
-# each one. `make rehearse` runs the whole of it against a local snapshot build
-# with --from-dist, which is the same path without the network — and without a
-# signature, because keyless signing needs an OIDC token a laptop does not have.
+# Two seams make this testable. `fetch` is the only thing that reaches the
+# network, so tests replace it with recorded releases. `cosign_verify` and
+# `have_cosign` are the second: a test cannot mint a sigstore bundle, so it
+# substitutes the verdict and asserts what this script does with each one.
 #
 # Sourcing this file with EVA_INSTALL_LIB=1 defines the functions and installs
 # nothing.
@@ -112,8 +87,8 @@ EOF
 # fetch <url>              writes the body to stdout
 # fetch_to <url> <path>    writes the body to a file
 #
-# Defined here from whichever tool is present, and replaced wholesale by the
-# tests. Everything that reaches the network goes through these two.
+# Defined from whichever tool is present, and replaced wholesale by the tests.
+# Everything that reaches the network goes through these two.
 install_choose_fetch() {
 	if command -v curl >/dev/null 2>&1; then
 		fetch() { curl -fsSL "$1"; }
@@ -160,12 +135,9 @@ detect_arch() {
 #
 # resolve_tag <channel> writes the tag to stdout, or returns 1.
 #
-# The parsing is deliberately dependency-free: jq is not on every machine that
-# will run this. It is also deliberately one object at a time. An earlier
-# version read the whole releases list and split it on `{`, which the nested
-# author and assets objects split too — so the piece holding "prerelease": true
-# held no tag_name, and --channel next found nothing. Asking for one release by
-# tag is a request more, and it cannot confuse two objects for one.
+# Dependency-free, because jq is not on every machine that will run this, and
+# one object at a time. Splitting the whole releases list on `{` split the
+# nested author and assets objects too, and --channel next found nothing.
 resolve_tag() {
 	case "${1:-}" in
 	stable)
@@ -194,23 +166,19 @@ resolve_tag() {
 # have_cosign      reports whether a signature can be checked at all
 # cosign_verify    checks one, and reports whether it held
 #
-# These are two lines of shell each, and they are functions for the reason fetch
-# is: a test can neither install cosign nor mint a sigstore bundle for a release
-# it did not sign. So a test replaces the verdict and asserts what this script
-# does with it — which is the part that has to be right, and the part that would
-# otherwise be reachable only by publishing a release.
+# Functions for the reason fetch is: a test can neither install cosign nor mint
+# a sigstore bundle, so it replaces the verdict and asserts what this script
+# does with it.
 have_cosign() { command -v cosign >/dev/null 2>&1; }
 
 # cosign_verify <bundle> <subject> <identity regexp> <issuer>
 #
-# The identity and the issuer are given rather than looked up here, because a
-# verification that did not pin both is not a verification: a keyless signature
-# with no expected identity says only that somebody, somewhere, signed this.
+# The identity and the issuer are given rather than looked up here. A keyless
+# signature with no expected identity says only that somebody signed this, so a
+# verification that pins neither is not a verification.
 #
-# Output is discarded and the exit status is the whole answer. What cosign prints
-# on success is a line about a transparency log, and what it prints on failure is
-# for whoever is debugging sigstore — neither is what a person installing Eva
-# needs, and the caller says something better in both cases.
+# Output is discarded and the exit status is the whole answer. The caller says
+# something better than cosign does, in both directions.
 cosign_verify() {
 	cosign verify-blob "$2" \
 		--bundle "$1" \
@@ -223,12 +191,9 @@ cosign_verify() {
 #
 # regexp_escape makes a literal string safe to put in a regexp.
 #
-# It escapes every character that is not a letter, a digit, an underscore, a
-# slash, or a hyphen. Without it a repository whose name holds a dot — which
-# GitHub allows — would have that dot match any character, so `evil.com/eva`
-# would satisfy an identity built for `evil.com/eva` and also one built for
-# `evilXcom/eva`. It is a small hole and it is the kind that is only ever found
-# afterwards.
+# Everything but a letter, a digit, an underscore, a slash, or a hyphen. GitHub
+# allows a dot in a repository name, and an unescaped dot matches any character
+# — so `evilXcom/eva` would satisfy an identity built for `evil.com/eva`.
 regexp_escape() { printf '%s' "$1" | sed 's/[^A-Za-z0-9/_-]/\\&/g'; }
 
 # signer_identity is the identity a release's signing certificate must carry.
@@ -238,10 +203,9 @@ regexp_escape() { printf '%s' "$1" | sed 's/[^A-Za-z0-9/_-]/\\&/g'; }
 #
 #   URI:https://github.com/missingstudio/eva/.github/workflows/release.yml@refs/tags/v0.1.1
 #
-# Anchored at the front, and open at the end because the tag is the part that
-# changes. Pinning the workflow as well as the repository is what makes this a
-# statement about the release path rather than about the account: a token from any
-# other workflow in this repository signs a certificate this rejects.
+# Anchored at the front, and open at the end because the tag is what changes.
+# Pinning the workflow as well as the repository makes this a statement about
+# the release path rather than about the account.
 signer_identity() {
 	printf '^https://github\.com/%s/\.github/workflows/release\.yml@refs/tags/' \
 		"$(regexp_escape "$REPO")"
@@ -251,9 +215,8 @@ signer_identity() {
 # caller said it must be.
 #
 # The second line is the point of the first. "cosign is not installed" is a fact
-# about a machine; what a person needs is what that leaves unproven, and saying it
-# every time is cheaper than a person having to know why the two checks are
-# different. It goes to stderr because it is not the result of the install.
+# about a machine; what a person needs is what that leaves unproven. It goes to
+# stderr because it is not the result of the install.
 unverified() {
 	if [ "$REQUIRE_SIG" = "1" ]; then
 		die "$1
@@ -316,9 +279,8 @@ published_checksum() {
 # Nothing is installed before its checksum matches. A download that cannot be
 # checked is a download that is thrown away.
 #
-# What this establishes is that the archive is the one checksums.txt names. Whether
-# checksums.txt is Eva's own is the signature's question, asked before this — see
-# verify_signature, and the note at the head of this file.
+# This establishes that the archive is the one checksums.txt names. Whether
+# checksums.txt is Eva's own is the signature's question, asked before this.
 verify_archive() {
 	sum=$(checksum_of "$1")
 	want=$(published_checksum "$2" "$3")

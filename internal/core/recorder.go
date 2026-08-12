@@ -9,33 +9,15 @@ import (
 	"github.com/missingstudio/eva/internal/events"
 )
 
-// Subscriber receives each Event after it is durably committed, in Trace
-// order.
-//
-// After, not before: a consumer that saw an Event the Trace does not hold
-// would be reading a claim rather than a record. The Event a Subscriber
-// receives carries the Trace position the Trace actually holds.
-//
-// A Subscriber is a projection, so it may not change what was committed. It
-// may fail — a broken pipe on the machine-readable stream is a real failure —
-// and its error reaches the caller, which is why the method returns one.
 type Subscriber interface {
 	Committed(ctx context.Context, e events.Event) error
 }
 
-// SubscriberFunc adapts a function to Subscriber.
 type SubscriberFunc func(ctx context.Context, e events.Event) error
 
-// Committed calls f.
 func (f SubscriberFunc) Committed(ctx context.Context, e events.Event) error { return f(ctx, e) }
 
-// RecorderOptions is everything a Recorder needs to stamp and commit.
-//
-// Now and NewID are supplied rather than read, because core is pure: it has no
-// clock and no source of entropy. The layer that owns the outside world hands
-// both in.
 type RecorderOptions struct {
-	// Sink is where committed Events land. Required.
 	Sink TraceSink
 
 	// The envelope every Event of this Run carries.
@@ -43,9 +25,7 @@ type RecorderOptions struct {
 	Actor   events.Identity
 	Run     events.RunID
 	Session events.SessionID
-	// Parent is the tool call that spawned this Unit, and is nil on the main
-	// conversation.
-	Parent *events.RunID
+	Parent  *events.RunID
 
 	// Now and NewID are required: an Event with no timestamp cannot be
 	// ordered across machines and an Event with no identity cannot be
@@ -53,36 +33,10 @@ type RecorderOptions struct {
 	Now   func() events.Timestamp
 	NewID func() events.EventID
 
-	// Subscribers receive each committed Event, in the order given.
 	Subscribers []Subscriber
 }
 
 // Recorder is the one way an Event reaches the Trace.
-//
-// It owns the three steps that used to sit at every call site — stamp the
-// envelope, commit the group, publish what was committed — so that a Unit
-// says what happened and nothing else. A Unit that wrote its own envelope
-// could disagree with the next Unit about what a fold key means; a Unit that
-// appended without publishing would leave the machine-readable stream showing
-// a different turn from the Trace.
-//
-// Record takes a group because the sink commits a group as one unit: either
-// every Event in it is stored or none is. That is what will make "no tool_use
-// is ever persisted without its tool_result" a property of the writer rather
-// than a rule contributors are expected to remember, and it is what gives the
-// sink's fold something to fold within.
-//
-// A Recorder belongs to one Run. It is safe for concurrent use, because stage
-// 2 runs parallel tool groups and a wire counter that is only safe by
-// convention is a data race waiting for its second goroutine.
-// listener is one Subscriber and whether it is still following.
-//
-// A Subscriber that returned an error missed the record it was given, and a
-// projection with a hole in it cannot be made whole by the records that come
-// after. So it stops being fed rather than being handed a stream it will
-// silently misread, and the Run carries a caveat saying a projection went
-// blind — which is the part a reader of the Trace needs, because the screen
-// that stopped updating cannot report its own absence.
 type listener struct {
 	sub    Subscriber
 	failed bool
@@ -112,11 +66,6 @@ type Recorder struct {
 	toldMissing []string
 }
 
-// NewRecorder builds a Recorder, or reports what the options are missing.
-//
-// The check is here rather than at the first Append because a Recorder with no
-// clock fails on the Event that mattered, at the point where the only thing
-// left to do is report the failure it should have prevented.
 func NewRecorder(o RecorderOptions) (*Recorder, error) {
 	switch {
 	case o.Sink == nil:
@@ -151,30 +100,6 @@ func NewRecorder(o RecorderOptions) (*Recorder, error) {
 	}, nil
 }
 
-// Record stamps the payloads and commits them as one group.
-//
-// The group is atomic: either every Event in it reaches the Trace or none
-// does. A rejected group takes no Trace position and leaves no gap, so the
-// caller may retry it without the Trace showing a hole where the first attempt
-// was.
-//
-// Committed Events go to the Subscribers in Trace order, after the sink
-// returns. The sink may return fewer Events than were handed to it — it folds
-// consecutive chunks of one content block into a single record — so what a
-// Subscriber sees is what the Trace holds, not what the producer sent.
-//
-// A Subscriber that fails does not un-commit the group. The error is returned
-// because a broken output stream is a real failure, but the Trace is the
-// source of truth and it already holds the record.
-//
-// It also does not stop the Subscribers behind it. It stops itself: it has
-// missed a record, so it is dropped from the fan-out and the Run gains the
-// caveat that says a projection is no longer following. Every other projection
-// keeps receiving the Trace in full.
-//
-// A Subscriber may not call Record: publishing happens under the same lock as
-// committing, because a Subscriber that saw group 3 before group 2 would be
-// reading the Trace out of the order the Trace holds.
 func (r *Recorder) Record(ctx context.Context, payloads ...events.Payload) error {
 	if len(payloads) == 0 {
 		return nil
@@ -186,34 +111,6 @@ func (r *Recorder) Record(ctx context.Context, payloads ...events.Payload) error
 	return r.commit(ctx, payloads...)
 }
 
-// Degrade says that something about this Run is incomplete, estimated, or
-// unreported, for the caveat Finish commits with the claim.
-//
-// A Recorder raises what it can see for itself, which is every record that
-// reached the Trace and nothing else. A cost the provider never reported and
-// an answer the model cut off are both real degradations that leave no trace
-// of themselves in the stream — nothing about the Events committed says a
-// figure was expected, or that more answer was coming. Whoever knew says so
-// here.
-//
-// This is being told, not composing. The Recorder still decides what the
-// caveat says and when it commits, which is what stops a Unit writing a clean
-// claim over a Trace that deserved a qualified one.
-//
-// Each entry is a sentence naming what sort of thing is missing, because the
-// list is read by someone working out why a Run was excluded from scoring. A
-// repeat is one entry: the caveat says what was missing, not how many times
-// something noticed. Nothing said leaves the Run clean, and anything said
-// after Finish has closed the Run reaches no Trace: Finish is what commits the
-// caveat, so there is nothing left to commit it with.
-//
-// It writes nothing, so it takes no context and cannot fail. A degradation
-// that could be lost by a cancelled call would be one the Trace is missing at
-// exactly the moment it mattered.
-//
-// A Subscriber may not call this, for the reason it may not call Record: this
-// takes the same lock that is held while committed Events are published, so a
-// Subscriber that called it would wait on itself.
 func (r *Recorder) Degrade(missing ...string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -225,23 +122,6 @@ func (r *Recorder) Degrade(missing ...string) {
 	}
 }
 
-// Finish closes the Run: the claim it makes about itself, and the caveat on
-// that claim, as one group.
-//
-// The caveat is not the caller's to remember. A Run that committed a record
-// nobody understood and then claimed a clean finish would leave a Trace that
-// is structurally valid and quietly wrong, and the Trace is the only
-// instrument the project has. The Recorder is the one path an Event takes to
-// the Trace and therefore the only thing that sees all of them, so it composes
-// the two rather than trusting each Unit to.
-//
-// This is the one group the Recorder decides the boundary of. Everywhere else
-// the caller decides what commits together, and the caveat is the exception
-// because it belongs to no producer: it is a property of what the Trace holds.
-//
-// Degraded is omitted when the Run is clean, because its presence is the flag:
-// a gate reads whether the record is there rather than reading a boolean
-// inside it.
 func (r *Recorder) Finish(ctx context.Context, claim events.Claim) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -253,14 +133,6 @@ func (r *Recorder) Finish(ctx context.Context, claim events.Claim) error {
 
 	// One caveat closes a Run, whatever it was assembled from. Two Degraded
 	// records would make a reader ask which of them qualified the claim.
-	//
-	// What the Recorder was told comes first, because it was known before the
-	// close and the kinds are what the close itself worked out.
-	//
-	// An entry says what sort of thing was not understood, rather than naming
-	// the kind alone: this list is read by someone working out why a Run was
-	// excluded, and "quantum_flux" on its own does not say whether a record or
-	// a figure is meant.
 	missing := make([]string, 0, len(r.toldMissing)+len(r.unknownKinds))
 	missing = append(missing, r.toldMissing...)
 	for _, kind := range r.unknownKinds {
@@ -305,9 +177,8 @@ func (r *Recorder) commit(ctx context.Context, payloads ...events.Payload) error
 	// failure stops the Subscriber that returned it rather than the loop. One
 	// broken projection used to end the publishing where it stood, so a
 	// Subscriber registered behind a broken one silently stopped receiving a
-	// Trace that was being written the whole time — and nothing anywhere said
-	// so. Which projection broke is the caller's to report; that one did is the
-	// Run's, and it commits with the claim.
+	// Trace that was being written the whole time — and nothing anywhere
+	// said so.
 	var failures []error
 	for _, e := range committed {
 		for i := range r.subs {
@@ -332,22 +203,12 @@ const projectionMissing = "a projection stopped following this Run, and is missi
 
 // noteUnknown collects the kind of a committed Event this build does not
 // recognise.
-//
-// It reads what the sink returned rather than what the producer sent, because
-// what degrades a Run is what its Trace holds. Each kind is named once however
-// many records of it arrive: the list says what was not understood, not how
-// often.
 func (r *Recorder) noteUnknown(e events.Event) {
 	if unknown, ok := e.Payload.(events.Unknown); ok {
 		r.unknownKinds = appendOnce(r.unknownKinds, unknown.Kind)
 	}
 }
 
-// appendOnce adds an entry unless the list already holds it.
-//
-// Both lists a Run's caveat is assembled from are sets: each says what was
-// missing, and neither says how often something noticed. The order is the
-// order things were met, which is why this is a list rather than a map.
 func appendOnce(list []string, entry string) []string {
 	for _, already := range list {
 		if already == entry {

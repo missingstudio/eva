@@ -24,18 +24,7 @@ import (
 // code. They start the real binary as a separate process, because two of the
 // requirements this stage is heading towards are about interruption, and a test
 // can only interrupt a process it started.
-//
-// eva is a console and nothing else, so a turn is driven the way a terminal
-// drives one: a line is typed and sent. The Trace is what the assertions read.
-// What a person saw was a screen redrawn in place and the record is not, and
-// the Trace is the same Events the console itself is a fold over — so reading
-// it is reading what the person was shown, without parsing a screen.
-//
-// Nothing here reaches into a struct, and nothing asserts on the order in
-// which functions were called. A test that would fail after a refactor that
-// changed no behaviour is testing the wrong thing.
 
-// binary is the eva under test, built once for the package.
 var binary string
 
 func TestMain(m *testing.M) {
@@ -71,7 +60,6 @@ type result struct {
 	stderr string
 }
 
-// world is one run's configuration file, Trace, and environment.
 type world struct {
 	dir    string
 	config string
@@ -79,14 +67,6 @@ type world struct {
 	env    []string
 }
 
-// provider is what a world's [provider] table says, with the model and the
-// credential that belong beside it.
-//
-// It is the only thing that differs between the runs in this package. Where
-// the Trace goes, who the actor is, and that no developer's home directory is
-// in reach are the same whether a turn is answered from a recording or from an
-// API — so they are written once, below, and a test names only the part that
-// is about it.
 type provider struct {
 	model string
 	table string
@@ -95,14 +75,6 @@ type provider struct {
 	key string
 }
 
-// replayed answers one scripted turn from a local server speaking the API's
-// own wire protocol.
-//
-// It is what a recording on disk used to be, and it is better in the way that
-// matters: the turn runs through the Provider that answers in production, over
-// the frames that Provider actually parses. A recording proved the machinery
-// around a Provider; this proves the Provider too, and still needs no account
-// and no network past the loopback.
 func replayed(t *testing.T) provider {
 	t.Helper()
 
@@ -114,7 +86,6 @@ func replayed(t *testing.T) provider {
 	}
 }
 
-// live answers from an API at base.
 func live(base string) provider {
 	return provider{
 		model: "claude-test",
@@ -133,7 +104,6 @@ func unnamed(base string) provider {
 	}
 }
 
-// plus is this provider with one more line in its table.
 func (p provider) plus(line string) provider {
 	p.table += line + "\n"
 	return p
@@ -141,16 +111,6 @@ func (p provider) plus(line string) provider {
 
 // oneTurn is the turn this package answers from when a test does not generate
 // one of its own, written as the frames the API sends.
-//
-// The figures are split the way the API splits them: what the input cost when
-// the message opens, what the output cost when it closes. A cached turn, so
-// that cache writes and cache reads are separate non-zero figures rather than
-// one number that cannot compute cost. Three chunks of one content block, so
-// that what the sink folds is visible in what the Trace holds.
-//
-// Reasoning and server-tool figures are absent on purpose: this API reports no
-// reasoning figure and bills thinking inside the output tokens, so a zero here
-// would be a confident lie rather than a measurement.
 var oneTurn = frames(
 	"message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"test-model","content":[],"usage":{"input_tokens":1200,"output_tokens":1,"cache_creation_input_tokens":96,"cache_read_input_tokens":1024}}}`,
 	"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Eva is an autonomous, "}}`,
@@ -160,7 +120,6 @@ var oneTurn = frames(
 	"message_stop", `{"type":"message_stop"}`,
 )
 
-// newWorld writes a configuration and puts the Trace somewhere this test owns.
 func newWorld(t *testing.T, p provider) *world {
 	t.Helper()
 
@@ -197,10 +156,6 @@ func newWorld(t *testing.T, p provider) *world {
 }
 
 // run starts eva and lets it end on its own, with nothing on its input.
-//
-// A console whose input is already at its end has nothing to read and leaves,
-// so this is how a test asserts on what happens before the first prompt: a
-// configuration Eva would not act on, a provider it cannot open, or the help.
 func (w *world) run(t *testing.T, args ...string) result {
 	t.Helper()
 
@@ -220,12 +175,6 @@ func (w *world) run(t *testing.T, args ...string) result {
 	return result{code: cmd.ProcessState.ExitCode(), stdout: stdout.String(), stderr: stderr.String()}
 }
 
-// converse drives the console the way a terminal drives it: each prompt is
-// typed and sent, one turn is waited for, and then the next is typed.
-//
-// Waiting matters. A second line typed into a console still answering the
-// first would be a race rather than a conversation, and the Trace is what says
-// a turn is over — the console answers beside this test, not inside it.
 func (w *world) converse(t *testing.T, prompts ...string) (result, []events.Event) {
 	t.Helper()
 
@@ -288,10 +237,6 @@ func (w *world) answer(t *testing.T, prompt string) []events.Event {
 	return held
 }
 
-// closedRuns is how many Runs the Trace holds a claim for.
-//
-// A Run closes whichever way the turn went, so this counts turns that are over
-// rather than turns that worked.
 func (w *world) closedRuns(t *testing.T) int {
 	t.Helper()
 
@@ -305,7 +250,6 @@ func (w *world) closedRuns(t *testing.T) int {
 	return bytes.Count(body, []byte(`"kind":"finished"`))
 }
 
-// awaitRuns waits until the Trace holds n closed Runs.
 func (w *world) awaitRuns(t *testing.T, n int, stderr *bytes.Buffer) {
 	t.Helper()
 
@@ -319,7 +263,6 @@ func (w *world) awaitRuns(t *testing.T, n int, stderr *bytes.Buffer) {
 	t.Fatalf("turn %d was not answered in 30s\nstderr: %s", n, stderr.String())
 }
 
-// stored is what the Trace holds.
 func (w *world) stored(t *testing.T) []events.Event {
 	t.Helper()
 
@@ -333,7 +276,6 @@ func (w *world) stored(t *testing.T) []events.Event {
 	return decodeStream(t, string(body))
 }
 
-// recorded is the answer [oneTurn] replays, folded.
 const recorded = "Eva is an autonomous, multi-tenant, AI-native software factory."
 
 func decodeStream(t *testing.T, s string) []events.Event {
@@ -478,8 +420,6 @@ func TestThePromptReachesTheTrace(t *testing.T) {
 	}
 }
 
-// A second prompt is answered in the light of the first, and both turns are in
-// one Trace under one Session.
 func TestASecondPromptIsAnsweredInTheSameSession(t *testing.T) {
 	w := newWorld(t, replayed(t))
 
@@ -614,12 +554,6 @@ func TestASecondRunAppendsToTheSameTrace(t *testing.T) {
 	}
 }
 
-// longReplay answers one turn of many blocks, each of many chunks, and reports
-// what one block folds to.
-//
-// It is generated rather than written down because the point is the volume:
-// enough chunks that a Trace holding one record per chunk would be obvious,
-// and enough blocks to interrupt in the middle of.
 func longReplay(t *testing.T, blocks, chunks int) (provider, string) {
 	t.Helper()
 
@@ -711,15 +645,6 @@ func TestAChunkHeavyRunProducesOneRecordPerBlock(t *testing.T) {
 // kill -9 in mid-stream. What is in the Trace at that moment is what the Trace
 // keeps: a killed process cannot flush, cannot close, and cannot run a deferred
 // anything.
-//
-// Nothing here waits for the right moment to kill. The Trace itself is watched
-// until it holds records of this turn and no claim closing it, and the signal
-// lands there. It is provably mid-stream when it does, rather than probably.
-//
-// Every group this stage commits is one record once the chunks of a block have
-// folded, so a torn group and a torn record are the same observation here. The
-// multi-record group is killed in trace/sink_test.go, where a group can be
-// constructed with the tool results stage 0 has no way to produce.
 func TestAKilledRunLeavesATraceThatParsesCompletely(t *testing.T) {
 	// This drives the console itself rather than through converse, so it needs
 	// the same carve-out for the same reason: no turn starts on Windows, so there
@@ -869,10 +794,6 @@ func TestAMissingAPIKeyExitsNonZeroSayingHowToSetOne(t *testing.T) {
 
 // A Trace is something a developer can share. A credential in one would make
 // that untrue.
-//
-// The credential is resolved on every run, whatever provider is selected, so
-// this canary is in a room the key does enter: the run below loads it into the
-// configuration and then answers from a recording.
 func TestTheAPIKeyNeverReachesTheTraceOrTheStream(t *testing.T) {
 	const key = "sk-ant-canary-do-not-store-me"
 
@@ -893,8 +814,6 @@ func TestTheAPIKeyNeverReachesTheTraceOrTheStream(t *testing.T) {
 	}
 }
 
-// Configuration is a file, and the flag says which one. The environment names
-// a default; the flag overrides it.
 func TestTheConfigFlagChoosesTheFile(t *testing.T) {
 	w := newWorld(t, replayed(t))
 	w.env = append(w.env, "EVA_CONFIG="+filepath.Join(w.dir, "there-is-no-such-file.toml"))
@@ -909,12 +828,6 @@ func TestTheConfigFlagChoosesTheFile(t *testing.T) {
 }
 
 // eva with no arguments is the console, and the console is all there is.
-//
-// It is driven here the way a terminal drives it, with keys on the input
-// stream, and what it left behind is read from the Trace rather than from
-// stdout: what a person saw was a screen redrawn in place, and the record is
-// not. The interface itself is exercised in console_test.go, in this process,
-// where the keys and the Events can be told apart.
 func TestNoArgumentsOpensAnInteractiveChat(t *testing.T) {
 	w := newWorld(t, replayed(t))
 
@@ -968,12 +881,6 @@ func TestTheCommandLineFailsClosed(t *testing.T) {
 	}
 }
 
-// A configuration a person got wrong is reported whichever way they ran Eva.
-//
-// How it looks used to be read only when the console opened, so a keymap that
-// would have eaten a letter and a colour that was not one both went unmentioned
-// on the one-shot path — and the same file was an error or not depending on how
-// the program was started.
 func TestALookAndFeelMistakeIsReportedOnEitherPath(t *testing.T) {
 	cases := []struct {
 		name string
@@ -1028,8 +935,6 @@ func TestALookAndFeelMistakeIsReportedOnEitherPath(t *testing.T) {
 	}
 }
 
-// eva init writes a configuration a person can then edit, and refuses to write
-// over one they already keep.
 func TestInitWritesAStarterAndWillNotOverwriteIt(t *testing.T) {
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
@@ -1057,10 +962,6 @@ func TestInitWritesAStarterAndWillNotOverwriteIt(t *testing.T) {
 	}
 	// A configuration names the variable a credential is read from, which is
 	// not a thing to leave readable to everyone on a shared machine.
-	//
-	// Windows has no POSIX modes: Perm() reports 0666 for any writable file
-	// whatever was asked for, so the check does not run there and says so. The
-	// same carve-out, for the same reason, guards the auth store's own mode.
 	if runtime.GOOS == "windows" {
 		t.Log("degraded: file modes are not POSIX here, so 0600 went unchecked")
 	} else {

@@ -12,13 +12,6 @@ import (
 // never races the boundary with a token that dies mid-flight.
 const refreshSkew = 5 * time.Minute
 
-// TokenSource yields a valid subscription access token, renewing it through
-// the Store when it nears expiry.
-//
-// It exists because a console session outlives an access token. The Provider
-// resolves its credential per attempt, and this is what that resolution
-// reaches: the current token when it is fresh, the renewed one when it was
-// not, and an error naming the fix when there is nothing to renew.
 type TokenSource struct {
 	store *Store
 	key   string
@@ -35,17 +28,10 @@ type TokenSource struct {
 	mu sync.Mutex
 }
 
-// NewTokenSource builds a TokenSource over the Credentials stored for key.
 func NewTokenSource(store *Store, key string) *TokenSource {
 	return &TokenSource{store: store, key: key, refresh: RefreshOpenAI}
 }
 
-// Token returns current, unexpired Credentials, renewing and persisting them
-// first when they need it.
-//
-// The error text is product surface: a person who never logged in, and a
-// person whose login has fully expired, are each told the command that fixes
-// it rather than shown a token error to decode.
 func (ts *TokenSource) Token(ctx context.Context) (Credentials, error) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()

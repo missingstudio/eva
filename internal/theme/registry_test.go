@@ -8,11 +8,6 @@ import (
 )
 
 // A look can be named, and a name Eva does not know says what it does know.
-//
-// The set is read from the registry rather than written into the message, which
-// is the same reason the Providers and the sinks do it: a sentence listing what a
-// person may choose goes stale in the commit that adds one, and nothing fails
-// when it does.
 func TestAnUnknownLookNamesTheOnesEvaDraws(t *testing.T) {
 	_, err := theme.Named("solarised", true)
 	if err == nil {

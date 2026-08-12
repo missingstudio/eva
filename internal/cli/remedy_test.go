@@ -13,22 +13,15 @@ import (
 
 // A remedy is Evidence, not advice. These tests put a machine in front of the
 // resolver and ask what it established — never what it would like to suggest.
-//
-// The auth store is a function rather than a file, which is the reason it is a
-// function: what is being tested is what Eva says about a machine, and writing
-// one to disk to find out would test the store instead.
 
-// stored is an auth store holding one login.
 func stored(creds auth.Credentials) func(string) (auth.Credentials, bool, error) {
 	return func(string) (auth.Credentials, bool, error) { return creds, true, nil }
 }
 
-// empty is an auth store nobody has logged in to.
 func empty() func(string) (auth.Credentials, bool, error) {
 	return func(string) (auth.Credentials, bool, error) { return auth.Credentials{}, false, nil }
 }
 
-// live is a login that has not expired and could be renewed if it had.
 func live() auth.Credentials {
 	return auth.Credentials{
 		AccountID:    "acct_42",
@@ -37,13 +30,6 @@ func live() auth.Credentials {
 	}
 }
 
-// A refused credential says which credential was refused, and the mode is what
-// decides which one that is.
-//
-// This is the distinction the console could not draw and this layer can. Before
-// it, an expired login and a key for the wrong organization were one sentence,
-// and the only place they came apart was a Trace file a person would have had
-// to know to open.
 func TestARefusedCredentialNamesTheCredential(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -104,10 +90,6 @@ func TestARefusedCredentialNamesTheCredential(t *testing.T) {
 }
 
 // A store that cannot be read establishes nothing, and says nothing.
-//
-// The read failing is not this person's problem to hear about in the middle of
-// a turn that failed for another reason — and a remedy composed anyway would be
-// one nothing checked, which is the whole thing this refuses to be.
 func TestAnUnreadableStoreEstablishesNothing(t *testing.T) {
 	e := &eva{providerName: "openai", checks: checks{
 		subscription: true,
@@ -121,12 +103,6 @@ func TestAnUnreadableStoreEstablishesNothing(t *testing.T) {
 	}
 }
 
-// A model the Provider will not serve is reported against the place the name
-// was actually chosen.
-//
-// /model puts a name in a Session that is in no file. Sending that person to
-// edit one would send them to change a line that is not what answered — which
-// is the confident wrongness a checked remedy exists to prevent.
 func TestAModelIsReportedAgainstWhereItWasChosen(t *testing.T) {
 	e := &eva{
 		providerName: "openai",
@@ -153,11 +129,6 @@ func TestAModelIsReportedAgainstWhereItWasChosen(t *testing.T) {
 
 // An unreachable provider says where the turn was sent, but only when something
 // on this machine chose somewhere.
-//
-// A base_url somebody set is the one cause of this that lives here rather than
-// on the network, so it is the first thing to name. Under the vendor's own host
-// there is nothing local to have got wrong, and this layer cannot tell a network
-// to wait out from a vendor to wait out.
 func TestAnUnreachableProviderNamesOnlyAnOverride(t *testing.T) {
 	overridden := &eva{providerName: "openai", checks: checks{
 		baseURL:    "http://localhost:1234/v1",
@@ -195,11 +166,6 @@ func TestABilledTurnNamesTheAccountOrTheVariable(t *testing.T) {
 
 // The classes with nothing checkable behind them establish nothing, and that is
 // the design rather than a gap in it.
-//
-// A rate limit, an overloaded vendor and a server that failed the request have
-// no step on this side of the network. The set is walked from the schema so that
-// a class added later is a decision somebody makes here rather than a silence
-// nobody notices.
 func TestTheClassesWithNoLocalCauseSayNothing(t *testing.T) {
 	// A fully configured machine, so that anything said would be said because
 	// the class allowed it rather than because there was nothing to read.

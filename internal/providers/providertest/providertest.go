@@ -1,16 +1,4 @@
 // Package providertest is the Provider contract, written as tests.
-//
-// The Stream interface carries about a dozen rules a caller depends on and the
-// type system states none of: which payload kinds cross the seam, that Usage
-// arrives once and last, that every ending repeats itself, that a turn nobody
-// priced says so rather than reporting zeros. They were prose in one file and
-// tests in another — asserted for one Provider, assumed for the rest, and the
-// one nobody asserted them for was quietly breaking one.
-//
-// So the rules live here, once, and every Provider is driven through them. A
-// Provider that satisfies the interface and breaks the contract is a Provider
-// this package fails, and the next Provider gets its contract tests by writing
-// down how to build one.
 package providertest
 
 import (
@@ -23,12 +11,6 @@ import (
 	"github.com/missingstudio/eva/internal/providers"
 )
 
-// Contract is one Provider under test, and what it takes to make it answer.
-//
-// Each field builds a Provider rather than being one, because these tests each
-// need a turn of their own: a Provider is usually pointed at a recorded server
-// that answers a fixed number of times, and a Provider that already answered is
-// not one another test can ask again.
 type Contract struct {
 	// Answers builds a Provider that answers one ordinary turn: some text, a
 	// figure for what it cost, and a clean end.
@@ -38,12 +20,9 @@ type Contract struct {
 	// when a Provider cannot be made to answer one.
 	Unpriced func(t *testing.T) providers.Provider
 
-	// Call is the turn to ask for. A Provider that replays a recording ignores
-	// it; one that speaks to an API needs a model and a transcript.
 	Call providers.Call
 }
 
-// Run drives one Provider through the whole contract.
 func Run(t *testing.T, c Contract) {
 	t.Helper()
 
@@ -158,7 +137,6 @@ func Run(t *testing.T, c Contract) {
 	})
 }
 
-// drain pulls a turn to its end and returns everything it yielded.
 func drain(t *testing.T, s providers.Stream) []events.Payload {
 	t.Helper()
 

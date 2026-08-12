@@ -28,8 +28,6 @@ func openAIUserCodeURL() string    { return authBase + "/api/accounts/deviceauth
 func openAIDeviceTokenURL() string { return authBase + "/api/accounts/deviceauth/token" }
 func openAITokenURL() string       { return authBase + "/oauth/token" }
 
-// OpenAIVerifyURL is where a person enters the code a login shows them. It is
-// exported for the layer that does the showing.
 func OpenAIVerifyURL() string { return authBase + "/codex/device" }
 
 // defaultPollTimeout bounds the wait for the browser approval. The codes the
@@ -37,7 +35,6 @@ func OpenAIVerifyURL() string { return authBase + "/codex/device" }
 // that can no longer be approved.
 const defaultPollTimeout = 15 * time.Minute
 
-// LoginOptions configures one interactive login.
 type LoginOptions struct {
 	// OnDeviceCode is shown the verification URL and the code a person must
 	// enter there, once, before the wait begins.
@@ -51,11 +48,6 @@ type LoginOptions struct {
 // in. It blocks until the browser approval completes, ctx is cancelled, or the
 // timeout elapses — a login is a conversation with a person, and the waiting
 // is the point.
-//
-// The flow is a device grant with the PKCE half inverted: the server generates
-// the code verifier and hands it back beside the authorization code, so this
-// client never computes a challenge. Three requests: mint a user code, poll
-// until the person approves, exchange what the poll returned for tokens.
 func LoginOpenAI(ctx context.Context, opts LoginOptions) (Credentials, error) {
 	httpc := &http.Client{Timeout: 30 * time.Second}
 
@@ -84,10 +76,6 @@ func LoginOpenAI(ctx context.Context, opts LoginOptions) (Credentials, error) {
 	return postToken(ctx, httpc, form)
 }
 
-// RefreshOpenAI renews a credential set from its refresh token.
-//
-// httpc is the client to renew with, and nil takes a bounded default — a
-// renewal with no deadline would park the turn that triggered it.
 func RefreshOpenAI(ctx context.Context, httpc *http.Client, refreshToken string) (Credentials, error) {
 	if httpc == nil {
 		httpc = &http.Client{Timeout: 30 * time.Second}
@@ -280,11 +268,6 @@ func postToken(ctx context.Context, httpc *http.Client, form url.Values) (Creden
 	}, nil
 }
 
-// accountIDFromToken reads the ChatGPT account id out of the access token.
-//
-// The token is a JWT and the id lives in a namespaced claim. The subscription
-// backend requires the id as a header on every request, so a token that does
-// not carry it is not a credential for that backend, whatever else it is.
 func accountIDFromToken(token string) (string, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {

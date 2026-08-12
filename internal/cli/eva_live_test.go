@@ -18,10 +18,6 @@ import (
 // that speaks the API's own wire protocol: a real request, real server-sent
 // events, real status codes. What they are for is the part the Provider's own
 // tests cannot reach — whether what the Provider said reaches the Trace.
-//
-// The observation point is the same as everywhere else in this package: the
-// bytes in the Trace, what the process wrote to its streams, and the exit code.
-// A turn is driven through the console, because that is the only way in.
 
 // answered is the frames of a turn that succeeded. The figures are split the
 // way the API splits them: what the input cost when the message opens, what
@@ -34,7 +30,6 @@ var answered = frames(
 	`message_stop`, `{"type":"message_stop"}`,
 )
 
-// frames builds a server-sent event stream from alternating kinds and bodies.
 func frames(pairs ...string) string {
 	var b strings.Builder
 	for i := 0; i < len(pairs); i += 2 {
@@ -43,8 +38,6 @@ func frames(pairs ...string) string {
 	return b.String()
 }
 
-// refused is the error document the API sends, with the status it sends it
-// under.
 type refused struct {
 	status int
 	kind   string
@@ -117,8 +110,6 @@ func only[T events.Payload](t *testing.T, es []events.Event) T {
 	return found
 }
 
-// The whole of the turn, end to end: a real request, a streamed answer, and
-// what it cost recorded honestly enough to bill from.
 func TestALiveTurnStreamsAnAnswerAndRecordsWhatItCost(t *testing.T) {
 	base, requests := api(t, answered)
 	w := newWorld(t, live(base))
@@ -201,13 +192,6 @@ func TestARetryReachesTheTraceThoughItProducesNoToolCall(t *testing.T) {
 
 }
 
-// A provider failure is data. The turn ends, the Trace holds every attempt that
-// was spent getting there, and the console is still there to be typed into.
-//
-// The exit code says nothing here, and that is the change a console makes: a
-// turn that failed is not a process that failed, because the person who asked
-// is still sitting in front of it. What the failure has to reach is the record,
-// and — through the record — the screen, which console_test.go asserts.
 func TestAProviderFailureReachesTheCallerAsData(t *testing.T) {
 	base, requests := api(t, "",
 		refused{529, "overloaded_error"},
@@ -280,8 +264,6 @@ func TestTheDefaultProviderIsOneTheCommandCanOpen(t *testing.T) {
 	}
 }
 
-// A Trace is something a developer can share, and this is the run where the
-// credential is genuinely used.
 func TestALiveTurnKeepsTheCredentialOutOfTheTraceAndTheStream(t *testing.T) {
 	const key = "sk-ant-canary-do-not-store-me"
 
@@ -438,14 +420,6 @@ func TestTheAnswerCapInTheFileReachesTheAPI(t *testing.T) {
 }
 
 // One turn from the command line says why it produced nothing.
-//
-// It exited in silence before this — a non-zero code and not one word — which
-// is the worst of the three ways to report a failure. A script got a number
-// with no reason, and a person got their shell prompt back and nothing at all.
-//
-// The line goes to stderr, and the guardrail the console holds is held here
-// too: what a person reads is this project's own words, and the vendor's stay
-// in the Trace.
 func TestOneTurnFromTheCommandLineSaysWhyItFailed(t *testing.T) {
 	base, _ := api(t, "", refused{http.StatusUnauthorized, "authentication_error"})
 	w := newWorld(t, live(base))
@@ -475,10 +449,6 @@ func TestOneTurnFromTheCommandLineSaysWhyItFailed(t *testing.T) {
 
 // A model the provider does not serve is its own failure, not the line kept for
 // failures nobody could place.
-//
-// It is the most fixable failure Eva can meet: the name came out of a file the
-// person who wrote it can open. Reported as "No response" it read as a fault
-// with no cause at all.
 func TestAModelTheProviderDoesNotServeSaysSo(t *testing.T) {
 	base, _ := api(t, "", refused{http.StatusNotFound, "not_found_error"})
 	w := newWorld(t, live(base))

@@ -26,11 +26,8 @@ import (
 	"github.com/missingstudio/eva/internal/providers/retry"
 )
 
-// data writes one SSE frame the way the API writes one.
 func data(payload string) string { return "data: " + payload + "\n\n" }
 
-// answered is a whole happy turn: two deltas, the assembled item restating
-// them, and the terminal frame carrying usage.
 func answered() string {
 	return strings.Join([]string{
 		"event: response.output_text.delta\n",
@@ -42,7 +39,6 @@ func answered() string {
 	}, "")
 }
 
-// reply is one scripted answer the server gives to one request.
 type reply struct {
 	status int
 	body   string
@@ -107,7 +103,6 @@ func subscriptionToken(t *testing.T, accountID string) string {
 	return "header." + base64.RawURLEncoding.EncodeToString(claims) + ".signature"
 }
 
-// open builds a Provider against base, retrying on a clock a test can afford.
 func open(t *testing.T, base, credential string, subscription bool) *openai.Provider {
 	t.Helper()
 	cred := providers.APIKey(func() (string, error) { return credential, nil })
@@ -135,7 +130,6 @@ func turn() providers.Call {
 	}
 }
 
-// drain pulls a Stream to completion and returns everything it yielded.
 func drain(t *testing.T, p *openai.Provider, call providers.Call) []events.Payload {
 	t.Helper()
 	s := p.Stream(context.Background(), call)
@@ -154,7 +148,6 @@ func drain(t *testing.T, p *openai.Provider, call providers.Call) []events.Paylo
 	}
 }
 
-// folded is the answer a turn's Text payloads spell out.
 func folded(payloads []events.Payload) string {
 	var b strings.Builder
 	for _, p := range payloads {
@@ -469,12 +462,6 @@ func TestOpenAIKeepsTheProviderContract(t *testing.T) {
 }
 
 // The error document names what happened; the status line only describes it.
-//
-// This API states a code and a type beside its prose, and the two disagree with
-// the status line in the case that matters most: `insufficient_quota` arrives
-// as a 429. Read as the rate limit it looks like, it spends the whole retry
-// policy to discover the account still has no credit — and then tells a person
-// to wait for something waiting will not fix.
 func TestTheErrorDocumentIsReadBeforeTheStatusLine(t *testing.T) {
 	for _, c := range []struct {
 		name   string

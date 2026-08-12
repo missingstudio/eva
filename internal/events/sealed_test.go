@@ -73,8 +73,6 @@ func main() {
 	}
 }
 
-// buildOutside compiles and runs body as its own module against this one, and
-// returns what the go tool and the program said.
 func buildOutside(t *testing.T, body string) (string, error) {
 	t.Helper()
 	if testing.Short() {

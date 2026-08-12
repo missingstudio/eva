@@ -17,17 +17,7 @@ import (
 // eva_test.go says as much — a test can only interrupt a process it started —
 // and until now the only signal any test sent was SIGKILL, which is the one
 // signal Eva cannot answer.
-//
-// What they hold down is that being asked to stop is Eva's own decision. Before
-// it was the terminal library's: the console stopped cleanly because bubbletea
-// installed a handler, the one-shot command had none, and nothing anywhere
-// asserted either fact. Removing Eva's handler now fails these.
 
-// signalled sends one signal to a process and returns the code it left.
-//
-// A signal Eva handles produces an ordinary exit code, which is the whole point
-// of the tests below: a process killed by a signal reports -1 through
-// os/exec, and every assertion here is that Eva reported something else.
 func signalled(t *testing.T, cmd *exec.Cmd, s os.Signal, stderr *bytes.Buffer) int {
 	t.Helper()
 
@@ -52,10 +42,6 @@ func signalled(t *testing.T, cmd *exec.Cmd, s os.Signal, stderr *bytes.Buffer) i
 
 // console starts an idle console and returns once it has answered one turn, so
 // that a signal arriving next arrives at a console that is certainly up.
-//
-// Waiting for the turn rather than sleeping is what makes this not a race. A
-// signal sent before Eva installed its handler would be answered by the
-// runtime, and the test would be asserting the old behaviour without saying so.
 func console(t *testing.T, w *world) (*exec.Cmd, *bytes.Buffer) {
 	t.Helper()
 
@@ -133,11 +119,6 @@ func TestAHangupLeavesLikeAnyOtherStop(t *testing.T) {
 }
 
 // Nothing a dependency calls a failure reaches a person in Eva's voice.
-//
-// This printed "eva: program was killed: program was interrupted" — two
-// sentinels of the terminal library's, prefixed with Eva's name, on the one
-// path where a person is owed Eva's own words. It is the leak render/failure.go
-// exists to prevent, arriving from the other side.
 func TestStoppingSaysNothingInSomebodyElsesWords(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the console cannot be driven through a pipe here")
@@ -164,9 +145,6 @@ func TestStoppingSaysNothingInSomebodyElsesWords(t *testing.T) {
 // answer to a signal at all: the process died between two records, so the Trace
 // kept a Run that opened and never closed — the record ADR 0016 exists to
 // prevent, produced by the path most likely to be automated.
-//
-// A Run that closes is the whole assertion. The claim says failed and says
-// "interrupted", which is what ADR 0016 settled a stopped Run says.
 func TestASignalledPromptClosesItsRun(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGINT cannot be delivered to another process here")

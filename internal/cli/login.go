@@ -29,12 +29,6 @@ func authStore() (*auth.Store, error) {
 	return auth.NewStore(filepath.Join(home, "auth.json")), nil
 }
 
-// login obtains a subscription Credential and stores it.
-//
-// It runs before the configuration is read, like init, because logging in is
-// what a person does when nothing else works yet — and it ends by printing
-// the configuration lines that put the login to work, so the next step is on
-// the screen rather than in a document.
 func login(ctx context.Context, provider string, stdout io.Writer) error {
 	switch provider {
 	case "", auth.ProviderOpenAI:
@@ -119,13 +113,6 @@ func authStatus(cfg config.Config, stdout io.Writer) error {
 	return nil
 }
 
-// subscriptionCredential resolves the login's access token, renewing it when
-// it needs renewing.
-//
-// The resolver is handed to the Provider, which calls it per attempt — a
-// console session outlives an access token, and the attempt made an hour in
-// must send the token that is live an hour in. The renewal bounds its own
-// network call, so a resolver with no context of its own cannot park a turn.
 func subscriptionCredential(cfg config.Config) (func() (string, error), error) {
 	store, err := authStore()
 	if err != nil {

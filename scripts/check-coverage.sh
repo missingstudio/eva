@@ -5,15 +5,12 @@
 # actually reaches.
 #
 # The duplication is deliberate: two lists exist so that a difference between
-# them is detectable, and this fails closed. A target added to the Makefile and
-# to no job stops the build, which is the direction worth failing in. The other
-# way round — an extra `make eva` in the release workflow — is harmless.
+# them is detectable, and this fails closed. A target declared and run by no job
+# stops the build, which is the direction worth failing in.
 #
-# "Reachable" is the part that used to be missing. Coverage was read out of
-# every workflow file, so a target invoked only from a workflow_dispatch job, or
-# from audit-report.yml, counted as covered while no push ever ran it. A
-# workflow is counted here only when its own `on:` block names push or
-# pull_request.
+# A workflow counts only when its own `on:` block names push or pull_request. A
+# target invoked from workflow_dispatch alone used to count as covered while no
+# push ever ran it.
 set -eu
 
 cd "$(dirname "$0")/.."

@@ -8,18 +8,6 @@ import (
 	"github.com/missingstudio/eva/internal/render"
 )
 
-// Every class of failure gets its own line, and every line is this project's
-// own words.
-//
-// The set is read from the schema rather than typed here, so a class added
-// later fails this test instead of shipping with nothing to show for it. That
-// is the whole mechanism: the reason one word was shown for every failure was
-// that nothing made anyone answer for the difference.
-//
-// ErrorOther is the deliberate exception and is asserted as one. A failure
-// something looked at and could not place has nothing to add beyond the bare
-// line, and saying "the provider failed in a way we could not place" would
-// spend a person's attention on the classifier rather than on their turn.
 func TestEveryFailureClassHasItsOwnLine(t *testing.T) {
 	classes := events.ErrorClasses()
 	if len(classes) == 0 {
@@ -58,12 +46,6 @@ func TestEveryFailureClassHasItsOwnLine(t *testing.T) {
 	}
 }
 
-// A remedy is a fact and, sometimes, the command that follows from it.
-//
-// The rule the shape enforces is that there is no step without a fact. A step
-// standing on nothing is advice, and advice in Eva's own voice is worse than
-// silence: somebody sent to fix a thing that was never broken stops reading the
-// line, and the line that would have helped them goes with it.
 func TestARemedyNeverOffersAStepItEstablishedNothingFor(t *testing.T) {
 	for _, c := range []struct {
 		name   string

@@ -17,32 +17,15 @@ import (
 	"github.com/missingstudio/eva/internal/theme"
 )
 
-// Screen is where a finished turn goes.
-//
-// A Renderer folds Events into a turn and hands the whole of it over; what
-// happens to it then belongs to whoever owns the destination. The console owns
-// the terminal and puts the turn above its own view, which it does with the
-// bytes exactly as it was handed them — so it reduces the colour first, and it
-// can only do that if the turn arrives whole rather than in pieces. A Screen
-// writing to a plain byte stream reduces the colour on the way out instead.
 type Screen interface {
 	// Show displays one finished turn: the answer, the caveat if the Run
 	// carried one, and the cost line.
 	Show(turn string) error
 }
 
-// Renderer shows committed Events to a person.
-//
-// It is a Subscriber, which is what makes it a fold over the Trace rather than
-// a second account of the turn: it sees a record after the Trace holds it,
-// never before. The interface it satisfies is declared in core, and this
-// package does not import core to say so — an assertion at the one place a
-// Renderer is built is enough, and the shorter import list is worth more.
 type Renderer struct {
-	screen   Screen
-	markdown *glamour.TermRenderer
-	// costStyle dims the cost line. It is subordinate to the answer: a
-	// developer reads it at the end of a turn, not during one.
+	screen    Screen
+	markdown  *glamour.TermRenderer
 	costStyle lipgloss.Style
 
 	// answer accumulates the text of the open Run. Markdown is rendered whole
@@ -86,40 +69,13 @@ type Renderer struct {
 	// rebuild for a resize keeps what a person configured.
 	look theme.Theme
 
-	// timing is whether a turn says how long it took. See WithTiming.
 	timing bool
 }
 
-// Option is what a caller says about a turn beyond how it looks.
-//
-// It exists because two frontends want different things from one fold. A console
-// draws turns on a screen a person reads, where a figure beside an answer is
-// context. The one-shot command writes the same turn to whatever a script is
-// piping it into, where anything but the answer is something that script has to
-// parse around.
 type Option func(*Renderer)
 
-// WithTiming draws how long a turn took under it.
-//
-// It is the frontend saying its surface can carry something that is not the
-// answer. How long a turn must take before it says anything is the Theme's, and
-// a Theme that names no threshold says nothing however this is set.
 func WithTiming() Option { return func(r *Renderer) { r.timing = true } }
 
-// New builds a Renderer that shows each finished turn on a Screen.
-//
-// There is one constructor and the caller names its Screen, because which
-// destination a turn goes to is the decision the seam exists for. A second
-// constructor that picked one would be the same decision made in two places,
-// and the one it picked would be the one nobody thought about.
-//
-// look is how the turn is drawn. It is handed in rather than detected, because
-// detecting the background means querying the terminal and this package holds
-// none — the frontend that owns the outside world asks, and hands in the
-// answer along with whatever a person configured.
-//
-// theme.Default(dark) is the whole of what this took before, so a caller with
-// nothing to say passes exactly that and sees exactly what it saw.
 func New(screen Screen, look theme.Theme, opts ...Option) (*Renderer, error) {
 	r := &Renderer{screen: screen, dark: look.Dark, look: look}
 	for _, opt := range opts {
@@ -131,23 +87,8 @@ func New(screen Screen, look theme.Theme, opts ...Option) (*Renderer, error) {
 	return r, nil
 }
 
-// Stream is the Screen a byte stream is: it writes the turn out, with its
-// colour reduced to what the destination can show.
-//
-// It is the Screen for a caller that owns nothing but a writer. A caller that
-// owns a terminal passes its own, and reduces the colour itself — a Renderer
-// that reduced first would have nothing left to reduce, because a screen is not
-// a byte stream and there is nothing to ask what it can show.
 func Stream(out io.Writer) Screen { return stream{out: out} }
 
-// Background tells the Renderer what colour the terminal is.
-//
-// It exists for the caller that learns the answer after the Renderer is built,
-// which is the caller that asks the terminal properly: the answer comes back
-// as a message, some time after the interface is already up.
-//
-// What the Session has spent is not disturbed. A terminal that answered late
-// must not also reset what the conversation has cost.
 func (r *Renderer) Background(dark bool) error {
 	r.dark = dark
 	// For rather than Default: the answer corrects the colours nobody chose and
@@ -160,15 +101,6 @@ func (r *Renderer) Background(dark bool) error {
 	return r.rebuild()
 }
 
-// Width tells the Renderer how many columns an answer may use.
-//
-// It exists because the markdown renderer wraps at a fixed width chosen when it
-// is built, and the frontend that owns a window learns the real one later and
-// again on every resize. Left alone it wraps at eighty, which is a paragraph
-// that overruns every narrower window and stops short in every wider one.
-//
-// A width of zero or less keeps the default, because a window that has not said
-// how wide it is has not said anything worth acting on.
 func (r *Renderer) Width(cols int) error {
 	if cols == r.width {
 		return nil
@@ -220,29 +152,9 @@ func (r *Renderer) rebuild() error {
 	return nil
 }
 
-// paint applies the colours a Theme names for an answer, and leaves the rest to
-// the library that draws it.
-//
-// A colour a Theme does not name is left exactly as the standard style had it,
-// which is what makes a Theme that names none of them draw what Eva drew before
-// any of this could be chosen. That is ADR 0030's rule, held here rather than
-// trusted: the default is not a choice, so it cannot be reconstructed from one.
-//
-// The mapping is here rather than in theme, and this is the seam that matters.
-// theme names the marks a reader navigates an answer by — a heading, code, a
-// quotation — in its own words. This is the one place those words become another
-// package's schema, so a Theme is never a wrapper around a dependency's
-// configuration and a person's file never has that dependency's shape.
 func paint(style *ansi.StyleConfig, look theme.Markdown) {
 	// A heading colour reaches every level, and takes the band of colour behind
 	// the first one with it.
-	//
-	// The standard styles give H1 its own colour on its own background and leave
-	// the other levels to inherit. So a Theme that named a heading colour and set
-	// only the inherited one would change every heading but the largest, which is
-	// the one a person was looking at when they named it. And a chosen colour on a
-	// background nobody chose is a pair that can be unreadable — the point of
-	// naming a colour is to be able to read it.
 	if look.Heading != nil {
 		hex := hexOf(look.Heading)
 		for _, level := range []*ansi.StyleBlock{
@@ -273,21 +185,13 @@ func paint(style *ansi.StyleConfig, look theme.Markdown) {
 	}
 }
 
-// hexOf writes a colour the way the markdown renderer reads one.
-//
-// It takes the top eight bits of each channel, which is what a terminal is told
-// in any case. The alpha is dropped: a style sheet has no way to say "partly
-// transparent" to a terminal, and a colour arrives here already resolved.
 func hexOf(c color.Color) string {
 	r, g, b, _ := c.RGBA()
 	return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 }
 
-// stream is the Screen a byte stream is: it writes the turn out, and that is
-// where the colour meets a destination that has a capability to be reduced to.
 type stream struct{ out io.Writer }
 
-// Show writes one finished turn.
 func (s stream) Show(turn string) error {
 	// Through lipgloss rather than to the writer directly: this is where
 	// colour is adapted to what the terminal can show, and where a terminal
@@ -298,20 +202,6 @@ func (s stream) Show(turn string) error {
 	return nil
 }
 
-// Committed folds one committed Event into what the person sees.
-//
-// Only the kinds that a person reads fold. Started opens a turn, Text is the
-// answer, Usage is what it cost, and Degraded is what the Run did not
-// understand; Finished is what makes all four appear, because a turn is shown
-// when it is over.
-//
-// Degraded arrives in the group Finished closes on, so it is folded before the
-// turn is written rather than after it.
-//
-// A kind this does not fold shows nothing, and Silent below is where that is
-// said out loud. The schema is open — a kind can be added to it — and a fold
-// that met a new one by falling off the end of a switch would show a person
-// nothing and tell nobody it had decided to.
 func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 	switch payload := e.Payload.(type) {
 	case events.Started:
@@ -334,13 +224,6 @@ func (r *Renderer) Committed(_ context.Context, e events.Event) error {
 	return nil
 }
 
-// Shown is every kind this fold puts on a screen.
-//
-// It is a list rather than something read off the switch above because Go
-// cannot be asked what a type switch handles. What keeps the two honest is the
-// test that walks the schema's own registry: a kind in neither this nor Silent
-// fails the build, so adding one to events is a decision about what a person
-// sees rather than a silence nobody chose.
 func Shown() []events.Kind {
 	return []events.Kind{
 		events.KindStarted,
@@ -352,10 +235,6 @@ func Shown() []events.Kind {
 }
 
 // Silent is every kind this fold deliberately shows nothing for, and why.
-//
-// Each is real, recorded, and not something a person reads a turn as. The
-// reason is written down because "it does not appear" and "nobody has got to it
-// yet" look identical on a screen, and only one of them is a decision.
 func Silent() map[events.Kind]string {
 	return map[events.Kind]string{
 		events.KindToolCall:   "a tool call is shown by the frontend that approves it, at stage 2",
@@ -367,11 +246,6 @@ func Silent() map[events.Kind]string {
 	}
 }
 
-// reset clears what belongs to one turn. A turn opening is what ends the last
-// one's claim on the figures, so this is where they go.
-//
-// The Session's spend is not part of that: it outlives every turn it is a sum
-// of. Neither is what has been written out — see show.
 func (r *Renderer) reset() {
 	r.answer.Reset()
 	r.missing = nil
@@ -381,11 +255,6 @@ func (r *Renderer) reset() {
 
 // Cost is what the last turn cost and what the Session has cost so far, for a
 // caller that is asking rather than finishing a turn.
-//
-// It is the same fold the footer shows, so the two cannot disagree about one
-// Session. What it adds is the caveat in full: a footer has one line and shares
-// it with the model, and a person who asks about cost is owed the whole of what
-// the figures do not cover.
 func (r *Renderer) Cost() string {
 	line := "session " + r.spent()
 	if caveat := r.caveat(); caveat != "" {
@@ -406,30 +275,10 @@ func (r *Renderer) cost() lipgloss.Style {
 	return r.costStyle.Width(r.width)
 }
 
-// spent is what the Session has cost, as figures.
-//
-// The Session and not the turn. A per-turn figure was reported beside it, and it
-// was the figure that aged fastest: true for one turn, restated on the next, and
-// never the number a person is actually deciding on. What a conversation has
-// cost is one number that keeps changing, and it is the one worth asking for.
-//
-// The cache figures ride here now. They were held to the turn to keep the line
-// to one line, and there is room for them once the turn is not on it — which
-// matters, because the ratio of cache written to cache read is the largest
-// single lever on what a conversation costs.
 func (r *Renderer) spent() string {
 	return segments(r.session.tokens(), r.session.cache(), r.session.money())
 }
 
-// caveat is what the Run did not understand, and is empty for a Run that was
-// whole.
-//
-// It is separate from the figures because it outlives them on screen. The
-// figures a turn cost are no longer written under the turn — a person reads an
-// answer, not an invoice, and what a Session has spent is on the footer where it
-// is true continuously rather than restated after every answer. What the Run
-// could not account for still goes under the answer it belongs to, because it
-// qualifies that turn and no other.
 func (r *Renderer) caveat() string {
 	if len(r.missing) == 0 {
 		return ""
@@ -437,11 +286,6 @@ func (r *Renderer) caveat() string {
 	return "degraded: " + strings.Join(r.missing, ", ")
 }
 
-// Session is what this Session has cost so far, for a frontend that shows it
-// continuously.
-//
-// It is the same fold over the same Usage records /cost answers with, so the
-// footer and the command cannot disagree about one Session.
 func (r *Renderer) Session() string {
 	// Nothing spent is nothing to say. A Session that has not run a turn would
 	// otherwise open with "no usage reported · cost unreported", which is a
@@ -459,12 +303,6 @@ func (r *Renderer) Session() string {
 	return r.spent()
 }
 
-// Cleared starts the accounting over, for a console that has emptied its
-// transcript and opened a new Session.
-//
-// The cumulative figure says what a Session has cost, so it belongs to the
-// Session that spent it. What was spent is not lost by starting over: the Trace
-// holds every Usage record either way.
 func (r *Renderer) Cleared() {
 	r.reset()
 	r.session = spend{}
@@ -473,11 +311,6 @@ func (r *Renderer) Cleared() {
 	r.kept = nil
 }
 
-// show hands the turn to the screen: the answer, then what it cost.
-//
-// The whole turn goes over in one call. A turn handed over in three would be
-// three things to a screen that places what it is given, and the answer, the
-// caveat, and the figures are one thing a person reads.
 func (r *Renderer) show() error {
 	kept := turn{
 		took:   r.elapsed,
@@ -492,9 +325,6 @@ func (r *Renderer) show() error {
 	// that marks each turn down its left-hand side would draw a mark against no
 	// text at all. It is not kept either, because what is not drawn cannot be
 	// redrawn at another width.
-	//
-	// This is the turn that broke before a word arrived, and what happened to it
-	// is the frontend's to say. The record of why is already committed.
 	if kept.answer == "" && kept.caveat == "" {
 		r.answer.Reset()
 		return nil
@@ -517,12 +347,6 @@ func (r *Renderer) show() error {
 	return nil
 }
 
-// turn is a finished turn in the form it can be drawn again from.
-//
-// The markdown is kept rather than only the bytes it rendered to, because those
-// bytes are wrapped to the window that was there at the time. A window is
-// resized, and a paragraph wrapped to the old one is either overrunning the new
-// one or standing in a column in the middle of it.
 type turn struct {
 	answer string
 	caveat string
@@ -532,12 +356,6 @@ type turn struct {
 	took time.Duration
 }
 
-// draw is one finished turn at the current width: the answer, the caveat if the
-// Run carried one, and the cost line.
-//
-// The whole turn goes over in one call. A turn handed over in three would be
-// three things to a screen that places what it is given, and the answer, the
-// caveat, and the figures are one thing a person reads.
 func (r *Renderer) draw(t turn) (string, error) {
 	var out strings.Builder
 
@@ -554,23 +372,12 @@ func (r *Renderer) draw(t turn) (string, error) {
 	// number a person actually watches is the cumulative one, which a per-turn
 	// line states and then immediately makes stale. It lives on the footer now,
 	// where it is true continuously, and /cost still breaks it down on demand.
-	//
-	// The caveat stays. Figures known to be incomplete are one problem; a turn
-	// that could not account for itself, with nothing on screen to say so, is a
-	// worse one. It is wrapped to the answer's width because unwrapped it would
-	// be the one thing on a narrow screen that runs off the edge.
 	if t.caveat != "" {
 		out.WriteString(r.cost().Render(t.caveat))
 		out.WriteString("\n")
 	}
 
 	// How long it took, under the answer it belongs to.
-	//
-	// It is here rather than beside the Session's spend on a frontend's footer,
-	// because it is the one figure about a turn that stops being available the
-	// moment the turn is over: a person watching the status line count up can
-	// read it, and a person scrolling back a week later cannot. The cost is the
-	// opposite — one number that keeps changing — which is why it is not here.
 	if took := r.took(t); took != "" {
 		out.WriteString(r.cost().Render(took))
 		out.WriteString("\n")
@@ -578,21 +385,6 @@ func (r *Renderer) draw(t turn) (string, error) {
 	return out.String(), nil
 }
 
-// Arriving renders an answer that is still coming, for the live area.
-//
-// It is the same renderer, at the same width, as the turn that will replace it.
-// That is the whole of why it exists: a person watching an answer arrive and
-// then watching it be replaced should not see it change shape. Raw markdown
-// while it streams and a rendered document a moment later are two different
-// pictures of one answer, and the switch between them is the most visible thing
-// on the screen at the moment it happens.
-//
-// This renders text; it does not fold Events, and nothing it returns is kept.
-// The caller holds the chunks for exactly as long as the Run lasts and throws
-// them away — what a person keeps still comes only from the record, and this
-// makes no claim about what was committed. Markdown that is half-written
-// renders as what it is so far, which is the honest picture of an answer that
-// is half-written.
 func (r *Renderer) Arriving(text string) (string, error) {
 	styled, err := r.markdown.Render(text)
 	if err != nil {
@@ -601,17 +393,6 @@ func (r *Renderer) Arriving(text string) (string, error) {
 	return styled, nil
 }
 
-// Kept is every turn this Session has answered, drawn at the current width.
-//
-// It is for the frontend that holds what it has drawn and has just been told the
-// window is a different size. The markdown is re-rendered rather than the old
-// bytes re-flowed, because re-flowing styled output means guessing where a
-// heading ended and a fenced block began — and the source that answers both is
-// already here.
-//
-// The order is the order they were answered in. A caller interleaving them with
-// its own lines can rely on that and on nothing else: this says nothing about
-// what a console put between two turns.
 func (r *Renderer) Kept() ([]string, error) {
 	out := make([]string, 0, len(r.kept))
 	for _, t := range r.kept {
@@ -624,17 +405,6 @@ func (r *Renderer) Kept() ([]string, error) {
 	return out, nil
 }
 
-// span is how long two records are apart.
-//
-// The monotonic reading is preferred because that is what it is for: a wall
-// clock can step backwards between two records of one Run, and a turn that
-// reported a negative duration would be the interface making an obvious lie out
-// of an ordinary clock correction. The wall clock answers when a record carries
-// no reading — an older Trace, or a producer that did not fill one.
-//
-// A span that still comes out negative is reported as nothing rather than as a
-// number. Two records whose order the clocks disagree about cannot be turned
-// into a duration by choosing a sign for it.
 func span(from, to events.Timestamp) time.Duration {
 	if from.Mono > 0 && to.Mono > 0 {
 		return max(0, time.Duration(to.Mono-from.Mono))
@@ -645,15 +415,6 @@ func span(from, to events.Timestamp) time.Duration {
 	return max(0, to.Wall.Sub(from.Wall))
 }
 
-// took is how long a turn took, for a turn that took long enough to say.
-//
-// The threshold is the Theme's, and zero says nothing about any turn. What a
-// figure on every turn would be is noise on the fast ones — and the number a
-// person is looking for is the one that surprised them.
-//
-// It is rounded to a tenth of a second, which is the precision the figure is
-// read at. A turn reported to the microsecond claims a measurement of the
-// network, and this is a fold over two timestamps.
 func (r *Renderer) took(t turn) string {
 	seconds := r.look.Layout.ElapsedSeconds
 	if !r.timing || seconds <= 0 || t.took <= 0 {
@@ -665,7 +426,6 @@ func (r *Renderer) took(t turn) string {
 	return "took " + t.took.Round(100*time.Millisecond).String()
 }
 
-// segments joins the parts that have something to say.
 func segments(parts ...string) string {
 	kept := make([]string, 0, len(parts))
 	for _, part := range parts {
@@ -676,18 +436,10 @@ func segments(parts ...string) string {
 	return strings.Join(kept, " · ")
 }
 
-// spend is what a set of Usage records adds up to.
-//
-// The dollar figure is summed only when every record in the set carried one.
-// A sum over a set where one turn reported nothing looks whole and is short by
-// an unknown amount, and a cost report that is confidently wrong is worse than
-// one that says it does not know.
 type spend struct {
 	in, out, cacheWrite, cacheRead tally
 
-	usd float64
-	// records is how many Usage records this is a sum of, and priced is how
-	// many of those carried a dollar figure.
+	usd     float64
 	records int
 	priced  int
 }
@@ -705,13 +457,6 @@ func (s *spend) add(u events.Usage) {
 	}
 }
 
-// tally sums one counter across a set of Usage records, and counts how many of
-// them carried it.
-//
-// The count is what keeps a partial sum from reading as a whole one. A set
-// where one record reported nothing sums to a figure that looks complete and is
-// short by an unknown amount, which is the same confidently-wrong report the
-// nullable counter exists to prevent — the absence has to survive the addition.
 type tally struct {
 	sum      uint64
 	reported int
@@ -725,7 +470,6 @@ func (t *tally) add(n *uint64) {
 	t.reported++
 }
 
-// whole says the figure covers every record it is a sum of.
 func (t tally) whole(records int) bool { return records > 0 && t.reported == records }
 
 // tokens is what went in and what came out, when every turn said. A set that

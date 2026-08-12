@@ -75,7 +75,6 @@ func (s *sink) committed() []events.Event {
 	return out
 }
 
-// collector is a Subscriber that keeps what it was shown.
 type collector struct {
 	seen []events.Event
 	fail error
@@ -125,7 +124,6 @@ func origin() core.Origin {
 	}
 }
 
-// payloadOf finds the one payload of a kind among committed Events.
 func payloadOf[T events.Payload](es []events.Event) (T, bool) {
 	var found T
 	for _, e := range es {
@@ -388,7 +386,6 @@ func TestEachUnrecognisedKindIsNamedOnceInTheOrderItWasMet(t *testing.T) {
 	}
 }
 
-// kinds is what a group says it holds.
 func kinds(es []events.Event) []events.Kind {
 	out := make([]events.Kind, len(es))
 	for i, e := range es {
@@ -511,7 +508,6 @@ func TestAForgedPayloadNeverReachesTheSink(t *testing.T) {
 // leaves open in the sealed set.
 type forged struct{ events.Payload }
 
-// A cancelled context stops the commit, and the sink is the thing that sees it.
 func TestACancelledContextStopsTheCommit(t *testing.T) {
 	s := &sink{}
 	rec := recorder(t, options(s))
@@ -619,8 +615,6 @@ func TestWhatTheRecorderWasToldJoinsWhatItSaw(t *testing.T) {
 	}
 }
 
-// The same entry twice is one entry. A caveat says what was missing, not how
-// many times something noticed.
 func TestTheSameDegradationIsNamedOnce(t *testing.T) {
 	s := &sink{}
 	rec := recorder(t, options(s))
@@ -657,11 +651,6 @@ func TestBeingToldNothingLeavesTheRunClean(t *testing.T) {
 
 // A projection that breaks takes itself out of the fan-out. It does not take
 // the projections registered behind it.
-//
-// Publishing used to stop at the first Subscriber that returned an error, so a
-// working projection sitting behind a broken one stopped receiving a Trace that
-// was still being written — with nothing on screen, in the file, or in the
-// error to say it had gone blind.
 func TestABrokenSubscriberDoesNotStarveTheOnesBehindIt(t *testing.T) {
 	s := &sink{}
 	broken := errors.New("the pipe is closed")

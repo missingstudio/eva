@@ -84,7 +84,6 @@ func TestANamedFileThatIsMissingIsAnError(t *testing.T) {
 	}
 }
 
-// The same is true of the file the environment names: it was asked for.
 func TestTheEnvironmentNamesTheFileAndTheFlagOverridesIt(t *testing.T) {
 	dir := home(t)
 
@@ -122,7 +121,6 @@ func TestAnUnknownKeyIsRejectedByName(t *testing.T) {
 	}
 }
 
-// A file may set some keys and leave the rest to the defaults.
 func TestAPartialFileKeepsTheDefaultsForWhatItLeftOut(t *testing.T) {
 	dir := home(t)
 	path := write(t, dir, "model = \"a-different-model\"\n")
@@ -293,8 +291,6 @@ func TestTheAPIKeyComesFromTheEnvironmentAndNotTheFile(t *testing.T) {
 	}
 }
 
-// A missing key is reported as a missing key, saying how to set one and how to
-// name a different variable.
 func TestAMissingAPIKeySaysHowToSetOne(t *testing.T) {
 	dir := home(t)
 	path := write(t, dir, "")
@@ -310,11 +306,8 @@ func TestAMissingAPIKeySaysHowToSetOne(t *testing.T) {
 	}
 }
 
-// quote writes a TOML string literal.
 func quote(s string) string { return "\"" + strings.ReplaceAll(s, "\\", "\\\\") + "\"" }
 
-// project makes a repository with its own settings, and puts the test inside
-// it. The .git marks the boundary the walk up stops at.
 func project(t *testing.T, body string) string {
 	t.Helper()
 
@@ -334,7 +327,6 @@ func project(t *testing.T, body string) string {
 	return path
 }
 
-// A repository may choose how the work is done.
 func TestARepositoryMaySetTheModel(t *testing.T) {
 	home(t)
 	project(t, "model = \"claude-from-the-repo\"\n")
@@ -344,13 +336,6 @@ func TestARepositoryMaySetTheModel(t *testing.T) {
 	}
 }
 
-// A repository may not choose what a run does.
-//
-// Its .eva/ is content from the internet, in the same category as a fetched web
-// page. A repository that could set these would redirect a person's turns to a
-// server it names, read their credential from a variable it chooses, or move
-// their Trace — on the first prompt after a clone, with nothing on screen to
-// say so.
 func TestARepositoryMayNotSetWhatARunDoes(t *testing.T) {
 	refused := []struct {
 		name string
@@ -388,8 +373,6 @@ func TestARepositoryMayNotSetWhatARunDoes(t *testing.T) {
 	}
 }
 
-// A key nobody knows is refused wherever it is written, and the message names
-// the file that holds it.
 func TestAnUnknownKeyInARepositoryIsRefusedByName(t *testing.T) {
 	home(t)
 	path := project(t, "modle = \"a typo\"\n")
@@ -462,8 +445,6 @@ func TestTheRepositoryRootsOwnSettingsAreFound(t *testing.T) {
 	}
 }
 
-// A named file still names the file. What --config and EVA_CONFIG mean did not
-// change when a second source arrived.
 func TestANamedFileIsStillTheFileThatIsRead(t *testing.T) {
 	home(t)
 	project(t, "model = \"from-the-repo\"\n")
@@ -516,14 +497,6 @@ follow = ["ctrl+g"]
 	}
 }
 
-// A person's own settings are not a repository's, whatever directory they are
-// standing in.
-//
-// The two files have the same name — ~/.eva/config.toml is where a person's
-// settings live, and .eva/config.toml is what the walk looks for — so running
-// from the home directory found the file that had already been read and applied
-// a repository's allow list to it. The result was an error telling a person to
-// move a setting into the file it was already in, and eva unusable from $HOME.
 func TestAPersonsOwnFileIsNotReadAsARepositorys(t *testing.T) {
 	dir := home(t)
 	write(t, dir, "[provider]\nname = \"openai\"\nbase_url = \"http://localhost:1\"\n")

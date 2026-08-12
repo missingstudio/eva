@@ -1,17 +1,4 @@
 // Package tracetest is the TraceSink contract, written as tests.
-//
-// Append carries rules the type system states none of: that a group is stored
-// whole or not at all, that Trace position is the sink's own and never the
-// producer's, that consecutive chunks of one content block come back as a
-// single record, and that the fold stops at every boundary a reader has to
-// tell apart. They were prose on the interface and tests beside the one sink
-// that happened to exist, so a second sink could satisfy the interface, break
-// the contract, and pass.
-//
-// So the rules live here, once, and every sink is driven through them. A sink
-// supplies a way to open an empty one and a way to read back what it holds;
-// the records are the suite's own, because a suite that could build one sink's
-// fixtures would be a suite with an opinion about which sink it was for.
 package tracetest
 
 import (
@@ -27,7 +14,6 @@ import (
 	"github.com/missingstudio/eva/internal/events"
 )
 
-// Contract is one sink under test, and what it takes to read it back.
 type Contract struct {
 	// Open builds a sink holding nothing, and the way to read what it has
 	// committed. It builds one rather than being one because every case here
@@ -45,14 +31,8 @@ type Contract struct {
 	Refuses func(events.Event) events.Event
 }
 
-// Records is everything a sink has committed, in the order it holds it.
-//
-// A sink answers this out of its store rather than out of what Append
-// returned. The contract is about what is durable, and that the two accounts
-// agree is one of the things under test.
 type Records func(t *testing.T) []events.Event
 
-// Run drives one sink through the whole contract.
 func Run(t *testing.T, c Contract) {
 	t.Helper()
 
@@ -400,7 +380,6 @@ func Run(t *testing.T, c Contract) {
 	})
 }
 
-// commit appends a group and fails the test if the sink refuses it.
 func commit(t *testing.T, sink core.TraceSink, group ...events.Event) []events.Event {
 	t.Helper()
 
@@ -413,9 +392,6 @@ func commit(t *testing.T, sink core.TraceSink, group ...events.Event) []events.E
 
 // wired builds an Event as a producer hands one over: numbered on the wire,
 // stamped, and carrying no Trace position at all.
-//
-// The wire numbers start high, so a sink that passed one through cannot pass
-// for a sink counting from 1.
 func wired(session events.SessionID, wire uint64, payload events.Payload) events.Event {
 	kind, _ := events.KindOf(payload)
 	return events.Event{

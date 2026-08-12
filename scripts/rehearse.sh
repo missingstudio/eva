@@ -2,10 +2,9 @@
 #
 # The release, rehearsed. Everything a tag sets off that does not need a tag.
 #
-# Nine defects reached a runner on the first two releases, and every one of them
-# was in the release path rather than in Eva. They were reachable only by
-# pushing a tag, because the release path had no interface anything else could
-# call. This is that interface.
+# Nine defects reached a runner on the first two releases, every one of them in
+# the release path and reachable only by pushing a tag. This is the interface
+# that path did not have.
 #
 #   1. the guard's cases                  (a tag shape cannot regress)
 #   2. the installer's channel cases      (a channel cannot regress)

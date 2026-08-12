@@ -9,12 +9,6 @@ import (
 	"github.com/missingstudio/eva/internal/tui/keymap"
 )
 
-// The command list shows what a person may type, narrows as they type it, and
-// puts the one they chose into the prompt.
-//
-// Completion cycled: one name at a time, in an order nobody could see. That is
-// enough when you know the name and useless when you are looking for it, which
-// is the case a list is for.
 func TestTheCommandListNarrowsAndFillsIn(t *testing.T) {
 	c := drawn(t)
 	c.layout(80, 24)
@@ -80,8 +74,6 @@ func TestChoosingACommandDoesNotRunIt(t *testing.T) {
 	}
 }
 
-// The key that opens the list closes it, and so does the key that stops
-// everything else.
 func TestTheListClosesOnTheKeyThatOpenedItAndOnAnInterrupt(t *testing.T) {
 	for _, action := range []keymap.Action{keymap.Palette, keymap.Interrupt} {
 		t.Run(string(action), func(t *testing.T) {
@@ -101,11 +93,6 @@ func TestTheListClosesOnTheKeyThatOpenedItAndOnAnInterrupt(t *testing.T) {
 	}
 }
 
-// The list walks with the same keys that recall a prompt, and wraps.
-//
-// It is the one modal thing in this interface: while a list of commands is on
-// screen, the keys that move a cursor are the keys that move the choice. Two
-// meanings for one key at one moment is what would make either unusable.
 func TestTheListWalksAndWraps(t *testing.T) {
 	c := drawn(t)
 	c.layout(80, 24)
@@ -127,10 +114,6 @@ func TestTheListWalksAndWraps(t *testing.T) {
 	}
 }
 
-// A window too short for the list drops the list first, and keeps the prompt.
-//
-// Everything the list offers can be typed, which is what makes it the first thing
-// to give up. A console a person cannot type into is not a console.
 func TestAShortWindowDropsTheListBeforeThePrompt(t *testing.T) {
 	c := drawn(t)
 	c.layout(40, 6)
@@ -150,12 +133,6 @@ func TestAShortWindowDropsTheListBeforeThePrompt(t *testing.T) {
 // console: the list is a filter over a table, and what a person has typed crosses
 // in as a string — so a test hands it one.
 
-// What has been typed of a command name is one answer, whatever asks for it.
-//
-// It was four, and the four disagreed. The case that separates them is an
-// argument: /model claude is a person filling in the one command that takes one,
-// and the name they have typed is /model — not the whole line, which matches no
-// command at all.
 func TestWhatHasBeenTypedOfACommandNameStopsAtTheArgument(t *testing.T) {
 	for _, c := range []struct{ typed, want string }{
 		{typed: "", want: ""},
@@ -170,8 +147,6 @@ func TestWhatHasBeenTypedOfACommandNameStopsAtTheArgument(t *testing.T) {
 	}
 }
 
-// The filter narrows the table, and a person who has moved on to an argument is
-// still choosing the command they named.
 func TestTheFilterNarrowsTheTable(t *testing.T) {
 	var p palette
 
@@ -190,10 +165,6 @@ func TestTheFilterNarrowsTheTable(t *testing.T) {
 }
 
 // A filter that narrows under a person cannot leave them pointing past the end.
-//
-// It is the one thing about the chosen row that is easy to get wrong: walk to the
-// fifth match, type one more character, and the row a person was on is a row that
-// no longer exists.
 func TestNarrowingTheFilterCannotLeaveTheChoicePastTheEnd(t *testing.T) {
 	p := palette{open: true}
 
@@ -212,9 +183,6 @@ func TestNarrowingTheFilterCannotLeaveTheChoicePastTheEnd(t *testing.T) {
 }
 
 // Choosing puts the name and a space in the prompt rather than running anything.
-//
-// /model takes an argument. A list that ran the command the moment it was chosen
-// would make the one command that takes one unusable from the list.
 func TestChoosingYieldsANameAndASpace(t *testing.T) {
 	p := palette{open: true}
 
@@ -231,11 +199,6 @@ func TestChoosingYieldsANameAndASpace(t *testing.T) {
 	}
 }
 
-// Tab offers each match in turn, and starts again from what was typed once the
-// person types.
-//
-// The second tab has to offer the next match rather than start again from what
-// the first one wrote — otherwise /c completes to /clear and stays there.
 func TestTabOffersEachMatchInTurn(t *testing.T) {
 	var p palette
 
@@ -262,9 +225,6 @@ func TestTabOffersEachMatchInTurn(t *testing.T) {
 }
 
 // Tab leaves alone what is not a command name being typed.
-//
-// A line with a space in it is a person writing an argument, and no table here
-// knows what a model is called.
 func TestTabLeavesEverythingThatIsNotACommandName(t *testing.T) {
 	for _, typed := range []string{"", "ask something", "/model claude", "/help\nmore"} {
 		var p palette

@@ -18,19 +18,7 @@ import (
 // These tests are about the two things a Loop decides that nothing downstream
 // can decide for it: where a group ends, and what counts as the turn failing
 // rather than the record failing.
-//
-// Both are invisible from outside the process. A group boundary leaves no mark
-// on a Trace once the sink's fold has run — a chunk committed alone and a chunk
-// committed with its neighbours produce the same records — and the difference
-// between an Outcome and an error is a difference between two return values,
-// not two files. So they are asserted here, at the interface, rather than
-// through the binary.
 
-// driven is a Provider the test drives.
-//
-// It keeps the transcript each call was conditioned on, which is the only way
-// to observe what a Loop assembled: an answer read back from the Trace is the
-// same answer whatever the call that produced it said.
 type driven struct {
 	mu     sync.Mutex
 	script []recording
@@ -38,7 +26,6 @@ type driven struct {
 	calls  []providers.Call
 }
 
-// recording is one turn this Provider replays.
 type recording struct {
 	// chunks is the answer, split the way a stream would deliver it.
 	chunks []string
@@ -60,7 +47,6 @@ func (d *driven) Stream(_ context.Context, call providers.Call) providers.Stream
 	return &drivenStream{rec: rec}
 }
 
-// transcripts is the transcript of every call so far.
 func (d *driven) transcripts() [][]core.Message {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -134,7 +120,6 @@ func (g *grouped) shape() []string {
 	return out
 }
 
-// errFull is what a Trace with nowhere to write says.
 var errFull = errors.New("no space left on device")
 
 // refusing is a TraceSink that will not take one of the groups it is offered,
@@ -160,11 +145,6 @@ func (r *refusing) Append(ctx context.Context, group []events.Event) ([]events.E
 
 // newTestSession opens a Session for a turn under test, on a clock that does
 // not move and identifiers that count.
-//
-// Both are the Session's rather than the process's, which is the point of
-// handing them in: a timestamp nothing chose is a field a test can only check
-// the shape of, and a Run named by eight random bytes is one no failure can
-// name back.
 func newTestSession() *core.Session {
 	var runs, records uint64
 	return core.NewSession("sess_test", "tenant_test",
@@ -195,8 +175,6 @@ func opened(t *testing.T, session *core.Session, sink core.TraceSink) *core.Reco
 	return rec
 }
 
-// recorder builds a Recorder over a sink, with a fixed clock and identifiers a
-// failure can name.
 func recorder(t *testing.T, sink core.TraceSink) *core.Recorder {
 	t.Helper()
 
@@ -219,11 +197,6 @@ func recorder(t *testing.T, sink core.TraceSink) *core.Recorder {
 
 // The chunks of one content block commit as one group, and anything that is
 // not a chunk closes the block it interrupted.
-//
-// This is the half of the fold that lives in the frontend. The sink merges
-// consecutive chunks of one block within a group; this is what puts them in
-// one group. A version of this that committed a chunk at a time would leave
-// every fold in trace correct and every one of them with nothing to do.
 func TestAContentBlockCommitsAsOneGroup(t *testing.T) {
 	for _, c := range []struct {
 		name     string
@@ -413,13 +386,6 @@ func TestAProviderFailureIsAnOutcomeRatherThanAnError(t *testing.T) {
 
 // A Provider that said why it failed is answered with a class, and the class
 // reaches the record with the summary.
-//
-// The class is what a projection spends instead of the summary, so a Loop that
-// dropped it would leave every interface with a choice between showing the
-// provider's own words and showing nothing at all. It travels as a value the
-// Provider stated rather than as something read back out of the message: a
-// Loop that matched on prose would be rebuilding a fact it was handed, and
-// would go wrong silently the first time a sentence was reworded.
 func TestAClassifiedFailureReachesTheCallerAndTheRecord(t *testing.T) {
 	sink := &grouped{}
 	unit := &Loop{
@@ -448,7 +414,6 @@ func TestAClassifiedFailureReachesTheCallerAndTheRecord(t *testing.T) {
 	}
 }
 
-// faulting is a Provider whose every turn fails with one stated class.
 type faulting struct{ fault *providers.Fault }
 
 var _ providers.Provider = (*faulting)(nil)
@@ -461,10 +426,6 @@ func (f *faulting) Stream(context.Context, providers.Call) providers.Stream {
 // Outcome still says what happened to the turn, because it did happen — but
 // there is no record of it to read instead, which is the whole reason this one
 // is not silent.
-//
-// The Run is opened and closed here and only the answer is refused, so the
-// error the caller gets is the one the stream carried out rather than one the
-// close produced.
 func TestARecordThatCannotBeWrittenReachesTheCallerAsAnError(t *testing.T) {
 	sink := &refusing{refuse: 2}
 	unit := &Loop{
@@ -488,14 +449,6 @@ func TestARecordThatCannotBeWrittenReachesTheCallerAsAnError(t *testing.T) {
 	}
 }
 
-// A Run that opened is a Run that closes, even when opening it reported a
-// failure.
-//
-// A group is committed before it is published, so a projection that breaks on
-// the way out leaves the Started record in the Trace and returns an error
-// anyway. Returning there left a Run open forever — and a Run with no Finished
-// record is one a reader cannot tell from a Run still going, which is the
-// distinction the whole Trace rests on.
 func TestARunThatOpenedClosesEvenWhenOpeningItFailed(t *testing.T) {
 	sink := &grouped{}
 	broken := core.SubscriberFunc(func(context.Context, events.Event) error {
@@ -547,13 +500,6 @@ func TestARunThatOpenedClosesEvenWhenOpeningItFailed(t *testing.T) {
 	}
 }
 
-// A turn whose blocks interleave commits each block whole, in the order the
-// provider sent them.
-//
-// The fold at the sink merges consecutive chunks of one block, so a block split
-// across two groups would reach the Trace as two records where a reader expects
-// one — and a block committed out of order would put a later part of the answer
-// above an earlier one.
 func TestBlocksThatInterleaveEachCommitWhole(t *testing.T) {
 	sink := &grouped{}
 	block := newBlocks(recorder(t, sink))
@@ -587,10 +533,6 @@ func TestBlocksThatInterleaveEachCommitWhole(t *testing.T) {
 }
 
 // A payload that is not a chunk closes the block before it.
-//
-// Usage committed inside an open block would put an accounting record in the
-// middle of an answer, and the sink's fold would stop at it — turning one block
-// into two records for a reason that has nothing to do with what was said.
 func TestANonChunkClosesTheBlockBeforeIt(t *testing.T) {
 	sink := &grouped{}
 	block := newBlocks(recorder(t, sink))

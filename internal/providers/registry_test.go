@@ -17,13 +17,6 @@ func (s stub) Stream(context.Context, providers.Call) providers.Stream {
 	return providers.Failed(errors.New("stub: this Provider does not answer"))
 }
 
-// A Provider is reachable by the name it registered under, and it is built from
-// the settings a person chose.
-//
-// This is the whole of what a new Provider costs: a package that registers
-// itself, and an import naming it. Selection used to be a switch in the layer
-// that wires a run, and two of the four edits it took did not stop the build
-// when they were forgotten.
 func TestARegisteredProviderIsSelectableByName(t *testing.T) {
 	const name = "test-selectable"
 
@@ -67,10 +60,6 @@ func TestTheUnknownProviderErrorNamesWhatIsRegistered(t *testing.T) {
 }
 
 // A credential is resolved by the Provider that needs one, and never before.
-//
-// Resolved up front, a recording replayed from a file would refuse to open for
-// want of an API key it never sends, and every test that replays one would have
-// to carry a secret.
 func TestACredentialIsResolvedOnlyByAProviderThatAsks(t *testing.T) {
 	var asked bool
 	options := providers.Options{

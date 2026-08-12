@@ -2,13 +2,6 @@ package cli
 
 import "testing"
 
-// Every word the table holds is a word the command line accepts, and every word
-// it accepts is one something dispatches.
-//
-// The two used to be separate lists — a switch that consumed the words, and an
-// if-ladder that acted on them — so a word could be known to one and unknown to
-// the other. That is a command which exists right up until somebody runs it,
-// and nothing in the package would have said so.
 func TestEveryCommandTheTableHoldsIsAWordEvaAnswersTo(t *testing.T) {
 	// The words a command needs beside its own, for the one command that takes
 	// any.
@@ -35,10 +28,6 @@ func TestEveryCommandTheTableHoldsIsAWordEvaAnswersTo(t *testing.T) {
 	}
 }
 
-// A word and a prompt are two things to do, and eva does one.
-//
-// Taken together the word won and the prompt was dropped in silence, which is a
-// person watching Eva do the thing they did not ask for.
 func TestAWordAndAPromptAreRefusedTogether(t *testing.T) {
 	if _, err := parse([]string{"init", "-p", "say something"}); err == nil {
 		t.Error("eva init -p was accepted, and one of the two was going to be ignored")
@@ -46,10 +35,6 @@ func TestAWordAndAPromptAreRefusedTogether(t *testing.T) {
 }
 
 // A word Eva does not know is an argument Eva does not know.
-//
-// The empty word belongs to the turn, and is not something anybody types — so
-// it stays what it was, which is a mistake reported rather than a console
-// opened.
 func TestAWordEvaDoesNotKnowIsRefused(t *testing.T) {
 	for _, args := range [][]string{{"bogus"}, {""}} {
 		if _, err := parse(args); err == nil {

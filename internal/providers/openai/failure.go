@@ -20,9 +20,6 @@ func retryAfter(resp *http.Response) time.Duration {
 
 // refusalDoc is the error body this API answers a refusal with, in the two
 // fields that name what happened rather than describe it.
-//
-// Only these two are read. The message beside them is prose, and prose is what
-// the class exists so that nothing has to parse.
 type refusalDoc struct {
 	Error struct {
 		Type string `json:"type"`
@@ -32,18 +29,6 @@ type refusalDoc struct {
 
 // classify names why an attempt failed, and says whether another one could go
 // differently.
-//
-// The document is read first, and the status line is the fallback for the proxy
-// that answered with a page of HTML. It used to be the other way round — the
-// status alone — on the grounds that this API describes a failure in prose
-// rather than naming it. That is true of the message and false of the two
-// fields beside it, and the difference matters most where the status line lies:
-// `insufficient_quota` arrives as a 429, and read as the rate limit it looks
-// like, it spends the whole retry policy to discover the account still has no
-// credit.
-//
-// A zero status is a transport that never reached a server — a refused
-// connection, a reset — and it is worth another attempt.
 func classify(status int, body string) (events.ErrorClass, bool) {
 	var doc refusalDoc
 	// A body too long to have arrived whole does not parse, and falls through

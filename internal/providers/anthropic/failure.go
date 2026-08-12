@@ -23,11 +23,6 @@ func retryAfter(err error) time.Duration {
 
 // classify names why an attempt failed, and says whether another one could go
 // differently.
-//
-// The class comes from the error document when the API sent one, because that
-// is the API saying what happened rather than this client inferring it from a
-// status line. The status line is the fallback, for the proxy that returned a
-// page of HTML with a 502 on it.
 func classify(err error) (events.ErrorClass, bool) {
 	var apiErr *sdk.Error
 	if !errors.As(err, &apiErr) {

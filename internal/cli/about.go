@@ -12,24 +12,8 @@ import (
 	"github.com/missingstudio/eva/internal/tui"
 )
 
-// Version is the build a person is talking to.
-//
-// It is a constant rather than something read from a tag, because a binary
-// built from a working tree has no tag and would then have no version — and a
-// version that is sometimes absent is one nobody can quote in a bug report. The
-// revision below is what distinguishes two builds of one version.
 const Version = "0.1.1"
 
-// About is what the console opens saying about the run behind it.
-//
-// Every fact here comes from outside the program, which is why it is assembled
-// in this layer: a frontend that read a repository or a process for itself
-// would be a frontend reaching the world, and the whole of what it may reach is
-// the five methods of tui.Control.
-//
-// A fact that cannot be had is left empty rather than guessed, and the masthead
-// draws no line for it. Eva run outside a repository has no branch, and saying
-// "unknown" would be filling a row with the absence of information.
 func (e *eva) About() tui.About {
 	return tui.About{
 		Version: version(),
@@ -38,11 +22,6 @@ func (e *eva) About() tui.About {
 	}
 }
 
-// version is the build, and the revision when the build carries one.
-//
-// A binary built from a dirty tree says so. Two people reporting a fault from
-// "0.1.0" who are in fact on different commits is the thing this prevents, and
-// it costs seven characters.
 func version() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -72,16 +51,6 @@ func version() string {
 
 // module is what the module graph knows about this build, and is empty when
 // that adds nothing to the constant.
-//
-// A binary the module proxy produced carries no VCS stamps, because a module
-// cache is not a git tree — so `go install` leaves the revision above empty and
-// every installed build reported the same seven characters of nothing. What
-// such a build does have is the version it was resolved at, and for a branch
-// that is a pseudo-version carrying the commit. Reporting it is what stops the
-// installed binary from being the one build nobody can pin down.
-//
-// A version that only repeats the constant is dropped. Printed twice, one fact
-// reads as two.
 func module(info *debug.BuildInfo) string {
 	switch v := info.Main.Version; v {
 	case "", "(devel)", "v" + Version:
@@ -91,32 +60,12 @@ func module(info *debug.BuildInfo) string {
 	}
 }
 
-// versionReport writes what build this is, and what built it, then leaves.
-//
-// It is a CLI verb rather than a console Command, for the reason a login is:
-// what a person scripting an upgrade check runs is a process, and a Command is
-// answered inside a Console that is already open.
-//
-// Every line is a fact about the running binary. Nothing here reads a
-// configuration, a network, or a repository, so this answers on a machine where
-// Eva is not yet set up — which is most of the machines that will ask.
 func versionReport(stdout io.Writer) error {
 	_, err := fmt.Fprintf(stdout, "eva:      %s\ngo:       %s\nplatform: %s/%s\n",
 		version(), runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	return err
 }
 
-// branch is the branch of the repository the run is standing in, and is empty
-// outside one.
-//
-// It reads the file rather than running git. A subprocess to learn one word
-// would be a process spawned before the first frame is drawn, and it would put
-// a program Eva does not control on the path between starting and showing
-// something — on a machine where that program is missing, slow, or waiting on a
-// lock.
-//
-// A detached head has no branch and says nothing, which is honest: what a
-// person wants from this line is the name they would push to.
 func branch() string {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -141,12 +90,6 @@ func branch() string {
 	}
 }
 
-// workingDir is where the run is standing, with the home directory written the
-// way a person writes it.
-//
-// The home directory is shortened because the part of a path that identifies it
-// is the end, and a masthead that spent half its width on /Users/somebody would
-// push the part that matters off a narrow window.
 func workingDir() string {
 	dir, err := os.Getwd()
 	if err != nil {

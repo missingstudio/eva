@@ -10,9 +10,6 @@ import (
 // A console is a prompt, so a binding on a bare printable key takes that
 // character away from whoever is typing. Bind j to scroll down and a person
 // cannot write "just".
-//
-// This is the rule this package exists to hold. It lived in a comment beside a
-// switch, where it bound whoever read the comment.
 func TestABarePrintableKeyIsRefused(t *testing.T) {
 	for _, chord := range []string{"j", "k", "q", " ", "/", "1", "J"} {
 		t.Run(chord, func(t *testing.T) {
@@ -116,7 +113,6 @@ func TestAnActionBoundToNothingIsRefused(t *testing.T) {
 	}
 }
 
-// The defaults are what Eva answered to before any of this could be configured.
 func TestTheDefaultsAreTheKeysEvaAlwaysAnsweredTo(t *testing.T) {
 	keys := keymap.Default()
 
@@ -141,7 +137,6 @@ func TestTheDefaultsAreTheKeysEvaAlwaysAnsweredTo(t *testing.T) {
 	}
 }
 
-// Every default binding obeys the rule the package enforces on a person's.
 func TestNoDefaultBindingStealsAPromptCharacter(t *testing.T) {
 	keys := keymap.Default()
 	for _, action := range keymap.Actions() {
@@ -194,7 +189,6 @@ func TestAChordThatNoTerminalReportsIsRefused(t *testing.T) {
 	}
 }
 
-// A chord with two modifiers is one a terminal does report.
 func TestATwoModifierChordIsAccepted(t *testing.T) {
 	keys, err := keymap.Parse(map[string][]string{"follow": {"ctrl+shift+g"}})
 	if err != nil {

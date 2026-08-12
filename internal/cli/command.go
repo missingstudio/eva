@@ -16,15 +16,6 @@ import (
 	"github.com/missingstudio/eva/internal/tui/keymap"
 )
 
-// stage is how much of a run has to be standing before a command can answer.
-//
-// It is declared beside each command because the ordering is a constraint and
-// not a habit: what build this is has to be answerable on a machine where
-// nothing else works yet, a status report has to answer for the credential that
-// is missing rather than require one, and only a turn needs a Provider. Held as
-// the order of statements in one function, those facts were true for exactly as
-// long as nobody moved a line, and nothing anywhere would have failed when
-// somebody did.
 type stage uint8
 
 const (
@@ -35,14 +26,7 @@ const (
 	assembled
 )
 
-// command is a word eva is asked with.
-//
-// The turn is one of them, under the empty name. eva with no word is the
-// console and eva -p is one turn on a stream, and what those need standing is
-// the same kind of fact as what every other command needs — so it is a row in
-// the table rather than the else of an if.
 type command struct {
-	// name is the word a person types, and is empty for the turn.
 	name string
 	// parse consumes the words that belong to this command and hands back the
 	// rest for the flags. It is nil for a command that takes no words of its
@@ -52,12 +36,6 @@ type command struct {
 	do    func(ctx context.Context, r *run) error
 }
 
-// commands are the words eva answers to.
-//
-// It is a function rather than a variable because the entries close over
-// nothing and the table is read twice per process — once to parse and once to
-// dispatch. Both readings come from here, so a word that parses is a word that
-// runs.
 func commands() []command {
 	return []command{
 		{
@@ -120,11 +98,6 @@ func commands() []command {
 	}
 }
 
-// lookup finds the command a word asks for.
-//
-// The empty name belongs to the turn and is not a word anybody types, so a
-// caller holding one that came from a command line has to refuse it before
-// asking here.
 func lookup(word string) (command, bool) {
 	for _, c := range commands() {
 		if c.name == word {
@@ -134,18 +107,11 @@ func lookup(word string) (command, bool) {
 	return command{}, false
 }
 
-// run is what a command is handed: the streams it answers on, what the command
-// line said, and as much of the machine as its stage needs standing.
-//
-// The fields past the streams are filled by perform in stage order and are the
-// zero value for a command that declared it does not need them. A version
-// report that read cfg would be reading a file it promised not to.
 type run struct {
 	opts   options
 	stdin  io.Reader
 	stdout io.Writer
 
-	// cfg is the configuration, and is read for a command that needs one.
 	cfg config.Config
 
 	// eva, look and keys stand only for a command that needs an assembly.
@@ -154,7 +120,6 @@ type run struct {
 	keys keymap.Keymap
 }
 
-// perform builds as much of a run as the command needs, and answers with it.
 func (r *run) perform(ctx context.Context) (err error) {
 	cmd, found := lookup(r.opts.command)
 	if !found {
@@ -183,12 +148,6 @@ func (r *run) perform(ctx context.Context) (err error) {
 	}
 	// A Trace that failed to flush is not a successful run, whatever the turn
 	// claimed.
-	//
-	// It does not replace a failure the turn already reported, and it is not
-	// dropped for one either. A person who asked a question is owed why it went
-	// unanswered; a person whose record did not reach the disk is owed the one
-	// fact that says something was lost, and it is the fact nowhere else can
-	// tell them.
 	defer func() {
 		cerr := finish()
 		switch {
@@ -205,11 +164,6 @@ func (r *run) perform(ctx context.Context) (err error) {
 // assemble builds what a turn is answered with — the Provider configuration
 // selects, the sink every Event lands in, the Session both are folded into, and
 // the look the answer is drawn in — and returns the close that ends the Trace.
-//
-// The look is resolved here rather than when a frontend opens, so that a file a
-// person got wrong is reported whichever way they ran Eva. A theme that was
-// only read when the console opened would make a broken configuration a thing
-// that depends on how you started the program.
 func (r *run) assemble() (func() error, error) {
 	provider, err := open(r.cfg)
 	if err != nil {

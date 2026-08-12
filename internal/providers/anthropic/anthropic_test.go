@@ -25,12 +25,7 @@ import (
 // wire protocol: server-sent events, the real error documents, the real status
 // codes. Nothing is stubbed inside the SDK, so what runs here is the decoding
 // path a live turn takes — and nothing needs the network or a credential.
-//
-// What they assert on is the payload sequence the Provider yields. That is the
-// whole of its contract: a Provider says what happened, and something else
-// decides how it is recorded.
 
-// frame is one server-sent event.
 func frame(kind, data string) string {
 	return fmt.Sprintf("event: %s\ndata: %s\n\n", kind, data)
 }
@@ -46,12 +41,10 @@ type reply struct {
 	header map[string]string
 }
 
-// stream is a reply that answers, built from its frames.
 func stream(frames ...string) reply {
 	return reply{status: http.StatusOK, body: strings.Join(frames, "")}
 }
 
-// fails is a reply that refuses, with the error document the API sends.
 func fails(status int, kind string) reply {
 	return reply{
 		status: status,
@@ -59,14 +52,12 @@ func fails(status int, kind string) reply {
 	}
 }
 
-// after is a refusal that says how long to wait, in seconds.
 func after(seconds string) reply {
 	r := fails(http.StatusTooManyRequests, "rate_limit_error")
 	r.header = map[string]string{"Retry-After": seconds}
 	return r
 }
 
-// serve replays the replies, and reports how many requests it received.
 func serve(t *testing.T, replies ...reply) (base string, requests func() int) {
 	t.Helper()
 
@@ -150,8 +141,6 @@ func open(t *testing.T, base string) *anthropic.Provider {
 	return p
 }
 
-// ask streams one prompt and returns every payload, and the failure the turn
-// ended on.
 func ask(t *testing.T, p *anthropic.Provider) ([]events.Payload, error) {
 	t.Helper()
 
@@ -274,8 +263,6 @@ func TestCacheWritesAndCacheReadsAreSeparateFigures(t *testing.T) {
 	}
 }
 
-// nil means the provider did not tell us and 0 means none were used.
-// Collapsing the two is how a cost report becomes confidently wrong.
 func TestWhatAnthropicDoesNotReportIsAbsentRatherThanZero(t *testing.T) {
 	base, _ := serve(t, stream(
 		frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":12,"output_tokens":1}}}`),
@@ -477,8 +464,6 @@ func TestARetriedRequestReportsTheAttemptAndTheErrorClass(t *testing.T) {
 	}
 }
 
-// answers is the frames of a turn that succeeded, for the tests whose subject
-// is what happened before it.
 func answers(said string) reply {
 	return stream(
 		frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":12,"output_tokens":1}}}`),
@@ -638,8 +623,6 @@ func TestExhaustedRetriesReportEveryAttemptAndThenFail(t *testing.T) {
 	}
 }
 
-// A stream that breaks part way still cost what it had already spent, and the
-// caller has to be told both things.
 func TestAStreamThatBreaksReportsWhatWasBilledAndThenTheFailure(t *testing.T) {
 	base, _ := serve(t, stream(
 		frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":1200,"output_tokens":1,"cache_creation_input_tokens":400,"cache_read_input_tokens":900}}}`),
@@ -772,11 +755,6 @@ func TestTheProviderRegistersItselfUnderItsPublishedName(t *testing.T) {
 	}
 }
 
-// A stream that has ended goes on saying so.
-//
-// Next loops until it has something to return, so a state that neither queued a
-// payload nor set an ending would spin forever. Reading past the end is the
-// cheapest way to prove every terminal state is terminal.
 func TestReadingPastTheEndKeepsReturningEOF(t *testing.T) {
 	base, _ := serve(t, stream(
 		frame("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":1,"output_tokens":1}}}`),
@@ -837,7 +815,6 @@ func TestACancelledStreamStopsAndStaysStopped(t *testing.T) {
 	}
 }
 
-// The Provider contract, driven through the seam every Provider shares.
 func TestAnthropicKeepsTheProviderContract(t *testing.T) {
 	providertest.Run(t, providertest.Contract{
 		Answers: func(t *testing.T) providers.Provider {
@@ -867,12 +844,6 @@ func TestAnthropicKeepsTheProviderContract(t *testing.T) {
 
 // A model this provider does not serve, and a balance that will not cover the
 // turn, are each their own class rather than "we could not place this".
-//
-// They decide the same thing about retrying, which is why they were one answer
-// once. They decide the opposite thing about what a person does next: one is a
-// name in a file they can change, and the other is an account they have to go
-// and settle. A class that answered only the first question left both arriving
-// on screen as the line reserved for failures nobody classified.
 func TestAFixableRefusalIsClassedApartFromOneNobodyCanPlace(t *testing.T) {
 	for _, c := range []struct {
 		name   string

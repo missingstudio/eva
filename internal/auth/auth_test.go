@@ -35,7 +35,6 @@ func token(t *testing.T, accountID string) string {
 	return "header." + payload + ".signature"
 }
 
-// server points the package at an httptest server for one test.
 func server(t *testing.T, handler http.Handler) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(handler)
@@ -47,8 +46,6 @@ func server(t *testing.T, handler http.Handler) *httptest.Server {
 	return srv
 }
 
-// approval is a device flow scripted end to end: a user code, a number of
-// pending polls, then the approval and the exchange.
 func approval(t *testing.T, pendingPolls int, accountID string) http.Handler {
 	t.Helper()
 	polls := 0
@@ -157,11 +154,6 @@ func TestTheStoreRoundTripsAndKeepsTheFilePrivate(t *testing.T) {
 	// there sets one read-only bit, and Perm() reports 0666 for any writable file
 	// whatever was asked for — so asserting 0600 on that platform would be
 	// asserting something the platform cannot express either way.
-	//
-	// What keeps the file private on Windows is the ACL it inherits from the
-	// user's profile directory, which a FileMode cannot describe and this test
-	// therefore cannot check. That is a real gap and it is named rather than
-	// hidden: the check does not run there, and the log says so.
 	if runtime.GOOS == "windows" {
 		t.Log("degraded: file modes are not POSIX here, so 0600/0700 went unchecked")
 		return

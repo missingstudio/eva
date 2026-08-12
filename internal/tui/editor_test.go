@@ -20,13 +20,6 @@ func TestNoEditorIsSaidRatherThanGuessedAt(t *testing.T) {
 	}
 }
 
-// The prompt goes into the file, and what was saved comes back into the prompt.
-//
-// The two halves are asserted apart because a test cannot run an editor: what
-// happens in between is a program taking the terminal, and the library's own job.
-// What is Eva's is the file — that it starts as the prompt, that what it holds
-// afterwards is what a person is left typing, and that it does not outlive the
-// keystroke.
 func TestThePromptGoesThroughTheEditorAndComesBack(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 20)
@@ -60,7 +53,6 @@ func TestThePromptGoesThroughTheEditorAndComesBack(t *testing.T) {
 	}
 }
 
-// An editor that failed says so and leaves the prompt alone.
 func TestAnEditorThatFailedLeavesThePromptAlone(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 20)

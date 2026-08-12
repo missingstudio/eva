@@ -13,15 +13,8 @@ import (
 // with input disabled and output redirected. What they assert on is what an
 // outside reader could — the bytes a person would have read, the transcript the
 // Provider was called with, and the records in the Trace.
-//
-// A command that reached the model by mistake would open a Run, so most of
-// these begin with a Provider that has no recording: the mistake would fail the
-// turn loudly rather than pass quietly.
 
 // answers types a command and returns what appeared because of it.
-//
-// What went before is cut off, so that a test can say what this command wrote
-// rather than searching a whole transcript for it.
 func (d *dialogue) answers(t *testing.T, typed string) string {
 	t.Helper()
 
@@ -31,11 +24,6 @@ func (d *dialogue) answers(t *testing.T, typed string) string {
 	// Two blocks: the prompt echoed back, and what the command answered. They
 	// are separated by a blank line and the echo lands first, so waiting for the
 	// second separator is waiting for the answer.
-	//
-	// Looked for after the echo rather than counted over the whole fragment. A
-	// block is spaced off the one before it, so the echo alone already carries a
-	// blank line — and on an empty transcript it carries no leading one at all,
-	// so any fixed count is wrong for one case or the other.
 	var said string
 	d.settle(t, func() bool {
 		said = strings.TrimPrefix(d.read(), before)
@@ -46,11 +34,6 @@ func (d *dialogue) answers(t *testing.T, typed string) string {
 }
 
 // /help answers, and answering is not a turn.
-//
-// That /help lists every command is tui's to assert, because the command table
-// is tui's — see TestHelpListsEveryCommand there. What is asserted here is the
-// part that needs the whole assembly: a command is answered by the console, so
-// no Run opens and the Trace holds no record of a turn that never ran.
 func TestHelpAnswersWithoutOpeningARun(t *testing.T) {
 	d := begin(t)
 
@@ -62,7 +45,6 @@ func TestHelpAnswersWithoutOpeningARun(t *testing.T) {
 	}
 }
 
-// A command nobody has says so, and the Session goes on.
 func TestAnUnknownCommandNamesItselfAndDoesNotEndTheSession(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"still here."}})
 
@@ -86,14 +68,6 @@ func TestAnUnknownCommandNamesItselfAndDoesNotEndTheSession(t *testing.T) {
 	d.settle(t, func() bool { return strings.Contains(d.read(), "still here.") })
 }
 
-// /cost reports what the whole Session has cost, on demand.
-//
-// Not what the last turn cost. That figure was reported beside this one and was
-// the one that aged fastest — true for a turn, restated on the next, and never
-// the number a person is deciding on.
-//
-// Each turn of the script reports 10 in and 20 out, so after two of them the
-// figures are known without computing them the way the code does.
 func TestCostReportsTheWholeSessionOnDemand(t *testing.T) {
 	d := begin(t,
 		recording{chunks: []string{"Eva is a software factory."}},
@@ -214,10 +188,6 @@ func TestModelWithNoNameReportsTheModelInUse(t *testing.T) {
 	}
 }
 
-// /clear empties the transcript, and the process goes on.
-//
-// The turn after it is conditioned on itself alone: what a cleared transcript
-// is for is a next prompt the earlier ones no longer cost anything to answer.
 func TestClearEmptiesTheTranscriptWithoutEndingTheProcess(t *testing.T) {
 	d := begin(t,
 		recording{chunks: []string{"Eva is a software factory."}},
@@ -242,15 +212,6 @@ func TestClearEmptiesTheTranscriptWithoutEndingTheProcess(t *testing.T) {
 	}
 }
 
-// /clear empties the pane as well as the Session.
-//
-// The transcript is the console's own now rather than the terminal's scrollback,
-// and a command whose whole job is to empty a transcript that leaves it on
-// screen is a command a person has to take on trust every time they use it.
-//
-// The second half is what makes the first half safe: what left the screen is
-// still in the Trace. That is the difference between closing a window on
-// evidence and destroying it.
 func TestClearEmptiesThePane(t *testing.T) {
 	d := begin(t, recording{chunks: []string{"Eva is a software factory."}})
 
@@ -264,11 +225,6 @@ func TestClearEmptiesThePane(t *testing.T) {
 	// transcript is its own evidence; a line reporting it would be the loudest
 	// thing left on screen, which is to say the command would not have done
 	// what it says.
-	//
-	// What is left is the masthead, and that is not a report: /clear opens a
-	// new Session (ADR 0019), and a new Session opens the way the process did.
-	// A console that forgot which model was answering because a person cleared
-	// a conversation would have cleared more than they asked it to.
 	d.settle(t, func() bool { return !strings.Contains(d.read(), "software factory") })
 
 	shown := d.read()

@@ -15,17 +15,10 @@ import (
 	"github.com/missingstudio/eva/internal/providers"
 )
 
-// wire is this Provider's half of a turn: one POST, and the server-sent-event
-// body it answers with.
-//
-// Everything around it — the queue, the retry that is a record before it is a
-// wait, the books closing once — is the Driver's, and is the same here as it is
-// for a Provider that speaks a vendor's SDK.
 type wire struct {
 	provider *Provider
 	body     []byte
 
-	// resp and frames are the connection, once there is one.
 	resp   *http.Response
 	frames *bufio.Scanner
 
@@ -39,11 +32,6 @@ type wire struct {
 
 var _ providers.Wire = (*wire)(nil)
 
-// Dial makes one attempt.
-//
-// The credential is resolved here, per attempt, rather than once for the turn:
-// a subscription token renews under a long session, and the attempt made after
-// a retry wait must send the token that is live then.
 func (w *wire) Dial(ctx context.Context) *providers.Refusal {
 	token, err := w.provider.credential.Resolve()
 	if err != nil {
@@ -105,10 +93,6 @@ func refused(status int, detail string, asked time.Duration) *providers.Refusal 
 }
 
 // pump advances the connection by one frame.
-//
-// The lines between frames — the blank separators, the event names, the [DONE]
-// sentinel — say nothing a Trace needs, so this reads until it has one data
-// frame or the stream is over.
 func (w *wire) Pump(d *providers.Driver) {
 	for w.frames.Scan() {
 		data, ok := strings.CutPrefix(strings.TrimSpace(w.frames.Text()), "data:")
@@ -147,7 +131,6 @@ func (w *wire) Pump(d *providers.Driver) {
 	d.Break(events.ErrorUnreachable, fmt.Errorf("openai: the stream ended before the response completed"))
 }
 
-// Close releases the connection.
 func (w *wire) Close() error {
 	if w.resp == nil {
 		return nil
@@ -157,7 +140,6 @@ func (w *wire) Close() error {
 	return resp.Body.Close()
 }
 
-// frame acts on one frame of the turn.
 func (w *wire) frame(d *providers.Driver, frame wireFrame) {
 	switch frame.Type {
 	case "response.output_text.delta":
@@ -235,12 +217,6 @@ func (w *wire) count(block, n int) {
 	w.emitted[block] += n
 }
 
-// spend reads what the terminal frame said the turn cost.
-//
-// The figures arrive once, so unlike Anthropic's two-frame books there is
-// nothing to restate — but the nullability is the same, and it is the Spend's
-// rule rather than this Provider's. What is this Provider's is knowing that
-// this API says "did the API state this" by sending a null.
 func spend(s *providers.Spend, u *wireUsage) {
 	if u == nil {
 		return
@@ -256,7 +232,6 @@ func spend(s *providers.Spend, u *wireUsage) {
 	// Cache writes stay absent: this API has no such figure.
 }
 
-// stated unwraps one nullable figure into the number and whether there was one.
 func stated(n *int64) (int64, bool) {
 	if n == nil {
 		return 0, false
@@ -264,7 +239,6 @@ func stated(n *int64) (int64, bool) {
 	return *n, true
 }
 
-// wireFrame is one SSE data frame, holding whichever fields its type uses.
 type wireFrame struct {
 	Type        string          `json:"type"`
 	OutputIndex int             `json:"output_index"`

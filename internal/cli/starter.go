@@ -14,12 +14,6 @@ import (
 	"github.com/missingstudio/eva/internal/tui/keymap"
 )
 
-// initialise writes a starter configuration and says where it went.
-//
-// A file that is already there is refused rather than replaced, and the refusal
-// is the command line's mistake rather than a fault: a person who has a
-// configuration asked for something Eva must not do, and a script is owed that
-// distinction before it decides whether to try again.
 func initialise(path string, stdout io.Writer) error {
 	written, err := config.Init(path, starter())
 	if err != nil {
@@ -29,21 +23,6 @@ func initialise(path string, stdout io.Writer) error {
 	return err
 }
 
-// starter is the configuration a first run is given.
-//
-// Every line of it is commented out, and that is the point: the file documents
-// the surface without choosing anything on a person's behalf, so the defaults
-// go on being the defaults until someone deliberately writes one down. A
-// starter that pinned today's model would quietly hold a person on it through
-// every release after, and they would have no way to tell that was happening.
-//
-// Nothing here is written out in its own words. The models, the Providers, the
-// sinks, the keys, and every value shown are read from the same places the
-// program reads them, because a template that restates a default is a template
-// that goes stale in the commit that changes one — and nothing fails when it
-// does. That is why this is composed here rather than in config: this is the
-// layer that can see the registries and the interface, and config is the layer
-// that must not.
 func starter() string {
 	look, keys := theme.Default(true), keymap.Default()
 

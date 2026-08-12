@@ -32,8 +32,6 @@ type fixed struct {
 	// what the console does with one. The zero value is a machine nothing could
 	// be established about, which is what most failures leave behind.
 	remedy render.Remedy
-	// editor is what this machine names to write a long prompt in. The zero value
-	// is a machine that names none.
 	editor Editor
 }
 
@@ -58,16 +56,6 @@ var escapes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
 
 func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 
-// The row under the prompt says what is happening at its near end and which model
-// is answering at its far end.
-//
-// One row for both, because neither ever fills its own and two rows of grey under
-// the prompt are two rows the transcript does not get. They are read at different
-// moments as well — the left while a turn runs, the right when somebody wonders
-// what a conversation has cost — so they do not compete.
-//
-// A person who has just used /model should not have to use it again to find out
-// what it did.
 func TestTheFooterPutsTheModelAtTheFarEnd(t *testing.T) {
 	// A whole console, because the footer now reads what the Session has spent
 	// and the fold is what knows.
@@ -107,11 +95,6 @@ func TestTheFooterKeepsQuietWhenItHasNoRoom(t *testing.T) {
 	}
 }
 
-// The status line says a turn is running, for how long, and how to stop it.
-//
-// The elapsed figure is what a person decides on: an answer that has not
-// started arriving looks exactly like an interface that has stopped, and the
-// difference between the two is how long it has been.
 func TestTheStatusLineSaysHowLongTheTurnHasRun(t *testing.T) {
 	c := &Console{
 		styles: newStyles(theme.Default(true)),
@@ -178,13 +161,6 @@ func TestArrivingTextIsShownWithoutBeingKept(t *testing.T) {
 	}
 }
 
-// A turn is on screen once, not twice.
-//
-// The rendered turn arrives with the record that closes the Run, and the Run's
-// own closing reaches the interface as a separate message afterwards. Erasing
-// the chunks on the later one leaves the answer shown twice — once as what
-// arrived, once as what was kept — and nothing recomposes after it, so it stays
-// that way until the next turn.
 func TestAnAnsweredTurnIsShownOnce(t *testing.T) {
 	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
 	if err != nil {
@@ -207,13 +183,6 @@ func TestAnAnsweredTurnIsShownOnce(t *testing.T) {
 	}
 }
 
-// The view is exactly the window it was given.
-//
-// A view a row too tall scrolls the terminal and leaves a duplicate line behind
-// on every frame; a row too short leaves a band the interface never draws into.
-// Neither announces itself, which is why the arithmetic is asserted rather than
-// looked at — and why the chrome is measured rather than counted, since the
-// status line grows a row when a prompt is queued behind a turn.
 func TestTheViewIsExactlyTheWindow(t *testing.T) {
 	for _, size := range []struct{ width, height int }{
 		{80, 24}, {120, 60}, {200, 15}, {40, 10}, {30, 6}, {24, 5}, {20, 4},
@@ -232,16 +201,6 @@ func TestTheViewIsExactlyTheWindow(t *testing.T) {
 
 // The view is never wider than the window, and it is inset from both edges while
 // the window can spare it.
-//
-// A terminal has no window frame of its own, so text against the first column
-// reads as text against the edge of the screen. The margin is what answers that,
-// and it is applied once, to the finished frame — every piece is composed to the
-// width it leaves. Get that wrong in one place and the frame hangs past the
-// right-hand edge of the terminal, which is what happened: three sizings read the
-// window where they had to read what was left of it.
-//
-// The narrow cases are here because a margin is the first thing a small window
-// gives up. Below forty columns every column belongs to the answer.
 func TestTheViewFitsTheWindowAndIsInsetFromItsEdges(t *testing.T) {
 	for _, size := range []struct{ width, height int }{
 		{120, 30}, {88, 24}, {60, 12}, {44, 9}, {40, 8}, {36, 8}, {24, 6}, {20, 4},
@@ -297,10 +256,6 @@ func TestASmallWindowKeepsThePrompt(t *testing.T) {
 
 // The transcript scrolls by key, and the keys that scroll it are never keys
 // that also type.
-//
-// The second half is the one that matters. The pane's own defaults bind j, k,
-// space, f, b, u and d — and ctrl+d, which is how this console is left — so a
-// pane holding them would make the prompt unusable and would do it silently.
 func TestTheTranscriptScrollsWithoutStealingCharacters(t *testing.T) {
 	c := drawn(t)
 	c.layout(40, 10)
@@ -326,9 +281,6 @@ func TestTheTranscriptScrollsWithoutStealingCharacters(t *testing.T) {
 }
 
 // A prompt typed while a turn is running waits for it rather than being lost.
-//
-// Dropping the keys was the old behaviour and it was silent: a person watched
-// the characters appear, pressed enter, and had nothing to show for either.
 func TestAPromptTypedDuringATurnWaitsForIt(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -364,11 +316,6 @@ func TestAPromptTypedDuringATurnWaitsForIt(t *testing.T) {
 	}
 }
 
-// An idle ctrl+c asks before it ends a Session, and any other key answers no.
-//
-// It sits next to the key that interrupts a turn, and a Session is an hour of
-// somebody's work by the time it is worth keeping. ctrl+d stays one press,
-// because nobody types it by accident.
 func TestAnIdleCtrlCAsksBeforeItLeaves(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -395,10 +342,6 @@ func TestAnIdleCtrlCAsksBeforeItLeaves(t *testing.T) {
 
 // The footer says how much transcript is below a person who has scrolled away
 // from the end, and says nothing while they are at it.
-//
-// It is what a scrolling pane needs and a scrollback never did: a person
-// scrolled up during a streaming answer sees a screen that does not change, and
-// nothing else on it tells that apart from a program that has stopped.
 func TestTheFooterSaysHowMuchIsBelow(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -433,15 +376,6 @@ func drawn(t *testing.T) *Console {
 	return c
 }
 
-// The prompt takes more than one line, and grows to what is being written.
-//
-// A person writing to a model writes paragraphs and pastes stack traces. A
-// single-line field scrolls all of that sideways past a fixed window, which
-// leaves what they are about to send as the one thing on screen they cannot
-// read.
-//
-// Enter still sends, so the newline is on a chord. What the pane gives up is
-// what the prompt takes, exactly: the window is the window.
 func TestThePromptGrowsWithoutTakingTheWindow(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 20)
@@ -482,15 +416,6 @@ func TestThePromptGrowsWithoutTakingTheWindow(t *testing.T) {
 	}
 }
 
-// A window that changed size takes the turns already on screen with it.
-//
-// An answer is wrapped by the fold that rendered it, to whatever the window was
-// at the time. Nothing about that survives a resize on its own: narrow the
-// window and every answer on screen overruns it, widen it and they stand in a
-// column with the rest of the screen empty beside them.
-//
-// What a person typed is left alone. It was never wrapped to anything, and where
-// it sits in the order is what makes the transcript readable.
 func TestAResizedWindowRewrapsTheTurnsAlreadyAnswered(t *testing.T) {
 	c := drawn(t)
 	c.layout(100, 20)
@@ -527,17 +452,6 @@ func TestAResizedWindowRewrapsTheTurnsAlreadyAnswered(t *testing.T) {
 	}
 }
 
-// Every look Eva ships with draws a whole screen.
-//
-// It is one test because the failure it catches is not a look's own: the masthead
-// draws a gradient from the accent, and a look that names no accent — mono does,
-// on purpose — reached a colour that was not there. Nothing else would have found
-// that, because every test in this file builds the default look.
-//
-// A look is a set of colours and measurements, and the interface reads them in
-// places no reviewer holds in their head at once. So the assertion is the
-// coarsest one available and it is the right one: draw everything, with every
-// look, and require that it draws.
 func TestEveryLookDrawsAWholeScreen(t *testing.T) {
 	for _, name := range theme.Names() {
 		t.Run(name, func(t *testing.T) {
@@ -573,14 +487,6 @@ func TestEveryLookDrawsAWholeScreen(t *testing.T) {
 
 // A turn that produced no answer is not drawn in the grey the interface says
 // everything else about itself in.
-//
-// Everything the console says about itself is subdued, because the answer is what
-// a person came for. A failure is the exception, and it has to be: in the same
-// grey as "ready" and the cost figure, the one line a person must not miss read
-// as one more line they could skip.
-//
-// Interruption stays subdued. It is not a failure to be found on a screen — it is
-// the thing the person just did.
 func TestAFailedTurnIsNotDrawnAsAHint(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
@@ -628,13 +534,6 @@ func opens(style lipgloss.Style) string {
 	return opening
 }
 
-// The footer is one row whether or not a person has scrolled.
-//
-// It is an invariant rather than a detail of the drawing. The pane's height is
-// what is left after the chrome, and the footer is the one piece of chrome that
-// reads the pane — so a footer that grew a row when somebody scrolled would take
-// a row from the thing it is reporting on, which would change what it reports.
-// The count of what is below is therefore written to fit a row it already has.
 func TestTheFooterIsOneRowWhetherOrNotSomebodyHasScrolled(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -657,13 +556,6 @@ func TestTheFooterIsOneRowWhetherOrNotSomebodyHasScrolled(t *testing.T) {
 	}
 }
 
-// settle resizes the window the way the program does, and waits for the turns
-// to be drawn again.
-//
-// A size arrives as a message and the console answers with a command that fires
-// once the window has stopped moving; running it is what the runtime would do.
-// So this is the whole path, including the wait — a test that called layout
-// itself would assert about a resize no window ever performs.
 func settle(t *testing.T, c *Console, width, height int) {
 	t.Helper()
 
@@ -676,14 +568,6 @@ func settle(t *testing.T, c *Console, width, height int) {
 	}
 }
 
-// A window still being dragged is drawn again once, at the width it stopped on.
-//
-// Every column an edge crosses is reported, and re-rendering a conversation's
-// markdown takes tens of milliseconds — so a drag that acted on each of them
-// spent seconds not answering a keystroke, for forty pictures nobody saw. What
-// this asserts is the coalescing: the sizes in the middle of a drag leave the
-// interface fitted and the turns alone, and the last one is the width they are
-// drawn at.
 func TestADraggedWindowIsDrawnAgainOnceAtTheWidthItStopsOn(t *testing.T) {
 	c := drawn(t)
 	c.layout(100, 20)
@@ -725,7 +609,6 @@ func TestADraggedWindowIsDrawnAgainOnceAtTheWidthItStopsOn(t *testing.T) {
 	}
 }
 
-// widest is the longest line in a block of text.
 func widest(s string) int {
 	over := 0
 	for _, line := range strings.Split(s, "\n") {
@@ -734,13 +617,6 @@ func widest(s string) int {
 	return over
 }
 
-// What is arriving and what is kept sit in the same column.
-//
-// They are the same answer a moment apart, so a person watching one become the
-// other should see nothing move. They did move: the fold indented a finished
-// document by two columns of its own while the chunks arrived at column zero, so
-// every answer stepped sideways the instant its Run closed. One owner of the
-// inset is what fixes that, and this is the assertion that keeps it one.
 func TestAnAnswerDoesNotMoveWhenItStopsArriving(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -774,16 +650,6 @@ func TestAnAnswerDoesNotMoveWhenItStopsArriving(t *testing.T) {
 
 // An arriving answer that costs a lot to draw is drawn less often, and it is
 // never left undrawn.
-//
-// The interface draws in the loop that reads the keys, so the cost of drawing a
-// long answer is what a keystroke waits behind. What bounds it is the cost
-// itself: the next drawing waits until a multiple of what the last one took has
-// passed. A cheap answer is therefore unaffected, which is what the first half
-// of this asserts by leaving the recorded cost at nothing.
-//
-// The second half is the part that could go wrong quietly. A frame that declines
-// to draw has to leave the interface knowing it is behind, or the newest text
-// waits for whatever arrives next — and at the end of a turn nothing does.
 func TestAnExpensiveAnswerIsDrawnLessOftenAndIsNotLost(t *testing.T) {
 	c := drawn(t)
 	c.layout(80, 20)
@@ -821,10 +687,6 @@ func TestAnExpensiveAnswerIsDrawnLessOftenAndIsNotLost(t *testing.T) {
 	}
 }
 
-// A turn that ends takes the drawing of what was arriving with it.
-//
-// The next turn draws nothing until its own first chunk, and a drawing left
-// behind would be the last turn's words under the new turn's spinner.
 func TestTheDrawingOfAnArrivingAnswerDoesNotOutliveItsTurn(t *testing.T) {
 	c := drawn(t)
 	c.layout(80, 20)
@@ -840,18 +702,6 @@ func TestTheDrawingOfAnArrivingAnswerDoesNotOutliveItsTurn(t *testing.T) {
 	}
 }
 
-// A block kept from an earlier frame draws the same as one drawn now.
-//
-// A frame hands on the rows it drew before rather than splitting the whole
-// transcript again, which is what makes a long conversation cost the same as a
-// short one. What that buys is only worth having if the two can never differ, so
-// this asks the question at each of the three moments a drawing could go stale:
-// after a block is kept, after the window changes width, and after the terminal
-// says what colour it is.
-//
-// It is the falsifier for the whole arrangement. A drawing kept past something
-// that changed it is the interface showing a person a screen that is no longer
-// true, and it would show it silently.
 func TestABlockKeptFromAnEarlierFrameIsStillTrue(t *testing.T) {
 	c := drawn(t)
 	c.layout(80, 20)
@@ -890,10 +740,6 @@ func TestABlockKeptFromAnEarlierFrameIsStillTrue(t *testing.T) {
 
 // The gutter says whose block it is: a person's mark, Eva's mark, and no mark
 // at all for the interface talking about itself.
-//
-// The two marks differ in colour rather than in shape, because what they are for
-// is being found without being read. Everything is inset by the same width, so
-// the edge they stand on is straight.
 func TestTheGutterSaysWhoseBlockItIs(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -931,7 +777,6 @@ func TestTheGutterSaysWhoseBlockItIs(t *testing.T) {
 	}
 }
 
-// column is the display column the given text starts at on the line holding it.
 func column(t *testing.T, screen, text string) int {
 	t.Helper()
 
@@ -945,12 +790,6 @@ func column(t *testing.T, screen, text string) int {
 }
 
 // One blank line stands between blocks, and it carries no mark.
-//
-// Without it a prompt and the answer under it are adjacent lines of one band,
-// and a conversation reads as a wall. The gap is what makes each exchange a
-// thing you can find. It is unmarked because a marked gap would join the two
-// bands it is there to separate — while a blank line *inside* a block keeps its
-// mark, since a paragraph break in one answer is not a boundary between two.
 func TestBlocksAreSpacedApartAndTheGapCarriesNoMark(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -991,12 +830,6 @@ func TestABlockIsTrimmedOfTheBlankLinesItArrivedWith(t *testing.T) {
 }
 
 // An answer is formatted while it arrives, not only once it is over.
-//
-// It goes through the same fold at the same width as the turn that will replace
-// it, so that when the record lands nothing on screen changes shape. It used to
-// be the raw bytes: a list arrived as hyphens and re-set itself as bullets the
-// instant the Run closed, which put the most visible event on the screen at the
-// exact moment a person had finally got what they were waiting for.
 func TestAnAnswerIsFormattedWhileItArrives(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -1105,10 +938,6 @@ func TestAReboundKeyIsTheKeyThatWorks(t *testing.T) {
 }
 
 // The hint naming a key reads the binding, so help and behaviour cannot drift.
-//
-// A footer that said "ctrl+end to follow" while ctrl+end did nothing would be a
-// help text and a behaviour that had come apart, and the person reading it
-// would be the one to find out.
 func TestTheFollowHintNamesTheKeyThatFollows(t *testing.T) {
 	keys, err := keymap.Parse(map[string][]string{"follow": {"ctrl+g"}})
 	if err != nil {
@@ -1138,12 +967,6 @@ func TestTheFollowHintNamesTheKeyThatFollows(t *testing.T) {
 
 // An interrupted Run is not an ended one, and the console stays busy until its
 // close arrives.
-//
-// Forgetting the Run at the moment it was cancelled made the console idle for
-// the window between ctrl+c and the close being folded in. A prompt typed in
-// that window opened a second Run instead of queueing, and then the first Run's
-// close arrived and cancelled the second one, reset its stream, and dropped
-// whatever was queued behind it.
 func TestAnInterruptedRunIsStillInHandUntilItCloses(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -1182,7 +1005,6 @@ func TestAnInterruptedRunIsStillInHandUntilItCloses(t *testing.T) {
 	c.stop()
 }
 
-// The console opens saying what it is and what it is talking to.
 func TestTheConsoleOpensWithItsMasthead(t *testing.T) {
 	c := drawn(t)
 	c.about = About{Version: "9.9.9", Branch: "some-branch", Dir: "~/somewhere"}
@@ -1212,8 +1034,6 @@ func TestAMissingFactDrawsNoRow(t *testing.T) {
 	}
 }
 
-// The masthead says which model is answering now, so /model changes it. Two
-// places naming a model is two places to disagree, and the footer is the other.
 func TestTheMastheadFollowsTheModel(t *testing.T) {
 	c := drawn(t)
 	c.about = About{Version: "9.9.9"}
@@ -1227,7 +1047,6 @@ func TestTheMastheadFollowsTheModel(t *testing.T) {
 	}
 }
 
-// The bar down the side is the accent a person chose, in shades of it.
 func TestTheMastheadBarIsTheChosenAccent(t *testing.T) {
 	look, err := theme.Build(true, theme.Settings{Person: "#FF00FF"})
 	if err != nil {
@@ -1255,11 +1074,6 @@ func TestTheMastheadBarIsTheChosenAccent(t *testing.T) {
 	}
 }
 
-// A failed turn says what happened, and then what that means on this machine.
-//
-// The console cannot establish the second part and does not try. It asks the
-// thing that wired the run — which can see a configuration and an auth store,
-// where this layer deliberately cannot — and draws whatever came back.
 func TestAFailedTurnDrawsTheCheckedNextStep(t *testing.T) {
 	c := drawn(t)
 	c.control = &fixed{model: "m", remedy: render.Remedy{
@@ -1283,10 +1097,6 @@ func TestAFailedTurnDrawsTheCheckedNextStep(t *testing.T) {
 }
 
 // A machine nothing could be established about gets the one line and no more.
-//
-// This is the ordinary case, not the edge one: most failures have no step on
-// this side of the network. A console that filled the gap with a likely-looking
-// suggestion would be the last place able to tell it was inventing one.
 func TestAFailureWithNothingCheckedDrawsNoStep(t *testing.T) {
 	c := drawn(t)
 	c.control = &fixed{model: "m"}

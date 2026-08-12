@@ -26,13 +26,6 @@ const (
 
 	// The OpenAI defaults, applied when the file selects that Provider and
 	// says nothing further.
-	//
-	// The model is the one the current Codex client ships as its default, so a
-	// subscription login works with a file that names nothing but the mode. The
-	// ChatGPT/Codex backend entitles an account to a shifting subset of models
-	// and rejects the rest with a 400 that names the model — so this tracks the
-	// current default rather than an older one a backend has since dropped, and
-	// a person on a different entitlement sets provider.model to one of theirs.
 	DefaultOpenAIModel     = "gpt-5.6-terra"
 	DefaultOpenAIAPIKeyEnv = "OPENAI_API_KEY"
 )
@@ -64,32 +57,14 @@ const (
 	EnvHome = "EVA_HOME"
 )
 
-// ProjectDir is the directory a repository keeps its Eva settings in, found by
-// walking up from the working directory.
 const ProjectDir = ".eva"
 
-// projectSettable is every key a repository's own file may set.
-//
-// It is an allow list, and that is the whole of the decision. A cloned
-// repository's .eva/ is content from the internet — the same category as a
-// fetched web page — so the question is not which keys are dangerous but which
-// are known to be safe. A deny list would admit every key added after it was
-// written, which is the one failure mode a trust boundary cannot have.
-//
-// What is on it can change what a person sees. What is off it can change what a
-// run does: which Provider answers, where the credential is read from, where
-// the traffic goes, where the Trace is written, who the run is attributed to. A
-// repository that could set those could redirect a person's turns to a server
-// it names and their Trace to a file it chooses, on the first prompt after a
-// clone.
 var projectSettable = map[string]bool{
 	// model, because choosing a model is choosing how the work is done rather
 	// than who it is done by. It cannot move the traffic or the credential.
 	"model": true,
 }
 
-// projectSettableTables are whole tables a repository may set, named by their
-// prefix. Look and feel lives here.
 var projectSettableTables = map[string]bool{
 	// Look and feel. A repository may say how Eva looks to whoever is working
 	// in it, which is the thing a team most wants to share and least wants to
@@ -98,21 +73,11 @@ var projectSettableTables = map[string]bool{
 	"keymap": true,
 }
 
-// Config is Eva's configuration, resolved.
-//
-// Configuration is a versioned file rather than a pile of flags, so that a
-// setup is reviewable and shareable (invariant 6).
 type Config struct {
-	// Model is which model a turn runs against.
 	Model string `toml:"model"`
 
 	// Editor is the program a long prompt is written in, and is empty when the
 	// environment answers instead.
-	//
-	// It is not a setting a repository may choose. Every other look-and-feel key
-	// is, and this one reads like one — but what it names is a program Eva starts
-	// on this machine, and a cloned repository naming that would be a repository
-	// choosing what runs.
 	Editor string `toml:"editor"`
 
 	// Project is the repository's own settings file, when one was found and
@@ -137,19 +102,14 @@ type Config struct {
 	APIKey Secret `toml:"-"`
 }
 
-// ProviderConfig selects the model provider.
 type ProviderConfig struct {
-	// Name selects the implementation.
 	Name string `toml:"name"`
 	// Auth selects how the Provider authenticates: an API key from the
 	// environment, or a subscription login. Empty is the API key, which is
 	// what every configuration written before this key existed meant.
-	Auth string `toml:"auth"`
-	// APIKeyEnv names the environment variable the credential is read from.
+	Auth      string `toml:"auth"`
 	APIKeyEnv string `toml:"api_key_env"`
-	// BaseURL points a network provider somewhere other than its public API:
-	// a gateway, a proxy, or a local server. Empty is the public API.
-	BaseURL string `toml:"base_url"`
+	BaseURL   string `toml:"base_url"`
 	// MaxTokens caps one answer. Zero leaves the cap to the provider, which
 	// is what knows its own API — so there is no default here to be kept in
 	// step with the one that does the work.
@@ -159,9 +119,6 @@ type ProviderConfig struct {
 // ThemeConfig is how the interface looks. Every field is optional and an empty
 // one keeps what Eva draws by default, so a file names the one thing it wants
 // changed rather than restating a whole appearance.
-//
-// It is a repository's to set. Nothing here can change what a run does — see
-// projectSettable.
 type ThemeConfig struct {
 	// Name selects one of the looks Eva ships with. Everything below is applied
 	// over it, so a file may name a look and change one colour of it.
@@ -171,12 +128,9 @@ type ThemeConfig struct {
 	Symbols  SymbolsConfig  `toml:"symbols"`
 	Layout   LayoutConfig   `toml:"layout"`
 	Markdown MarkdownConfig `toml:"markdown"`
-	// Border is the rule above and below the prompt: normal, rounded, thick,
-	// double, or none.
-	Border string `toml:"border"`
+	Border   string         `toml:"border"`
 }
 
-// ColorsConfig are hues, each written as #rgb or #rrggbb.
 type ColorsConfig struct {
 	Subdued string `toml:"subdued"`
 	Person  string `toml:"person"`
@@ -185,8 +139,6 @@ type ColorsConfig struct {
 	Failure string `toml:"failure"`
 }
 
-// MarkdownConfig are the colours an answer itself is drawn in. An empty one
-// keeps the colour the interface's own renderer chooses for the background.
 type MarkdownConfig struct {
 	// Plain draws the answer with no colour and with ASCII marks.
 	Plain     *bool  `toml:"plain"`
@@ -199,11 +151,6 @@ type MarkdownConfig struct {
 	Quote     string `toml:"quote"`
 }
 
-// SymbolsConfig are the marks an interface writes that are not words.
-//
-// They are pointers because an empty string is a choice here: a person who
-// wants no mark before their prompt writes prompt = "", and a person who wants
-// the default leaves the line out.
 type SymbolsConfig struct {
 	Prompt      *string `toml:"prompt"`
 	Placeholder *string `toml:"placeholder"`
@@ -211,10 +158,7 @@ type SymbolsConfig struct {
 	Spinner     string  `toml:"spinner"`
 }
 
-// LayoutConfig are the measurements.
 type LayoutConfig struct {
-	// Margin is what the interface holds back at each edge of the window, and
-	// Padding is what it holds back inside that. Each edge is optional.
 	Margin         SidesConfig `toml:"margin"`
 	Padding        SidesConfig `toml:"padding"`
 	PromptRows     *int        `toml:"prompt_rows"`
@@ -223,11 +167,6 @@ type LayoutConfig struct {
 	LiveShare      *int        `toml:"live_share"`
 }
 
-// SidesConfig is a number of cells at each of four edges, each one optional.
-//
-// They are pointers because zero is a real answer here: a person who wants no
-// space at the left writes left = 0, and a person who says nothing about the left
-// keeps whatever the look gives it.
 type SidesConfig struct {
 	Top    *int `toml:"top"`
 	Right  *int `toml:"right"`
@@ -235,16 +174,10 @@ type SidesConfig struct {
 	Left   *int `toml:"left"`
 }
 
-// KeysConfig is which chords ask for which action, by the action's name.
-//
-// It is a map rather than a field per action so that the set of actions lives
-// in one place — the frontend that has them — rather than being restated here
-// and going out of step with it. An action Eva does not have is refused by name.
 type KeysConfig struct {
 	Bind map[string][]string `toml:"bind"`
 }
 
-// TraceConfig says where the Trace is written.
 type TraceConfig struct {
 	Path string `toml:"path"`
 	// Kind selects which sink writes it. Empty is the append-only JSONL file,
@@ -252,19 +185,12 @@ type TraceConfig struct {
 	Kind string `toml:"kind"`
 }
 
-// IdentityConfig is who a Run acts as.
-//
-// Tenant and Actor are configured from the first commit, long before a second
-// tenant exists, because they ride on every Event and adding them later would
-// touch every stored record.
 type IdentityConfig struct {
-	Tenant string `toml:"tenant"`
-	Actor  string `toml:"actor"`
-	// ActorKind is human, agent, or system.
+	Tenant    string `toml:"tenant"`
+	Actor     string `toml:"actor"`
 	ActorKind string `toml:"actor_kind"`
 }
 
-// Actor is the identity Events are attributed to.
 func (c Config) Actor() events.Identity {
 	return events.Identity{
 		ID:   c.Identity.Actor,
@@ -272,17 +198,12 @@ func (c Config) Actor() events.Identity {
 	}
 }
 
-// Tenant is the tenant Events are attributed to.
 func (c Config) Tenant() events.TenantID { return events.TenantID(c.Identity.Tenant) }
 
 // Subscription reports whether the Provider authenticates with a login rather
 // than an API key.
 func (c Config) Subscription() bool { return c.Provider.Auth == AuthSubscription }
 
-// RequireAPIKey returns the credential, or an error that says how to set one.
-//
-// Configuration is the surface a user touches before anything else works, so
-// its error messages are part of the product.
 func (c Config) RequireAPIKey() (Secret, error) {
 	if !c.APIKey.Empty() {
 		return c.APIKey, nil
@@ -293,20 +214,6 @@ func (c Config) RequireAPIKey() (Secret, error) {
 		c.Provider.Name, c.Provider.APIKeyEnv, c.Provider.APIKeyEnv, c.Path)
 }
 
-// Load reads the configuration.
-//
-// Four sources, each able to override the one before it: the compiled defaults,
-// the person's own file, the repository's, and the flag. A run with none of
-// them works, because every setting has a default.
-//
-// path selects the person's file. When it is empty, EVA_CONFIG is used, and
-// failing that the default location — and a default location that does not
-// exist is not an error, because a first run has no file yet. A path that was
-// asked for by name and is missing is an error, because the caller meant that
-// file.
-//
-// The repository's file is found by walking up from the working directory, and
-// it may set only what a repository is trusted to set. See projectSettable.
 func Load(path string) (Config, error) {
 	explicit := path != ""
 	if !explicit {
@@ -346,12 +253,6 @@ func Load(path string) (Config, error) {
 	return cfg, nil
 }
 
-// loadProject applies the repository's own settings over the person's.
-//
-// A repository that holds none is the ordinary case and changes nothing. The
-// file it does hold is read strictly, like every other, and then checked
-// against what a repository may set — so a key that is real, spelled right, and
-// not a repository's to choose is refused by name rather than ignored.
 func (c *Config) loadProject() error {
 	start, err := os.Getwd()
 	if err != nil {
@@ -405,13 +306,6 @@ func (c *Config) loadProject() error {
 	return nil
 }
 
-// leaves are the keys a file actually set, without the table headers above
-// them.
-//
-// A decoder reports both "provider" and "provider.base_url" for one setting,
-// and the header is the less useful of the two to be refused by: a person who
-// wrote base_url and is told that "provider" is not theirs to choose has to
-// work out which line to delete.
 func leaves(keys []toml.Key) []string {
 	named := make([]string, len(keys))
 	for i, key := range keys {
@@ -434,11 +328,6 @@ func leaves(keys []toml.Key) []string {
 	return out
 }
 
-// settableFromProject reports whether a repository may set a key.
-//
-// A table is named by its prefix so that a whole area of settings is opened at
-// once rather than key by key. Nothing else is: the default is refusal, which
-// is what makes a setting added later safe by omission.
 func settableFromProject(key string) bool {
 	if projectSettable[key] {
 		return true
@@ -451,13 +340,6 @@ func settableFromProject(key string) bool {
 	return false
 }
 
-// findProject walks up from a directory looking for the settings a repository
-// keeps.
-//
-// It stops at a repository boundary, so a file above the repository a person is
-// working in is not read: the settings belong to this checkout, and a directory
-// that happens to be its parent is not part of it. It stops at the filesystem
-// root regardless, so a working directory outside any repository reads nothing.
 func findProject(start string) (string, bool) {
 	dir := start
 	for {
@@ -525,12 +407,6 @@ func decode(path string, cfg *Config) error {
 }
 
 // retired names the settings Eva has removed, and what to do instead.
-//
-// A key that was real and is gone reads exactly like a typo to a strict
-// decoder, and the two want different answers: one person mistyped a setting
-// they meant, the other is carrying a file forward across a version that took
-// the setting away. Naming it is the difference between "fix your spelling"
-// and "this is not here any more, and here is why".
 var retired = map[string]string{
 	"provider.script": "the replaying Provider it selected was removed once real Providers answered turns. " +
 		"Point provider.base_url at a server of your own to answer turns without reaching a vendor.",
@@ -555,7 +431,6 @@ func defaults() Config {
 	}
 }
 
-// normalize fills in what the file left empty and expands the paths it gave.
 func (c *Config) normalize() error {
 	d := defaults()
 	if c.Provider.Name == "" {
@@ -629,7 +504,6 @@ func (c *Config) normalize() error {
 	return nil
 }
 
-// Home is the directory Eva keeps its own files in.
 func Home() (string, error) {
 	if home := os.Getenv(EnvHome); home != "" {
 		return home, nil
@@ -641,7 +515,6 @@ func Home() (string, error) {
 	return filepath.Join(home, ".eva"), nil
 }
 
-// expand resolves a leading ~ against the user's home directory.
 func expand(path string) (string, error) {
 	if path != "~" && !strings.HasPrefix(path, "~/") {
 		return path, nil
@@ -653,22 +526,6 @@ func expand(path string) (string, error) {
 	return filepath.Join(home, strings.TrimPrefix(path, "~")), nil
 }
 
-// Init writes a starter configuration, and reports where it put it.
-//
-// path selects the file, resolved the way Load resolves it, so that a person
-// who has moved their configuration with a flag or the environment initialises
-// the file they are actually going to use.
-//
-// content is composed by the caller. What a starter file should say names the
-// Providers a build ships, the sinks it can write to, and what its interface
-// looks like unconfigured — three things this layer cannot see and must not,
-// since a configuration that could reach a Provider is a configuration that
-// could select itself. The layer that wires a run can see all of them.
-//
-// It refuses to overwrite. A configuration is something a person edits and
-// keeps, and a command that silently replaced one would be a command nobody
-// could run twice safely — so an existing file is reported rather than
-// improved upon.
 func Init(path, content string) (string, error) {
 	if path == "" {
 		path = os.Getenv(EnvConfig)

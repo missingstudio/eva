@@ -14,17 +14,7 @@ const (
 	defaultSubscriptionBase = "https://chatgpt.com/backend-api/codex"
 )
 
-// transport is one of the two ways this Provider reaches the Responses API.
-//
-// The two differ in three places and no more: the host, the headers beyond the
-// bearer token, and whether a turn carrying no system prompt is acceptable.
-// Threaded through as a boolean, those three forks sat in two files — and the
-// third of them was buried in transcript mapping, where nobody reading about
-// transports would find it. Here the choice is made once and the differences
-// are in one place, which is what "identical past the dial" was supposed to
-// mean.
 type transport struct {
-	// endpoint is the URL one attempt posts to.
 	endpoint string
 
 	// instructions is what a turn with no system prompt sends. Empty means a
@@ -32,11 +22,6 @@ type transport struct {
 	instructions string
 
 	// decorate adds whatever this transport requires beyond the bearer token.
-	//
-	// It takes the token because one of them reads a header out of it. That
-	// happens per attempt, not at construction: the token renews under a long
-	// session, and a header set once at startup would go on naming the account
-	// of a token that is no longer being sent (ADR-0033).
 	decorate func(h http.Header, token string) error
 }
 
@@ -48,7 +33,6 @@ func apiKeyTransport(base string) transport {
 	}
 }
 
-// subscriptionTransport is the ChatGPT backend a login reaches.
 func subscriptionTransport(base string) transport {
 	return transport{
 		endpoint: responses(base, defaultSubscriptionBase),
@@ -69,8 +53,6 @@ func subscriptionTransport(base string) transport {
 	}
 }
 
-// responses is the URL one attempt posts to: what a person pointed this at, or
-// the transport's own host.
 func responses(base, fallback string) string {
 	if base == "" {
 		base = fallback
@@ -78,14 +60,6 @@ func responses(base, fallback string) string {
 	return strings.TrimRight(base, "/") + "/responses"
 }
 
-// accountID reads the ChatGPT account id out of a subscription access token.
-//
-// The subscription backend requires the id as a header on every request, and
-// the token is a JWT that carries it in a namespaced claim — the credential's
-// own shape, so the Provider that speaks that wire reads it here rather than
-// being handed a second value that could disagree with the first. The login
-// flow refuses a token without the claim, so failing here means the token came
-// from somewhere other than a login.
 func accountID(token string) (string, error) {
 	claims, err := claims(token)
 	if err != nil {

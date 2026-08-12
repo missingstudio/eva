@@ -186,8 +186,6 @@ func TestUnrecognisedKindIsPreservedWithItsBytes(t *testing.T) {
 	}
 }
 
-// Nil means the provider did not report a figure; 0 means none were used.
-// Collapsing the two is how a cost report becomes confidently wrong.
 func TestUsageAbsenceIsDistinctFromZero(t *testing.T) {
 	zero := uint64(0)
 
@@ -334,12 +332,6 @@ func TestAnUnreportedCounterSurvivesTheRoundTrip(t *testing.T) {
 
 // A Claim nobody classified carries no class, and one that was classified
 // carries it as a field rather than inside its prose.
-//
-// The absence is the assertion that matters. A class defaulted to "other" on
-// the way to the Trace would say something was examined and could not be
-// placed, for every success, every interruption, and every failure that arrived
-// from a path with no opinion — and a reader counting unplaceable failures
-// would be counting all of them.
 func TestAClaimCarriesItsClassAndSaysNothingWhenThereIsNone(t *testing.T) {
 	for _, c := range []struct {
 		name  string

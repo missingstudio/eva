@@ -12,12 +12,6 @@ import (
 
 // A turn in flight says something beside the spinner, and it is not the same
 // thing every turn.
-//
-// What a caption is for is the stretch where nothing has arrived yet: a spinner
-// alone says the program is running, and a person waiting on an answer is asking
-// a slightly different question. What it must never do is claim anything, which
-// is why the elapsed figure is asserted beside it — that is the part carrying
-// meaning, and it has to survive the decoration going in front of it.
 func TestATurnInFlightIsCaptioned(t *testing.T) {
 	c := drawn(t)
 	c.layout(60, 12)
@@ -45,10 +39,6 @@ func TestATurnInFlightIsCaptioned(t *testing.T) {
 	}
 }
 
-// A caption changes on a clock of its own, not on the spinner's frame.
-//
-// Twelve times a second is unreadable, and never is not evidence that anything
-// is still happening. The interval is what makes it neither.
 func TestACaptionChangesOnItsOwnClock(t *testing.T) {
 	c := drawn(t)
 
@@ -77,8 +67,6 @@ func TestACaptionChangesOnItsOwnClock(t *testing.T) {
 
 // The same caption twice reads as an interface that has stopped rather than one
 // that is still going, so a repeat is picked past.
-//
-// A list this long repeats about once every four changes if nothing does.
 func TestACaptionDoesNotRepeatItself(t *testing.T) {
 	c := drawn(t)
 
@@ -108,12 +96,6 @@ func TestACaptionDoesNotRepeatItself(t *testing.T) {
 	}
 }
 
-// Every caption is about waiting, and none of them claims Eva did anything.
-//
-// Eva at this stage has no tools and acts on nothing: no file is read, no
-// command is run, no repository is searched. A caption that said otherwise would
-// be the interface making a claim the program cannot keep, and a person would
-// have no way to tell it apart from the lines on this screen that are true.
 func TestNoCaptionClaimsEvaActedOnAnything(t *testing.T) {
 	// The verbs of a factory that has tools. When Eva grows them, these stop
 	// being lies — and this test is where that is noticed rather than where it

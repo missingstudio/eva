@@ -8,7 +8,6 @@ import (
 	"github.com/missingstudio/eva/internal/trace/tracetest"
 )
 
-// The TraceSink contract, driven through the suite every sink shares.
 func TestTheJSONLSinkKeepsTheTraceSinkContract(t *testing.T) {
 	tracetest.Run(t, tracetest.Contract{
 		Open: func(t *testing.T) (core.TraceSink, tracetest.Records) {
