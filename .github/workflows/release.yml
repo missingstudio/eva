@@ -105,6 +105,7 @@ jobs:
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -eu
           # The pin is asked of the Makefile rather than read out of it with a
@@ -126,6 +127,10 @@ jobs:
 
       # Kept for the length of a debugging session, separately from the release
       # itself, so a failed publish still leaves the evidence of what was built.
+      # The cask is here for a second reason. It is pushed to the tap after the
+      # release is public, so a token that expired leaves a stale tap and no
+      # failed release. Keeping the file makes that recovery a commit rather than
+      # a re-run that would republish artifacts people already have.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
@@ -135,5 +140,6 @@ jobs:
             dist/*.zip
             dist/checksums.txt*
             dist/*.sbom.json
+            dist/homebrew/Casks/*.rb
           retention-days: 14
           if-no-files-found: warn

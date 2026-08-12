@@ -125,20 +125,40 @@ release:
     attestation naming the workflow and commit that built it. Both commands are
     in [Verify what you downloaded](https://github.com/missingstudio/eva/blob/{{ .Tag }}/docs/how-to/install-eva.md#verify-what-you-downloaded).
 
-# A Homebrew tap needs a second repository and a token that can write to it.
-# Neither exists yet, so this stays commented rather than failing the first
-# release. Enabling it is three steps: create missingstudio/homebrew-tap, put a
-# token with contents:write on it in the HOMEBREW_TAP_TOKEN secret, and
-# uncomment this.
+# The macOS install path, and the only place a release writes to a second
+# repository. `brew install --cask missingstudio/tap/eva` resolves to
+# missingstudio/homebrew-tap, where the release commits the file below beside the
+# formulae already there.
 #
-# brews:
-#   - name: eva
-#     ids: [eva]
-#     repository:
-#       owner: missingstudio
-#       name: homebrew-tap
-#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-#     homepage: https://github.com/missingstudio/eva
-#     description: An autonomous, AI-native software factory
-#     license: MIT
-#     skip_upload: auto
+# `make snapshot` writes the file this would push, to dist/homebrew/Casks, with
+# no tag and no token — so `make rehearse` reads it and a wrong archive name is
+# caught here rather than in the tap.
+homebrew_casks:
+  - name: eva
+    ids: [eva]
+    binaries: [eva]
+
+    repository:
+      owner: missingstudio
+      name: homebrew-tap
+      # The only stored secret this repository has: fine-grained,
+      # contents:write, on the tap and nothing else. It is spent after the
+      # release is published, so an expired token leaves a public release and a
+      # stale tap rather than a failed release.
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+
+    homepage: https://github.com/missingstudio/eva
+    description: An autonomous, AI-native software factory
+
+    # `auto` reads the tag the way `release.prerelease` above does: v0.3.0-rc.1
+    # is skipped and v0.3.0 is published. The tap is the stable channel by the
+    # same fact that decides the release, and not by a second rule that could
+    # disagree with it.
+    skip_upload: auto
+
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/eva"]
+          end
