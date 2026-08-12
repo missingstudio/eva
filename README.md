@@ -34,7 +34,10 @@ you see on screen is read back out of that file.
 ### Install
 
 ```bash
-# macOS and Linux
+# Homebrew, on macOS
+brew install --cask missingstudio/tap/eva
+
+# The install script, on macOS and Linux
 curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh
 
 # With the Go toolchain

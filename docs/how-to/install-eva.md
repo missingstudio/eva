@@ -11,11 +11,37 @@ place that cannot be out of date.
 
 | You want                                     | Use                                                        |
 | -------------------------------------------- | ---------------------------------------------------------- |
+| The newest release, on macOS                  | [Homebrew](#with-homebrew)                                  |
 | The newest release, and you have Go           | [`go install`](#with-the-go-toolchain)                      |
 | The newest release, and you do not have Go    | [the install script](#with-the-install-script)               |
 | To try a fix before it is released            | [a prerelease](#a-prerelease)                                |
 | The newest commit, and you accept a broken day | [`@main`](#the-newest-commit)                               |
 | To work on Eva                                | [source](#build-it-from-source)                              |
+
+## With Homebrew
+
+```bash
+brew install --cask missingstudio/tap/eva
+```
+
+It resolves to `github.com/missingstudio/homebrew-tap` and installs the newest
+**stable** release. A prerelease never reaches the tap, so this is the stable
+channel by the same rule that decides the release.
+
+Naming the cask in full is deliberate. Homebrew trusts a third-party tap before
+it loads anything from it, and a fully-qualified name trusts **only this one
+cask**. A `brew tap` first would widen that to everything the tap will ever hold.
+
+Upgrade and removal are the usual pair:
+
+```bash
+brew upgrade --cask eva
+brew uninstall --cask eva
+```
+
+This is the macOS path. The cask clears the quarantine attribute for you, which
+is the one thing the install script can only ask you to do. Homebrew on Linux
+carries casks too, but nobody has run this one there — use the install script.
 
 ## With the Go toolchain
 
