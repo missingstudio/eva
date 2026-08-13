@@ -264,37 +264,140 @@ linters:
             # whole of what a sink under test has to be.
             - github.com/missingstudio/eva/internal/core
 
-        # loop is the Unit that answers a prompt: it assembles one call out of
-        # what it was handed, replays what the Provider yields into the Trace,
-        # and closes the Run with the claim of how it went. One provider turn
-        # today; tool dispatch, parallel groups, and approval gates later.
+        # harness owns answering a prompt: the Harness contract, the registry
+        # that selects one, and the assembly that opens a Run on a Session and
+        # commits what a Harness emits. The assembly lives here because a
+        # Frontend, a Server, and a daemon each need it, and a second place that
+        # knows how a Run is wired is a second place for the wiring to drift.
         #
         # The absences are why it is a layer rather than a package under the
-        # frontend. No config, so the layer that reads a person's file is still
-        # the only layer that reads it. No trace, so the sink a Run commits to is
-        # chosen above and handed in as a Recorder. No tui and no render, so a
-        # Loop cannot show a person anything it did not first commit — which is
-        # the property a loop grown inside the frontend would have had no rule to
-        # keep.
-        loop:
+        # frontend. No tui and no render, so a Harness cannot show a person
+        # anything it did not first commit — which is the property a loop grown
+        # inside the frontend would have had no rule to keep. No auth: a
+        # Credential is obtained by an act a person performs, and the Frontend
+        # that performs it hands the resolver in.
+        harness:
           list-mode: strict
           files:
-            - "**/internal/loop/**"
+            - "**/internal/harness/**"
+            # Eva's own Harness is governed by its own rule below, which is
+            # narrower than this one rather than wider.
+            - "!**/internal/harness/eva/**"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            # core, for the Session a Run opens on, the Recorder every step
+            # reaches the Trace through, and the Outcome a Harness returns.
+            - github.com/missingstudio/eva/internal/core
+            # config, because the assembly is what configuration describes: the
+            # Harness, the Provider, the sink, and the identity a Run acts under.
+            - github.com/missingstudio/eva/internal/config
+            # providers, for the Provider a turn is asked of. The two shipped
+            # implementations are imported for their registration alone, by the
+            # layer whose lookup fails when nothing registered.
+            - github.com/missingstudio/eva/internal/providers
+            - github.com/missingstudio/eva/internal/providers/anthropic
+            - github.com/missingstudio/eva/internal/providers/openai
+            # trace, for the sink configuration selects. It is opened here for
+            # the same reason the Provider is: this is the layer that wires a Run.
+            - github.com/missingstudio/eva/internal/trace
+            # See the events rule: this reaches the external test package only.
+            - github.com/missingstudio/eva/internal/harness
+
+        # harness/eva is Eva's own Harness, and one entry in the registry above.
+        # It holds the Loop: the Unit that answers a prompt by assembling one
+        # call, replaying what the Provider yields into the Trace, and closing
+        # the Run with the claim of how it went. One provider turn today; tool
+        # dispatch, parallel groups, and approval gates later.
+        #
+        # No config and no trace: which Provider answers and where the Trace is
+        # written are settled above, and what arrives here is a Recorder and a
+        # Provider. No tui and no render, for the reason the layer above gives.
+        harness-eva:
+          list-mode: strict
+          files:
+            - "**/internal/harness/eva/**"
           allow:
             - $gostd
             - github.com/missingstudio/eva/internal/events
             # core, for the Unit it satisfies, the Recorder every step reaches
             # the Trace through, and the Session a turn is conditioned on.
             - github.com/missingstudio/eva/internal/core
+            # core/prompt, for the base system prompt every turn of this build is
+            # conditioned on. It is Eva's own, which is why it is named here and
+            # not in the layer that selects a Harness.
+            - github.com/missingstudio/eva/internal/core/prompt
+            # harness, for the contract this satisfies, the Turn one turn
+            # arrives as, and the registry it puts itself in.
+            - github.com/missingstudio/eva/internal/harness
+            # harnesstest, for the Session a test answers against. See
+            # api-tests: one fixture, so two tests that disagree disagree about
+            # the thing they are testing.
+            - github.com/missingstudio/eva/internal/harness/harnesstest
             # providers, for the Provider a turn is asked of, and the contract
             # alone. No implementation is named: which Provider answers is
             # configuration's to say and the registry's to hold.
             - github.com/missingstudio/eva/internal/providers
 
-        # cli assembles a run and is the top of the graph. It may import
-        # everything below it, and it holds no terminal: the console is tui's,
-        # and the fold a person reads a turn in is ui's. What is left here is
-        # the process surface and the wiring.
+        # api is the Session API and the Transports that carry it. It is the only
+        # place that knows there is a distance: in this process the assembly
+        # answers the API itself, and the Remote Transport speaks to a Server.
+        #
+        # No config, no providers, and no trace: what a turn is answered with is
+        # settled below this layer, and what arrives here is a Session. No tui
+        # and no render, because an API a Frontend drives must not know which
+        # Frontend.
+        api:
+          list-mode: strict
+          files:
+            - "**/internal/api/**"
+            - "!**/internal/api/**_test.go"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            # core, for the Subscriber a watcher satisfies and the Outcome a turn
+            # returns. Both cross the wire, which is what makes them the API's.
+            - github.com/missingstudio/eva/internal/core
+            # harness is absent, and the absence is the point. This layer states
+            # the Session API; what satisfies it in this process is the assembly,
+            # which satisfies it by shape rather than by being named here. So the
+            # Server's half serves anything that answers those five methods, and
+            # a test can put a Session with nothing behind it under one.
+            # See the events rule: this reaches the external test package only.
+            - github.com/missingstudio/eva/internal/api
+
+        # api's tests are ADR 0047's falsifier: one suite against both
+        # Transports, asserting the same outcomes. Driving a real turn needs a
+        # Provider to script and a sink to read, which production api does not.
+        # The rule is separate for the reason core-tests is — a test needing a
+        # package must not be the reason production code may import it.
+        api-tests:
+          list-mode: strict
+          files:
+            - "**/internal/api/**_test.go"
+          allow:
+            - $gostd
+            - github.com/missingstudio/eva/internal/events
+            - github.com/missingstudio/eva/internal/core
+            - github.com/missingstudio/eva/internal/config
+            - github.com/missingstudio/eva/internal/providers
+            - github.com/missingstudio/eva/internal/harness
+            - github.com/missingstudio/eva/internal/harness/eva
+            # harnesstest, the one place a test builds a Session's worth of
+            # assembly. A fixture that differs per package is a difference a
+            # reader has to rule out before trusting two tests that disagree.
+            - github.com/missingstudio/eva/internal/harness/harnesstest
+            - github.com/missingstudio/eva/internal/api
+
+        # cli is the command line, the process, the exit codes, and the wiring.
+        # It is the top of the graph and it holds no terminal: the console is
+        # tui's, and the fold a person reads a turn in is render's.
+        #
+        # providers and trace are gone, and that absence is what this layer
+        # narrowing means (ADR 0045). Assembling a Run is not a frontend's job —
+        # it moved to harness, where a Server and a daemon can reach it too. What
+        # is left here is the process surface, the Credential a person obtained,
+        # and the facts about this machine that no Transport carries.
         cli:
           list-mode: strict
           files:
@@ -311,32 +414,38 @@ linters:
             - github.com/missingstudio/eva/internal/core
             - github.com/missingstudio/eva/internal/config
             # auth, for the subscription Credentials a login stores. The store's
-            # path is composed here and the token resolver is handed to the
-            # Provider — this is the one place config, auth, and providers meet.
+            # path is composed here and the token resolver is handed down to the
+            # layer that wires a Run — this is the one place config and auth meet.
             - github.com/missingstudio/eva/internal/auth
-            - github.com/missingstudio/eva/internal/providers
-            - github.com/missingstudio/eva/internal/trace
-            # loop, the Unit a prompt is answered by. This builds one out of the
-            # assembly it holds and asks it for an Outcome; what the Unit does
-            # between provider turns is the loop's and never the frontend's.
-            - github.com/missingstudio/eva/internal/loop
+            # harness, for the assembly a turn is answered by. This hands it a
+            # configuration and gets an Assembly; what happens between provider
+            # turns is the Harness's and never the frontend's.
+            - github.com/missingstudio/eva/internal/harness
+            # harness/eva, for its registration alone. Which Harness answers is
+            # configuration's to say, and a build says which ones it ships.
+            - github.com/missingstudio/eva/internal/harness/eva
+            # api, for the Session API this drives and the Transport it drives it
+            # over. One turn on a command line and a browser typing the same
+            # prompt reach the same five methods.
+            - github.com/missingstudio/eva/internal/api
             # render, for the fold a person reads a turn in. It is a layer beside
             # core rather than a package under this one: it holds no terminal,
             # so the frontend consumes it and it consumes nothing of the
             # frontend's.
             - github.com/missingstudio/eva/internal/render
-            # tui, the interactive frontend this hands a built assembly to.
+            # tui, the interactive frontend this hands a Session API to.
             - github.com/missingstudio/eva/internal/tui
             # theme, which this maps a person's file onto before handing it in.
             - github.com/missingstudio/eva/internal/theme
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/cli
 
-        # cli's tests drive the console themselves: they build it, type keys
-        # into the program, and read what a person would have. So they get the
-        # terminal library, and production cli does not. The rule is separate
-        # for the reason core-tests is — a test needing a package must not be
-        # the reason production code may import it.
+        # cli's tests drive the whole thing: they build the console, type keys
+        # into the program, and read what a person would have, against a
+        # Provider they script and a Trace they read. So they get the terminal
+        # library, a Provider, and a sink — and production cli gets none of the
+        # three. The rule is separate for the reason core-tests is: a test
+        # needing a package must not be the reason production code may import it.
         cli-tests:
           list-mode: strict
           files:
@@ -345,10 +454,16 @@ linters:
             - $gostd
             - github.com/missingstudio/eva/internal/events
             - github.com/missingstudio/eva/internal/core
+            - github.com/missingstudio/eva/internal/core/prompt
             - github.com/missingstudio/eva/internal/config
             - github.com/missingstudio/eva/internal/auth
             - github.com/missingstudio/eva/internal/providers
             - github.com/missingstudio/eva/internal/trace
+            - github.com/missingstudio/eva/internal/harness
+            - github.com/missingstudio/eva/internal/harness/eva
+            # See api-tests: one fixture builds the assembly a test drives.
+            - github.com/missingstudio/eva/internal/harness/harnesstest
+            - github.com/missingstudio/eva/internal/api
             - github.com/missingstudio/eva/internal/render
             - github.com/missingstudio/eva/internal/tui
             - github.com/missingstudio/eva/internal/theme
@@ -411,6 +526,10 @@ linters:
             - $gostd
             - github.com/missingstudio/eva/internal/events
             - github.com/missingstudio/eva/internal/core
+            # api, for the Session API the console drives. The interface and
+            # nothing behind it: which Transport carries it is not a thing an
+            # interface may know.
+            - github.com/missingstudio/eva/internal/api
             - github.com/missingstudio/eva/internal/render
             # See the events rule: this reaches the external test package only.
             - github.com/missingstudio/eva/internal/tui
@@ -518,6 +637,15 @@ linters:
       - path: (internal/cli/about|internal/trace/sink)\.go$
         linters: [gosec]
         text: "G304"
+
+      # G704 reads the address the Remote Transport dials as tainted, because it
+      # arrives as a parameter. Dialing an address somebody named is what a
+      # client is: it comes from --server or from a Registration the Service
+      # wrote, and nothing a Session holds can steer it. A rule that forbade it
+      # would forbid the Transport (ADR 0047).
+      - path: internal/api/remote\.go$
+        linters: [gosec]
+        text: "G704"
 
 # A capped count understates exactly the rules that fire most, which are the
 # ones a policy has to cover. The first audit of this repository read 19 gosec
