@@ -5,5 +5,10 @@
 /dist/
 .DS_Store
 
+# What the debugger builds: the launch configuration names the first, and Delve
+# names the second when nothing tells it where to write.
+/eva-debug
+__debug_bin*
+
 # Local trace and config, which the sink and config loader will write
 .eva/

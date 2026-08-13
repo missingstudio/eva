@@ -1,0 +1,43 @@
+{
+  // The console runs in a terminal of its own, because the interface draws in
+  // raw mode and the Debug Console is not a terminal.
+  //
+  // "output" names the binary, so the interrupt task can find the process by
+  // name. Left out, the extension builds a name that changes every run.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "eva: console",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/eva",
+      "output": "${workspaceFolder}/eva-debug",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "eva: one prompt",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/eva",
+      "output": "${workspaceFolder}/eva-debug",
+      "console": "integratedTerminal",
+      "args": ["-p", "${input:prompt}"]
+    },
+    {
+      "name": "eva: attach to a running eva",
+      "type": "go",
+      "request": "attach",
+      "mode": "local",
+      "processId": "${command:pickProcess}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "prompt",
+      "type": "promptString",
+      "description": "The prompt eva answers"
+    }
+  ]
+}
