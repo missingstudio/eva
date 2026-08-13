@@ -170,13 +170,18 @@ equals "a dot in a repository name is escaped" \
 	'^https://github\.com/evil\.com/eva/\.github/workflows/release\.yml@refs/tags/'
 
 # A signature that holds: the install goes on, and it says which check it made.
+#
+# What it says is a variable rather than a line on stdout, because the two facts
+# a person needs are settled in one order and read in another. So the assertions
+# below read SIG_SUMMARY and SIG_NOTE, which is what report_verified prints.
 have_cosign() { return 0; }
 cosign_verify() { return 0; }
 allows "a signature that holds installs" \
 	verify_signature "$work/checksums.txt" "$work/checksums.txt.sigstore.json"
-contains "a signature that holds is reported" \
-	"$(verify_signature "$work/checksums.txt" "$work/checksums.txt.sigstore.json")" \
-	"signature ok"
+verify_signature "$work/checksums.txt" "$work/checksums.txt.sigstore.json"
+contains "a signature that holds is reported" "$SIG_SUMMARY" \
+	"the signature of missingstudio/eva's release workflow"
+equals "and it leaves nothing unproven to explain" "$SIG_NOTE" ""
 
 # A signature that does not hold installs nothing. This is the case that has to be
 # a refusal rather than a warning, and it is a refusal whatever the flags say —
@@ -211,9 +216,10 @@ have_cosign() { return 1; }
 REQUIRE_SIG=0
 allows "no cosign installs on the checksum alone" \
 	verify_signature "$work/checksums.txt" "$work/checksums.txt.sigstore.json"
-said=$( (verify_signature "$work/checksums.txt" "$work/checksums.txt.sigstore.json") 2>&1 || true)
-contains "and says the signature was not checked" "$said" "cosign is not installed"
-contains "and says what that leaves unproven" "$said" "not that the release is Eva's"
+verify_signature "$work/checksums.txt" "$work/checksums.txt.sigstore.json"
+contains "and says the signature was not checked" "$SIG_SUMMARY" "cosign is not installed"
+contains "and says what that leaves unproven" "$SIG_NOTE" "not that the release is Eva's"
+contains "and says what would check it" "$SIG_NOTE" "install cosign"
 
 # The same machine, told to require one.
 REQUIRE_SIG=1
@@ -226,8 +232,8 @@ have_cosign() { return 0; }
 REQUIRE_SIG=0
 allows "an unsigned build installs on the checksum alone" \
 	verify_signature "$work/checksums.txt" "$work/nothing-here.sigstore.json"
-unsigned=$( (verify_signature "$work/checksums.txt" "$work/nothing-here.sigstore.json") 2>&1 || true)
-contains "and says the build is unsigned" "$unsigned" "publishes no signature"
+verify_signature "$work/checksums.txt" "$work/nothing-here.sigstore.json"
+contains "and says the build is unsigned" "$SIG_SUMMARY" "publishes no signature"
 REQUIRE_SIG=1
 refuses "an unsigned build under --require-signature installs nothing" \
 	verify_signature "$work/checksums.txt" "$work/nothing-here.sigstore.json"
@@ -304,17 +310,92 @@ equals "the cursor is not restored where no bar hid it" \
 
 # The drawing itself, without a download. The percentage is what a person reads,
 # and the arithmetic is in kibibytes to survive a 32-bit shell.
+#
+# progress_style is what raises the bar to blocks and to the terminal's width,
+# and nothing here calls it — so these draw with the ASCII and the 40 cells the
+# script falls back to, which is also what a machine with no UTF-8 locale gets.
 filled=''
 drawn=0
 equals "a bar at half of eight megabytes reads 50%" \
 	"$(progress_draw 4194304 8388608 2>&1 | tr -d '\r')" \
-	"####################....................  50%"
+	"  ####################....................  50%"
 
 filled=''
 drawn=0
 equals "a bar past its total is capped at 100%" \
 	"$(progress_draw 9000000 8388608 2>&1 | tr -d '\r')" \
-	"######################################## 100%"
+	"  ######################################## 100%"
+
+# Presentation.
+#
+# The locale is the only thing a shell can ask about the block glyphs, and
+# getting it wrong writes three bytes that arrive as three wrong characters.
+allows "a UTF-8 locale carries the blocks" env LC_ALL=en_US.UTF-8 sh -c '
+	EVA_INSTALL_LIB=1 . ./scripts/install.sh; unicode_ok'
+refuses "and a C locale does not" env LC_ALL=C sh -c '
+	EVA_INSTALL_LIB=1 . ./scripts/install.sh; unicode_ok'
+allows "lower-case utf8 is the same answer" env LC_ALL=en_US.utf8 sh -c '
+	EVA_INSTALL_LIB=1 . ./scripts/install.sh; unicode_ok'
+
+# LC_ALL outranks LANG, which is the case a machine with both set actually has.
+refuses "LC_ALL outranks LANG" env LANG=en_US.UTF-8 LC_ALL=C sh -c '
+	EVA_INSTALL_LIB=1 . ./scripts/install.sh; unicode_ok'
+
+# Nothing in this suite is a terminal, so every escape the script can write is
+# one it must not write here. This is the assertion that a coloured transcript
+# cannot regress into a log full of escape characters.
+transcript=$(
+	SIG_SUMMARY="checksum ok"
+	SIG_NOTE="a second line"
+	report_start "0.2.0" "linux/amd64"
+	report_verified
+	report_installed "0.2.0" "$work"
+	report_quarantine darwin "$work"
+	report_next
+	wordmark
+) 2>&1
+equals "no escape reaches a stream that is not a terminal" \
+	"$(printf '%s' "$transcript" | tr -dc '\033' | wc -c | tr -d ' ')" "0"
+
+# And the wordmark is drawn on no terminal at all, rather than drawn small.
+equals "the wordmark stands down where there is no terminal" \
+	"$(wordmark | wc -c | tr -d ' ')" "0"
+
+# A mark and the width that lets it draw cannot drift apart. Both are read back
+# out of the script, so editing the art without editing the gate fails here
+# rather than wrapping on somebody's terminal — which is the way round it went
+# the first time.
+#
+# The block is three bytes and one column, so it is made one byte before
+# anything counts it: awk measures bytes on the shells this has to run on.
+marks=$(sed 's/█/#/g' scripts/install.sh | awk "
+	/cat <<'ART'/ { inblock = 1; widest = 0; next }
+	/^ART\$/      { if (inblock) print widest; inblock = 0; next }
+	inblock       { if (length(\$0) > widest) widest = length(\$0) }
+")
+# shellcheck disable=SC2016 # $ww is literal: it is the text being searched for.
+gates=$(sed -n 's/.*"\$ww" -ge \([0-9][0-9]*\).*/\1/p' scripts/install.sh)
+
+equals "there is one mark and one gate" \
+	"$(printf '%s\n' "$marks" | wc -l | tr -d ' ')$(printf '%s\n' "$gates" | wc -l | tr -d ' ')" "11"
+
+equals "the mark is $marks columns and draws at $gates, so it fits" \
+	"$((gates - marks >= 2))" "1"
+
+# And it stays a signature rather than becoming the loudest thing on the screen.
+# Eight rows of this drawing is 57 columns, which is wider than every line of the
+# transcript it sits above.
+equals "the mark is no wider than the transcript under it" "$((marks <= 40))" "1"
+
+# ~ is what a person reads; the full path is what a shell needs. tilde is only
+# ever used on the first of those.
+# shellcheck disable=SC2088 # the tilde is the expected output, not a path to expand.
+equals "a path under home is written with a tilde" \
+	"$(HOME=/home/ada tilde /home/ada/.local/bin/eva)" "~/.local/bin/eva"
+equals "a path outside home is written in full" \
+	"$(HOME=/home/ada tilde /usr/local/bin/eva)" "/usr/local/bin/eva"
+equals "an empty home leaves every path alone" \
+	"$(HOME='' tilde /usr/local/bin/eva)" "/usr/local/bin/eva"
 
 if [ "$failures" -ne 0 ]; then
 	echo "$failures install case(s) failed" >&2

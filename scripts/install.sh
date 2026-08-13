@@ -44,8 +44,37 @@ REQUIRE_SIG="${EVA_REQUIRE_SIGNATURE:-0}"
 # name a different issuer could name their own.
 SIG_ISSUER="https://token.actions.githubusercontent.com"
 
-# The bar is 40 cells, so it and its percentage fit a 48-column terminal.
+# Presentation.
+#
+# Every escape lives in one of these, and every one is empty until something
+# establishes there is a terminal to write it to. That is what lets each printf
+# below be written once rather than twice, and it is what keeps a CI log clean:
+# a run that never calls install_choose_style writes exactly what this script
+# wrote before any of it had colour.
+#
+# Eva's mark is black and white and its palette has no accent, so this has none
+# either. Weight carries the hierarchy: bold is a result, dim is a remark.
+C_OFF=''
+C_DIM=''
+C_BOLD=''
+C_WARN=''
+
+# The bar, defaulting to the ASCII and the width it can always draw.
+# progress_style raises both once it has asked the terminal.
 PROGRESS_WIDTH=40
+PROG_FULL='#'
+PROG_EMPTY='.'
+PROG_ON=''
+PROG_MUTE=''
+PROG_OFF=''
+
+# SEP joins the facts in the opening line.
+SEP='-'
+
+# What the install proved, written where each fact is known and printed where a
+# person can use it. See report_verified.
+SIG_SUMMARY=''
+SIG_NOTE=''
 
 die() {
 	echo "install: $*" >&2
@@ -82,12 +111,87 @@ VERIFICATION:
   workflow; the checksum proves the archive matches them. A bad signature or a
   bad checksum installs nothing, whatever the flags say.
 
-PROGRESS:
+PRESENTATION:
   A download draws a bar when it has a terminal to draw on, and draws nothing
   when its output is a file or a log. EVA_INSTALL_NO_PROGRESS turns it off.
+  Colour follows the same rule, and NO_COLOR turns it off. The blocks and the
+  wordmark need a UTF-8 locale, and fall back to ASCII or to nothing without
+  one.
 
 Eva reports what it is with `eva version`.
 EOF
+}
+
+# color_ok <fd> is whether escapes should reach that descriptor.
+#
+# It is asked per descriptor because the two answer differently: a run with its
+# stdout in a file still draws its bar on a terminal. NO_COLOR is honoured
+# because somebody who set it has answered this already, and a dumb terminal is
+# one that cannot colour anything.
+color_ok() {
+	[ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != "dumb" ] && [ -t "$1" ]
+}
+
+# unicode_ok is whether the terminal was told it can carry the block glyphs.
+#
+# The locale is the only thing a shell can ask. Anything that does not name
+# UTF-8 gets the ASCII bar and no wordmark, because three bytes written in hope
+# arrive as three wrong characters.
+unicode_ok() {
+	case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
+	*[Uu][Tt][Ff]8* | *[Uu][Tt][Ff]-8*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# term_width is how wide the terminal is, and 80 when nothing will say.
+#
+# stty is asked first, and asked on stderr, because `tput cols` on macOS answers
+# with the terminfo entry's own 80 whatever the window is — which would wrap the
+# wordmark on a narrow terminal and hide it on a wide one.
+term_width() {
+	tw=$(stty size <&2 2>/dev/null | cut -d' ' -f2)
+	case "$tw" in
+	'' | *[!0-9]*) tw=$(tput cols 2>/dev/null || true) ;;
+	esac
+	case "$tw" in
+	'' | *[!0-9]*) tw="${COLUMNS:-80}" ;;
+	esac
+	case "$tw" in
+	'' | *[!0-9]*) tw=80 ;;
+	esac
+	printf '%s' "$tw"
+}
+
+# install_choose_style fills the escapes in, when there is somewhere to put them.
+install_choose_style() {
+	if color_ok 1; then
+		C_OFF=$(printf '\033[0m')
+		C_DIM=$(printf '\033[2m')
+		C_BOLD=$(printf '\033[1m')
+		# The one colour, on the one line that is a problem rather than a
+		# result. It is 3-bit so that the terminal's own theme resolves it,
+		# which a 256-colour yellow would not on a light background.
+		C_WARN=$(printf '\033[33m')
+	fi
+	unicode_ok && SEP='·'
+	return 0
+}
+
+# tilde <path> writes a path with $HOME as ~.
+#
+# A person's own home directory is the longest and least telling part of a line
+# they are about to read three times.
+tilde() {
+	case "${HOME:-}" in
+	'') printf '%s' "$1" ;;
+	*)
+		case "$1" in
+		"$HOME"/*) printf '~%s' "${1#"$HOME"}" ;;
+		*) printf '%s' "$1" ;;
+		esac
+		;;
+	esac
 }
 
 # The seam.
@@ -245,14 +349,23 @@ installed_version() {
 # person is otherwise told a version is installed while their shell runs
 # another one.
 report_installed() {
-	echo "eva $1 is already at $2/eva. Nothing to do."
+	printf '\n  %seva %s%s is already at %s. Nothing to do.\n' \
+		"$C_BOLD" "$1" "$C_OFF" "$(tilde "$2/eva")"
 
 	onpath=$(command -v eva 2>/dev/null || true)
 	if [ -n "$onpath" ] && [ "$onpath" != "$2/eva" ]; then
 		# shellcheck disable=SC2016 # the backticks are literal: they quote a command name.
-		printf '`eva` on your PATH is %s, which is a different file.\n' "$onpath"
+		printf '%s  `eva` on your PATH is %s, which is a different file.%s\n' \
+			"$C_WARN" "$(tilde "$onpath")" "$C_OFF"
 	fi
-	echo "Run again with --force to install it anyway."
+	printf '%s  Run again with --force to install it anyway.%s\n' "$C_DIM" "$C_OFF"
+}
+
+# report_start is the opening line: what is being done, and the three facts that
+# decided it, set apart because they are context rather than the action.
+report_start() {
+	printf '\n  %sinstalling eva %s%s  %s%s%s\n' \
+		"$C_BOLD" "$1" "$C_OFF" "$C_DIM" "$2" "$C_OFF"
 }
 
 # Progress.
@@ -308,18 +421,44 @@ progress_draw() {
 	on=$((pct * PROGRESS_WIDTH / 100))
 
 	while [ "$drawn" -lt "$on" ]; do
-		filled="$filled#"
+		filled="$filled$PROG_FULL"
 		drawn=$((drawn + 1))
 	done
 
 	empty=''
 	n=$drawn
 	while [ "$n" -lt "$PROGRESS_WIDTH" ]; do
-		empty="$empty."
+		empty="$empty$PROG_EMPTY"
 		n=$((n + 1))
 	done
 
-	printf '\r%s%s %3d%%' "$filled" "$empty" "$pct" >&2
+	printf '\r  %s%s%s%s%s%s %s%3d%%%s' \
+		"$PROG_ON" "$filled" "$PROG_OFF" \
+		"$PROG_MUTE" "$empty" "$PROG_OFF" \
+		"$PROG_ON" "$pct" "$PROG_OFF" >&2
+}
+
+# progress_style settles what the bar is drawn with, once, before it is drawn.
+#
+# The width is the terminal's own, less the room the indent and the percentage
+# take, and it is capped: a bar spanning a wide window reads as a loading screen
+# rather than as one line of a transcript.
+progress_style() {
+	if unicode_ok; then
+		PROG_FULL='█'
+		PROG_EMPTY='░'
+	fi
+	if color_ok 2; then
+		PROG_ON=$(printf '\033[1m')
+		PROG_MUTE=$(printf '\033[2m')
+		PROG_OFF=$(printf '\033[0m')
+	fi
+
+	pw=$(($(term_width) - 10))
+	[ "$pw" -gt 44 ] && pw=44
+	[ "$pw" -lt 12 ] && pw=12
+	PROGRESS_WIDTH="$pw"
+	return 0
 }
 
 # progress_watch <path> <total> <pid>
@@ -331,6 +470,7 @@ progress_draw() {
 # The last frame draws the size the file reached. A download that failed at 43%
 # says 43%, because a bar that ends at 100% over a failure is a bar that lies.
 progress_watch() {
+	progress_style
 	filled=''
 	drawn=0
 	delay=$(progress_delay)
@@ -418,17 +558,17 @@ signer_identity() {
 # unverified reports a signature that could not be checked, and stops when the
 # caller said it must be.
 #
-# The second line is the point of the first. "cosign is not installed" is a fact
-# about a machine; what a person needs is what that leaves unproven. It goes to
-# stderr because it is not the result of the install.
+# The note is the point of the summary. "cosign is not installed" is a fact
+# about a machine; what a person needs is what that leaves unproven. Neither is
+# printed here — see report_verified for where they go and why.
 unverified() {
 	if [ "$REQUIRE_SIG" = "1" ]; then
 		die "$1
 --require-signature was given, so nothing was installed."
 	fi
-	echo "warning: $1" >&2
-	echo "         the checksum proves the download is intact, not that the release is Eva's" >&2
-	echo "         install cosign, or pass --require-signature, to check that too" >&2
+	SIG_SUMMARY="checksum only — $1"
+	SIG_NOTE="that proves the download is intact, not that the release is Eva's
+install cosign, or pass --require-signature, to check that too"
 }
 
 # verify_signature <subject> <bundle>
@@ -459,7 +599,8 @@ repository's release workflow. Nothing was installed, and this is not a case to
 retry: check it by hand before trusting these bytes.
   https://github.com/$REPO/blob/main/docs/how-to/install-eva.md#verify-what-you-downloaded"
 	fi
-	echo "signature ok — ${1##*/} was signed by $REPO's release workflow"
+	SIG_SUMMARY="checksum, and the signature of $REPO's release workflow"
+	SIG_NOTE=""
 }
 
 # checksum_of <file> writes the file's SHA-256 to stdout.
@@ -496,7 +637,6 @@ verify_archive() {
   published: $want
 Nothing was installed."
 	fi
-	echo "checksum ok"
 }
 
 # Installing.
@@ -511,25 +651,119 @@ unpack_and_install() {
 	# not on every machine.
 	mv "$2/eva" "$3/eva"
 	chmod 0755 "$3/eva"
-	echo "installed $3/eva"
 }
 
+# The wordmark.
+#
+# The letters are docs/assets/eva-logo-white.svg sampled onto a character grid.
+# That drawing is built on four horizontal bands, so only a multiple of four
+# rows keeps its proportions: four rows gives each band one, eight gives each
+# two. Six looks better in isolation and is a different logo.
+#
+# Regenerate with:
+#   magick -background none docs/assets/eva-logo-white.svg -resize '27x4!' txt:-
+#
+# Four rows is the size it is drawn at, and there is only one size. Eight rows
+# is 57 columns, which is half again the width of the longest line under it, and
+# a mark that outweighs the result it is celebrating is a mark that has stopped
+# being a signature. Half-blocks would buy the detail of eight rows in the space
+# of four, and they were tried: this drawing is slanted, and the diagonals
+# quantise into alternating half cells that break the E's arms.
+#
+# It is a literal because a payoff that has to fetch something is a payoff that
+# can fail, and it is drawn only where it fits whole: a wrapped mark is worse
+# than none, so a narrower terminal gets nothing.
+wordmark() {
+	[ -t 1 ] || return 0
+	unicode_ok || return 0
+
+	# The blank line belongs to the mark and not to the bar above it, so that a
+	# terminal too narrow to draw one is left with one blank line here and not
+	# two.
+	ww=$(term_width)
+	# The mark is 31 columns and asks for two more than it needs: a terminal
+	# that wraps at exactly its width would otherwise fold the last cell of
+	# every row onto the next line, which is the one failure this stands down
+	# to avoid.
+	[ "$ww" -ge 33 ] || return 0
+
+	printf '\n%s' "$C_BOLD"
+	cat <<'ART'
+      ███████  ██  ███    █████
+      ██      ███  ██  ███  ██
+     ████     ██  ███  ██████
+    ███████    ███    ███ ███
+ART
+	printf '%s' "$C_OFF"
+	return 0
+}
+
+# report_verified says what the install proved, under the result rather than
+# over it.
+#
+# Both facts are settled before this runs and neither is printed where it is
+# settled, because the order they are established in is not the order they are
+# read in: the signature is checked first so that the checksums are Eva's before
+# they are used, but what a person wants is the result and then its warrant. A
+# check that failed is not here at all — it stopped the install.
+report_verified() {
+	printf '%s  verified   %s%s\n' "$C_DIM" "$SIG_SUMMARY" "$C_OFF"
+	[ -n "$SIG_NOTE" ] || return 0
+	printf '%s\n' "$SIG_NOTE" | while IFS= read -r line; do
+		printf '%s             %s%s\n' "$C_DIM" "$line" "$C_OFF"
+	done
+}
+
+# report_path is the one line here that is a problem rather than a result, so it
+# is the one line that carries a colour.
+#
+# The export names the directory in full. A ~ inside those quotes is a literal
+# tilde to the shell that would run this, which is a line that looks right and
+# does nothing.
 report_path() {
 	case ":$PATH:" in
-	*":$1:"*) ;;
-	*) echo "
-$1 is not on your PATH. Add it:
-  export PATH=\"$1:\$PATH\"" ;;
+	*":$1:"*) return 0 ;;
 	esac
+	printf '\n%s  %s is not on your PATH. Add it:%s\n' "$C_WARN" "$(tilde "$1")" "$C_OFF"
+	# shellcheck disable=SC2016 # $PATH is literal: this line is for a person to paste.
+	printf '%s    export PATH="%s:$PATH"%s\n' "$C_WARN" "$1" "$C_OFF"
 }
 
+# The command is on its own line and carries the path in full, for the reason
+# report_path's does. Both lines fit eighty columns, which is the width every
+# terminal has.
 report_quarantine() {
-	if [ "$1" = "darwin" ]; then
-		echo "
-macOS may refuse an unsigned binary that was downloaded. If it does:
-  xattr -d com.apple.quarantine \"$2/eva\"
-Notarized builds are not published yet."
-	fi
+	[ "$1" = "darwin" ] || return 0
+	printf '\n%s  macOS may refuse this binary; notarized builds are not published yet.%s\n' \
+		"$C_DIM" "$C_OFF"
+	printf '%s    xattr -d com.apple.quarantine "%s/eva"%s\n' \
+		"$C_DIM" "$2" "$C_OFF"
+}
+
+# report_next closes on what to do with Eva rather than on what to check about
+# it. The verifying is this script's job and it has already done it.
+report_next() {
+	printf '\n%s  To start%s\n' "$C_DIM" "$C_OFF"
+	printf '    %seva%s          %s# open a session%s\n' "$C_BOLD" "$C_OFF" "$C_DIM" "$C_OFF"
+	printf '    %seva version%s  %s# what you have%s\n' "$C_BOLD" "$C_OFF" "$C_DIM" "$C_OFF"
+	printf '\n%s  Docs  https://github.com/%s%s\n' "$C_DIM" "$REPO" "$C_OFF"
+}
+
+# report_success <dir> <quarantining os> is everything a finished install says,
+# in the order it is read: the mark, what happened, what warrants it, and what
+# to do next.
+#
+# The second argument is empty when nothing was downloaded. macOS quarantines
+# what arrived over the network and not what was copied from a directory, so a
+# local install that repeated the note would be teaching a person to clear an
+# attribute their file does not carry.
+report_success() {
+	wordmark
+	printf '\n%s  installed%s  %s%s%s\n' "$C_DIM" "$C_OFF" "$C_BOLD" "$(tilde "$1/eva")" "$C_OFF"
+	report_verified
+	report_path "$1"
+	report_quarantine "$2" "$1"
+	report_next
 }
 
 # Main.
@@ -578,6 +812,8 @@ install_main() {
 		esac
 	done
 
+	install_choose_style
+
 	case "$CHANNEL" in
 	stable | next) ;;
 	*) die "unknown channel $CHANNEL: it is stable or next" ;;
@@ -607,7 +843,7 @@ The archive names this script derives and the ones the build wrote disagree."
 			report_installed "$VERSION" "$DIR"
 			return 0
 		fi
-		echo "installing eva $VERSION ($os/$arch) from $FROM_DIST"
+		report_start "$VERSION" "$os/$arch $SEP $FROM_DIST"
 
 		cp "$FROM_DIST/$archive" "$tmp/$archive"
 		[ -f "$FROM_DIST/checksums.txt" ] ||
@@ -621,10 +857,7 @@ The archive names this script derives and the ones the build wrote disagree."
 		verify_archive "$tmp/$archive" "$FROM_DIST/checksums.txt" "$archive"
 
 		unpack_and_install "$tmp/$archive" "$tmp" "$DIR"
-		report_path "$DIR"
-		echo "
-Check it:
-  $DIR/eva version"
+		report_success "$DIR" ""
 		return 0
 	fi
 
@@ -648,7 +881,7 @@ Check it:
 		return 0
 	fi
 
-	echo "installing eva $VERSION ($os/$arch) from the $CHANNEL channel"
+	report_start "$VERSION" "$os/$arch $SEP $CHANNEL"
 
 	# The two small files ride inside the archive's transfer, so their connection
 	# cost disappears into it. The seam stays one URL at a time, which a curl
@@ -679,13 +912,7 @@ Check the version, or the release page: https://github.com/$REPO/releases"
 	verify_signature "$tmp/checksums.txt" "$bundle"
 	verify_archive "$tmp/$archive" "$tmp/checksums.txt" "$archive"
 	unpack_and_install "$tmp/$archive" "$tmp" "$DIR"
-
-	report_path "$DIR"
-	report_quarantine "$os" "$DIR"
-
-	echo "
-Check it:
-  $DIR/eva version"
+	report_success "$DIR" "$os"
 }
 
 # dist_version <dir> reads the version a snapshot build stamped into its

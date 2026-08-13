@@ -78,12 +78,24 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
   that does not hold installs nothing.
 
   It needs [cosign](https://github.com/sigstore/cosign) on the machine. Without it
-  the install goes ahead on the checksum alone and says on stderr what that leaves
-  unproven, because an installer that refused on a bare machine is one nobody runs.
+  the install goes ahead on the checksum alone and says what that leaves unproven,
+  because an installer that refused on a bare machine is one nobody runs.
   `--require-signature`, or `EVA_REQUIRE_SIGNATURE=1`, makes it a refusal instead —
   which is what a CI job wants. The expected identity is pinned to this
   repository's release workflow running on a tag, so a token from any other
   workflow signs a certificate the check rejects.
+
+- **The install script looks like something Eva made.** The bar fills in blocks at
+  the terminal's own width, the transcript carries weight rather than one flat grey,
+  and a finished install signs off with Eva's wordmark. What was proved moved under
+  the result rather than over it: a machine with no cosign got a three-line
+  `warning:` between the bar and the outcome, which was the loudest thing on the
+  screen and was not a failure. It says the same three things, dimmed, under
+  `installed`. The closing lines say how to start Eva rather than how to check it,
+  and the one colour on screen is on the one line that is a problem — a `PATH` that
+  will otherwise leave `eva` unfound. Each part stands down on its own terms: no
+  terminal, `NO_COLOR`, a locale that is not UTF-8, or a window too narrow to hold
+  the mark whole. A CI log still receives no escape character at all.
 
 - **The install script shows the download.** A bar fills as the archive arrives, and
   the percentage is real: the total comes from the size the release document already

@@ -68,7 +68,13 @@ both figures.
 
 The download draws a progress bar when it has a terminal to draw on. A run whose
 output goes to a file or to a CI log writes no bar and no escape character.
-`EVA_INSTALL_NO_PROGRESS=1` turns it off anywhere.
+`EVA_INSTALL_NO_PROGRESS=1` turns it off anywhere, and `NO_COLOR=1` turns the
+colour off while leaving the bar.
+
+The bar is drawn in blocks, and the install signs off with Eva's wordmark, on a
+terminal whose locale says UTF-8. Anywhere else the bar falls back to ASCII and
+the wordmark is not drawn — nor is it drawn on a terminal too narrow to hold it
+whole.
 
 The binary goes to `~/.local/bin` by default. To choose:
 
@@ -85,8 +91,8 @@ The script asks what is already installed before it downloads anything, and it
 compares the binary at the directory it would write to:
 
 ```
-eva 0.1.1 is already at ~/.local/bin/eva. Nothing to do.
-Run again with --force to install it anyway.
+  eva 0.1.1 is already at ~/.local/bin/eva. Nothing to do.
+  Run again with --force to install it anyway.
 ```
 
 So the command is safe in a Dockerfile or a CI step: the second run costs one
@@ -181,11 +187,21 @@ checksum against the file the signature established. A bad signature or a bad
 checksum installs nothing.
 
 It needs [cosign](https://github.com/sigstore/cosign) on the machine for the
-signature. Without it the install goes ahead on the checksum alone and says so:
+signature. Without it the install goes ahead on the checksum alone and says so,
+under the result rather than over it:
 
 ```
-warning: cosign is not installed, so the signature was not checked
-         the checksum proves the download is intact, not that the release is Eva's
+  installed  ~/.local/bin/eva
+  verified   checksum only — cosign is not installed, so the signature was not checked
+             that proves the download is intact, not that the release is Eva's
+             install cosign, or pass --require-signature, to check that too
+```
+
+With cosign present, that block is one line naming what vouched for the archive:
+
+```
+  installed  ~/.local/bin/eva
+  verified   checksum, and the signature of missingstudio/eva's release workflow
 ```
 
 That is a deliberate default — an installer that refused on a machine with no
