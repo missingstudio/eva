@@ -20,7 +20,9 @@ The best packages here are already deep. `events` exposes one sealed interface a
 
 ## Interfaces belong to the consumer
 
-Go's idiom, and the repo's best seam, is the interface defined where it is *needed*, not where it is implemented. `tui.Control` (`internal/tui/command.go:43`) is five methods the console needs. `tui` defines them and `cli` implements them. So a six-line stub can test the frontend, and the frontend can never reach a Provider or the Trace. `core.TraceSink` is the same inversion: core declares, `trace` implements.
+Go's idiom, and the repo's best seam, is the interface defined where it is *needed*, not where it is implemented. `tui.Local` (`internal/tui/command.go`) is the three facts the console asks of its own machine, defined by `tui` and implemented by `cli`. So a small stub can test the frontend, and the frontend can never reach a Provider or the Trace. `core.TraceSink` is the same inversion: core declares, `trace` implements.
+
+The counter-example is `api.Session`, and it is worth the exception. Five methods, defined where they are *carried* rather than where they are needed, because two Transports and every future Frontend implement or drive the same list. An interface with one consumer belongs to that consumer; an interface that is the contract between many belongs to neither of them.
 
 The corollary: **accept interfaces, return structs.** Constructors take the contracts they consume (`render.New(screen Screen, look theme.Theme)`) and return concrete types callers can grow with.
 
@@ -31,7 +33,7 @@ The second corollary: **keep interfaces small.** One to three methods. `Provider
 Go composes by embedding and by passing values — there is no inheritance to lean on, which is the point. Composition has two halves and both are in force:
 
 - The *contract* half: anything can implement `Provider`, `TraceSink`, `Subscriber`.
-- The *selection* half: a registry the implementations put themselves into, the standard library's own answer (`database/sql` drivers, `image` formats). `providers.Open` reads one, `trace.New` reads its own, and `Attach` appends projections rather than assigning one. So the layer that wires a run knows no implementation by name. The error naming what a person may choose comes from the registry, rather than from a line that would go stale.
+- The *selection* half: a registry the implementations put themselves into, the standard library's own answer (`database/sql` drivers, `image` formats). `harness.Open` reads one, `providers.Open` reads one, and `trace.New` reads its own. So the layer that wires a run knows no implementation by name. The error naming what a person may choose comes from the registry, rather than from a line that would go stale.
 
 A registry turns "add an implementation" from four edits in three packages into one package that registers itself plus one config line. ADR 0028 holds the reasoning, and its falsifier. Selection that needs more than a name and a small struct wants a factory at the composition root, not a wider registry.
 

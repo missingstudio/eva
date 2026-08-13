@@ -137,9 +137,14 @@ _See_: [0012](docs/adr/0012-retries-are-payloads-so-every-attempt-is-a-record.md
 ### Answering a turn
 
 **Loop**:
-The Unit that answers a prompt. It assembles one call, replays what the Provider yields into the Trace, and closes the Run with a Claim. It runs one turn today and decides nothing between turns; it grows into the cycle that proposes, acts, and observes.
+The Unit that answers a prompt, and Eva's own entry in the Harness registry. It holds what a build gave it, is handed one Prompt, assembles one call, replays what the Provider yields into the Trace, and closes the Run with a Claim. It runs one turn today and decides nothing between turns; it grows into the cycle that proposes, acts, and observes.
 _Avoid_: Agent (an agent is a Unit at a longer timescale), executor, runner, Driver (that is one Provider's half of one turn, a layer below)
 _See_: [0037](docs/adr/0037-a-prompt-is-answered-by-a-run-and-a-turn-is-one-provider-exchange.md)
+
+**Prompt**:
+What a person asks Eva, and what a Harness is handed to answer it: the ask itself and the Run that is already open to answer it in. It is the one shape that crosses the Harness seam, so the layer that opens a Run and the layer that answers in it describe the work the same way.
+_Avoid_: Turn (that is one exchange with a Provider, and answering one Prompt holds as many as there are tools to call), request, job (a Job is one target of a Run), Base system prompt (that conditions every turn and is not what anybody asked)
+_See_: [0062](docs/adr/0062-a-harness-holds-what-a-build-gives-it-and-is-handed-the-prompt-to-answer.md)
 
 **Turn**:
 One exchange with a Provider: a request starts, and a stream is read to its end. It is the providers' word, and it is not a unit of record. The Trace holds Runs, and one Run holds many turns once there are tools to call between them.
@@ -159,7 +164,9 @@ _Avoid_: Loop (a caller pulls, so nothing here loops on its own), pump, engine
 _See_: [0034](docs/adr/0034-one-driver-pulls-a-turn-and-a-provider-is-a-wire.md)
 
 **Transport**:
-One Provider's way of reaching its own API: a host, the headers beyond the Credential, and what a turn must carry to be accepted there. One Provider can have two, and they are identical past the dial.
+One way of reaching an API. It carries the calls and decides nothing about them, so two Transports for one API are identical past the dial. A Provider's Transport is a host and the headers beyond the Credential. The Session API's two are the Direct and the Remote.
+_Avoid_: Connection, channel, protocol (a protocol is what a Transport speaks, not the reaching)
+_See_: [0047](docs/adr/0047-one-api-and-two-transports-carry-it.md)
 
 ### Credentials
 
@@ -177,10 +184,81 @@ _See_: [0032](docs/adr/0032-a-login-is-a-cli-verb-and-its-credential-lives-in-on
 The one file subscription Credentials live in, beside the configuration and private to the user. A Login writes it, a turn's credential resolver reads and renews it, and nothing prints what it holds.
 _Avoid_: Keychain, credential cache, token file
 
+### The service and its interfaces
+
+**Session API**:
+What a client drives: answer a prompt, watch what happens, read the model, set the model, and clear the transcript. Five methods, and a Transport carries them unchanged.
+_Avoid_: Control (retired for this: the console's old interface held local facts too), RPC surface, service interface
+_See_: [0048](docs/adr/0048-the-session-api-crosses-the-wire-and-local-facts-do-not.md)
+
+**Local fact**:
+Something a Frontend answers about its own machine. The editor, the build and directory, and the Remedy checked after a turn failed. No Transport carries one.
+_Avoid_: Client info, environment, metadata
+
+**Direct Transport**:
+The Session API called in the same process. It opens no socket and starts no child, which is what lets one turn on a command line cost nothing to serve. The Assembly answers it, so nothing stands between the two.
+_See_: [0061](docs/adr/0061-the-assembly-is-the-session-api-in-this-process.md)
+
+**Remote Transport**:
+The Session API spoken over the wire to a Server. It is the public surface, and it is the only promise Eva makes to code it did not write.
+
+**Frontend**:
+Anything a person or a script drives Eva through: the Console, the desktop application, the phone, the browser, a script. Every Frontend is a Subscriber and holds no Session of its own.
+_Avoid_: Client (a client is what speaks a Transport, and a Frontend is what a person uses), UI, app
+
+**Server**:
+The process that holds Sessions and answers the Session API over the wire. It holds no ambient directory; a Session carries its own.
+_Avoid_: Backend, host, instance
+
+**Service**:
+The Server run in the background, kept across a Frontend leaving. What manages it starts, restarts, stops, and reports on the same Server rather than implementing a second one.
+_Avoid_: Daemon (a daemon pulls work from a control plane; a Service answers Frontends)
+
+**Pairing token**:
+A short-lived, single-use grant that a client exchanges for a Credential of its own. It is printed, because being read is its whole purpose, and it is worthless once used or expired.
+_Avoid_: Password, server key, secret (the Credential it buys is those things, and nothing prints one)
+_See_: [0051](docs/adr/0051-a-pairing-token-is-printed-and-the-credential-it-buys-is-not.md)
+
+**Location**:
+A directory a Session belongs to, and the scope a request acts in. A Server holds many and has no ambient one, so a request that lists anything names the Location it means.
+_Avoid_: Workspace (that is created, isolated, and snapshotted; a Location is only where, and a Workspace is what one resolves to), project, folder
+_See_: [0056](docs/adr/0056-a-question-belongs-to-a-session-and-the-inbox-is-a-fold-over-a-location.md)
+
+**Registration**:
+What a Service writes about itself so a client can find it: the address it answers on, its process, and its service version. A client reads one rather than being told an address.
+_Avoid_: Lock file (a lock says something runs; a Registration says how to reach it), discovery record, pid file
+_See_: [0060](docs/adr/0060-the-service-registers-itself-and-a-client-never-stops-a-stranger.md)
+
+**Service version**:
+The version of the wire surface, separate from the Event schema's. It travels in the health response, and a client speaks one major. It never appears inside a record, and the schema version never gates a method.
+_Avoid_: API version, protocol version (a protocol is what a Transport speaks), build version
+_See_: [0050](docs/adr/0050-the-go-schema-is-canonical-and-the-wire-schema-is-generated-from-it.md), [0057](docs/adr/0057-the-service-version-travels-on-the-wire-and-a-busy-service-is-not-replaced.md)
+
+### Escalation
+
+**Question**:
+What a Run asks a human when it cannot proceed alone. It is a record, and a Run blocked on one is blocked by design rather than stalled.
+_Avoid_: Prompt (that is what a person asks Eva), elicitation, ask
+
+**Resolution**:
+How a Question ended, from a closed set of four: `answered`, `rejected`, `expired`, and `cancelled`. A rejection is a person declining to answer, which is data rather than an error.
+_Avoid_: Disposition (that is how a tool call ended, and half its values cannot happen to a Question), status, reply
+_See_: [0055](docs/adr/0055-an-answer-is-a-record-and-a-rejection-is-one-of-its-resolutions.md)
+
+**Inbox**:
+The pending Questions across every Session in a Location. It is a fold over Traces, never a table, so it cannot disagree with the record.
+_Avoid_: Queue (a queue holds work; this holds questions), attention list, escalation store
+
 ### Capability and extension
 
 **Harness**:
-Something that owns a tool-calling loop and can be driven behind one adapter contract. Eva is a Harness; so are Claude Code and Codex.
+Something that owns a tool-calling loop and can be driven behind one adapter contract. Eva is a Harness; so are Claude Code and Codex. A registry selects one by name, and Eva is the configured default.
+_Avoid_: Orchestrator (retired: it named three things that already have names), engine, backend
+_See_: [0045](docs/adr/0045-the-harness-is-a-layer-and-eva-is-one-entry-in-its-registry.md)
+
+**Assembly**:
+Everything one Session's turns are answered with: the Harness that answers, the Provider it reaches, the sink every Event lands in, and the Session all of it folds into. It opens one Run per prompt and guarantees that Run closes, and it is the Session API in the process it runs in.
+_Avoid_: Driver (that is one Provider's half of one turn, a layer below), runtime, context
 
 **Profile**:
 A named bundle of model, harness, tools, policy, budget, memory, verifier, and environment.

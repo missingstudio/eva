@@ -103,8 +103,8 @@ sequence-numbered Event. There is no second vocabulary anywhere in the system.
   carries the intent and whose claim closes it. "Turn" is pinned to the providers'
   meaning: one exchange with a Provider, of which one Run holds many once there are
   tools. Its consequence has landed. The type named for the arc moved out of the
-  frontend into `internal/loop` and is `loop.Loop`, whose contract is a depguard rule
-  and a package comment, as every other layer's is.
+  frontend and is `eva.Loop`, inside the Harness that owns it, whose contract is a
+  depguard rule and a package comment, as every other layer's is.
 - **A transcript entry is blocks, so a tool exchange can be rebuilt** ([0039](adr/0039-a-transcript-entry-is-blocks-so-a-tool-exchange-can-be-rebuilt.md)).
   A Message holds words, a tool call, and the result that answers it, behind a sealed
   set. The Event schema already recorded tool calls and could not give them back: a
@@ -218,6 +218,94 @@ sequence-numbered Event. There is no second vocabulary anywhere in the system.
   speaking the real wire protocol, because a second implementation of the contract is
   one that can disagree with the first and be believed.
 
+## The service seam
+
+Eva is a service, and every interface is a client of it. The argument is in
+[explanation/the-service-seam.md](explanation/the-service-seam.md). These are the
+decisions it fixes. None of them changes a stage number or an exit test.
+
+- **The Harness is a layer, and Eva is one entry in its registry** ([0045](adr/0045-the-harness-is-a-layer-and-eva-is-one-entry-in-its-registry.md)).
+  The assembly that wires a Run left the frontend, because a server and a daemon each
+  need it and each would have rebuilt it. Selection is a registry with one entry today,
+  so a second Harness is a package plus one configuration line.
+- **The wire is the public surface, and `internal` stays internal** ([0046](adr/0046-the-wire-is-the-public-surface-and-internal-stays-internal.md)).
+  A version number already exists where the promise belongs: a reader migrates an old
+  record, and nothing migrates a Go type. There is no `pkg/`.
+- **One API, and two Transports carry it** ([0047](adr/0047-one-api-and-two-transports-carry-it.md)).
+  The Direct Transport is a call in one process and the Remote Transport is the wire.
+  Identical semantics, one conformance suite. This is what lets one turn on a command
+  line open no socket while the browser reaches the same service.
+- **The Session API crosses the wire, and Local facts do not** ([0048](adr/0048-the-session-api-crosses-the-wire-and-local-facts-do-not.md)).
+  Three of the console's eight methods describe a machine rather than a Session, and
+  each would have lied over a wire. Five and three, which also repairs the four-method
+  rule this repository already held.
+- **A Frontend resumes by Trace position, and only a durable Event moves a Cursor** ([0049](adr/0049-a-frontend-resumes-by-trace-position-and-only-a-durable-event-moves-a-cursor.md)).
+  One stream carries what arrived and what was committed, and the durable position is
+  the mark that tells them apart. A Worker replays a connection and resumes by WireSeq;
+  a Frontend folds a Session and resumes by Seq. This is where 0008's split first pays.
+- **The Go schema is canonical, and the wire schema is generated from it** ([0050](adr/0050-the-go-schema-is-canonical-and-the-wire-schema-is-generated-from-it.md)).
+  Generated Go cannot carry an unexported method, so a schema compiler owning the types
+  would delete 0005's seal. Generation runs outward from the payload registry. Two
+  version numbers: one for records, one for the wire surface.
+- **A pairing token is printed, and the Credential it buys is not** ([0051](adr/0051-a-pairing-token-is-printed-and-the-credential-it-buys-is-not.md)).
+  A pairing act has to put something on a screen, so the question is what. A single-use
+  grant that expires in minutes is safe to show; a bearer credential for an agent that
+  runs commands is not. The rejected design is a static password defaulting to absent.
+- **A Login verb lives under the noun that owns it** ([0052](adr/0052-a-login-verb-lives-under-the-noun-that-owns-it.md)).
+  `eva provider login` and `eva console login`. Two subjects arrived — a machine
+  reaching a model, and a person reaching the managed Console — and one verb cannot
+  guess. The old verbs fail with their replacements rather than aliasing.
+- **The web interface ships in the binary, and it needs no Console** ([0053](adr/0053-the-web-interface-ships-in-the-binary-and-needs-no-console.md)).
+  One checksummed artifact is the whole install story. Three constraints bind, and the
+  third is an exit test: a full turn through the interface against a local server with
+  no route to the Console.
+- **A repository is trusted per directory, and by the person** ([0054](adr/0054-a-repository-is-trusted-per-directory-and-by-the-person.md)).
+  A Server outlives any one directory, so one process reads configuration from
+  repositories nobody vetted. The grant lands while the only thing behind it is
+  appearance, because a grant introduced later is a dialog people learn to dismiss.
+- **An answer is a record, and a rejection is one of its Resolutions** ([0055](adr/0055-an-answer-is-a-record-and-a-rejection-is-one-of-its-resolutions.md)).
+  The schema held the Question and nothing held the reply, so a Session that escalated
+  could not be rebuilt. One additive Kind closes it, naming the Question by the Event
+  identity that already exists. A person declining to answer is data, so neither Outcome
+  nor Error Class widens. SchemaVersion stays 2.
+- **A Question belongs to a Session, and the Inbox is a fold over a Location** ([0056](adr/0056-a-question-belongs-to-a-session-and-the-inbox-is-a-fold-over-a-location.md)).
+  The Attention view cannot be built from per-Session lists, so the Inbox needs a
+  boundary. Tenant is too wide and Run is too narrow. A Location is where a person is, so
+  it travels on the request as well as on the Session.
+- **The service version travels on the wire, and a busy Service is not replaced** ([0057](adr/0057-the-service-version-travels-on-the-wire-and-a-busy-service-is-not-replaced.md)).
+  Additive within a major, checked on the service version rather than the build. It rides
+  in the health response, because a client that arrived over a network has no local file
+  to read. An idle Service is replaced silently; a busy one is reported. A development
+  build never reuses one.
+- **One web interface serves every screen** ([0058](adr/0058-one-web-interface-serves-every-screen.md)).
+  The desktop application is a shell around it and a phone reaches it over a Pairing
+  token, so there is one interface toolchain beside Go. What it cannot do — notifications,
+  no network, an application store — is the falsifier, named rather than discovered.
+- **The Console surface is a second interface document** ([0059](adr/0059-the-console-surface-is-a-second-interface-document.md)).
+  Organizations, seats, and billing get their own document, version, and authentication. A
+  namespace would put unanswerable methods in the surface; a reduced local implementation
+  would fabricate an organization.
+- **The Service registers itself, and a client never stops a stranger** ([0060](adr/0060-the-service-registers-itself-and-a-client-never-stops-a-stranger.md)).
+  One server, and `--register` is what makes a run of it the Service. The port is
+  ephemeral and the Registration carries the address. A client re-reads the Registration
+  before and after it signals, because a process identifier is reused and a stale one
+  stops whatever inherited it.
+- **The assembly is the session API in this process** ([0061](adr/0061-the-assembly-is-the-session-api-in-this-process.md)).
+  Five operations had three implementations, and one of them forwarded. The assembly
+  answers the API itself and the Server's half serves the interface, so `api` names no
+  implementation and a test can put a Session with nothing behind it under a Server. An
+  arriving chunk is written as a chunk rather than as an Event with its position left off.
+- **A Harness holds what a build gives it, and is handed the prompt to answer** ([0062](adr/0062-a-harness-holds-what-a-build-gives-it-and-is-handed-the-prompt-to-answer.md)).
+  Two structs held the same five fields and the same comments three times over. The Loop
+  keeps the Provider and the system prompt; a `Prompt` carries the rest — named for what a
+  person asks rather than for a turn, because "Turn" is pinned to one Provider exchange and
+  this shape spans a whole Run. `core.Unit` goes, because a Harness already says it and one
+  concept gets one name.
+- **The layer that opened a Run is the layer that closes it** ([0063](adr/0063-the-layer-that-opened-a-run-is-the-layer-that-closes-it.md)).
+  A Harness that returns without closing its Run leaves one a reader cannot tell from a
+  Run still going, and a comment cannot hold that invariant because the layer holding it
+  cannot check it. The assembly closes what comes back open, and a Run closes once.
+
 ## What supersedes what
 
 Nothing is rewritten. A superseded clause is marked in the older ADR's own status line.
@@ -229,6 +317,10 @@ Nothing is rewritten. A superseded clause is marked in the older ADR's own statu
 | 0015                                         | where a kept turn goes on screen               | 0023                          |
 | 0038                                         | a failed turn names the Trace                  | 0041                          |
 | 0019                                         | "/clear does not clear the screen"             | 0023                          |
+| 0032                                         | `login` as a top-level verb with no noun       | 0052, which narrows it        |
+| 0028                                         | `Attach` as a second way to attach             | 0061, which removes it        |
+| 0040                                         | `Execute(ctx, spec)`, and per-turn fields      | 0062, which keeps the rest    |
+| reference/architecture.md                    | `cli` imports config, providers, trace directly | 0045                         |
 | product.md (now `roadmap.md`)                | config format left open                        | 0009                          |
 | product.md (now `reference/architecture.md`) | the layer tree in the final-repo-shape section | 0010                          |
 | product.md (now `roadmap.md`, stage 0)       | six modules                                    | 0021                          |
@@ -241,8 +333,49 @@ above: the transcript schema in 0039, the Unit's shape in 0040, and where the lo
 lives in 0037's consequence. The review that raised them is
 [reviews/2026-08-09-architecture-review.md](reviews/2026-08-09-architecture-review.md).
 
-What is left is known cost rather than undecided shape, named here so it is met on
-purpose:
+Six things are undecided, and each is named here rather than assumed. Five wait on work
+that has not started, or on a stage not reached. The sixth — where the extraction sits in
+the build order — waits on a person, and it is an omission rather than a deferral:
+
+- **The lease clock, while a Run is blocked on a human.** A lease carries a deadline, and
+  a Run waiting on a person is idle by design. So the deadline must pause or extend, or
+  the escalation races it and the Job requeues under the operator's nose. The answer must
+  also re-enter the exact call on the resume Cursor rather than restarting the Run. This
+  needs a lease, and leases arrive at stage 9b. What already lands is the record the pause
+  will read (0055, 0056). The falsifier
+  `reference/architecture.md` carries still stands for the lease half: if a tool ships a
+  genuine elicitation-through-lease, adopt its shape instead.
+- **Provider Credentials over the wire.** A shipped tool exposes them, which is how its
+  web interface configures a Provider. That collides with the rule that a Credential never
+  reaches a record, and with 0031's rule that the mode alone decides. It is flagged rather
+  than adopted, and it needs a decision of its own.
+- **Which machine a Remedy describes, per Error Class.** 0048 keeps the Remedy on the
+  Frontend's own side, and a wire adds a third party. A turn that failed on a Server for
+  want of a Credential has a Remedy belonging to that Server's operator. A turn that failed
+  because a person's editor is unset has one belonging to the person. There are eight
+  classes and the answer differs by class, so it is settled per class rather than once.
+  0041 already fixes that the layer which can check a Remedy is not the layer that says it,
+  which is the constraint the answer has to satisfy.
+- **The binary's size budget.** 0053 puts the web interface in the binary and says a size
+  budget belongs beside the prompt-byte budget. No figure is set and no gate exists. The
+  base prompt's budget is a test (0020), and this one should be too — otherwise what ships
+  grows by accident rather than by review.
+- **The editor protocol surface.** Editors speak their own protocol to an agent, and
+  serving it lets somebody else's editor drive Eva — the mirror of a Harness adapter. The
+  seam is named in `explanation/the-service-seam.md` and nothing is built. It is a *second*
+  wire contract, and rule 3 says a published contract to other people's code is the
+  expensive kind of shallow. It waits until the extension host at 6.5 has exercised the
+  first one.
+- **Where the extraction sits in the build order.** 0045 to 0060 fix the shape and change
+  no stage number, so the work they describe has no stage. `roadmap.md` says to work the
+  lowest stage whose exit test has not passed, which is stage 1, and an agent reading it
+  would not know when to do this. Stage 0 already has the word for the answer — it calls
+  the Makefile a prefactor, which ships first so every later ticket lands against checks
+  that already run. The extraction is the same shape, and naming it that is a change to the
+  build order. That is a person's call, and it is unmade.
+
+What is left after those is known cost rather than undecided shape, named here so it is
+met on purpose:
 
 - **Rebuilding a Session is linear in its records**, and every turn copies the whole
   transcript. That is nothing at the length a person types, and something at the

@@ -15,6 +15,11 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
 
 ### Added
 
+- **`harness` names what answers a prompt.** This build ships one, `eva`, and it is
+  what you get without writing the setting. A name Eva does not have is refused with
+  the list of the ones it has. The setting exists for the harnesses that have not
+  landed, and a repository may not choose it: it decides what a run does rather than
+  how it looks.
 - **The console lists its commands.** <kbd>ctrl</kbd>+<kbd>p</kbd> opens the slash
   commands and narrows them as you type. <kbd>enter</kbd> writes the one you chose
   into the prompt, rather than running it, because a command may take an argument.
@@ -115,6 +120,16 @@ Under 1.0 a minor bump may break something; that is what `0.` means here.
   nothing to do.
 
 ### Fixed
+
+- **A turn always closes the Run it opened.** Whatever answers a prompt is expected
+  to close its own Run with the claim of how it went. Nothing checked, so anything
+  that returned without doing it left a Run a reader cannot tell from a Run still
+  going. The layer that opens a Run now closes any that comes back open, marked
+  failed and saying so — and a Run still closes exactly once.
+
+- **A `[trace] kind` Eva does not have now names the file to edit.** An unknown
+  Harness and an unknown Provider both said which file the setting was written in,
+  and the sink said only that the kind was unknown.
 
 - **A window being dragged no longer freezes the interface.** Every column an edge
   crossed re-rendered every answer in the conversation. Now the drag fits the window
