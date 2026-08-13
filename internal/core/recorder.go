@@ -64,6 +64,10 @@ type Recorder struct {
 	// order it was told. These are already sentences, because whoever knew
 	// the thing is the only one who can say what sort of thing it was.
 	toldMissing []string
+	// closed says the Run has been closed. A Run closes once, on the first
+	// account of it: two Finished records would leave a reader choosing which
+	// of them the Run ended on.
+	closed bool
 }
 
 func NewRecorder(o RecorderOptions) (*Recorder, error) {
@@ -122,9 +126,30 @@ func (r *Recorder) Degrade(missing ...string) {
 	}
 }
 
+// Closed says whether this Recorder has already stated the Run's close. It is
+// what lets the layer that opened a Run tell a Unit that closed it from one
+// that returned without closing it — a fault only that layer is in a position
+// to repair. It says the close was stated rather than that the Trace took it:
+// a close the sink refused is reported to whoever asked for it, and this
+// Recorder does not offer a second account of the same Run.
+func (r *Recorder) Closed() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.closed
+}
+
+// Finish closes the Run with the claim its Unit makes about it. Closing a Run
+// that is already closed commits nothing: the Run closed on the first account
+// of it, and a second Finished record would leave a reader choosing between
+// two.
 func (r *Recorder) Finish(ctx context.Context, claim events.Claim) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if r.closed {
+		return nil
+	}
+	r.closed = true
 
 	finished := events.Finished{Claim: claim}
 	if len(r.toldMissing) == 0 && len(r.unknownKinds) == 0 {
