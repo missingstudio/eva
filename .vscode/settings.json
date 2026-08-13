@@ -1,0 +1,8 @@
+{
+  // The editor runs what the Makefile runs. `make test` and CI both run the
+  // race detector and shuffle the order, and a run without them is a weaker
+  // test: the sink assigns Trace position under a mutex, and a turn's tool
+  // groups run in parallel against one Recorder. A test of either invariant
+  // passes without the race detector, whether or not the invariant holds.
+  "go.testFlags": ["-race", "-shuffle=on"]
+}
