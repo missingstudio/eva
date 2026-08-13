@@ -1,4 +1,4 @@
-package loop
+package eva
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/core/prompt"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/harness"
+	"github.com/missingstudio/eva/internal/harness/harnesstest"
 	"github.com/missingstudio/eva/internal/providers"
 )
 
@@ -143,23 +145,17 @@ func (r *refusing) Append(ctx context.Context, group []events.Event) ([]events.E
 	return r.grouped.Append(ctx, group)
 }
 
-// newTestSession opens a Session for a turn under test, on a clock that does
-// not move and identifiers that count.
-func newTestSession() *core.Session {
-	var runs, records uint64
-	return core.NewSession("sess_test", "tenant_test",
-		events.Identity{ID: "test", Kind: events.ActorAgent},
-		core.Origin{
-			Now: func() events.Timestamp { return events.Timestamp{} },
-			RunID: func() events.RunID {
-				runs++
-				return events.RunID(fmt.Sprintf("run_%d", runs))
-			},
-			EventID: func() events.EventID {
-				records++
-				return events.EventID(fmt.Sprintf("evt_%d", records))
-			},
-		})
+// answering is one prompt for the Loop to answer: the Run it is answered in,
+// the transcript it is conditioned on, and the prompt itself. It is the shape
+// the layer above hands down, so a test drives the Loop the way the Assembly
+// does rather than through a second door.
+func answering(session *core.Session, rec *core.Recorder, intent string) harness.Prompt {
+	return harness.Prompt{
+		Spec:     core.Spec{Intent: intent},
+		Recorder: rec,
+		Session:  session,
+		Model:    harnesstest.Model,
+	}
 }
 
 // opened is a Recorder for one Run of a Session, so that what the Run commits
@@ -260,19 +256,13 @@ func TestAContentBlockCommitsAsOneGroup(t *testing.T) {
 // Loop.conditioning has why the two are separate.
 func TestTheBaseSystemPromptHeadsTheTurnAndIsNotInTheTranscript(t *testing.T) {
 	provider := &driven{script: []recording{{chunks: []string{"answered."}}}}
-	session := newTestSession()
-	unit := &Loop{
-		Provider: provider,
-		// The Session opens its own Run, so the prompt folds into the
-		// transcript as it is committed — which is what the Provider is then
-		// conditioned on.
-		Recorder:     opened(t, session, &grouped{}),
-		Session:      session,
-		Model:        "test-model",
-		SystemPrompt: prompt.Base(),
-	}
+	session := harnesstest.Session()
+	unit := &Loop{Provider: provider, SystemPrompt: prompt.Base()}
 
-	if _, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"}); err != nil {
+	// The Session opens its own Run, so the prompt folds into the transcript as
+	// it is committed — which is what the Provider is then conditioned on.
+	toAnswer := answering(session, opened(t, session, &grouped{}), "what is this project")
+	if _, err := unit.Answer(context.Background(), toAnswer); err != nil {
 		t.Fatalf("answer a turn: %v", err)
 	}
 
@@ -299,15 +289,11 @@ func TestTheBaseSystemPromptHeadsTheTurnAndIsNotInTheTranscript(t *testing.T) {
 // rejects an empty content block.
 func TestATurnWithNoSystemPromptSendsNoSystemMessage(t *testing.T) {
 	provider := &driven{script: []recording{{chunks: []string{"answered."}}}}
-	session := newTestSession()
-	unit := &Loop{
-		Provider: provider,
-		Recorder: opened(t, session, &grouped{}),
-		Session:  session,
-		Model:    "test-model",
-	}
+	session := harnesstest.Session()
+	unit := &Loop{Provider: provider}
 
-	if _, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"}); err != nil {
+	toAnswer := answering(session, opened(t, session, &grouped{}), "what is this project")
+	if _, err := unit.Answer(context.Background(), toAnswer); err != nil {
 		t.Fatalf("answer a turn: %v", err)
 	}
 
@@ -343,14 +329,10 @@ func TestAProviderFailureIsAnOutcomeRatherThanAnError(t *testing.T) {
 	sink := &grouped{}
 	// An empty script, so the first call is refused. What broke does not
 	// matter here; that it broke before the Trace did is the whole of it.
-	unit := &Loop{
-		Provider: &driven{},
-		Recorder: recorder(t, sink),
-		Session:  newTestSession(),
-		Model:    "test-model",
-	}
+	unit := &Loop{Provider: &driven{}}
 
-	outcome, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"})
+	toAnswer := answering(harnesstest.Session(), recorder(t, sink), "what is this project")
+	outcome, err := unit.Answer(context.Background(), toAnswer)
 	if err != nil {
 		t.Fatalf("err = %v, want a turn that failed to be answered with an Outcome", err)
 	}
@@ -391,12 +373,10 @@ func TestAClassifiedFailureReachesTheCallerAndTheRecord(t *testing.T) {
 	unit := &Loop{
 		Provider:     &faulting{fault: &providers.Fault{Err: errors.New("anthropic: 401"), Class: events.ErrorAuthFailed}},
 		ProviderName: "anthropic",
-		Recorder:     recorder(t, sink),
-		Session:      newTestSession(),
-		Model:        "test-model",
 	}
 
-	outcome, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"})
+	toAnswer := answering(harnesstest.Session(), recorder(t, sink), "what is this project")
+	outcome, err := unit.Answer(context.Background(), toAnswer)
 	if err != nil {
 		t.Fatalf("err = %v, want a turn that failed to be answered with an Outcome", err)
 	}
@@ -428,14 +408,10 @@ func (f *faulting) Stream(context.Context, providers.Call) providers.Stream {
 // is not silent.
 func TestARecordThatCannotBeWrittenReachesTheCallerAsAnError(t *testing.T) {
 	sink := &refusing{refuse: 2}
-	unit := &Loop{
-		Provider: &driven{script: []recording{{chunks: []string{"answered."}}}},
-		Recorder: recorder(t, sink),
-		Session:  newTestSession(),
-		Model:    "test-model",
-	}
+	unit := &Loop{Provider: &driven{script: []recording{{chunks: []string{"answered."}}}}}
 
-	outcome, err := unit.Execute(context.Background(), core.Spec{Intent: "what is this project"})
+	toAnswer := answering(harnesstest.Session(), recorder(t, sink), "what is this project")
+	outcome, err := unit.Answer(context.Background(), toAnswer)
 	if !errors.Is(err, errFull) {
 		t.Fatalf("err = %v, want the sink's own failure", err)
 	}
@@ -468,14 +444,10 @@ func TestARunThatOpenedClosesEvenWhenOpeningItFailed(t *testing.T) {
 		t.Fatalf("build a Recorder: %v", err)
 	}
 
-	unit := &Loop{
-		Recorder: rec,
-		Session:  newTestSession(),
-		Provider: &driven{script: []recording{{chunks: []string{"answered."}}}},
-		Model:    "test-model",
-	}
+	unit := &Loop{Provider: &driven{script: []recording{{chunks: []string{"answered."}}}}}
 
-	if _, err := unit.Execute(context.Background(), core.Spec{Intent: "hello"}); err == nil {
+	toAnswer := answering(harnesstest.Session(), rec, "hello")
+	if _, err := unit.Answer(context.Background(), toAnswer); err == nil {
 		t.Fatal("a publish failure while opening the Run was not reported")
 	}
 

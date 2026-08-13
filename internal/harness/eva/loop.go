@@ -1,4 +1,4 @@
-package loop
+package eva
 
 import (
 	"context"
@@ -8,13 +8,16 @@ import (
 
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/harness"
 	"github.com/missingstudio/eva/internal/providers"
 )
 
-// Loop is the Unit that answers one prompt. It takes a Spec and returns an
-// Outcome, exactly as a workflow, an agent, or a factory does at a longer
-// timescale, and the whole account of the prompt-to-answer arc is the Run this
-// Unit executes as — there is no third name for that arc.
+// Loop is the Unit that answers one prompt: Eva's own tool-calling loop, behind
+// the contract that selects a Harness. It takes a Spec and returns an Outcome,
+// as a workflow, an agent, or a factory does at a longer timescale.
+//
+// It holds what every turn of this build is answered with; the prompt and its
+// Run arrive as a Prompt, stated once rather than copied per layer (ADR 0062).
 type Loop struct {
 	Provider providers.Provider
 
@@ -24,37 +27,19 @@ type Loop struct {
 	// be a copy that could disagree with the one a person wrote.
 	ProviderName string
 
-	Recorder *core.Recorder
-
-	// Session is read, never written. The transcript the answer is
-	// conditioned on is a fold over committed Events, so the Recorder is what
-	// puts things into it.
-	Session *core.Session
-
-	Model string
-
+	// SystemPrompt conditions every turn ahead of the transcript, and is not
+	// part of it. See conditioning.
 	SystemPrompt string
-
-	// Interrupt says whether a cancellation of this turn is a clean cancel:
-	// whether something is listening for it and lets the Run close, rather
-	// than the process dying under it. It is a property of whoever drives the
-	// Loop, so it is told rather than worked out here.
-	Interrupt bool
-
-	// Arriving is told each chunk as the Provider yields it, before any of it
-	// is committed. It is nil on every path but the console, where nobody is
-	// watching a turn happen.
-	Arriving func(chunk string)
 }
 
-var _ core.Unit = (*Loop)(nil)
+var _ harness.Harness = (*Loop)(nil)
 
-func (l *Loop) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error) {
+func (l *Loop) Answer(ctx context.Context, prompt harness.Prompt) (core.Outcome, error) {
 	// The intent rides on Started, which is what puts the prompt in the Trace
 	// and therefore in the Session. A transcript whose first message lives
 	// only in this process is one a Trace cannot reconstruct.
-	started := events.Started{Intent: spec.Intent, Capabilities: capabilities(l.Interrupt)}
-	if err := l.Recorder.Record(ctx, started); err != nil {
+	started := events.Started{Intent: prompt.Spec.Intent, Capabilities: capabilities(prompt.Interrupt)}
+	if err := prompt.Recorder.Record(ctx, started); err != nil {
 		// The Run may be open even though this failed. A group is committed
 		// before it is published, so a projection that broke on the way out
 		// leaves the Started record in the Trace and returns an error anyway —
@@ -62,11 +47,11 @@ func (l *Loop) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 		// from a Run still going. So it is closed here, and the failure that
 		// caused it is what is reported.
 		closed := core.Outcome{Result: events.ResultFailed, Summary: "the run could not be opened"}
-		_ = l.Recorder.Finish(context.WithoutCancel(ctx), closed.Claim())
+		_ = prompt.Recorder.Finish(context.WithoutCancel(ctx), closed.Claim())
 		return core.Outcome{}, err
 	}
 
-	streamErr := l.stream(ctx)
+	streamErr := l.stream(ctx, prompt)
 
 	outcome := core.Outcome{Result: events.ResultDone, Summary: "answered"}
 	switch {
@@ -96,7 +81,7 @@ func (l *Loop) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	// record is a Run a reader cannot tell from one that is still going —
 	// and an interrupted Run is exactly the one whose close would otherwise be
 	// cancelled along with it.
-	if err := l.Recorder.Finish(context.WithoutCancel(ctx), outcome.Claim()); err != nil {
+	if err := prompt.Recorder.Finish(context.WithoutCancel(ctx), outcome.Claim()); err != nil {
 		return outcome, err
 	}
 
@@ -113,8 +98,11 @@ func (l *Loop) Execute(ctx context.Context, spec core.Spec) (core.Outcome, error
 	return outcome, nil
 }
 
-func (l *Loop) conditioning() []core.Message {
-	transcript := l.Session.Messages()
+// conditioning is what the Provider is sent: the base system prompt ahead of
+// the transcript, which is a fold over what the Trace holds. The system prompt
+// is not part of that fold, so it is put in front of one rather than into it.
+func (l *Loop) conditioning(session *core.Session) []core.Message {
+	transcript := session.Messages()
 	if l.SystemPrompt == "" {
 		return transcript
 	}
@@ -128,17 +116,17 @@ type unrecorded struct{ err error }
 func (u unrecorded) Error() string { return u.err.Error() }
 func (u unrecorded) Unwrap() error { return u.err }
 
-func (l *Loop) stream(ctx context.Context) error {
+func (l *Loop) stream(ctx context.Context, prompt harness.Prompt) error {
 	stream := l.Provider.Stream(ctx, providers.Call{
-		Model:    l.Model,
-		Messages: l.conditioning(),
+		Model:    prompt.Model,
+		Messages: l.conditioning(prompt.Session),
 	})
 	// The turn's outcome is what the caller acts on. A stream that failed to
 	// close has nothing to add to it, and the Trace already holds what
 	// happened.
 	defer func() { _ = stream.Close() }()
 
-	block := newBlocks(l.Recorder)
+	block := newBlocks(prompt.Recorder)
 	for {
 		payload, err := stream.Next(ctx)
 		if errors.Is(err, io.EOF) {
@@ -163,8 +151,8 @@ func (l *Loop) stream(ctx context.Context) error {
 		// told is the only reason they are watching. It is told what arrived,
 		// which is not the same act as recording it: the record is committed
 		// below, a content block at a time.
-		if text, isText := payload.(events.Text); isText && l.Arriving != nil {
-			l.Arriving(text.Chunk)
+		if text, isText := payload.(events.Text); isText && prompt.Arriving != nil {
+			prompt.Arriving(text.Chunk)
 		}
 
 		if degraded, isCaveat := payload.(events.Degraded); isCaveat {
@@ -173,7 +161,7 @@ func (l *Loop) stream(ctx context.Context) error {
 			// that noticed two things — and a Run whose Trace also holds a
 			// record nobody understood — still close on a single Degraded
 			// rather than on a scattering of them a reader has to reconcile.
-			l.Recorder.Degrade(degraded.Missing...)
+			prompt.Recorder.Degrade(degraded.Missing...)
 			continue
 		}
 

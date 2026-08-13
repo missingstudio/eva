@@ -125,7 +125,8 @@ func TestHowLongACaptionStaysIsConfigured(t *testing.T) {
 		t.Fatalf("build the Theme: %v", err)
 	}
 
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{}, WithTheme(look))
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}

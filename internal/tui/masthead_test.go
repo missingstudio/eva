@@ -35,7 +35,8 @@ func TestTheHintNamesACommandTheConsoleAnswersTo(t *testing.T) {
 
 // It is drawn once, under the facts, and not repeated per row of the bar.
 func TestTheHintIsDrawnOnce(t *testing.T) {
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}

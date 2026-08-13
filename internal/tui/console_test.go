@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/missingstudio/eva/internal/api"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/render"
@@ -23,9 +25,10 @@ import (
 // turn: what a turn does is asserted where the assembly is, and what is left
 // for this package is the part a person looks at.
 
-// fixed is a Control that never answers. It is what the console draws against
-// when the drawing is the whole of the question — which is the seam Control
-// exists for: a frontend needs a model's name and nothing behind it.
+// fixed is a Session that never answers, and the machine it runs on. It is what
+// the console draws against when the drawing is the whole of the question —
+// which is the seam these two interfaces exist for: a frontend needs a model's
+// name and nothing behind it.
 type fixed struct {
 	model string
 	// remedy is what this machine would have checked, for the tests that ask
@@ -33,22 +36,45 @@ type fixed struct {
 	// be established about, which is what most failures leave behind.
 	remedy render.Remedy
 	editor Editor
+	// refuse is what every method of the Session API answers with, for the
+	// tests that ask what a console does when the Session is out of reach.
+	refuse error
 }
 
-var _ Control = (*fixed)(nil)
+var (
+	_ api.Session = (*fixed)(nil)
+	_ Local       = (*fixed)(nil)
+)
 
 func (f *fixed) Answer(context.Context, string) (core.Outcome, error) {
-	return core.Outcome{}, nil
+	return core.Outcome{}, f.refuse
 }
-func (f *fixed) Watch(core.Subscriber, func(string)) {}
-func (f *fixed) About() About                        { return About{} }
-func (f *fixed) Remedy(events.ErrorClass) render.Remedy {
-	return f.remedy
+
+func (f *fixed) Watch(context.Context, core.Subscriber, func(string)) error { return f.refuse }
+
+func (f *fixed) About() About { return About{} }
+
+func (f *fixed) Remedy(events.ErrorClass, string) render.Remedy { return f.remedy }
+
+func (f *fixed) Editor() Editor { return f.editor }
+
+func (f *fixed) Model(context.Context) (string, error) { return f.model, f.refuse }
+
+func (f *fixed) UseModel(_ context.Context, model string) error {
+	if f.refuse != nil {
+		return f.refuse
+	}
+	f.model = model
+	return nil
 }
-func (f *fixed) Editor() Editor        { return f.editor }
-func (f *fixed) Model() string         { return f.model }
-func (f *fixed) UseModel(model string) { f.model = model }
-func (f *fixed) Clear()                {}
+
+func (f *fixed) Clear(context.Context) error { return f.refuse }
+
+// against points a console at a Session and a machine, and keeps what it draws
+// from in step with what it would have read at build.
+func against(c *Console, f *fixed) {
+	c.session, c.local, c.model = f, f, f.model
+}
 
 // escapes matches any terminal escape sequence, so that a test can assert on
 // the words a person reads rather than on the bytes that place them.
@@ -60,7 +86,7 @@ func TestTheFooterPutsTheModelAtTheFarEnd(t *testing.T) {
 	// A whole console, because the footer now reads what the Session has spent
 	// and the fold is what knows.
 	c := drawn(t)
-	c.control = &fixed{model: "claude-sonnet-4-5"}
+	against(c, &fixed{model: "claude-sonnet-4-5"})
 	c.layout(40, 12)
 
 	got := plain(c.footer())
@@ -87,7 +113,7 @@ func TestTheFooterKeepsQuietWhenItHasNoRoom(t *testing.T) {
 		{name: "the model is wider than the window", width: 6},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			console := &Console{control: &fixed{model: "claude-sonnet-4-5"}, width: c.width, styles: newStyles(theme.Default(theme.Dark))}
+			console := &Console{model: "claude-sonnet-4-5", width: c.width, styles: newStyles(theme.Default(theme.Dark))}
 			if got := console.footer(); got != "" {
 				t.Errorf("the footer drew %q, want nothing", got)
 			}
@@ -133,7 +159,8 @@ func TestArrivingTextIsShownWithoutBeingKept(t *testing.T) {
 	// Built the way a run builds it, so that the pane, the renderer and the
 	// styles are the ones a person would be looking at. The program it returns
 	// is never started: nothing here needs a turn.
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -162,7 +189,8 @@ func TestArrivingTextIsShownWithoutBeingKept(t *testing.T) {
 }
 
 func TestAnAnsweredTurnIsShownOnce(t *testing.T) {
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -365,7 +393,8 @@ func TestTheFooterSaysHowMuchIsBelow(t *testing.T) {
 func drawn(t *testing.T) *Console {
 	t.Helper()
 
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -374,6 +403,20 @@ func drawn(t *testing.T) *Console {
 	// into one would be asserting about a console no person ever sees.
 	c.Init()
 	return c
+}
+
+// A console that cannot reach its Session does not open. Opening one would draw
+// a model nobody chose and show a person nothing of the turns they start.
+func TestAConsoleThatCannotReachItsSessionDoesNotOpen(t *testing.T) {
+	backend := &fixed{model: "m", refuse: errors.New("the session is out of reach")}
+
+	_, _, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("a console opened against a Session it cannot reach")
+	}
+	if !strings.Contains(err.Error(), "out of reach") {
+		t.Errorf("the failure does not carry the Session's own words: %v", err)
+	}
 }
 
 func TestThePromptGrowsWithoutTakingTheWindow(t *testing.T) {
@@ -460,7 +503,8 @@ func TestEveryLookDrawsAWholeScreen(t *testing.T) {
 				t.Fatalf("build the %q look: %v", name, err)
 			}
 
-			_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+			backend := &fixed{model: "m"}
+			_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{}, WithTheme(look))
 			if err != nil {
 				t.Fatalf("build the interface: %v", err)
 			}
@@ -496,7 +540,8 @@ func TestAFailedTurnIsNotDrawnAsAHint(t *testing.T) {
 	// line.
 	look := theme.Default(theme.Dark)
 
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{}, WithTheme(look))
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -882,7 +927,8 @@ func TestAConfiguredThemeReachesTheScreen(t *testing.T) {
 		t.Fatalf("build the Theme: %v", err)
 	}
 
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{}, WithTheme(look))
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -897,7 +943,8 @@ func TestAConfiguredThemeReachesTheScreen(t *testing.T) {
 
 	// The mark down the left of what a person said carries the chosen hue, so
 	// the styled bytes differ from the ones the default would have produced.
-	_, plainConsole, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{})
+	fallback := &fixed{model: "m"}
+	_, plainConsole, err := NewConsole(context.Background(), fallback, fallback, nil, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("build the default interface: %v", err)
 	}
@@ -913,7 +960,8 @@ func TestAReboundKeyIsTheKeyThatWorks(t *testing.T) {
 		t.Fatalf("parse the keymap: %v", err)
 	}
 
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithKeymap(keys))
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{}, WithKeymap(keys))
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -944,7 +992,8 @@ func TestTheFollowHintNamesTheKeyThatFollows(t *testing.T) {
 		t.Fatalf("parse the keymap: %v", err)
 	}
 
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithKeymap(keys))
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{}, WithKeymap(keys))
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -1039,7 +1088,9 @@ func TestTheMastheadFollowsTheModel(t *testing.T) {
 	c.about = About{Version: "9.9.9"}
 	c.layout(80, 24)
 
-	c.control.UseModel("a-different-model")
+	if err := c.useModel("a-different-model"); err != nil {
+		t.Fatalf("switch the model: %v", err)
+	}
 	c.refresh()
 
 	if got := plain(c.pane.View()); !strings.Contains(got, "a-different-model") {
@@ -1053,7 +1104,8 @@ func TestTheMastheadBarIsTheChosenAccent(t *testing.T) {
 		t.Fatalf("build the Theme: %v", err)
 	}
 
-	_, c, err := NewConsole(context.Background(), &fixed{model: "m"}, nil, &bytes.Buffer{}, WithTheme(look))
+	backend := &fixed{model: "m"}
+	_, c, err := NewConsole(context.Background(), backend, backend, nil, &bytes.Buffer{}, WithTheme(look))
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -1076,10 +1128,10 @@ func TestTheMastheadBarIsTheChosenAccent(t *testing.T) {
 
 func TestAFailedTurnDrawsTheCheckedNextStep(t *testing.T) {
 	c := drawn(t)
-	c.control = &fixed{model: "m", remedy: render.Remedy{
+	against(c, &fixed{model: "m", remedy: render.Remedy{
 		Because: "no openai login is stored",
 		Do:      "eva login",
-	}}
+	}})
 	c.layout(60, 12)
 
 	c.close(answered{outcome: core.Outcome{Result: events.ResultFailed, Class: events.ErrorAuthFailed}})
@@ -1099,7 +1151,7 @@ func TestAFailedTurnDrawsTheCheckedNextStep(t *testing.T) {
 // A machine nothing could be established about gets the one line and no more.
 func TestAFailureWithNothingCheckedDrawsNoStep(t *testing.T) {
 	c := drawn(t)
-	c.control = &fixed{model: "m"}
+	against(c, &fixed{model: "m"})
 	c.layout(60, 12)
 
 	c.close(answered{outcome: core.Outcome{Result: events.ResultFailed, Class: events.ErrorOverloaded}})
@@ -1113,10 +1165,10 @@ func TestAFailureWithNothingCheckedDrawsNoStep(t *testing.T) {
 // just did on purpose, and offering one would answer a question nobody asked.
 func TestAnInterruptedTurnIsGivenNoRemedy(t *testing.T) {
 	c := drawn(t)
-	c.control = &fixed{model: "m", remedy: render.Remedy{
+	against(c, &fixed{model: "m", remedy: render.Remedy{
 		Because: "no openai login is stored",
 		Do:      "eva login",
-	}}
+	}})
 	c.layout(60, 12)
 	c.interrupted = true
 

@@ -1,11 +1,9 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/render"
 )
@@ -21,9 +19,11 @@ type command struct {
 
 type reach interface {
 	// usingModel is which model answers the turns that follow, and useModel
-	// switches it from the next turn on.
+	// switches it from the next turn on. Switching reaches the Session and can
+	// fail; reading does not, because a frame a person is looking at is drawn
+	// from what this console already knows.
 	usingModel() string
-	useModel(name string)
+	useModel(name string) error
 
 	// spent is what this Session has cost so far, already drawn. It is a fold over
 	// the Usage records the Trace holds, which is why a Command asks for it rather
@@ -32,7 +32,7 @@ type reach interface {
 
 	// empty empties the transcript, and the Session behind it. Nothing is
 	// destroyed: see clear, and ADR 0019.
-	empty()
+	empty() error
 
 	// aside is a line in the interface's own voice — subdued, because a command's
 	// answer is not part of the conversation.
@@ -44,36 +44,39 @@ var _ reach = (*Console)(nil)
 // The console's own half of that list. Each is one line, and each is the reason
 // the list is short: a Command that wanted anything else would have to say so
 // here, where a reader would see it.
-func (c *Console) usingModel() string       { return c.control.Model() }
-func (c *Console) useModel(name string)     { c.control.UseModel(name) }
+func (c *Console) usingModel() string       { return c.model }
 func (c *Console) spent() string            { return c.renderer.Cost() }
 func (c *Console) aside(text string) string { return c.styles.hint.Render(text) }
 
-type Control interface {
-	// Answer runs one turn as one Run, and returns when the Run is closed.
-	Answer(ctx context.Context, intent string) (core.Outcome, error)
-	// Watch attaches the frontend that drives these turns: what was committed,
-	// what is arriving, and the Interrupt capability that listening claims.
-	Watch(sub core.Subscriber, arriving func(chunk string))
+// useModel switches the model and keeps what this console draws in step with
+// what answered. The console's own copy moves only after the Session took the
+// change, so a frame never reports a model that is not answering.
+func (c *Console) useModel(name string) error {
+	if err := c.session.UseModel(c.ctx, name); err != nil {
+		return err
+	}
+	c.model = name
+	return nil
+}
 
-	// About is what this console can say about the run behind it before anyone
-	// has asked anything: the build, the branch, the directory.
+// Local is what a Frontend answers about its own machine. No Transport carries
+// one: a program starts where a person is sitting, a build and a directory
+// describe one computer, and what was checked after a turn failed was checked
+// where the request was made.
+type Local interface {
+	// About is what this console can say about the machine it runs on before
+	// anyone has asked anything: the build, the branch, the directory.
 	About() About
 
 	// Remedy is what was checked about this machine after a turn failed this
-	// way, and the one command that follows from it.
-	Remedy(class events.ErrorClass) render.Remedy
+	// way on this model, and the one command that follows from it. The model is
+	// handed in because where its name came from is a fact about this machine's
+	// own configuration, and the name itself is not.
+	Remedy(class events.ErrorClass, model string) render.Remedy
 
 	// Editor is the program a person writes a long prompt in, and is the zero
 	// Editor when this machine names none.
 	Editor() Editor
-
-	// Model is which model the turns that follow will use.
-	Model() string
-	// UseModel switches it, from the next turn on.
-	UseModel(model string)
-	// Clear empties the transcript.
-	Clear()
 }
 
 func commands() []command {
@@ -124,7 +127,12 @@ func model(r reach, name string) string {
 		return r.aside("model " + r.usingModel())
 	}
 	was := r.usingModel()
-	r.useModel(name)
+	if err := r.useModel(name); err != nil {
+		// The switch did not happen, so the line says so rather than reporting
+		// a change nothing made. A person acting on the wrong one would send
+		// the next turn to a model that is not answering it.
+		return r.aside("model is still " + was + " — " + err.Error())
+	}
 	return r.aside("model " + was + " → " + name)
 }
 
@@ -138,7 +146,9 @@ func cost(r reach, _ string) string { return r.spent() }
 // clear empties the transcript, and the spend with it, because both belong to
 // the Session that is being left behind. Session.Fresh has the argument.
 func clear(r reach, _ string) string {
-	r.empty()
+	if err := r.empty(); err != nil {
+		return r.aside("the transcript is unchanged — " + err.Error())
+	}
 	return ""
 }
 

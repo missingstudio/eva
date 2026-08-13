@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -13,15 +14,58 @@ type reached struct {
 	// flag: a command that emptied twice is a command that opened two Sessions.
 	emptied int
 	cost    string
+	// refuse is what the Session behind this one answers with, for the tests
+	// that ask what a command says when it did not happen.
+	refuse error
 }
 
 var _ reach = (*reached)(nil)
 
 func (s *reached) usingModel() string       { return s.model }
-func (s *reached) useModel(name string)     { s.model = name }
 func (s *reached) spent() string            { return s.cost }
-func (s *reached) empty()                   { s.emptied++ }
 func (s *reached) aside(text string) string { return text }
+
+func (s *reached) useModel(name string) error {
+	if s.refuse != nil {
+		return s.refuse
+	}
+	s.model = name
+	return nil
+}
+
+func (s *reached) empty() error {
+	if s.refuse != nil {
+		return s.refuse
+	}
+	s.emptied++
+	return nil
+}
+
+// A command that did not happen says so. Reporting the change anyway would send
+// the next turn somewhere a person did not choose, and leave them reading a
+// screen that agrees with nothing.
+func TestACommandThatDidNotHappenSaysTheStateIsUnchanged(t *testing.T) {
+	refused := errors.New("the session is out of reach")
+
+	said := model(&reached{model: "m", refuse: refused}, "another-model")
+	for _, want := range []string{"still", "m", refused.Error()} {
+		if !strings.Contains(said, want) {
+			t.Errorf("/model does not say %q when the switch failed:\n%s", want, said)
+		}
+	}
+	if strings.Contains(said, "→") {
+		t.Errorf("/model reported a switch that did not happen:\n%s", said)
+	}
+
+	kept := &reached{refuse: refused}
+	said = clear(kept, "")
+	if !strings.Contains(said, "unchanged") {
+		t.Errorf("/clear does not say the transcript is unchanged:\n%s", said)
+	}
+	if kept.emptied != 0 {
+		t.Errorf("/clear emptied the transcript %d time(s) after the Session refused", kept.emptied)
+	}
+}
 
 func TestHelpListsEveryCommand(t *testing.T) {
 	said := help(&reached{}, "")

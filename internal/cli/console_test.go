@@ -16,12 +16,18 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/missingstudio/eva/internal/config"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/core/prompt"
 	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/harness"
+	"github.com/missingstudio/eva/internal/harness/harnesstest"
 	"github.com/missingstudio/eva/internal/providers"
 	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui"
+
+	// The Harness these turns are answered by, registering itself as it loads.
+	_ "github.com/missingstudio/eva/internal/harness/eva"
 )
 
 // These tests run the interface itself, in this process, with input disabled
@@ -155,25 +161,6 @@ func (s *drivenStream) Next(ctx context.Context) (events.Payload, error) {
 
 func (s *drivenStream) Close() error { return nil }
 
-// newTestSession opens a Session for the turns under test, on a clock that does
-// not move and identifiers that count.
-func newTestSession() *core.Session {
-	var runs, records uint64
-	return core.NewSession("sess_test", "tenant_test",
-		events.Identity{ID: "test", Kind: events.ActorAgent},
-		core.Origin{
-			Now: func() events.Timestamp { return events.Timestamp{} },
-			RunID: func() events.RunID {
-				runs++
-				return events.RunID(fmt.Sprintf("run_%d", runs))
-			},
-			EventID: func() events.EventID {
-				records++
-				return events.EventID(fmt.Sprintf("evt_%d", records))
-			},
-		})
-}
-
 type heard struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -219,15 +206,18 @@ func begin(t *testing.T, script ...recording) *dialogue {
 	t.Cleanup(func() { _ = sink.Close() })
 
 	provider := &driven{script: script}
-	e := &eva{
-		provider: provider,
-		sink:     sink,
-		session:  newTestSession(),
-		model:    selection{name: "test-model"},
+	unit, err := harness.Open(config.DefaultHarness, harness.Options{Provider: provider, ProviderName: "driven"})
+	if err != nil {
+		t.Fatalf("open the Harness: %v", err)
 	}
 
+	assembly := harnesstest.Assemble(t, unit, sink)
+
 	out := &heard{}
-	program, c, err := tui.NewConsole(context.Background(), e, nil, out)
+	// The console drives the same Session API a browser would. In this process
+	// that API is the assembly itself, and a browser typing the same prompt
+	// reaches the same five methods over the wire.
+	program, c, err := tui.NewConsole(context.Background(), assembly, &local{}, nil, out)
 	if err != nil {
 		t.Fatalf("build the interface: %v", err)
 	}
@@ -689,101 +679,6 @@ func TestTheShippedProvidersAreSelectable(t *testing.T) {
 		}
 	}
 }
-
-func TestEveryAttachedProjectionSeesEveryEvent(t *testing.T) {
-	e := &eva{
-		provider: &driven{script: []recording{{chunks: []string{"answered"}}}},
-		sink:     &collecting{},
-		session:  newTestSession(),
-		model:    selection{name: "test-model"},
-	}
-
-	var first, second int
-	e.Attach(core.SubscriberFunc(func(context.Context, events.Event) error { first++; return nil }))
-	e.Attach(core.SubscriberFunc(func(context.Context, events.Event) error { second++; return nil }))
-
-	if _, err := e.Answer(context.Background(), "say something"); err != nil {
-		t.Fatalf("the turn failed: %v", err)
-	}
-
-	if first == 0 || second == 0 {
-		t.Fatalf("projections saw %d and %d Events, want both fed", first, second)
-	}
-	if first != second {
-		t.Errorf("projections saw %d and %d Events, want the same Trace", first, second)
-	}
-}
-
-// A capability is claimed on purpose, and attaching a projection is not a claim.
-func TestAttachingAProjectionClaimsNoCapability(t *testing.T) {
-	e := &eva{}
-
-	e.Attach(core.SubscriberFunc(func(context.Context, events.Event) error { return nil }))
-	if e.interrupt {
-		t.Error("attaching a projection claimed the Interrupt capability")
-	}
-	if e.arriving != nil {
-		t.Error("attaching a projection said it watches a turn arrive")
-	}
-
-	e.Attach(nil, WithInterrupt())
-	if !e.interrupt {
-		t.Error("WithInterrupt did not claim the capability")
-	}
-}
-
-func TestEveryAttachedWatcherIsToldWhatIsArriving(t *testing.T) {
-	e := &eva{}
-
-	var first, second int
-	e.Attach(nil, WithArriving(func(string) { first++ }))
-	e.Attach(nil, WithArriving(func(string) { second++ }))
-
-	watching := e.watching()
-	if watching == nil {
-		t.Fatal("two watchers attached, and a Loop is told nobody is watching")
-	}
-	watching("a chunk")
-
-	if first != 1 || second != 1 {
-		t.Errorf("the watchers were told %d and %d chunks, want both told once", first, second)
-	}
-}
-
-// Nobody watching is nil, and not a fan-out over nothing.
-func TestNobodyWatchingIsToldNothing(t *testing.T) {
-	e := &eva{}
-	if e.watching() != nil {
-		t.Error("a Loop is told a turn is being watched when nothing is")
-	}
-
-	e.Attach(nil, WithArriving(nil))
-	if e.watching() != nil {
-		t.Error("a watcher that is nothing counted as somebody watching")
-	}
-}
-
-// collecting is a sink that keeps what it was given, for a test that cares who
-// was published to rather than what was written.
-type collecting struct {
-	mu   sync.Mutex
-	next uint64
-}
-
-func (c *collecting) Append(_ context.Context, group []events.Event) ([]events.Event, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	out := make([]events.Event, len(group))
-	for i, e := range group {
-		c.next++
-		e.Seq = c.next
-		out[i] = e
-	}
-	return out, nil
-}
-
-func (c *collecting) Close() error { return nil }
 
 // The console says where the provider's own account of a failure went, once per
 // Session.
