@@ -17,6 +17,10 @@ const (
 	// DefaultModel is what a turn runs against when nothing selects a model.
 	DefaultModel    = "claude-sonnet-4-5"
 	DefaultProvider = "anthropic"
+	// DefaultHarness is what answers a prompt when nothing selects a Harness.
+	// Eva is one entry in a registry, and it is the entry a build ships as its
+	// default.
+	DefaultHarness = "eva"
 	// DefaultAPIKeyEnv is where the credential is read from. A secret enters
 	// at the environment boundary and nowhere else, so there is no
 	// configuration key that holds one.
@@ -75,6 +79,11 @@ var projectSettableTables = map[string]bool{
 
 type Config struct {
 	Model string `toml:"model"`
+
+	// Harness is what owns the tool-calling loop that answers a prompt. It is
+	// not a setting a repository may choose: it decides what a run does rather
+	// than how it looks.
+	Harness string `toml:"harness"`
 
 	// Editor is the program a long prompt is written in, and is empty when the
 	// environment answers instead.
@@ -420,6 +429,7 @@ func defaults() Config {
 	// decode cannot tell a default from a choice, so the default has to wait
 	// until the choice is in.
 	return Config{
+		Harness: DefaultHarness,
 		Provider: ProviderConfig{
 			Name: DefaultProvider,
 		},
@@ -433,6 +443,9 @@ func defaults() Config {
 
 func (c *Config) normalize() error {
 	d := defaults()
+	if c.Harness == "" {
+		c.Harness = d.Harness
+	}
 	if c.Provider.Name == "" {
 		c.Provider.Name = d.Provider.Name
 	}
