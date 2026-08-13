@@ -28,6 +28,7 @@ will not load.
 
 ```toml
 model = "claude-sonnet-4-5"     # follows the provider if you leave it out
+harness = "eva"                 # what owns the loop that answers a prompt
 editor = ""                     # $VISUAL, then $EDITOR, when you leave it out
 
 [provider]
@@ -49,6 +50,10 @@ actor_kind = "human"            # human, agent, or system
 
 The model and the key variable follow the provider you pick. Name `openai` and you
 get `gpt-5.6-terra` reading `OPENAI_API_KEY`, without saying either out loud.
+
+`harness` names what owns the tool-calling loop. This build ships one, `eva`, and a
+name it does not have is refused with the list of the ones it has. Other harnesses
+are what the setting exists for, and none has landed.
 
 **`auth` decides, and nothing overrides it.** If it says `subscription`, an exported
 `OPENAI_API_KEY` is ignored, and `eva auth status` says so rather than quietly using

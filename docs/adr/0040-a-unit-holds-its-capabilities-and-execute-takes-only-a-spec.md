@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, the Execute signature and the Loop's per-turn fields superseded by 0062
 ---
 
 # A Unit holds its capabilities, and Execute takes only a Spec

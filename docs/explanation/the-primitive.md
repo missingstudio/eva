@@ -51,6 +51,15 @@ type Outcome struct {
 }
 ```
 
+**Where this is in the tree today.** The shape above is the destination, not the current
+signature. What answers a prompt now is `harness.Harness`, and what it is handed is a
+`Prompt`: a Spec beside the Run that is open to answer it in — the Provider, the system
+prompt, and everything else a `Runtime` field names above are held by the implementation
+the registry built, per [0040](../adr/0040-a-unit-holds-its-capabilities-and-execute-takes-only-a-spec.md).
+There is no `Unit` interface in Go: one concept gets one name, and at this rung the name
+is Harness ([0062](../adr/0062-a-harness-holds-what-a-build-gives-it-and-is-handed-the-prompt-to-answer.md)).
+Unit stays the word for the thing at every rung, which is what this page is about.
+
 `Hooks` is on the primitive for the same reason as `Tenant`. If you add an extension surface later, you must re-plumb every loop. Our harness will not build all software. Community skills, tools, and extensions must compose in. So the attachment point exists from commit one, although the extension host itself ships at stage 6.5.
 
 Every optional capability in `Runtime` ships a null implementation from day one: `NoCompaction`, `NoMemory`, and `NoSubagents`. This is owainlewis/neo's pattern. The loop never branches on presence. A "shallow" stage means a null implementation behind the final interface. It does not mean a missing field.

@@ -9,19 +9,20 @@ part, and this page says which one to open.
 
 ## Where each thing is written
 
-| Document                                                     | Answers                                                           | Kind        |
-| ------------------------------------------------------------ | ----------------------------------------------------------------- | ----------- |
-| [tutorial/first-run.md](tutorial/first-run.md)               | I have never run Eva. Show me.                                    | Tutorial    |
-| [how-to/](how-to/)                                           | I need to do one specific thing.                                  | How-to      |
-| [explanation/the-ladder.md](explanation/the-ladder.md)       | Why does a factory need ten rungs, and in what order?             | Explanation |
-| [explanation/the-primitive.md](explanation/the-primitive.md) | What is the one type, and why that shape?                         | Explanation |
-| [reference/commands.md](reference/commands.md)               | What can I type, and what key does what?                          | Reference   |
-| [reference/configuration.md](reference/configuration.md)     | What can I set, and what does it default to?                      | Reference   |
-| [reference/architecture.md](reference/architecture.md)       | What is the event schema, the adapter contract, the hook surface? | Reference   |
-| [reference/platform.md](reference/platform.md)               | How do tenancy, isolation, and billing work?                      | Reference   |
-| [roadmap.md](roadmap.md)                                     | What ships in which order, and what is the exit test?             | Roadmap     |
-| [../CONTEXT.md](../CONTEXT.md)                               | What does this word mean?                                         | Glossary    |
-| [decisions.md](decisions.md)                                 | What has been decided, and why?                                   | Decisions   |
+| Document                                                           | Answers                                                           | Kind        |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------- | ----------- |
+| [tutorial/first-run.md](tutorial/first-run.md)                     | I have never run Eva. Show me.                                    | Tutorial    |
+| [how-to/](how-to/)                                                 | I need to do one specific thing.                                  | How-to      |
+| [explanation/the-ladder.md](explanation/the-ladder.md)             | Why does a factory need ten rungs, and in what order?             | Explanation |
+| [explanation/the-primitive.md](explanation/the-primitive.md)       | What is the one type, and why that shape?                         | Explanation |
+| [explanation/the-service-seam.md](explanation/the-service-seam.md) | Where does an interface attach, and what does Eva promise it?     | Explanation |
+| [reference/commands.md](reference/commands.md)                     | What can I type, and what key does what?                          | Reference   |
+| [reference/configuration.md](reference/configuration.md)           | What can I set, and what does it default to?                      | Reference   |
+| [reference/architecture.md](reference/architecture.md)             | What is the event schema, the adapter contract, the hook surface? | Reference   |
+| [reference/platform.md](reference/platform.md)                     | How do tenancy, isolation, and billing work?                      | Reference   |
+| [roadmap.md](roadmap.md)                                           | What ships in which order, and what is the exit test?             | Roadmap     |
+| [../CONTEXT.md](../CONTEXT.md)                                     | What does this word mean?                                         | Glossary    |
+| [decisions.md](decisions.md)                                       | What has been decided, and why?                                   | Decisions   |
 
 Open [the ladder](explanation/the-ladder.md) for the argument. Open
 [the roadmap](roadmap.md) for the build order. Open
@@ -48,13 +49,15 @@ The event schema is settled and is no longer a draft. It was resolved on 2026-08
 and now lives in [`adr/0001`](adr/) to `adr/0008`, which own the reasoning.
 [reference/architecture.md](reference/architecture.md) carries the resulting shape only.
 
-Three further decisions override this document:
+Five further decisions override this document:
 
-| Decision                                                                           | What it fixes                                                                                          |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [`adr/0009`](adr/0009-config-and-profiles-are-toml.md)                             | Config and profiles are TOML, decoded strictly                                                         |
-| [`adr/0010`](adr/0010-core-is-pure-so-io-lives-beside-it.md)                       | The layer graph, which differs from the tree in [reference/architecture.md](reference/architecture.md) |
-| [`adr/0021`](adr/0021-the-repository-is-one-module-and-internal-is-the-default.md) | One module, with those layers under `internal/`                                                        |
+| Decision                                                                              | What it fixes                                                                                          |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [`adr/0009`](adr/0009-config-and-profiles-are-toml.md)                                | Config and profiles are TOML, decoded strictly                                                         |
+| [`adr/0010`](adr/0010-core-is-pure-so-io-lives-beside-it.md)                          | The layer graph, which differs from the tree in [reference/architecture.md](reference/architecture.md) |
+| [`adr/0021`](adr/0021-the-repository-is-one-module-and-internal-is-the-default.md)    | One module, with those layers under `internal/`                                                        |
+| [`adr/0045`](adr/0045-the-harness-is-a-layer-and-eva-is-one-entry-in-its-registry.md) | The Harness is a layer that lands early, and selection is a registry                                   |
+| [`adr/0046`](adr/0046-the-wire-is-the-public-surface-and-internal-stays-internal.md)  | What Eva promises code it did not write, and that no package leaves `internal/`                        |
 
 Where any document mapped above and an ADR disagree, the ADR wins.
 

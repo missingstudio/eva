@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, Attach as a second way to attach superseded by 0061
 ---
 
 # Selection is a registry
@@ -30,7 +30,7 @@ One shape, three applications, copied from the command table this repository alr
 
 `Attach` appends. It used to assign a slice of one, so a second projection silently replaced the first — no metrics tap beside a console, no second screen, no machine-readable stream beside the one a person reads. A fan-out that admits one consumer is a field.
 
-The capability claim came apart from the attachment in the same motion. Watching a turn arrive and claiming Interrupt are things a frontend *is*, and being a Subscriber is a thing it *does*; bundling them meant a projection that watched nothing arrive still claimed it could cancel cleanly. A capability that is missing degrades a Run and a capability claimed and absent corrupts it, so the claim is now a word a caller writes: `WithInterrupt()`.
+The capability claim came apart from the attachment in the same motion. Watching a turn arrive and claiming Interrupt are things a frontend *is*, and being a Subscriber is a thing it *does*; bundling them meant a projection that watched nothing arrive still claimed it could cancel cleanly. A capability that is missing degrades a Run and a capability claimed and absent corrupts it, so the claim is a word a caller writes rather than a thing attaching implies. The word has since become the act: watching a Session claims Interrupt (ADR 0048). `Attach` itself is gone — with the claim carried by the act, a second way to attach that claimed nothing had no production caller, and the fan-out this section is about is now the watchers' own.
 
 ## The fold that cannot be registered
 

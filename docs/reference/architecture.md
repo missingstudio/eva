@@ -326,7 +326,11 @@ Two mechanisms are load-bearing, and they must be designed together because they
 
 Three things follow. Emit `NeedsHuman{Question, Resume}` as a mid-stream event, not only as a terminal outcome. Hold the lease in a `blocked-on-human` state that does not count against the progress signal (below). Route the answer back on the same cursor-addressed stream.
 
-**Falsifier:** if a harness ships an externally-usable elicitation-through-lease mechanism, adopt its shape instead. Until then, treat this as unexplored and over-invest.
+**The record half is now settled, and the lease half is not.** ADR 0055 adds one Kind: `Resolved` names the Question by the Event identity the Recorder assigned, and says how it ended — answered, rejected, expired, or cancelled. A rejection is a person declining to answer, so it is data rather than an error, and neither `OutcomeKind` nor `ErrorClass` widens. ADR 0056 addresses a Question to its Session and makes the Attention view a fold over a Location rather than a table.
+
+One consequence removes work from this section: **a `NeedsHuman` with no matching `Resolved` *is* the `blocked-on-human` state.** It is a fold over two records, so the scheduler needs no state field that could disagree with the Trace.
+
+**Falsifier: half fired.** A shipped tool exposes pending questions over its own interface, with reply and reject as separate verbs, and that shape is adopted above. The other half did not fire — nothing ships this through a lease, with a paused deadline, for a fleet where the human is never at the worker. So the lease clock stays Eva's to invent, and the falsifier stands for that half alone: if a harness ships a genuine elicitation-through-lease, adopt its shape instead.
 
 ## Enrollment — daemons join from anywhere
 
@@ -394,6 +398,20 @@ Every action carries this chain: lease token → worker credential → join toke
 ## CLI surface
 
 ```
+# the session service — one service, several ways to reach it
+eva                             # uses the background server, starting it if absent
+eva --standalone                # a private server for this process alone
+eva --server <url>              # drive a server somewhere else
+eva -p "<prompt>"               # one turn, direct transport, no socket
+eva serve                       # API + web interface, foreground
+eva service start|restart|status|stop|password
+eva pair                        # mint a pairing token; show how to reach this server
+eva api <operation|METHOD path> # one request against the running server
+
+# credentials — the verb lives under the noun that owns it
+eva provider login | logout | status | ls
+eva console  login | logout | status
+
 # control plane
 eva control up --bind 0.0.0.0:7777
 eva enroll create --tier semi --role builder --ttl 10m --uses 1
@@ -408,7 +426,10 @@ eva daemon                      # local: embedded CP, auto-enrolled
 eva ext install <git-ref|name> | ls | rm
 ```
 
-One command and one pasteable token, from anywhere. That is the ergonomic bar.
+One command and one pasteable token, from anywhere. That is the ergonomic bar, and it
+binds a phone pairing with a local server as much as a Worker joining a fleet — the same
+token ladder, at a shorter distance. `docs/explanation/the-service-seam.md` holds the
+argument for the first block, and ADRs 0045 to 0054 hold its decisions.
 
 ## The dashboard
 
@@ -460,16 +481,38 @@ eva/                    # go.mod; cmd/ for binaries, these layers under internal
 │                       # trust gate; firstparty/ extensions
 │                       #   imports: core                          (stage 6.5)
 ├── harness/            # profiles, subagent, resume, branch; Harness iface,
-│   │                   # Eva's own impl, adapters, conformance
+│   │                   # the registry that selects one, and the Assembly that opens
+│   │                   # a Run on a Session and commits what a Harness emits
 │   │                   #   imports: core, env, providers, exthost (stages 7, 9c)
+│   │                   #   The layer, the registry, and eva/ land EARLY — the
+│   │                   #   assembly that wires a Run has to live somewhere a
+│   │                   #   server and a daemon can both reach it (ADR 0045).
+│   ├── eva/            # Eva's own implementation: the Loop that answers a prompt.
+│   │                   # One entry in the registry, and the configured default.
+│   │                   # It holds what the build gave it; a Prompt is the ask
+│   │                   # and the Run to answer it in (ADR 0062).
+│   ├── harnesstest/    # the fixture a test builds one Session's worth of
+│   │                   # assembly from: a Session on a clock that does not move,
+│   │                   # a sink it can read back, and the Assembly of the two.
 │   ├── adapter/ conform/                                         # stage 9c
 │   └── eval/                                                     # stage 8
+├── api/                # the session API + the transports that carry it: the
+│                       # assembly answers it in this process, remote/ speaks it
+│                       # over the wire, and the Server's half serves the
+│                       # interface (ADR 0061). Also the generated interface
+│                       # document every client is built from.
+│                       #   imports: core — not harness             (ADRs 0047, 0061)
+├── server/             # the listener: eva serve, the background service, the
+│                       # pairing token, the embedded web interface's assets
+│                       #   imports: api                       (ADRs 0051, 0053)
 ├── cli/                # repl, TUI, render, print/JSON/RPC modes
 │                       #   imports: harness — pure consumer of events/
 │                       #   the core never renders                 (stage 0)
-│                       #   UNTIL stage 7 there is no harness, so cli imports
-│                       #   config, providers, and trace directly. Narrow it
-│                       #   when harness lands; do not widen it further.
+│                       #   Narrowed when harness landed (ADR 0045): the assembly
+│                       #   that wires a Run moved to harness/, and cli keeps the
+│                       #   command line, the process, and the exit codes. It
+│                       #   drives the session API through a transport, and it
+│                       #   holds local facts itself (ADR 0048).
 ├── daemon/             # task, queue, scheduler, enroll, identity
 │                       #   imports: harness                       (stages 9a-9b)
 ├── skill/              # source format, compiler, per-harness targets; mcpserver/
