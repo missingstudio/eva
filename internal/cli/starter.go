@@ -5,12 +5,11 @@ import (
 	"io"
 	"strings"
 
+	"github.com/missingstudio/eva/internal/auth"
 	"github.com/missingstudio/eva/internal/config"
 	"github.com/missingstudio/eva/internal/events"
-	"github.com/missingstudio/eva/internal/providers"
-	"github.com/missingstudio/eva/internal/providers/openai"
+	"github.com/missingstudio/eva/internal/harness"
 	"github.com/missingstudio/eva/internal/theme"
-	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui/keymap"
 )
 
@@ -25,6 +24,9 @@ func initialise(path string, stdout io.Writer) error {
 
 func starter() string {
 	look, keys := theme.Default(theme.Dark), keymap.Default()
+	// What a build can be configured to use is read from the registries that
+	// own each list, so this file cannot offer something this build lacks.
+	can := harness.Choices()
 
 	return fmt.Sprintf(`# Eva — configuration
 #
@@ -37,6 +39,11 @@ func starter() string {
 
 # Which model a turn runs against.
 # model = %q
+
+# What owns the tool-calling loop that answers a prompt. This build ships: %s.
+# It is not a setting a repository may choose: it decides what a run does rather
+# than how it looks.
+# harness = %q
 
 # The program a long prompt is written in, opened by ctrl+o. Left out, Eva reads
 # VISUAL and then EDITOR from your environment. It is not a setting a repository
@@ -170,10 +177,11 @@ func starter() string {
 %s
 `,
 		config.DefaultModel,
-		strings.Join(providers.Names(), ", "), config.DefaultProvider,
-		config.AuthAPIKey, config.AuthSubscription, openai.Name, config.AuthAPIKey,
+		strings.Join(can.Harnesses, ", "), config.DefaultHarness,
+		strings.Join(can.Providers, ", "), config.DefaultProvider,
+		config.AuthAPIKey, config.AuthSubscription, auth.ProviderOpenAI, config.AuthAPIKey,
 		config.DefaultAPIKeyEnv,
-		config.EnvHome, strings.Join(trace.Kinds(), ", "), trace.JSONL,
+		config.EnvHome, strings.Join(can.Sinks, ", "), can.DefaultSink,
 		config.DefaultTenant, config.DefaultActor, string(events.ActorHuman),
 		strings.Join(theme.Names(), ", "), theme.Eva, theme.Contrast, theme.Mono, theme.Eva,
 		strings.Join(theme.Borders(), ", "), theme.BorderNormal,

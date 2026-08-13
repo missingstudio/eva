@@ -21,7 +21,7 @@ func (c *Console) masthead() string {
 
 	facts := [][2]string{
 		{"version", c.about.Version},
-		{"model", c.control.Model()},
+		{"model", c.model},
 		{"branch", c.about.Branch},
 		{"cwd", c.about.Dir},
 	}

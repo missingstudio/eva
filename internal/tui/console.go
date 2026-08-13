@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
+	"github.com/missingstudio/eva/internal/api"
 	"github.com/missingstudio/eva/internal/core"
 	"github.com/missingstudio/eva/internal/events"
 	"github.com/missingstudio/eva/internal/render"
@@ -25,11 +26,21 @@ import (
 // console is the interactive interface: what a person is typing, what is
 // arriving, and the turns already answered.
 type Console struct {
-	// control is the whole of what this console can reach of the run behind it:
-	// starting a turn, and what a command may change about the turns that
-	// follow. What keeps a Provider and a sink out of reach is the type — see
-	// Control.
-	control Control
+	// session is the whole of what this console can reach of the Session behind
+	// it: starting a turn, watching one, and what a command may change about
+	// the turns that follow. What keeps a Provider and a sink out of reach is
+	// the type, and a Transport carries every method of it unchanged.
+	session api.Session
+
+	// local is what this console asks of its own machine rather than of the
+	// Session: the editor to start, the build to report, and what was checked
+	// after a turn failed. No Transport carries one — see Local.
+	local Local
+
+	// model is which model answers, as this console last knew it. It is kept
+	// rather than asked for, because a frame is drawn on the way to a person's
+	// eyes and reading it may reach a Server.
+	model string
 
 	// renderer is the projection a person reads: a fold over committed Events,
 	// showing on this model rather than writing to a stream.
@@ -341,7 +352,7 @@ func pollable(file *os.File) bool {
 }
 
 // newConsole builds the interactive program, and the interface behind it.
-func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Writer, opts ...Option) (*tea.Program, *Console, error) {
+func NewConsole(ctx context.Context, session api.Session, local Local, in io.Reader, out io.Writer, opts ...Option) (*tea.Program, *Console, error) {
 	look, keys := theme.Default(theme.Dark), keymap.Default()
 	for _, opt := range opts {
 		opt(&look, &keys)
@@ -372,7 +383,8 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	input.SetStyles(inputStyles(look.Background))
 
 	c := &Console{
-		control: backend,
+		session: session,
+		local:   local,
 		ctx:     ctx,
 		input:   input,
 		spin:    spinner.New(spinner.WithSpinner(spinnerFor(look))),
@@ -387,7 +399,15 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	// Theme allows it. It reaches nothing else: see live.go.
 	c.live = newLive(c.arriving, look.Layout.LiveShare)
 
-	c.about = backend.About()
+	c.about = local.About()
+
+	// Which model answers is read once and kept, because every frame reports it
+	// and a frame must not reach a Server to be drawn.
+	model, err := session.Model(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	c.model = model
 
 	// WithTiming because this is a screen a person reads: a turn may say how long
 	// it took. The one-shot command asks for no such thing, because what it draws
@@ -433,10 +453,14 @@ func NewConsole(ctx context.Context, backend Control, in io.Reader, out io.Write
 	// turn tells the second what is arriving; both reach the interface as a
 	// message from outside the update loop, and the interface keeps them apart
 	// because they are different claims.
-	backend.Watch(
+	if err := session.Watch(ctx,
 		&feed{program: program},
 		func(text string) { program.Send(chunk{text: text}) },
-	)
+	); err != nil {
+		// A console that is not watching would show a person nothing and say
+		// nothing about why, so it does not open at all.
+		return nil, nil, err
+	}
 
 	return program, c, nil
 }
@@ -801,7 +825,7 @@ func (c *Console) refresh() {
 func (c *Console) Screen() string { return c.shown.frame() }
 
 func (c *Console) footer() string {
-	model := c.control.Model()
+	model := c.model
 	if c.width <= 0 || lipgloss.Width(model) >= c.width {
 		return ""
 	}
@@ -1114,7 +1138,7 @@ func (c *Console) complete() {
 }
 
 func (c *Console) openEditor() tea.Cmd {
-	editor := c.control.Editor()
+	editor := c.local.Editor()
 	if editor.Command == "" {
 		c.put(c.styles.hint.Render("no editor is set — export EDITOR, or write editor in your configuration"))
 		return nil
@@ -1179,7 +1203,7 @@ func (c *Console) start(prompt string) tea.Cmd {
 		defer c.running.Done()
 		defer cancel()
 
-		outcome, err := c.control.Answer(ctx, prompt)
+		outcome, err := c.session.Answer(ctx, prompt)
 		return answered{outcome: outcome, err: err}
 	}
 
@@ -1221,7 +1245,7 @@ func (c *Console) close(a answered) tea.Cmd {
 
 		// Then what that means on this machine, and the one step that follows.
 		if !c.interrupted {
-			if next := c.control.Remedy(a.outcome.Class).Said(); next != "" {
+			if next := c.local.Remedy(a.outcome.Class, c.model).Said(); next != "" {
 				c.put(c.styles.failure.Render(next))
 			}
 		}
@@ -1245,8 +1269,13 @@ func (c *Console) close(a answered) tea.Cmd {
 	return tea.Batch(c.input.Focus(), c.send(next))
 }
 
-func (c *Console) empty() {
-	c.control.Clear()
+func (c *Console) empty() error {
+	if err := c.session.Clear(c.ctx); err != nil {
+		// Nothing is taken away, because the Session behind the transcript is
+		// still the one that holds it. A screen emptied here would be a screen
+		// disagreeing with the record.
+		return err
+	}
 	c.renderer.Cleared()
 
 	// Back to the top before the content goes, so that a person who had scrolled
@@ -1255,6 +1284,7 @@ func (c *Console) empty() {
 	c.transcript = nil
 	c.pane.GotoTop()
 	c.refresh()
+	return nil
 }
 
 // put adds a block to the transcript, which is what a person keeps.

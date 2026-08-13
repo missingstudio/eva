@@ -32,21 +32,23 @@ func live() auth.Credentials {
 
 func TestARefusedCredentialNamesTheCredential(t *testing.T) {
 	for _, c := range []struct {
-		name  string
-		eva   *eva
-		says  []string
-		types string
+		name    string
+		machine *local
+		says    []string
+		types   string
 	}{
 		{
 			name: "a key is named by its variable, and there is nothing to type",
-			eva: &eva{providerName: "anthropic", checks: checks{
-				keyEnv: "ANTHROPIC_API_KEY",
+			machine: &local{checks: checks{
+				provider: "anthropic",
+				keyEnv:   "ANTHROPIC_API_KEY",
 			}},
 			says: []string{"$ANTHROPIC_API_KEY", "anthropic"},
 		},
 		{
 			name: "no login stored is the one thing logging in fixes",
-			eva: &eva{providerName: "openai", checks: checks{
+			machine: &local{checks: checks{
+				provider:     "openai",
 				subscription: true,
 				login:        empty(),
 			}},
@@ -55,7 +57,8 @@ func TestARefusedCredentialNamesTheCredential(t *testing.T) {
 		},
 		{
 			name: "an expired login with nothing to renew it is the other",
-			eva: &eva{providerName: "openai", checks: checks{
+			machine: &local{checks: checks{
+				provider:     "openai",
 				subscription: true,
 				login: stored(auth.Credentials{
 					AccountID: "acct_42",
@@ -67,7 +70,8 @@ func TestARefusedCredentialNamesTheCredential(t *testing.T) {
 		},
 		{
 			name: "a live login says so, so that nobody logs in again to no effect",
-			eva: &eva{providerName: "openai", checks: checks{
+			machine: &local{checks: checks{
+				provider:     "openai",
 				subscription: true,
 				login:        stored(live()),
 			}},
@@ -75,7 +79,7 @@ func TestARefusedCredentialNamesTheCredential(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := c.eva.Remedy(events.ErrorAuthFailed)
+			got := c.machine.Remedy(events.ErrorAuthFailed, "a-model")
 
 			for _, want := range c.says {
 				if !strings.Contains(got.Because, want) {
@@ -91,26 +95,27 @@ func TestARefusedCredentialNamesTheCredential(t *testing.T) {
 
 // A store that cannot be read establishes nothing, and says nothing.
 func TestAnUnreadableStoreEstablishesNothing(t *testing.T) {
-	e := &eva{providerName: "openai", checks: checks{
+	machine := &local{checks: checks{
+		provider:     "openai",
 		subscription: true,
 		login: func(string) (auth.Credentials, bool, error) {
 			return auth.Credentials{}, false, errors.New("permission denied")
 		},
 	}}
 
-	if got := e.Remedy(events.ErrorAuthFailed); got != (render.Remedy{}) {
+	if got := machine.Remedy(events.ErrorAuthFailed, "a-model"); got != (render.Remedy{}) {
 		t.Errorf("an unreadable store produced %+v, want nothing established", got)
 	}
 }
 
 func TestAModelIsReportedAgainstWhereItWasChosen(t *testing.T) {
-	e := &eva{
-		providerName: "openai",
-		model:        selection{name: "gpt-nonexistent"},
-		checks:       checks{configPath: "/home/p/.eva/config.toml"},
-	}
+	machine := &local{checks: checks{
+		provider:   "openai",
+		model:      "gpt-nonexistent",
+		configPath: "/home/p/.eva/config.toml",
+	}}
 
-	named := e.Remedy(events.ErrorNoSuchModel)
+	named := machine.Remedy(events.ErrorNoSuchModel, "gpt-nonexistent")
 	for _, want := range []string{"gpt-nonexistent", "/home/p/.eva/config.toml"} {
 		if !strings.Contains(named.Because, want) {
 			t.Errorf("the fact does not say %q: %q", want, named.Because)
@@ -120,8 +125,7 @@ func TestAModelIsReportedAgainstWhereItWasChosen(t *testing.T) {
 		t.Errorf("a model name Eva cannot supply came with %q to type", named.Do)
 	}
 
-	e.UseModel("gpt-also-nonexistent")
-	chosen := e.Remedy(events.ErrorNoSuchModel)
+	chosen := machine.Remedy(events.ErrorNoSuchModel, "gpt-also-nonexistent")
 	if !strings.Contains(chosen.Because, "/model") {
 		t.Errorf("a model chosen in the Session is reported against the file: %q", chosen.Because)
 	}
@@ -130,19 +134,20 @@ func TestAModelIsReportedAgainstWhereItWasChosen(t *testing.T) {
 // An unreachable provider says where the turn was sent, but only when something
 // on this machine chose somewhere.
 func TestAnUnreachableProviderNamesOnlyAnOverride(t *testing.T) {
-	overridden := &eva{providerName: "openai", checks: checks{
+	overridden := &local{checks: checks{
+		provider:   "openai",
 		baseURL:    "http://localhost:1234/v1",
 		configPath: "/home/p/.eva/config.toml",
 	}}
-	got := overridden.Remedy(events.ErrorUnreachable)
+	got := overridden.Remedy(events.ErrorUnreachable, "a-model")
 	for _, want := range []string{"http://localhost:1234/v1", "provider.base_url", "/home/p/.eva/config.toml"} {
 		if !strings.Contains(got.Because, want) {
 			t.Errorf("the fact does not say %q: %q", want, got.Because)
 		}
 	}
 
-	plain := &eva{providerName: "openai", checks: checks{configPath: "/home/p/.eva/config.toml"}}
-	if said := plain.Remedy(events.ErrorUnreachable).Said(); said != "" {
+	plain := &local{checks: checks{provider: "openai", configPath: "/home/p/.eva/config.toml"}}
+	if said := plain.Remedy(events.ErrorUnreachable, "a-model").Said(); said != "" {
 		t.Errorf("with nothing overridden the remedy reads %q, want nothing established", said)
 	}
 }
@@ -150,16 +155,17 @@ func TestAnUnreachableProviderNamesOnlyAnOverride(t *testing.T) {
 // A turn nobody will bill names the account it would have been charged to,
 // because settling one means knowing which.
 func TestABilledTurnNamesTheAccountOrTheVariable(t *testing.T) {
-	subscription := &eva{providerName: "openai", checks: checks{
+	subscription := &local{checks: checks{
+		provider:     "openai",
 		subscription: true,
 		login:        stored(live()),
 	}}
-	if got := subscription.Remedy(events.ErrorBilling); !strings.Contains(got.Because, "acct_42") {
+	if got := subscription.Remedy(events.ErrorBilling, "a-model"); !strings.Contains(got.Because, "acct_42") {
 		t.Errorf("the fact does not name the account: %q", got.Because)
 	}
 
-	key := &eva{providerName: "anthropic", checks: checks{keyEnv: "ANTHROPIC_API_KEY"}}
-	if got := key.Remedy(events.ErrorBilling); !strings.Contains(got.Because, "$ANTHROPIC_API_KEY") {
+	key := &local{checks: checks{provider: "anthropic", keyEnv: "ANTHROPIC_API_KEY"}}
+	if got := key.Remedy(events.ErrorBilling, "a-model"); !strings.Contains(got.Because, "$ANTHROPIC_API_KEY") {
 		t.Errorf("the fact does not name the variable: %q", got.Because)
 	}
 }
@@ -169,7 +175,9 @@ func TestABilledTurnNamesTheAccountOrTheVariable(t *testing.T) {
 func TestTheClassesWithNoLocalCauseSayNothing(t *testing.T) {
 	// A fully configured machine, so that anything said would be said because
 	// the class allowed it rather than because there was nothing to read.
-	e := &eva{providerName: "openai", model: selection{name: "gpt-5"}, checks: checks{
+	machine := &local{checks: checks{
+		provider:     "openai",
+		model:        "gpt-5",
 		subscription: true,
 		baseURL:      "http://localhost:1234/v1",
 		keyEnv:       "OPENAI_API_KEY",
@@ -185,7 +193,7 @@ func TestTheClassesWithNoLocalCauseSayNothing(t *testing.T) {
 	}
 
 	for _, class := range events.ErrorClasses() {
-		said := e.Remedy(class).Said()
+		said := machine.Remedy(class, "gpt-5").Said()
 		if silent[class] && said != "" {
 			t.Errorf("%q established %q, and there is nothing on this machine to check for it", class, said)
 		}
@@ -196,10 +204,10 @@ func TestTheClassesWithNoLocalCauseSayNothing(t *testing.T) {
 
 	// A failure nobody classified, and one from a build that knows a class this
 	// one does not, are both machines with nothing to say about them.
-	if said := e.Remedy("").Said(); said != "" {
+	if said := machine.Remedy("", "gpt-5").Said(); said != "" {
 		t.Errorf("an unclassified failure established %q", said)
 	}
-	if said := e.Remedy(events.ErrorClass("quantum_flux")).Said(); said != "" {
+	if said := machine.Remedy(events.ErrorClass("quantum_flux"), "gpt-5").Said(); said != "" {
 		t.Errorf("an unknown class established %q", said)
 	}
 }

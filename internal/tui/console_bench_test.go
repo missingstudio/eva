@@ -28,7 +28,8 @@ var benchAnswers = []int{1, 8, 32}
 func benchConsole(tb testing.TB, blocks int) *Console {
 	tb.Helper()
 
-	_, c, err := NewConsole(context.Background(), &fixed{model: "a-model"}, strings.NewReader(""), &strings.Builder{})
+	backend := &fixed{model: "a-model"}
+	_, c, err := NewConsole(context.Background(), backend, backend, strings.NewReader(""), &strings.Builder{})
 	if err != nil {
 		tb.Fatal(err)
 	}

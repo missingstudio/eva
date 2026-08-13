@@ -6,10 +6,11 @@ import (
 	"io"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/missingstudio/eva/internal/api"
 )
 
-func Run(ctx context.Context, backend Control, in io.Reader, out io.Writer, opts ...Option) error {
-	program, c, err := NewConsole(ctx, backend, in, out, opts...)
+func Run(ctx context.Context, session api.Session, local Local, in io.Reader, out io.Writer, opts ...Option) error {
+	program, c, err := NewConsole(ctx, session, local, in, out, opts...)
 	if err != nil {
 		return err
 	}

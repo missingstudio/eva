@@ -7,13 +7,20 @@ import (
 	"io"
 	"strings"
 
+	"github.com/missingstudio/eva/internal/api"
 	"github.com/missingstudio/eva/internal/config"
-	"github.com/missingstudio/eva/internal/core"
-	"github.com/missingstudio/eva/internal/events"
+	"github.com/missingstudio/eva/internal/harness"
 	"github.com/missingstudio/eva/internal/theme"
-	"github.com/missingstudio/eva/internal/trace"
 	"github.com/missingstudio/eva/internal/tui"
 	"github.com/missingstudio/eva/internal/tui/keymap"
+
+	// The Harnesses a build can select, each registering itself as it loads.
+	// Eva is the configured default and today the only name.
+	//
+	// The Providers are imported where their registry is, and a Harness cannot
+	// be: it imports that layer to register itself. The one that cannot go
+	// where its registry is ends up here, where the wiring is.
+	_ "github.com/missingstudio/eva/internal/harness/eva"
 )
 
 type stage uint8
@@ -43,9 +50,9 @@ func commands() []command {
 			needs: assembled,
 			do: func(ctx context.Context, r *run) error {
 				if r.opts.prompt != "" {
-					return once(ctx, r.eva, r.opts.prompt, r.stdout, r.look)
+					return once(ctx, r.session, r.local, r.opts.prompt, r.stdout, r.look)
 				}
-				return tui.Run(ctx, r.eva, r.stdin, r.stdout, tui.WithTheme(r.look), tui.WithKeymap(r.keys))
+				return tui.Run(ctx, r.session, r.local, r.stdin, r.stdout, tui.WithTheme(r.look), tui.WithKeymap(r.keys))
 			},
 		},
 		{
@@ -114,10 +121,14 @@ type run struct {
 
 	cfg config.Config
 
-	// eva, look and keys stand only for a command that needs an assembly.
-	eva  *eva
-	look theme.Theme
-	keys keymap.Keymap
+	// The rest stand only for a command that needs an assembly: the Session API
+	// a Frontend drives, what this machine answers for itself, the Assembly that
+	// holds the Trace open, and the look a turn is drawn in.
+	session  api.Session
+	local    *local
+	assembly *harness.Assembly
+	look     theme.Theme
+	keys     keymap.Keymap
 }
 
 func (r *run) perform(ctx context.Context) (err error) {
@@ -142,14 +153,13 @@ func (r *run) perform(ctx context.Context) (err error) {
 		return cmd.do(ctx, r)
 	}
 
-	finish, err := r.assemble()
-	if err != nil {
+	if err := r.assemble(); err != nil {
 		return err
 	}
 	// A Trace that failed to flush is not a successful run, whatever the turn
 	// claimed.
 	defer func() {
-		cerr := finish()
+		cerr := r.assembly.Close()
 		switch {
 		case cerr == nil:
 		case err == nil:
@@ -161,40 +171,46 @@ func (r *run) perform(ctx context.Context) (err error) {
 	return cmd.do(ctx, r)
 }
 
-// assemble builds what a turn is answered with — the Provider configuration
-// selects, the sink every Event lands in, the Session both are folded into, and
-// the look the answer is drawn in — and returns the close that ends the Trace.
-func (r *run) assemble() (func() error, error) {
-	provider, err := open(r.cfg)
-	if err != nil {
-		return nil, rejected(err)
+// assemble builds the service in this process and takes hold of the Session API
+// onto it, over the Transport that opens no socket. What a turn is answered
+// with — the Harness, the Provider, the sink, and the Session — is the layer
+// below's to wire; what stays here is the credential a person obtained, the
+// look the answer is drawn in, and the facts about this machine.
+func (r *run) assemble() error {
+	var creds harness.Credentials
+	if r.cfg.Subscription() {
+		resolve, err := subscriptionCredential(r.cfg)
+		if err != nil {
+			return err
+		}
+		creds.Subscription = resolve
 	}
 
-	sink, err := trace.New(r.cfg.Trace.Kind, trace.Options{Path: r.cfg.Trace.Path})
+	assembly, err := harness.Assemble(r.cfg, creds)
 	if err != nil {
-		return nil, err
+		return rejected(err)
 	}
 
 	look, keys, err := appearance(r.cfg)
 	if err != nil {
-		// The sink is open and the configuration it was opened from is one Eva
+		// The Trace is open and the configuration it was opened from is one Eva
 		// will not act on. Its own failure to close on the way back out is not
 		// what this person has to hear about instead.
-		_ = sink.Close()
-		return nil, rejected(err)
+		_ = assembly.Close()
+		return rejected(err)
 	}
 
-	r.eva = &eva{
-		provider:     provider,
-		providerName: r.cfg.Provider.Name,
-		sink:         sink,
-		session:      core.NewSession(events.SessionID(newID("sess")), r.cfg.Tenant(), r.cfg.Actor(), origin()),
-		// Where the name came from is written rather than left to the zero
-		// value: it is the fact a remedy turns on, and a fact that is only true
-		// because nobody set it is one an added field could quietly take away.
-		model:  selection{name: r.cfg.Model, from: fromFile},
+	r.assembly = assembly
+	// The Session API in this process is the assembly itself, which is what
+	// lets one turn on a command line cost nothing to serve. A browser reaching
+	// the same five methods over the wire is the other Transport, and neither
+	// knows which it is.
+	r.session = assembly
+	r.local = &local{
 		editor: r.cfg.Editor,
 		checks: checks{
+			provider:     r.cfg.Provider.Name,
+			model:        r.cfg.Model,
 			subscription: r.cfg.Subscription(),
 			keyEnv:       r.cfg.Provider.APIKeyEnv,
 			baseURL:      r.cfg.Provider.BaseURL,
@@ -203,5 +219,5 @@ func (r *run) assemble() (func() error, error) {
 		},
 	}
 	r.look, r.keys = look, keys
-	return sink.Close, nil
+	return nil
 }

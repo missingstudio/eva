@@ -8,19 +8,9 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
-
-	"github.com/missingstudio/eva/internal/tui"
 )
 
 const Version = "0.1.1"
-
-func (e *eva) About() tui.About {
-	return tui.About{
-		Version: version(),
-		Branch:  branch(),
-		Dir:     workingDir(),
-	}
-}
 
 func version() string {
 	info, ok := debug.ReadBuildInfo()
