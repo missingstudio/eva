@@ -1,0 +1,41 @@
+{
+  "name": "eva",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "packages/*",
+      "apps/*"
+    ],
+    "catalog": {
+      "effect": "4.0.0-rc.109",
+      "zod": "4.4.3",
+      "typescript": "7.0.2",
+      "vitest": "4.1.10"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "check": "vp check",
+    "lint": "vp lint",
+    "format": "vp fmt",
+    "staged": "vp staged",
+    "hooks:setup": "vp config",
+    "test": "vp test",
+    "test:watch": "vp test watch",
+    "dev": "vp run -r dev",
+    "build": "vp run -r build",
+    "pack": "vp run -r pack",
+    "verify": "vp check && vp test && vp run -r pack && bun audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "catalog:",
+    "vite-plus": "0.2.8",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "bun": ">=1.3.10",
+    "node": ">=22"
+  },
+  "packageManager": "bun@1.3.10"
+}

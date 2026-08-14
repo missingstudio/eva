@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test and tool output
+coverage/
+.vite-cache/
+.vitest-cache/
+
+# Vite+ managed hooks — generated per clone by `vp hooks enable`
+.vite-hooks/
+
+# Local environment
+.env
+.env.*
+!.env.example
+*.local
+
+# Editor and OS
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# Eva runtime state
+.eva/

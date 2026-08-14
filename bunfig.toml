@@ -1,0 +1,7 @@
+[install]
+linker = "isolated"
+
+# Refuse a dependency version published less than three days ago.
+# A compromised release is usually found and pulled inside that window.
+minimumReleaseAge = 259200
+minimumReleaseAgeExcludes = ["@types/node", "typescript"]
