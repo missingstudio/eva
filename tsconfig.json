@@ -1,8 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
-  "compilerOptions": {
-    "types": ["bun"]
-  },
-  "include": ["packages", "apps", "vite.config.ts"],
-  "exclude": ["**/dist", "**/node_modules"]
+  "compilerOptions": { "types": ["node"] },
+  "include": ["vite.config.ts"]
 }

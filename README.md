@@ -10,6 +10,4 @@
   <img alt="An AI-native software factory" src="assets/eva-cli.png" width="100%">
 </p>
 
-Eva is an open-source, AI-native software factory. In enables control of the harnesses on your machine. It works with Eva's native harness along with your subscriptions on Claude Code, Codex, and OpenCode. If they're set up on your computer, Eva can orchestrate them.
-
-
+Eva is an open-source, AI-native software factory. It runs coding work end to end — from a spec a machine can check, through a harness that does the work, to evidence that it was done. Eva ships its own harness and drives the ones you already pay for — Claude Code, Codex, OpenCode, DeepSeek Harness — behind one contract, with one trace, one verifier, and one bill. It runs on your laptop as a CLI and as a service you reach from anywhere; those are the same program.

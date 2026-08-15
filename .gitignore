@@ -9,9 +9,7 @@ dist/
 coverage/
 .vite-cache/
 .vitest-cache/
-
-# Vite+ managed hooks — generated per clone by `vp hooks enable`
-.vite-hooks/
+.vite-hooks/_/
 
 # Local environment
 .env

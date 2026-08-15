@@ -5,6 +5,7 @@
     "module": "preserve",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
+    "jsx": "react-jsx",
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
