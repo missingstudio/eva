@@ -1,0 +1,27 @@
+{
+  "name": "@missingstudio/eva-conformance",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@missingstudio/eva-boot": "workspace:*",
+    "@missingstudio/eva-catalog-models": "workspace:*",
+    "@missingstudio/eva-catalog-prices": "workspace:*",
+    "@missingstudio/eva-core": "workspace:*",
+    "@missingstudio/eva-keymap": "workspace:*",
+    "@missingstudio/eva-schema": "workspace:*",
+    "@missingstudio/eva-sdk": "workspace:*",
+    "@missingstudio/eva-session-jsonl": "workspace:*",
+    "@missingstudio/eva-testkit": "workspace:*",
+    "@missingstudio/eva-themes": "workspace:*",
+    "@missingstudio/eva-trace": "workspace:*",
+    "@missingstudio/eva-trace-jsonl": "workspace:*",
+    "@missingstudio/eva-trace-memory": "workspace:*",
+    "@missingstudio/eva-tui": "workspace:*",
+    "@missingstudio/eva-tui-core": "workspace:*",
+    "@missingstudio/eva-tui-surface": "workspace:*",
+    "@types/node": "catalog:",
+    "effect": "catalog:",
+    "typescript": "catalog:"
+  }
+}
