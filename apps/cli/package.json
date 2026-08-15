@@ -1,0 +1,61 @@
+{
+  "name": "@missingstudio/eva",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "eva": "./bin/eva.mjs"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "scripts": {
+    "dev": "bun run src/eva.ts",
+    "pack": "vp pack",
+    "build": "vp pack"
+  },
+  "dependencies": {
+    "@missingstudio/eva-auth": "workspace:*",
+    "@missingstudio/eva-boot": "workspace:*",
+    "@missingstudio/eva-budget": "workspace:*",
+    "@missingstudio/eva-catalog-models": "workspace:*",
+    "@missingstudio/eva-catalog-prices": "workspace:*",
+    "@missingstudio/eva-commands": "workspace:*",
+    "@missingstudio/eva-config": "workspace:*",
+    "@missingstudio/eva-core": "workspace:*",
+    "@missingstudio/eva-kernel": "workspace:*",
+    "@missingstudio/eva-keymap": "workspace:*",
+    "@missingstudio/eva-print": "workspace:*",
+    "@missingstudio/eva-provider-anthropic": "workspace:*",
+    "@missingstudio/eva-provider-retry": "workspace:*",
+    "@missingstudio/eva-schema": "workspace:*",
+    "@missingstudio/eva-sdk": "workspace:*",
+    "@missingstudio/eva-session-jsonl": "workspace:*",
+    "@missingstudio/eva-themes": "workspace:*",
+    "@missingstudio/eva-trace": "workspace:*",
+    "@missingstudio/eva-trace-jsonl": "workspace:*",
+    "@missingstudio/eva-trace-memory": "workspace:*",
+    "@missingstudio/eva-tui": "workspace:*",
+    "@missingstudio/eva-tui-surface": "workspace:*",
+    "@missingstudio/eva-usage": "workspace:*",
+    "commander": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@missingstudio/eva-testkit": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
