@@ -18,10 +18,13 @@
     "pack": "vp pack"
   },
   "dependencies": {
+    "@missingstudio/eva-core": "workspace:*",
+    "@missingstudio/eva-schema": "workspace:*",
     "effect": "catalog:",
-    "zod": "catalog:"
+    "yaml": "catalog:"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "typescript": "catalog:"
   }
 }
