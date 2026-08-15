@@ -19,10 +19,11 @@
   },
   "dependencies": {
     "@missingstudio/eva-core": "workspace:*",
-    "@missingstudio/eva-kernel": "workspace:*",
+    "@missingstudio/eva-schema": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "typescript": "catalog:"
   }
 }
