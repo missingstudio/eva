@@ -1,0 +1,642 @@
+import type { FrontendAnswer, SessionAPI } from "@missingstudio/eva-core"
+import type { SessionID } from "@missingstudio/eva-schema"
+import {
+  dispatch,
+  type CommandInfo,
+  type FrontendRequest,
+  type KeymapInfo,
+  type PickRow,
+} from "@missingstudio/eva-sdk"
+import {
+  canonical,
+  conflicts,
+  makeKeymap,
+  themeColors,
+  type KeyPress,
+  type Renderer,
+  type ThemeColors,
+} from "@missingstudio/eva-tui-core"
+import { Cause, Deferred, Effect, Exit, Fiber, Queue, Schedule, Scope, Stream } from "effect"
+import { branchOf, shortPath } from "./banner.js"
+import { apply, backStep, frameOf, initial, type ConsoleEvent, type Place } from "./console.js"
+import { edit, pasted, type LineAction, type LineCommand } from "./line.js"
+import {
+  commandRows,
+  completed,
+  completionQuery,
+  opened,
+  pickRows,
+  selectedRow,
+  COMMANDS_HINT,
+  COMMANDS_TITLE,
+  PICK_HINT,
+  type OpenOverlay,
+} from "./overlay.js"
+
+export const TUI_SURFACE = "eva.tui"
+
+export interface SurfaceDeps {
+  readonly api: SessionAPI
+  readonly renderer: Renderer
+  // Read at the point of use, so a plugin loaded later is reachable.
+  readonly commands: Effect.Effect<readonly CommandInfo[]>
+  readonly keymap: Effect.Effect<readonly KeymapInfo[]>
+  readonly directory: string
+  // The app owns the manifest, so the app says which version this is.
+  readonly version: string
+  // The colors configuration chose. They reach the renderer as a fact of
+  // every Frame rather than as something the renderer was built with, which
+  // is what lets a theme be chosen while the surface runs.
+  readonly theme?: ThemeColors
+  // What went wrong on the way here — a theme that named no row, say. The
+  // surface shows them where the person is looking, until the first fold.
+  readonly notices?: readonly string[]
+  readonly now?: () => number
+  // How long the Live area may take to drain after its Run has closed.
+  // Named here so a test can reach the stop without waiting for it.
+  readonly settle?: number
+}
+
+// How often the spinner turns. Fast enough to read as motion, slow enough
+// that a redraw is not what the terminal spends its time on.
+export const TICK = 100
+
+// How long the Live area may take to drain after the Run it belongs to has
+// closed. It is a stop rather than a wait: everything the stream will say
+// is published by then, so a drain that has not finished by now is a
+// subscription that never started.
+export const SETTLE = 2000
+
+/**
+ * A choice a command is waiting on: the rows as the command offered them,
+ * and what the screen was painted in before the panel opened. Esc means keep
+ * what you had, and what you had includes the colors.
+ */
+interface Waiting {
+  readonly rows: readonly PickRow[]
+  readonly deferred: Deferred.Deferred<PickRow | undefined>
+  readonly theme?: ThemeColors
+}
+
+/**
+ * A panel's own query is a line with no bindings on it: the keys that
+ * submit and cancel belong to the surface, and the query only collects
+ * what was typed. The editor is reused rather than rewritten, so a caret
+ * behaves the same wherever there is text.
+ */
+const QUERY_KEYS = makeKeymap(new Map())
+
+/**
+ * What the loop acts on: a line's command, the word that an open Run
+ * settled, or one of the panel's own. `settled` names the Run it closes, so
+ * a Run that ended while a cancel was landing cannot close the one that
+ * follows it.
+ *
+ * The panel's three are here rather than in the key handler because every
+ * one of them may run a command, and a command is an Effect.
+ */
+type LoopSignal =
+  | LineCommand
+  | { readonly kind: "settled"; readonly run: number }
+  | { readonly kind: "palette" }
+  // The line changed, so what completion offers may have changed with it.
+  | { readonly kind: "completing" }
+  // A row was taken: run what it names, or leave it on the line to finish.
+  | { readonly kind: "took"; readonly how: "run" | "complete" }
+
+/**
+ * The terminal surface: a thin shell around the Console. The Console holds
+ * every rule of what the screen shows; this wires the world to it — keys in,
+ * frames out, Session API calls at the edge — and keeps no state of its own.
+ * The loop takes keys while a Run is open, so a cancel acts on the Run it
+ * was pressed against.
+ */
+export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDeps) {
+  const scope = yield* Effect.scope
+  const now = deps.now ?? (() => Date.now())
+  const finished = yield* Deferred.make<void>()
+  const keys = yield* Queue.unbounded<LoopSignal>()
+  const asked = yield* Queue.unbounded<FrontendAnswer>()
+
+  // Where this run is, which no Run changes. Only the model is read again.
+  const place: Place = {
+    version: deps.version,
+    branch: branchOf(deps.directory),
+    directory: shortPath(deps.directory),
+  }
+
+  // The Console is the state; every event is drawn, so the screen is never
+  // behind what happened.
+  let state = initial(yield* deps.api.create(deps.directory))
+  const on = (event: ConsoleEvent) => {
+    state = apply(state, event)
+    deps.renderer.draw(frameOf(state, place))
+  }
+
+  // The keymap Domain decides what a key means on this surface. A row
+  // another surface claimed is not a binding here.
+  const rows = (yield* deps.keymap).filter(
+    (row) => row.surface === undefined || row.surface === TUI_SURFACE,
+  )
+  const bindings = makeKeymap(new Map(rows.map((row) => [row.binding, row.command])))
+
+  // A binding that cannot fire and a key bound twice are degraded outcomes,
+  // said where the person is looking rather than passed over. This is the
+  // one place rows collapse into a keymap, so it is the one place that asks.
+  const notes = [
+    ...(deps.notices ?? []),
+    ...rows
+      .filter((row) => canonical(row.binding) === undefined)
+      .map((row) => `key binding ${row.id} names no key this surface knows: ${row.binding}`),
+    ...conflicts(rows).map(
+      (one) => `${one.binding} is bound twice (${one.ids.join(", ")}); the last one wins`,
+    ),
+  ]
+
+  // The choices open, by the number that names each request. A panel that
+  // closes late cannot answer a question nobody asked.
+  const waiting = new Map<number, Waiting>()
+  let picks = 0
+
+  /**
+   * The screen while a row is only being looked at. A row that names colors
+   * paints them; one that names none paints nothing, which is why moving
+   * through the model picker never switches a model — that is a fact of the
+   * Session, and it happens when a row is taken.
+   */
+  const preview = (request: number, id: string | undefined): void => {
+    const colors = waiting.get(request)?.rows.find((row) => row.id === id)?.colors
+    const gated = colors === undefined ? undefined : themeColors(colors)
+    if (gated !== undefined) on({ kind: "themed", colors: gated })
+  }
+
+  /**
+   * A choice, answered. The panel leaves the screen as it found it — what it
+   * painted while a row was under the selection was a look, not a decision —
+   * and what the command does with the row it took is the command's to say.
+   */
+  const resolved = (request: number, id?: string): void => {
+    const one = waiting.get(request)
+    if (one === undefined) return
+
+    waiting.delete(request)
+    on({ kind: "themed", ...(one.theme === undefined ? {} : { colors: one.theme }) })
+    Deferred.doneUnsafe(one.deferred, Effect.succeed(one.rows.find((row) => row.id === id)))
+  }
+
+  /**
+   * The `pick` a command is given here. It is a Deferred the panel answers:
+   * enter carries the row back, esc carries nothing — and nothing means the
+   * person kept what they had, which no command may read as a choice.
+   */
+  const pick = Effect.fn("eva.tui.pick")(function* (title: string, rows: readonly PickRow[]) {
+    picks += 1
+    const request = picks
+    const deferred = yield* Deferred.make<PickRow | undefined>()
+    waiting.set(request, {
+      rows,
+      deferred,
+      ...(state.theme === undefined ? {} : { theme: state.theme }),
+    })
+    on({
+      kind: "opened-overlay",
+      overlay: opened(title, pickRows(rows), "", { kind: "pick", request }, "query", PICK_HINT),
+    })
+    return yield* Deferred.await(deferred)
+  })
+
+  // The screen's colors, changed by a command that decided them. A row that
+  // is not a theme paints nothing: the contract's own gate says which is
+  // which, and the command that offered the colors says why.
+  const paint = (colors: Record<string, string>): void => {
+    const gated = themeColors(colors)
+    if (gated !== undefined) on({ kind: "themed", colors: gated })
+  }
+
+  /**
+   * Every open choice, answered with nothing. The loop is waiting on the
+   * panel, so a cancel or a quit reaches the loop only once the command
+   * holding it has been let go — a surface that is going away answers every
+   * question the way esc does.
+   */
+  const abandon = (): void => {
+    const panel = state.overlay
+    if (panel?.intent.kind !== "pick") return
+
+    on({ kind: "closed-overlay" })
+    resolved(panel.intent.request)
+  }
+
+  /**
+   * The keys a panel claims while one is open, answered here and never
+   * passed on. Everything it does not claim falls through to the line —
+   * which is what keeps typing typing, whatever is on the screen.
+   */
+  const overlayKey = (open: OpenOverlay, key: KeyPress, action: LineAction): boolean => {
+    if (key.key === "up" || key.key === "down") {
+      on({ kind: "stepped", by: key.key === "up" ? -1 : 1 })
+      const moved = state.overlay
+      if (open.intent.kind === "pick" && moved !== undefined) {
+        preview(open.intent.request, selectedRow(moved)?.id)
+      }
+      return true
+    }
+    // Tab completes a line, and a choice is not a line. A panel filled by a
+    // command claims it for nothing.
+    if (key.key === "tab" && open.intent.kind === "command") {
+      Queue.offerUnsafe(keys, { kind: "took", how: "complete" })
+      return true
+    }
+    if (action.kind === "submit" || (action.kind === "editing" && key.key === "return")) {
+      if (open.intent.kind === "pick") {
+        const row = selectedRow(open)
+        on({ kind: "closed-overlay" })
+        resolved(open.intent.request, row?.id)
+        return true
+      }
+      Queue.offerUnsafe(keys, { kind: "took", how: "run" })
+      return true
+    }
+    // A panel with its own query is typed into; one that follows the line
+    // lets the line take the key, and follows it.
+    if (open.source === "query" && action.kind === "editing") {
+      const query = { buffer: open.query, cursor: Array.from(open.query).length }
+      const typed = edit(query, key, QUERY_KEYS)
+      if (typed.kind === "editing") on({ kind: "filtered", query: typed.line.buffer })
+      return true
+    }
+    return false
+  }
+
+  const stopKeys = deps.renderer.onKey((key) => {
+    const line = { buffer: state.buffer, cursor: state.cursor }
+    const action = edit(line, key, bindings, state.recall !== undefined)
+
+    /**
+     * One key, one meaning: step back. The Console decides what that means
+     * from what is open, and it is asked before the event is applied — the
+     * step it names is the step this press performs, and interrupting is
+     * the one of them the surface has to do itself.
+     */
+    if (action.kind === "back") {
+      const step = backStep(state)
+      const panel = state.overlay
+      on({ kind: "backed" })
+
+      // A panel that a command is waiting on is answered with nothing, which
+      // is what keeping what you had is called. A command never hears that a
+      // panel closed; it hears that nobody chose.
+      if (step === "close-overlay" && panel?.intent.kind === "pick") {
+        resolved(panel.intent.request)
+      }
+      if (step === "interrupt") Queue.offerUnsafe(keys, { kind: "cancel" })
+      return
+    }
+
+    // An interrupt a person armed and then typed past is not armed any
+    // more, so nothing is ever interrupted by a key pressed for something
+    // else.
+    if (state.armed) on({ kind: "disarmed" })
+
+    if (action.kind === "palette") {
+      Queue.offerUnsafe(keys, { kind: "palette" })
+      return
+    }
+
+    if (state.overlay !== undefined && overlayKey(state.overlay, key, action)) return
+
+    if (action.kind === "editing") {
+      on({ kind: "typed", buffer: action.line.buffer, cursor: action.line.cursor })
+      // Completion follows the line: what the line is still naming is what
+      // the panel offers, and a line that has stopped naming closes it.
+      Queue.offerUnsafe(keys, { kind: "completing" })
+      return
+    }
+
+    if (action.kind === "history") {
+      on({ kind: "recalled", direction: action.direction })
+      return
+    }
+
+    // Stopping outranks a question: a cancel or a quit has to reach the
+    // loop, and while a panel is open the loop is waiting on the panel.
+    if (action.kind === "cancel" || action.kind === "quit") abandon()
+
+    // A line that left the editor is a line the history keeps, whatever it
+    // turns out to mean: a command recalled is as useful as a prompt.
+    if (action.kind === "submit") on({ kind: "submitted", line: action.line })
+
+    on({ kind: "typed", buffer: "", cursor: 0 })
+    Queue.offerUnsafe(keys, action)
+  })
+  yield* Scope.addFinalizer(scope, Effect.sync(stopKeys))
+
+  /**
+   * A pasted block lands on the line, whatever is in it. It never passes
+   * through the keymap: a newline in a paste is text, and it used to submit
+   * the half of a block that had arrived so far.
+   *
+   * A panel with its own query is typed into, so a paste goes there instead
+   * — the same rule typing follows.
+   */
+  const stopPaste = deps.renderer.onPaste((text) => {
+    const panel = state.overlay
+    if (panel?.source === "query") {
+      const query = pasted({ buffer: panel.query, cursor: Array.from(panel.query).length }, text)
+      on({ kind: "filtered", query: query.buffer })
+      return
+    }
+    const line = pasted({ buffer: state.buffer, cursor: state.cursor }, text)
+    on({ kind: "typed", buffer: line.buffer, cursor: line.cursor })
+    Queue.offerUnsafe(keys, { kind: "completing" })
+  })
+  yield* Scope.addFinalizer(scope, Effect.sync(stopPaste))
+
+  // The end of the input is a request to stop, in the renderer's own word.
+  // It never passes through the keymap, so no rebinding can strand a pipe.
+  const stopEnd = deps.renderer.onEnd(() => {
+    abandon()
+    Queue.offerUnsafe(keys, { kind: "quit" })
+  })
+  yield* Scope.addFinalizer(scope, Effect.sync(stopEnd))
+  yield* Scope.addFinalizer(
+    scope,
+    Effect.sync(() => deps.renderer.stop()),
+  )
+
+  // The record folds; the Console decides what the fold replaces.
+  const refresh = Effect.fn("eva.tui.refresh")(function* (holding = false) {
+    const transcript = yield* Effect.scoped(deps.api.attach(state.session))
+    const model = (yield* deps.api.model.get(state.session)).model
+    on({
+      kind: "folded",
+      messages: [...transcript.messages()],
+      model,
+      summary: transcript.cost(),
+      holding,
+    })
+  })
+
+  // Dispatch owns what a line means and what to say when it means nothing.
+  // This surface supplies where writing goes and which Session is open.
+  const runCommand = Effect.fn("eva.tui.command")(function* (line: string) {
+    const outcome = yield* dispatch(yield* deps.commands, line, (parsed) => ({
+      api: deps.api,
+      session: state.session,
+      ...(parsed.argument === undefined ? {} : { argument: parsed.argument }),
+      write: (text: string) => on({ kind: "said", text }),
+      select: (next: SessionID) => on({ kind: "selected", session: next }),
+      /**
+       * What this surface can do beyond writing, which is what its renderer
+       * can draw. A pipe draws no panel, so it offers no choice: one opened
+       * there would wait on an answer that can never arrive. The same
+       * command then says its answer in words, which is what a pipe wanted.
+       */
+      ...(deps.renderer.draws.panels ? { pick } : {}),
+      ...(deps.renderer.draws.colors ? { paint } : {}),
+    }))
+
+    if (outcome.kind === "said") on({ kind: "said", text: outcome.text })
+    return outcome.kind !== "prompt"
+  })
+
+  const answer = Effect.fn("eva.tui.answer")(function* (line: string) {
+    on({ kind: "answered" })
+    yield* Queue.offer(asked, { kind: "text", text: line } satisfies FrontendAnswer)
+  })
+
+  const ask = Effect.fn("eva.tui.ask")(function* (request: FrontendRequest) {
+    on({ kind: "asked", question: request.question })
+    return yield* Queue.take(asked)
+  })
+
+  /**
+   * One open Run, from the prompt that opens it to the fold that replaces
+   * its stream. It runs as a fiber of its own, so the loop stays at the
+   * queue while it is open.
+   */
+  const runPrompt = Effect.fn("eva.tui.run")(function* (line: string) {
+    on({ kind: "opened", line, at: now() })
+
+    // The spinner turns on a clock of its own, because a Run that says
+    // nothing for a while is still a Run that is working.
+    const turning = yield* Effect.forkChild(
+      Effect.repeat(
+        Effect.sync(() => on({ kind: "ticked", at: now() })),
+        Schedule.spaced(TICK),
+      ),
+    )
+
+    // The Live area is fed by a watcher of its own. It subscribes after it
+    // is forked, so a Run that closes in the same turn is a close it never
+    // hears — and what it never hears it would wait for forever.
+    const watching = yield* Effect.forkChild(
+      Stream.runForEach(
+        Stream.takeUntil(deps.api.watch(state.session), (one) => one.kind === "finished"),
+        (one) => Effect.sync(() => on({ kind: "streamed", payload: one })),
+      ),
+    )
+    // `submit` is what says the Run is over: it does not return until the
+    // Run has closed. So the stream has already said everything it will
+    // say, and the watcher is only draining what is in hand.
+    yield* deps.api.submit(state.session, { kind: "prompt", text: line })
+    // The watcher is given its turn to finish that drain, and is then
+    // stopped rather than waited on. A watcher that missed the close holds
+    // nothing open, and the fold that follows is the record either way.
+    yield* Effect.timeoutOption(Fiber.await(watching), deps.settle ?? SETTLE)
+    yield* Fiber.interrupt(watching)
+    yield* Fiber.interrupt(turning)
+    on({ kind: "closed", at: now() })
+    // The fold replaces the stream. What stays on screen is the record.
+    yield* refresh(true)
+  })
+
+  const loop = Effect.fn("eva.tui.loop")(function* () {
+    // The theme configuration chose is the first thing the screen is told,
+    // so every frame after it is painted — including the first.
+    if (deps.theme !== undefined) on({ kind: "themed", colors: deps.theme })
+    yield* refresh()
+    // What went wrong on the way here is one thing that went wrong, however
+    // many lines it takes to say it.
+    if (notes.length > 0) on({ kind: "said", text: notes.join("\n") })
+
+    // The one open Run, and the lines typed while it ran.
+    let open: { readonly id: number; readonly fiber: Fiber.Fiber<void> } | undefined
+    let pending: string[] = []
+    let runs = 0
+
+    // A line does what it says: a command runs here; anything else opens a
+    // Run, forked so the queue stays read while it is open.
+    const handle = Effect.fn("eva.tui.line")(function* (line: string) {
+      const before = state.session
+      const handled = yield* runCommand(line)
+      if (!handled) {
+        runs += 1
+        const id = runs
+        const fiber = yield* Effect.forkChild(
+          Effect.ensuring(
+            runPrompt(line),
+            Effect.sync(() => Queue.offerUnsafe(keys, { kind: "settled", run: id })),
+          ),
+        )
+        open = { id, fiber }
+      } else if (state.session !== before) {
+        // A command that opened another Session is followed there: what the
+        // screen shows is the fold of the Session now open, which for a new
+        // one is nothing — that is what clearing looks like.
+        yield* refresh()
+      }
+    })
+
+    /**
+     * The panel over every command there is. It reads the command Domain
+     * at the point of use, so a plugin loaded a moment ago is in it.
+     */
+    const openPalette = Effect.fn("eva.tui.palette")(function* () {
+      const rows = commandRows(yield* deps.commands)
+      on({
+        kind: "opened-overlay",
+        overlay: opened(COMMANDS_TITLE, rows, "", { kind: "command" }, "query", COMMANDS_HINT),
+      })
+    })
+
+    /**
+     * Completion, kept in step with the line. A line that is still naming a
+     * command has a panel; one that has stopped naming one does not, and a
+     * panel dismissed for this line stays dismissed until the line moves on.
+     */
+    const completing = Effect.fn("eva.tui.completing")(function* () {
+      const showing = state.overlay?.source === "buffer"
+      const query = completionQuery(state.buffer)
+      if (query === undefined || state.hushed) {
+        if (showing) on({ kind: "closed-overlay" })
+        return
+      }
+      // An open panel is already following the line: the Console refiltered
+      // it when the line changed.
+      if (showing) return
+      const rows = commandRows(yield* deps.commands)
+      on({
+        kind: "opened-overlay",
+        overlay: opened(
+          COMMANDS_TITLE,
+          rows,
+          state.buffer,
+          { kind: "command" },
+          "buffer",
+          COMMANDS_HINT,
+        ),
+      })
+    })
+
+    /**
+     * A row was taken. Enter runs it and tab leaves it on the line to
+     * finish, which is what the panel says the two keys do.
+     *
+     * A command that names an argument is still run: `argumentHint` says
+     * what an argument would look like, never that one is needed, and
+     * running with none is not inventing one — it is the line the person
+     * would have typed. `/theme` and `/model` both answer a bare line with
+     * a choice of their own, and reading the hint as a demand is what made
+     * the palette type them out instead of opening either.
+     */
+    const take = Effect.fn("eva.tui.take")(function* (how: "run" | "complete") {
+      const overlay = state.overlay
+      if (overlay === undefined) return
+      const row = selectedRow(overlay)
+      if (row === undefined) return
+
+      const command = (yield* deps.commands).find((one) => one.id === row.id)
+      if (command === undefined) return
+      on({ kind: "closed-overlay" })
+
+      const line = completed(command)
+      if (how === "complete") {
+        on({ kind: "typed", buffer: line, cursor: Array.from(line).length })
+        return
+      }
+      // The space tab leaves for an argument is not part of the line a Run
+      // is opened on.
+      const run = line.trimEnd()
+      on({ kind: "submitted", line: run })
+      on({ kind: "typed", buffer: "", cursor: 0 })
+      yield* handle(run)
+    })
+
+    for (;;) {
+      const action = yield* Queue.take(keys)
+      if (action.kind === "palette") {
+        yield* openPalette()
+        continue
+      }
+      if (action.kind === "completing") {
+        yield* completing()
+        continue
+      }
+      if (action.kind === "took") {
+        yield* take(action.how)
+        continue
+      }
+      if (action.kind === "settled") {
+        if (open === undefined || action.run !== open.id) continue
+        // A Run that died says so; one that was interrupted was cancelled,
+        // and the cancel already spoke.
+        const outcome = yield* Fiber.await(open.fiber)
+        open = undefined
+
+        if (Exit.isFailure(outcome) && !Cause.hasInterruptsOnly(outcome.cause)) {
+          const squashed: unknown = Cause.squash(outcome.cause)
+          on({
+            kind: "said",
+            text: `the Run failed: ${squashed instanceof Error ? squashed.message : String(squashed)}`,
+          })
+        }
+
+        const next = pending.shift()
+        if (next !== undefined) yield* handle(next)
+        continue
+      }
+      if (action.kind === "quit") {
+        if (open !== undefined) yield* Fiber.interrupt(open.fiber)
+        return
+      }
+      if (action.kind === "cancel") {
+        // Cancel acts on the open Run, and stop means stop: the lines that
+        // were waiting behind it are dropped with it.
+        if (open !== undefined) {
+          yield* Fiber.interrupt(open.fiber)
+          open = undefined
+          pending = []
+        }
+
+        yield* deps.api.cancel(state.session, "user")
+        on({ kind: "cancelled" })
+
+        yield* refresh(true)
+        continue
+      }
+      if (state.asking) {
+        yield* answer(action.line)
+        continue
+      }
+
+      if (open !== undefined) {
+        // A line typed during a Run waits its turn rather than racing it.
+        pending.push(action.line)
+        continue
+      }
+
+      yield* handle(action.line)
+    }
+  })
+
+  const running = yield* Effect.forkIn(
+    Effect.ensuring(loop(), Deferred.succeed(finished, undefined)),
+    scope,
+  )
+  yield* Scope.addFinalizer(scope, Fiber.interrupt(running).pipe(Effect.asVoid))
+
+  // What this surface can do is on its row in the surface Domain, registered
+  // where the plugin is defined. It is not repeated here.
+  return { id: TUI_SURFACE, ask, done: Deferred.await(finished) }
+})
