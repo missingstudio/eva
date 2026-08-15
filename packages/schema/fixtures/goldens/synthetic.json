@@ -1,0 +1,145 @@
+{
+  "merged": [
+    "{\"id\":\"evt_synth_001\",\"seq\":1,\"at\":{\"wall\":\"2026-08-15T09:00:00.000000Z\"},\"version\":1,\"kind\":\"started\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"intent\":\"read the README and summarize it\"}}",
+    "{\"id\":\"evt_synth_002\",\"seq\":2,\"at\":{\"wall\":\"2026-08-15T09:00:01.000000Z\"},\"version\":1,\"kind\":\"plan\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"entries\":[{\"content\":\"read README.md\",\"priority\":\"high\",\"status\":\"in_progress\"},{\"content\":\"write the summary\",\"priority\":\"medium\",\"status\":\"pending\"}]}}",
+    "{\"id\":\"evt_synth_003\",\"seq\":3,\"at\":{\"wall\":\"2026-08-15T09:00:02.000000Z\"},\"version\":1,\"kind\":\"thought\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"block\":0,\"content\":{\"type\":\"text\",\"text\":\"The README is short. Read it whole.\"}}}",
+    "{\"id\":\"evt_synth_004\",\"seq\":4,\"at\":{\"wall\":\"2026-08-15T09:00:03.000000Z\"},\"version\":1,\"kind\":\"tool_call\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"id\":\"call_read_1\",\"name\":\"read\",\"tool\":\"read\",\"args\":{\"path\":\"README.md\"},\"status\":\"pending\",\"redacted\":false}}",
+    "{\"id\":\"evt_synth_005\",\"seq\":5,\"at\":{\"wall\":\"2026-08-15T09:00:04.000000Z\"},\"version\":1,\"kind\":\"tool_update\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"id\":\"call_read_1\",\"status\":\"in_progress\",\"content\":[{\"type\":\"text\",\"text\":\"reading README.md\"}]}}",
+    "{\"id\":\"evt_synth_006\",\"seq\":6,\"at\":{\"wall\":\"2026-08-15T09:00:05.000000Z\"},\"version\":1,\"kind\":\"tool_result\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"id\":\"call_read_1\",\"name\":\"read\",\"disposition\":\"ok\",\"bytes\":1420}}",
+    "{\"id\":\"evt_synth_007\",\"seq\":7,\"at\":{\"wall\":\"2026-08-15T09:00:06.000000Z\"},\"version\":1,\"kind\":\"edit\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"path\":\"docs/summary.md\",\"hunks\":1}}",
+    "{\"id\":\"evt_synth_008\",\"seq\":8,\"at\":{\"wall\":\"2026-08-15T09:00:07.000000Z\"},\"version\":1,\"kind\":\"text\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"block\":0,\"content\":{\"type\":\"text\",\"text\":\"Eva is a model client on a plugin kernel.\"}}}",
+    "{\"id\":\"evt_synth_010\",\"seq\":10,\"at\":{\"wall\":\"2026-08-15T09:00:09.000000Z\"},\"version\":1,\"kind\":\"usage\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"model\":\"anthropic/claude-sonnet-4-5\",\"inputTokens\":1200,\"outputTokens\":340,\"cacheWriteTokens\":256,\"cacheReadTokens\":0,\"reasoningTokens\":0,\"serverToolTokens\":0,\"costTicks\":51000000000}}",
+    "{\"id\":\"evt_synth_011\",\"seq\":11,\"at\":{\"wall\":\"2026-08-15T09:01:10.000000Z\"},\"version\":1,\"kind\":\"finished\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"claim\":{\"result\":\"done\",\"summary\":\"answered\"},\"stopReason\":\"end_turn\"}}",
+    "{\"id\":\"evt_synth_012\",\"seq\":1,\"at\":{\"wall\":\"2026-08-15T09:01:11.000000Z\"},\"version\":1,\"kind\":\"started\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"intent\":\"explain the trace format\"}}",
+    "{\"id\":\"evt_synth_013\",\"seq\":2,\"at\":{\"wall\":\"2026-08-15T09:01:12.000000Z\"},\"version\":1,\"kind\":\"degraded\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"missing\":[\"TraceSink\"]}}",
+    "{\"id\":\"evt_synth_014\",\"seq\":3,\"at\":{\"wall\":\"2026-08-15T09:01:13.000000Z\"},\"version\":1,\"kind\":\"mode\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"mode\":\"plan\",\"reason\":\"user switched\"}}",
+    "{\"id\":\"evt_synth_015\",\"seq\":4,\"at\":{\"wall\":\"2026-08-15T09:01:14.000000Z\"},\"version\":1,\"kind\":\"commands\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"commands\":[{\"name\":\"model\",\"description\":\"set the session model\",\"input\":{\"hint\":\"provider/model\"}},{\"name\":\"cost\",\"description\":\"show the session spend\"}]}}",
+    "{\"id\":\"evt_synth_016\",\"seq\":5,\"at\":{\"wall\":\"2026-08-15T09:01:15.000000Z\"},\"version\":1,\"kind\":\"config\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"options\":[{\"id\":\"model\",\"name\":\"Model\",\"value\":\"anthropic/claude-sonnet-4-5\"}]}}",
+    "{\"id\":\"evt_synth_017\",\"seq\":6,\"at\":{\"wall\":\"2026-08-15T09:01:16.000000Z\"},\"version\":1,\"kind\":\"info\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"title\":\"Trace format\",\"updatedAt\":\"2026-08-15T09:05:00Z\"}}",
+    "{\"id\":\"evt_synth_018\",\"seq\":7,\"at\":{\"wall\":\"2026-08-15T09:01:17.000000Z\"},\"version\":1,\"kind\":\"message\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"content\":{\"type\":\"text\",\"text\":\"keep it short\"},\"target\":\"next-step\"}}",
+    "{\"id\":\"evt_synth_019\",\"seq\":8,\"at\":{\"wall\":\"2026-08-15T09:01:18.000000Z\"},\"version\":1,\"kind\":\"retry\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"attempt\":1,\"max\":3,\"delayMs\":2000,\"errorClass\":\"overloaded\"}}",
+    "{\"id\":\"evt_synth_020\",\"seq\":9,\"at\":{\"wall\":\"2026-08-15T09:01:19.000000Z\"},\"version\":1,\"kind\":\"text\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"block\":0,\"content\":{\"type\":\"text\",\"text\":\"The trace is JSONL, one event per line.\"}}}",
+    "{\"id\":\"evt_synth_021\",\"seq\":10,\"at\":{\"wall\":\"2026-08-15T09:02:20.000000Z\"},\"version\":1,\"kind\":\"needs_human\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"question\":\"Overwrite the existing file?\",\"resume\":{\"session\":\"sess_synth_degraded\",\"seq\":9}}}",
+    "{\"id\":\"evt_synth_021b\",\"seq\":11,\"at\":{\"wall\":\"2026-08-15T09:02:25.000000Z\"},\"version\":1,\"kind\":\"resolved\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"question\":\"evt_synth_021\",\"resolution\":\"answered\",\"content\":{\"type\":\"text\",\"text\":\"Yes, overwrite it.\"}}}",
+    "{\"id\":\"evt_synth_022\",\"seq\":12,\"at\":{\"wall\":\"2026-08-15T09:02:21.000000Z\"},\"version\":1,\"kind\":\"usage\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"model\":\"anthropic/claude-sonnet-4-5\",\"inputTokens\":900,\"outputTokens\":120,\"cacheWriteTokens\":null,\"cacheReadTokens\":40,\"reasoningTokens\":null,\"serverToolTokens\":null}}",
+    "{\"id\":\"evt_synth_023\",\"seq\":13,\"at\":{\"wall\":\"2026-08-15T09:02:22.000000Z\"},\"version\":1,\"kind\":\"finished\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"claim\":{\"result\":\"failed\",\"summary\":\"cancelled by user\"},\"stopReason\":\"cancelled\"}}"
+  ],
+  "transcripts": {
+    "sess_synth_tools": [
+      {
+        "author": "human",
+        "blocks": [
+          {
+            "type": "content",
+            "block": 0,
+            "content": {
+              "type": "text",
+              "text": "read the README and summarize it"
+            }
+          }
+        ]
+      },
+      {
+        "author": "agent",
+        "blocks": [
+          {
+            "type": "thought",
+            "block": 0,
+            "content": {
+              "type": "text",
+              "text": "The README is short. Read it whole."
+            }
+          },
+          {
+            "type": "tool",
+            "id": "call_read_1",
+            "name": "read",
+            "tool": "read",
+            "status": "in_progress",
+            "disposition": "ok"
+          },
+          {
+            "type": "content",
+            "block": 0,
+            "content": {
+              "type": "text",
+              "text": "Eva is a model client on a plugin kernel."
+            }
+          }
+        ]
+      }
+    ],
+    "sess_synth_degraded": [
+      {
+        "author": "human",
+        "blocks": [
+          {
+            "type": "content",
+            "block": 0,
+            "content": {
+              "type": "text",
+              "text": "explain the trace format"
+            }
+          }
+        ]
+      },
+      {
+        "author": "human",
+        "blocks": [
+          {
+            "type": "content",
+            "block": 0,
+            "content": {
+              "type": "text",
+              "text": "keep it short"
+            }
+          }
+        ]
+      },
+      {
+        "author": "agent",
+        "blocks": [
+          {
+            "type": "content",
+            "block": 0,
+            "content": {
+              "type": "text",
+              "text": "The trace is JSONL, one event per line."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "costs": {
+    "sess_synth_tools": {
+      "inputTokens": 1200,
+      "outputTokens": 340,
+      "cacheWriteTokens": 256,
+      "cacheReadTokens": 0,
+      "reasoningTokens": 0,
+      "serverToolTokens": 0,
+      "costTicks": 51000000000,
+      "estimatedCostTicks": null
+    },
+    "sess_synth_degraded": {
+      "inputTokens": 900,
+      "outputTokens": 120,
+      "cacheWriteTokens": null,
+      "cacheReadTokens": 40,
+      "reasoningTokens": null,
+      "serverToolTokens": null,
+      "costTicks": null,
+      "estimatedCostTicks": null
+    }
+  },
+  "headers": {
+    "sess_synth_tools": {
+      "title": "read the README and summarize it"
+    },
+    "sess_synth_degraded": {
+      "title": "Trace format",
+      "updatedAt": "2026-08-15T09:05:00Z"
+    }
+  }
+}
