@@ -4,4 +4,34 @@ linker = "isolated"
 # Refuse a dependency version published less than three days ago.
 # A compromised release is usually found and pulled inside that window.
 minimumReleaseAge = 259200
-minimumReleaseAgeExcludes = ["@types/node", "typescript"]
+
+# Named exceptions, so the gate still holds for everything else. Lowering
+# the floor instead would admit every fresh package resolved in that window
+# and freeze the result into the lockfile.
+#
+# OpenTUI publishes faster than three days and has never had a release older
+# than the gate, so the terminal is either pinned here or not built. It is
+# native code reached over Bun FFI, which is the weight this accepts.
+# `effect` is an exact pin of a release candidate. Without it here every
+# install needs a hand-written override, and a gate people route around is
+# a gate that stops being read.
+minimumReleaseAgeExcludes = [
+  "@types/node",
+  "@types/react",
+  "typescript",
+  "effect",
+  "@opentui/core",
+  "@opentui/react",
+
+  # The prebuilt renderer, one package per platform. `@opentui/core` names
+  # them as optional dependencies and loads one at run time, so the gate must
+  # admit every platform this repository builds on, not only this machine's.
+  "@opentui/core-darwin-arm64",
+  "@opentui/core-darwin-x64",
+  "@opentui/core-linux-arm64",
+  "@opentui/core-linux-arm64-musl",
+  "@opentui/core-linux-x64",
+  "@opentui/core-linux-x64-musl",
+  "@opentui/core-win32-arm64",
+  "@opentui/core-win32-x64",
+]
