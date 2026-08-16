@@ -1,0 +1,58 @@
+name: Audit
+
+# The dependency graph: what Eva inherited rather than what it wrote. CodeQL,
+# which reads Eva's own code, is security.yml.
+#
+# This is the one workflow in the repository with a schedule, and it is the
+# only one that earns one. An advisory is published on somebody else's
+# timetable, so a dependency's verdict changes while the tree does not.
+# Without a clock, a repository that sits quiet for three weeks reports green
+# for three weeks and means "green as of the last time anyone happened to
+# push". The schedule's period sets the worst case: an advisory published
+# just after a run goes unseen for one period, unless somebody pushes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Mondays at 07:23 UTC, the morning Dependabot also opens its grouped
+    # pull requests. The week's dependency news then arrives together: what
+    # needs bumping, and what is already known to be exploitable. An odd
+    # minute, because everything scheduled on the hour queues behind
+    # everything else scheduled on the hour.
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: audit-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.10
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      # Integrity first: the lockfile still matches every manifest, and the
+      # install itself enforces bunfig.toml's minimumReleaseAge — no version
+      # younger than the window in which a compromised release is usually
+      # found and pulled. The exceptions are named in that file.
+      - run: bun install --frozen-lockfile
+
+      # Then the database: no known-exploitable advisory against anything
+      # installed. This is the verdict that changes while the tree does not.
+      - run: bun audit --audit-level=high
