@@ -25,3 +25,8 @@ Thumbs.db
 
 # Eva runtime state
 .eva/
+
+# Website build output
+apps/*/.output/
+apps/*/.tanstack/
+apps/*/src/routeTree.gen.ts

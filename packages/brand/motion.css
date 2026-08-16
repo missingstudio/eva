@@ -1,0 +1,113 @@
+/* ===========================================================================
+   Motion — the reveal system.
+
+   Every animation on either site draws from the token table in tokens.css.
+   There are no ad-hoc durations and no ad-hoc easings: a value that is not in
+   that table is a bug, because a page whose timings disagree reads as several
+   pages stitched together. A test fails the build on a literal.
+
+   The whole system is CSS. No animation library ships to the browser.
+
+   Two rules shape every block below. Motion is gated behind `.js`, a class
+   only JavaScript can add, so a reader without it — which includes most
+   crawlers — is never shown a hidden element. And every hidden state lives
+   inside `prefers-reduced-motion: no-preference`, so a reader who asked for
+   less motion is served the settled state directly rather than an animation
+   that was cancelled.
+=========================================================================== */
+
+@layer components {
+  @media (prefers-reduced-motion: no-preference) {
+    /*
+       Entrance. One move, the whole site: 64px up, blurred and transparent,
+       resolving to settled, sharp and opaque. An IntersectionObserver sets
+       `data-shown` when the element arrives, and never unsets it — nothing
+       re-hides on the way back up.
+    */
+    .js .reveal {
+      opacity: 0;
+      transform: translateY(4rem);
+      filter: blur(12px);
+      transition:
+        opacity var(--dur-reveal) var(--ease-fluid),
+        transform var(--dur-reveal) var(--ease-fluid),
+        filter var(--dur-reveal) var(--ease-fluid);
+    }
+    .js .reveal[data-shown] {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+
+    /* Stagger the children of a revealed group, one step apart. */
+    .js .reveal-group > * {
+      transition-delay: calc(var(--reveal-index, 0) * var(--stagger));
+    }
+
+    /*
+       The tagline band. Its words rest at 30% of the ink and come up to full
+       colour one at a time, in reading order, as each crosses the trigger
+       line. The block never flips at once, which is the whole effect.
+
+       It is gated with the rest: at 30% the text is below AA, so a reader
+       without JavaScript, or one who asked for less motion, gets full colour
+       from the first paint.
+    */
+    .js .word {
+      color: color-mix(in oklch, var(--eva-text) 30%, transparent);
+      transition: color var(--dur-base) var(--ease-fluid);
+      /*
+         The word carries its own delay rather than inheriting the group's.
+         A line of the band is a block, so the words are grandchildren of the
+         group and `.reveal-group > *` never reaches them — which lit a whole
+         line at once instead of one word at a time.
+      */
+      transition-delay: calc(var(--reveal-index, 0) * var(--stagger));
+    }
+    .js .word[data-shown] {
+      color: var(--eva-text);
+    }
+  }
+
+  /*
+     A row in the mobile menu overlay. The overlay is mounted open, so there is
+     no "before" state for a transition to start from — `@starting-style`
+     supplies one, and the stagger walks the rows in one step each.
+
+     A browser without `@starting-style` shows the rows immediately, which is
+     the same outcome the reduced-motion reader gets.
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    .js .menu-item {
+      opacity: 1;
+      transform: none;
+      transition:
+        opacity var(--dur-fast) var(--ease-fluid),
+        transform var(--dur-fast) var(--ease-fluid);
+      transition-delay: calc(var(--reveal-index, 0) * var(--stagger));
+    }
+    @starting-style {
+      .js .menu-item {
+        opacity: 0;
+        transform: translateY(3rem);
+      }
+    }
+  }
+
+  /*
+     A link that draws its own underline rather than borrowing the browser's.
+     The origin is the content box, so a link padded out to a 24px target still
+     draws its rule against the text rather than against the padding.
+  */
+  .link-rule {
+    background-image: linear-gradient(var(--eva-accent), var(--eva-accent));
+    background-repeat: no-repeat;
+    background-origin: content-box;
+    background-position: 0 100%;
+    background-size: 0% 1px;
+    transition: background-size var(--dur-instant) var(--ease-fluid);
+  }
+  .link-rule:hover {
+    background-size: 100% 1px;
+  }
+}

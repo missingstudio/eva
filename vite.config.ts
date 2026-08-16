@@ -30,6 +30,7 @@ export default defineConfig({
     passWithNoTests: true,
     include: [
       "apps/*/src/**/*.test.ts",
+      "apps/*/src/**/*.test.tsx",
       "packages/*/src/**/*.test.ts",
       "packages/*/src/**/*.test.tsx",
       "plugins/*/src/**/*.test.ts",
@@ -42,7 +43,13 @@ export default defineConfig({
   },
 
   lint: {
-    ignorePatterns: ["dist/**", "coverage/**"],
+    ignorePatterns: [
+      "dist/**",
+      "coverage/**",
+      "apps/*/.output/**",
+      "apps/*/.tanstack/**",
+      "apps/*/src/routeTree.gen.ts",
+    ],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -142,8 +149,21 @@ export default defineConfig({
         ["@missingstudio/eva-tui-core"],
         "the terminal imports tui-core only",
       ),
-      // apps/* has no import rule on purpose: an app is the composition
+      // apps/cli has no import rule on purpose: an app is the composition
       // root, and composing is the one job that needs every layer at once.
+      // The two sites are the exception. They compose nothing, and they must
+      // never pull the kernel into a browser bundle, so they may reach one
+      // package and no other. Generated reference arrives as MDX.
+      layer(["packages/brand/**"], [], "brand imports nothing internal"),
+      layer(
+        ["apps/web/**", "apps/docs/**"],
+        ["@missingstudio/eva-brand"],
+        "a site imports the brand package only — reference arrives as MDX",
+      ),
+      {
+        files: ["apps/web/**", "apps/docs/**"],
+        plugins: ["typescript", "react"],
+      },
     ],
   },
 

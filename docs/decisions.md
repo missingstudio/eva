@@ -243,6 +243,63 @@ effort ended, and a copy that cannot outlive its subject cannot drift.
 **Code in a document is an excerpt, and its types are checked.** A snippet that
 does not compile is worse than none, because a reader trusts it.
 
+## The web surfaces
+
+**`AI-native` keeps its hyphen, and it is the only word that does.** The copy
+rule forbids a hyphen inside a sentence, a heading or a label, and the tagline
+in `site.ts` broke it. The hyphen carries the compound: `AI native software
+factory` is three stacked nouns and reads as a different claim. _Rejected:_
+dropping it everywhere, and rewriting the tagline.
+
+**One token is defined once, and both surfaces read it.** The documentation
+site set `h1` to 2.5rem in its own stylesheet while the marketing site set the
+same role from a clamp, so the two display scales disagreed by design.
+`--text-display-*` and `--tracking-display-*` live in the brand package;
+typography.css turns them into the `.d-*` classes and `apps/docs` binds its own
+headings to the same properties. _Rejected:_ a second copy of the scale in the
+surface stylesheet.
+
+**The base layer is a layer.** An unlayered `h1` rule in `tokens.css` outranked
+every class in `@layer components`, so `.d-hero` set `-0.028em` and the page
+painted `-0.018em` — the display tracking never landed, and nothing failed.
+Base sets defaults; the display classes and the utilities override them.
+
+**A field that does not flip needs ink that does not flip, and that includes
+the highlighter.** The code panel is dark in both schemes, and Shiki emits both
+palettes on every token while the preset picks the light one unless `.dark` is
+an ancestor. Light syntax colours on the dark panel measured 1.21:1. The dark
+palette is the correct one on that field in both schemes.
+
+**The theme cookie is the record, and local storage is a mirror.** The
+documentation site runs next-themes under Fumadocs, which reads local storage —
+per origin, where the two sites are two origins. The pre-paint script seeds the
+key next-themes reads from the cookie, and a bridge writes every change back.
+_Rejected:_ replacing next-themes, which would take the Fumadocs theme control
+with it.
+
+**A control is three states, not two, and it is not a `<select>`.** A light
+and dark toggle cannot say "follow the system", and once a reader has touched
+it, it never can again. A native select answers that, but it brings the
+platform's own control chrome and its own focus ring, so it sat in the
+navigation island as the one element the system could not style. The control is
+a button that cycles the three and shows the state it is in. _Rejected:_ a
+sun and moon switch, which names a state with a picture.
+
+**A page is at least the viewport tall, and the main region takes the slack.**
+The footer stopped where the content stopped, so on the changelog it floated in
+the middle of the screen and read as a band rather than as the foot of the
+page. Every page on the marketing surface is built from one `Page` shell, which
+also means the skip link, the navigation and the footer cannot drift apart
+between pages.
+
+**No cookie banner, because there is one cookie and the reader sets it.**
+`eva-theme` holds a preference the reader asked for by using the theme control,
+and ePrivacy exempts a cookie that is strictly necessary or user-requested.
+There is no analytics, no advertising, and no third-party origin on either
+site, so a banner would ask consent for nothing. `/privacy` states this, and
+every sentence on it is checkable against the tree. Revisit the day either
+site adds a measurement or an embed.
+
 ## Surfaces and remote
 
 **A surface is a row in the `surface` domain.** "Every user interface is a
