@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs"
 
+// The release build injects the version with --define, because a compiled
+// binary carries no manifest to read.
+declare const EVA_VERSION: string | undefined
+
 // The manifest sits one directory above both src/ and dist/, so the same
 // lookup answers from source and from the packed build.
 const read = (): string => {
@@ -13,4 +17,4 @@ const read = (): string => {
   }
 }
 
-export const VERSION = read()
+export const VERSION = typeof EVA_VERSION === "string" ? EVA_VERSION : read()
