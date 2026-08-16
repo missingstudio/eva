@@ -355,3 +355,115 @@ a beta branch with hourly sync; Windows and macOS signing infrastructure (§9);
 AUR and a container image — both are afternoon-sized additions to the publish
 step when someone asks, and channels nobody asked for are channels nobody
 maintains.
+
+## 11. The runbook: from a desk to a published release
+
+Everything above says why; this section says what to type. It reads start to
+finish as one release.
+
+### 11.1 Once, before the first release
+
+Each of these lives outside the repository, and §9 carries the reasoning:
+
+1. On npmjs.com, configure a trusted publisher for `@missingstudio/eva` and
+   each `@missingstudio/eva-<os>-<arch>` package: repository
+   `missingstudio/eva`, workflow `release.yml`. A package npm refuses to
+   configure before it exists gets its first version published by hand from
+   `dist/npm/<dir>` after a rehearsal — `npm publish --access public` — and is
+   configured after.
+2. Store `HOMEBREW_TAP_TOKEN`: a fine-grained token, `contents: write`, on
+   `missingstudio/homebrew-tap` and nothing else.
+3. In the `main` ruleset: require the `gate` check and nothing else, and let
+   GitHub Actions bypass the push restriction — the bump commit and the tag
+   are the one push a workflow makes (§4).
+
+### 11.2 Test at the desk
+
+```sh
+bun install && bun run verify
+```
+
+The whole desk gate — check, tests, pack, audit — and exactly what CI runs on
+every change. Then the release path itself:
+
+```sh
+bun run rehearse
+```
+
+Five targets compiled, the host binary smoke-tested through the guard, the
+archives and `checksums.txt` written, the cask and the six npm packages
+generated, the notes folded, and the real installer run against the build
+(§7). When this is green, the only things a release can still fail on are
+credentials and the network.
+
+To see what a dispatch would decide before dispatching:
+
+```sh
+EVA_BUMP=minor bun scripts/release/version.ts
+```
+
+It prints the version, or refuses for the reason a release would refuse — the
+tag exists, or nothing has landed since the previous one. The artifacts are
+inspectable where the rehearsal left them: `dist/notes.md` is the release
+notes, `dist/homebrew/Casks/eva.rb` is the cask, `dist/npm/` is what npm would
+receive, and `cd dist && shasum -a 256 -c checksums.txt` re-proves the
+archives.
+
+### 11.3 Dispatch
+
+Releases are never automatic — merging to `main` ships nothing (§4). From a
+terminal:
+
+```sh
+gh workflow run release.yml -f bump=minor
+```
+
+```sh
+gh run watch
+```
+
+Or from the browser: Actions → Release → Run workflow → choose the bump. One
+input, not both: `bump` for a normal release, `version` for what a bump cannot
+spell — `-f version=0.2.0-rc.1` for a candidate (npm `next`, GitHub
+prerelease, no tap), or the first release. Given both, the explicit version
+wins.
+
+The run then does what §4 describes, in that order: the three gates, the
+version, the bump commit, five binaries, the guard, the tag push, the release
+with its checksums and signature and SBOMs, the attestations, npm, the tap.
+
+### 11.4 Verify what shipped
+
+```sh
+gh release view v0.2.0 --repo missingstudio/eva
+```
+
+```sh
+npm view @missingstudio/eva version
+```
+
+```sh
+brew install --cask missingstudio/tap/eva && eva --version
+```
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh
+```
+
+And the provenance, on any downloaded archive:
+
+```sh
+gh attestation verify eva-darwin-arm64.zip --repo missingstudio/eva
+```
+
+Then `git pull` — the release put the bump commit and the tag on `main`, and
+the desk should hold what shipped.
+
+### 11.5 When it fails
+
+Where it failed says what exists. Before the tag push, nothing: no commit, no
+tag, no artifact — fix and dispatch again. After the tag push, the tag and the
+release exist and some channels may not; dispatch again with the explicit
+version — `-f version=0.2.0` — and every step that already published skips
+itself (§4), so the re-run fills only what is missing. The failed run's `dist`
+artifact holds what was built, for 14 days, whatever happened after.
