@@ -1,0 +1,43 @@
+name: Security
+
+# CodeQL, over Eva's own code: unsafe patterns written here, rather than
+# vulnerabilities inherited from a dependency. Those are audit.yml's job, and
+# the two are separate because they fail for different reasons — this one
+# fails because of the diff in front of you, and that one can fail because of
+# a database published overnight.
+#
+# There is no schedule. CodeQL's verdict is a pure function of the tree, so a
+# scheduled run would spend a runner confirming the last commit's answer.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # The release workflow calls this file, so a release cannot be the one run
+  # that skipped the security gate.
+  workflow_call:
+
+concurrency:
+  group: security-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: codeql
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Findings land in code scanning as alerts with a state, rather than as
+      # lines in this job's log.
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          languages: javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
