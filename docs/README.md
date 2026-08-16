@@ -20,13 +20,14 @@ plugins, behind one contract, with one trace, one verifier, and one bill.
 
 Then, as you need them:
 
-| You want to                   | Read                                                         |
-| ----------------------------- | ------------------------------------------------------------ |
-| Write a plugin                | [reference/writing-plugins.md](reference/writing-plugins.md) |
-| Type a command or a flag      | [reference/command-line.md](reference/command-line.md)       |
-| Build, test, or ship the repo | [reference/toolchain.md](reference/toolchain.md)             |
-| Know why something is so      | [decisions.md](decisions.md)                                 |
-| Know what Eva is for          | [product.md](product.md)                                     |
+| You want to                 | Read                                                         |
+| --------------------------- | ------------------------------------------------------------ |
+| Write a plugin              | [reference/writing-plugins.md](reference/writing-plugins.md) |
+| Type a command or a flag    | [reference/command-line.md](reference/command-line.md)       |
+| Build or test the repo      | [reference/toolchain.md](reference/toolchain.md)             |
+| Ship a release, install Eva | [reference/ci-cd.md](reference/ci-cd.md)                     |
+| Know why something is so    | [decisions.md](decisions.md)                                 |
+| Know what Eva is for        | [product.md](product.md)                                     |
 
 ## The layout
 
@@ -41,7 +42,8 @@ docs/
     ├── architecture.md    the plugin model, the kernel, every module and interface
     ├── writing-plugins.md the authoring walkthrough
     ├── command-line.md    every command and flag, and how they are parsed
-    └── toolchain.md       Vite+, Bun, TypeScript, CI, day-to-day commands
+    ├── toolchain.md       Vite+, Bun, TypeScript, CI, day-to-day commands
+    └── ci-cd.md           the workflow fleet, the release, every install channel
 ```
 
 ## Conventions
@@ -58,16 +60,17 @@ to that document. Two copies of a fact become two different facts.
 
 **One document owns one subject:**
 
-| Document             | Owns                                  |
-| -------------------- | ------------------------------------- |
-| `context.md`         | what every term means                 |
-| `architecture.md`    | how the mechanisms work               |
-| `writing-plugins.md` | how to author a plugin, and the traps |
-| `command-line.md`    | every command and flag, and the parse |
-| `toolchain.md`       | how to build, test, and ship          |
-| `roadmap.md`         | what we build, in what order          |
-| `decisions.md`       | what we decided, and what we rejected |
-| `product.md`         | what Eva is for, and who for          |
+| Document             | Owns                                     |
+| -------------------- | ---------------------------------------- |
+| `context.md`         | what every term means                    |
+| `architecture.md`    | how the mechanisms work                  |
+| `writing-plugins.md` | how to author a plugin, and the traps    |
+| `command-line.md`    | every command and flag, and the parse    |
+| `toolchain.md`       | how to build and test, and CI's jobs     |
+| `ci-cd.md`           | the workflows, the release, the channels |
+| `roadmap.md`         | what we build, in what order             |
+| `decisions.md`       | what we decided, and what we rejected    |
+| `product.md`         | what Eva is for, and who for             |
 
 When two documents disagree, one is wrong. Fix it — do not reconcile by copying.
 
