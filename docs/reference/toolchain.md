@@ -1,8 +1,9 @@
 # Toolchain
 
-How this repository is built, checked, and shipped. The architecture it builds
-is in [architecture.md](architecture.md); the stage each package arrives in is
-in [roadmap.md](../roadmap.md).
+How this repository is built and checked, and what each CI job is for. The
+architecture it builds is in [architecture.md](architecture.md); the stage each
+package arrives in is in [roadmap.md](../roadmap.md); the workflow fleet, the
+release, and the install channels are in [ci-cd.md](ci-cd.md).
 
 ## 1. Vite+ and Bun
 
