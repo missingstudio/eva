@@ -1,0 +1,40 @@
+---
+title: Commands
+description: Every slash command in the Eva console. They are answered locally, never reach a model, and cost nothing.
+source: docs/reference/command-line.md
+---
+
+A command is a line you type at the console with a leading slash. **Commands
+never reach a model, so they cost nothing.**
+
+Type `/` to open the palette. <kbd>Enter</kbd> runs the selected row, and <kbd>Tab</kbd> completes it.
+
+## The commands
+
+| Command  | Argument         | What it does                     |
+| -------- | ---------------- | -------------------------------- |
+| `/help`  | —                | list the commands                |
+| `/model` | `provider/model` | show or set the session model    |
+| `/cost`  | —                | show what this session has spent |
+| `/theme` | `theme`          | show or set the theme            |
+| `/clear` | —                | open a new Session               |
+| `/new`   | —                | an alias for `/clear`            |
+
+## Commands that take an argument
+
+`/model` and `/theme` both name an argument, and both answer a bare line with a
+choice of their own. Running `/model` with no argument opens the model picker
+rather than complaining.
+
+An argument hint says what an argument would look like. It never says one is
+required.
+
+## What is not a command
+
+A flag is not a command. `--print`, `--model`, and `--config` start a process
+and are read before the console exists. See the
+[CLI reference](/reference/cli).
+
+`eva trust`, `eva untrust`, and `eva config show` are commands of the
+executable rather than of the console. You type them in your shell, not at the
+Eva prompt.

@@ -1,0 +1,73 @@
+---
+title: How plugins work
+description: Eva is a small kernel that loads plugins. There are exactly four extension points — Domain, Slot, Hook, and Broadcast — and no fifth.
+source: docs/reference/architecture.md
+---
+
+Eva is plugin-first. A small **Kernel** holds the plugin runtime, the four
+extension points, the config source, and location resolution. **Everything that
+is not the Kernel is a plugin** — the model, the surface, the trace, the
+session store, the themes, and the harness.
+
+Eva's own harness is a plugin with no privileged position.
+
+## A plugin
+
+A plugin exports an id and an effect, and declares the config keys it reads.
+The effect runs once at load and registers into extension points.
+
+```ts
+export default {
+  id: "example.hello",
+  effect: () => {
+    // register into extension points here
+  },
+}
+```
+
+## The four extension points
+
+There are exactly four, and there is no fifth.
+
+**Domain** — shared state that many plugins build together. The Kernel rebuilds
+a Domain by replaying every registered Transform in order, then running the
+domain's finalizer. A Transform describes a contribution rather than performing
+one, which is why it can replay.
+
+**Slot** — a typed key and its contract. Exactly one plugin fills a Slot at a
+time. A consumer reads it at the moment of use and never captures it, so
+replacing the plugin behind a Slot takes effect at once.
+
+**Hook** — a callback at a live operation boundary. Hooks run in registration
+order, and a later Hook sees what an earlier one changed. **A Hook may narrow
+what a Run does, never widen it.**
+
+**Broadcast** — a typed, process-local notification a plugin subscribes to as a
+stream. It is never written to the Trace and carries no cross-version
+guarantee. Control flow belongs in a Hook, not here.
+
+## A Seam
+
+A **Seam** is a complete swappable capability in three roles: the Slot that
+defines it, the plugins that fill it, and the plugins that read it. The Seam is
+the whole capability. Name a part by its role rather than calling the part a
+Seam.
+
+## What a plugin may import
+
+A plugin imports the contract packages only. **Never the kernel, and never
+another plugin.** That rule is enforced by lint rather than by convention, so a
+violation fails the build rather than a review.
+
+## Disabling one
+
+```bash
+eva --without-plugin eva.themes
+```
+
+A plugin that is disabled, or that fails, degrades the Run rather than stopping
+it. The repository has CI jobs whose only purpose is to prove that: one starts
+the binary with every plugin disabled, and another disables a single plugin and
+asserts the Run still completes.
+
+Next: [write a plugin](/extend/write-a-plugin).

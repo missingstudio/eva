@@ -1,0 +1,64 @@
+---
+title: Contributing
+description: Clone Eva, run the one command CI runs, and know the conventions before you open a pull request.
+source: docs/reference/toolchain.md
+---
+
+Eva is MIT licensed and developed in the open at
+[github.com/missingstudio/eva](https://github.com/missingstudio/eva).
+
+## Get set up
+
+Requires Bun 1.3 or newer.
+
+```bash
+git clone git@github.com:missingstudio/eva.git && cd eva && bun install
+```
+
+## The one command
+
+```bash
+bun run verify
+```
+
+That is exactly what CI checks on every change: types and lint, the tests, the
+packaging, and a dependency audit, in that order. If it passes locally it
+passes in CI.
+
+Run a subset while you work:
+
+```bash
+bun run check      # types, lint, and format in one pass
+bun run test       # the suite
+bun run test packages/kernel   # one package, by path
+```
+
+## Conventions that will fail review
+
+**Commits are Conventional Commits.** `type(scope): description`, lowercase,
+imperative, no full stop. Types: `feat`, `fix`, `refactor`, `chore`, `docs`,
+`test`, `ci`, `build`. One logical change per commit.
+
+```
+feat(kernel): batch domain rebuilds during boot
+```
+
+**Branches are `type/kebab-case-description`.** For example
+`fix/streaming-first-char-missing`.
+
+**Prose is ASD-STE100 Simplified Technical English** — short sentences, active
+voice, one instruction per sentence, and the same word for the same thing every
+time. That applies to commits, plans, and documentation.
+
+**Make the smallest correct change.** Follow the package boundaries that are
+already there.
+
+## Package boundaries are enforced
+
+A plugin imports the contract packages only — never the kernel, and never
+another plugin. That is a lint rule rather than a convention, so crossing a
+boundary fails the build rather than a review.
+
+## Before you open a pull request
+
+Read [AGENTS.md](https://github.com/missingstudio/eva/blob/main/AGENTS.md).

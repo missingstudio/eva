@@ -1,0 +1,45 @@
+---
+title: Themes
+description: Eva ships three themes — Default, High contrast, and Monochrome. Switch with the theme command, or set one in config.
+source: plugins/themes
+---
+
+Eva ships three themes.
+
+| Id         | Name          | For                                 |
+| ---------- | ------------- | ----------------------------------- |
+| `default`  | Default       | most terminals                      |
+| `contrast` | High contrast | low-contrast displays, bright rooms |
+| `mono`     | Monochrome    | terminals with a restricted palette |
+
+## Switch theme
+
+```
+/theme contrast
+```
+
+Running `/theme` with no argument opens the picker rather than complaining.
+
+## Set one permanently
+
+Put it in your config file:
+
+```yaml
+eva.themes:
+  theme: contrast
+```
+
+[Configuration](/configure/configuration) explains where that file goes and
+how Eva decides which one wins.
+
+## Themes are a plugin
+
+`eva.themes` is a plugin like everything else in Eva, so you can turn it off:
+
+```bash
+eva --without-plugin eva.themes
+```
+
+Eva keeps running without it. A plugin that fails or is disabled degrades the
+run rather than stopping it — the repository has a CI job whose only purpose is
+to prove that.

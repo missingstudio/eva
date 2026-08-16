@@ -1,0 +1,60 @@
+---
+title: Models and providers
+description: Eva talks to Anthropic today. Set the model with a flag for one run, or with the model command inside a session.
+source: docs/context.md
+---
+
+A **Provider** is a model behind one contract. It knows no Run and no Session —
+it begins a Provider Turn and yields payloads of Eva's one Event schema.
+
+Eva ships one provider today: Anthropic.
+
+## Set the model for one run
+
+```bash
+eva --model anthropic/claude-sonnet-4-5
+```
+
+The value is `provider/model`. The flag works on every command, including
+`--print`.
+
+## Set it inside a session
+
+```
+/model anthropic/claude-sonnet-4-5
+```
+
+With no argument, `/model` shows the current model and offers the ones Eva
+knows about.
+
+## The Catalog
+
+The **Catalog** is the Domain holding providers, their models, and the default.
+Provider plugins write to it and nothing owns it, so adding a provider is
+adding a plugin rather than editing a list.
+
+The Catalog also holds **Price** — what a vendor publishes per million tokens.
+Price feeds an Estimate and never a Cost; [cost and usage](/use/cost) explains
+why those stay apart.
+
+## Credentials
+
+A Credential authenticates Eva to a Provider. Today that is an API key from the
+environment:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Your key never reaches a settings file, a log, or the session record.
+
+## Retries
+
+A retry is an attempt that spent money and wall clock and produced nothing, so
+Eva records it as an event of its own rather than hiding it inside the attempt
+that succeeded. When you read what a Run cost, retries are in the number.
+
+## More providers
+
+More providers, and the harnesses you already pay for, arrive with the
+multi-harness stage. [The roadmap](/about/roadmap) says when.

@@ -1,0 +1,74 @@
+---
+title: What is Eva
+description: Eva is an open-source, AI-native software factory. It runs coding work end to end, from a spec a machine can check to evidence it was done.
+source: docs/product.md
+---
+
+Eva runs coding work end to end: you give it a spec a machine can check, a
+harness does the work, and Eva keeps the evidence that it was done.
+
+It runs on your laptop as a CLI, and it runs as a service you reach from
+anywhere. Those are the same program.
+
+<Callout title="Eva is early">
+  Today Eva is a terminal client on a plugin kernel. A small core loads plugins, and every
+  capability is one — the model, the surface, the trace, the themes. What ships today is on this
+  site. What comes next is on the [roadmap](/about/roadmap).
+</Callout>
+
+## The problem
+
+You have subscriptions to Claude Code, Codex, and OpenCode. Each is a good
+harness. None can tell you what a change cost, none can check another's work,
+and none can run twenty tasks overnight and show you the evidence in the
+morning.
+
+Switching between them means switching tools, losing history, and starting the
+accounting again. And all of them are tied to the machine you are sitting at.
+Close the laptop and the work stops.
+
+## What Eva does about it
+
+**One contract over every harness.** Eva's native harness and every foreign one
+implement the same interface, so a task runs on any of them without being
+rewritten. Eva's own harness has no privileged position.
+
+**One trace.** Everything every harness does lands in one event schema. What a
+trace cannot rebuild is a bug.
+
+**One verifier.** Acceptance criteria are checked by Eva, not claimed by the
+agent that did the work. A claim is never evidence.
+
+**One bill.** Cost is attributed per task, per merged change, and per harness.
+That makes "use this harness for this kind of work" a measurement rather than a
+preference.
+
+## What Eva is not
+
+Not a model. Not an IDE. Not a replacement for the harnesses you use — Eva
+drives them, and its own harness is one entry in the same registry.
+
+[What is an AI-native software factory?](/software-factory) defines the
+category these four properties belong to, and how a factory differs from a
+harness.
+
+## Start here
+
+<Cards>
+  <Card
+    title="Install"
+    href="/install"
+    description="Four channels, and how to verify a download."
+  />
+  <Card
+    title="Connect a model"
+    href="/connect-a-model"
+    description="One key, and where it does not go."
+  />
+  <Card
+    title="Your first run"
+    href="/first-run"
+    description="Ask something, read the answer, see the cost."
+  />
+  <Card title="Concepts" href="/concepts" description="The words Eva uses for its own machinery." />
+</Cards>

@@ -1,0 +1,91 @@
+---
+title: Write a plugin
+description: Author an Eva plugin — declare the config keys it reads, register into an extension point, clean up after itself, and fill or read a Slot.
+source: docs/reference/writing-plugins.md
+---
+
+The smallest plugin exports an id and an effect.
+
+```ts
+import type { Plugin } from "@missingstudio/eva-sdk"
+
+export default {
+  id: "example.hello",
+  effect: () => {},
+} satisfies Plugin
+```
+
+An id is namespaced. Eva's own plugins use `eva.*`; use your own prefix.
+
+## Declare the config keys you read
+
+A **Declaration** is the config keys a plugin reads, and the reader they
+produce. One half goes beside the plugin's id and the other reads a key out of
+config, **so a key is declared and read in one place**.
+
+This is what lets Eva tell a person about a key nothing reads. The key sweep
+asks the same reader, so a value it passes is a value the plugin can read.
+
+A Declaration validates nothing and rejects nothing. It is not a schema.
+
+## Clean up after yourself
+
+Registering into an extension point returns a **Registration**. It is owned by
+the registering plugin's scope, and disposing it is safe to repeat.
+
+You rarely dispose one by hand — the scope does it when the plugin unloads. It
+matters because a plugin must be able to unload and reload in one live process
+without losing its position. The repository has a CI job that fails when it
+cannot.
+
+## Fill a Slot
+
+Exactly one plugin fills a Slot at a time. Filling one replaces whatever was
+there.
+
+```ts
+export default {
+  id: "example.store",
+  effect: (ctx) => {
+    ctx.fill(SessionStore, myStore)
+  },
+} satisfies Plugin
+```
+
+## Read a Slot
+
+**Read a Slot at the moment of use. Never capture it.**
+
+```ts
+// Correct: read at the moment of use.
+const store = ctx.use(SessionStore)
+
+// Wrong: captured at load, so a later replacement never takes effect.
+const captured = ctx.use(SessionStore)
+```
+
+A Slot is late-bound on purpose. Capturing one at load time defeats the whole
+point of the Seam, and it fails quietly rather than loudly.
+
+## Ship it
+
+A plugin ships as an npm package — a **Bundle**. A Bundle carries a config
+layer that applies when a Profile lists it.
+
+Package boundaries are enforced: a plugin imports the contract packages only,
+never the kernel and never another plugin. Its own tests may also import the
+testkit, which boots the plugin so its effect can be tested.
+
+## Test it
+
+```ts
+import { boot } from "@missingstudio/eva-testkit"
+
+test("the plugin registers", async () => {
+  const eva = await boot({ plugins: [plugin] })
+  expect(eva.has("example.hello")).toBe(true)
+})
+```
+
+The testkit is a devDependency everywhere it is used, so nothing it reaches
+ends up in a shipped plugin.

@@ -1,0 +1,86 @@
+---
+title: Troubleshooting
+description: Fixes for what people actually hit with Eva — a setting that does nothing, a missing key, a chord the terminal cannot send, a plugin that misbehaves.
+---
+
+## A setting I wrote does nothing
+
+Ask Eva what it resolved and where each value came from:
+
+```bash
+eva config show
+```
+
+Three common causes. The key is under the wrong plugin id. The key is spelled
+differently from the one the plugin declares. Or the file is not in a layer Eva
+reads — a `.eva` directory needs [`eva trust`](/configure/trust) first.
+
+Eva also reports an unread key as a finding on stderr, naming the plugin whose
+options it was written under. That message is usually the whole answer.
+
+## Eva says it has no credential
+
+Eva reads `ANTHROPIC_API_KEY` from the environment at the moment it opens a
+request.
+
+```bash
+echo $ANTHROPIC_API_KEY | head -c 8
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+A key set in a shell profile is not visible to a shell that started before the
+profile changed. Open a new terminal, or re-source the profile.
+
+## Shift+Enter does not insert a newline
+
+Most terminals cannot send `shift+enter` without the kitty keyboard protocol.
+Rebind it to a chord your terminal does send:
+
+```yaml
+eva.keymap:
+  bindings:
+    input.newline: ctrl+j
+```
+
+Pasting a multi-line block works regardless — a paste arrives whole, and a
+newline inside it is text rather than a key.
+
+## The terminal looks wrong, or colours are unreadable
+
+Try a different theme:
+
+```
+/theme contrast
+```
+
+`contrast` suits bright rooms and low-contrast displays. `mono` suits terminals
+with a restricted palette. See [themes](/use/themes).
+
+## A plugin is misbehaving
+
+Turn it off for one run:
+
+```bash
+eva --without-plugin eva.themes
+```
+
+Eva keeps running with a plugin disabled. If disabling one fixes your problem,
+that is worth an issue — a single disabled plugin should degrade the run, never
+break it.
+
+## My pipeline does not stop on failure
+
+`--print` exits non-zero when the answer fails, but a shell pipeline reports
+the last command's status by default:
+
+```bash
+eva -p "review the diff" > review.txt || exit 1
+```
+
+See [exit codes](/reference/exit-codes).
+
+## Still stuck
+
+Open an issue at
+[github.com/missingstudio/eva](https://github.com/missingstudio/eva/issues).
+Include the output of `eva --version` and `eva config show`.

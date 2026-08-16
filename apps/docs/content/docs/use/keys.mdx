@@ -1,0 +1,49 @@
+---
+title: Keys and bindings
+description: How Eva spells a key chord, which keys the console binds by default, and how to rebind one.
+source: docs/context.md
+---
+
+A **binding** is a key chord written as words joined by `+`, in one canonical
+spelling. There is exactly one way to write any chord, so a config file cannot
+name a key two ways.
+
+## The spelling rules
+
+| Rule           | Correct             | Wrong          |
+| -------------- | ------------------- | -------------- |
+| Modifier order | `ctrl+meta+shift+k` | `shift+ctrl+k` |
+| The enter key  | `enter`             | `return`       |
+| The plus key   | `plus`              | `+`            |
+
+The joiner cannot also be a key, which is why `plus` is spelled out.
+
+A string Eva cannot parse names no key. Eva says so to you rather than storing
+it and failing later.
+
+## Default bindings
+
+| Chord                              | Action                   |
+| ---------------------------------- | ------------------------ |
+| <kbd>Enter</kbd>                   | send the prompt          |
+| <kbd>Esc</kbd>                     | interrupt the Run        |
+| <kbd>Esc</kbd> twice               | confirm the interrupt    |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd> twice | leave the console        |
+| <kbd>Tab</kbd>                     | complete in the palette  |
+| <kbd>/</kbd>                       | open the command palette |
+
+## Rebind a key
+
+The keymap is a plugin, `eva.keymap`, and its bindings are config:
+
+```yaml
+eva.keymap:
+  bindings:
+    input.newline: ctrl+j
+```
+
+<Callout type="warn">
+  `input.newline` is bound to `shift+enter` by default, and most terminals cannot send that chord
+  without the kitty keyboard protocol. If you want a multi-line prompt you can type rather than
+  paste, rebind it to something your terminal sends, such as `ctrl+j`.
+</Callout>

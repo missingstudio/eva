@@ -1,0 +1,50 @@
+---
+title: Sessions
+description: A Session is Eva's durable, resumable transcript. It survives kill -9, because everything Eva knows is folded from a Trace on disk rather than held in memory.
+source: docs/context.md
+---
+
+A Session is the durable, resumable transcript of your work with Eva.
+**It survives `kill -9`.**
+
+That is not a recovery feature bolted on afterwards. Eva writes every
+observable thing to a Trace as it happens, and everything you see is a fold
+over that Trace. There is no in-memory state that a crash could lose, because
+there is no in-memory state that matters.
+
+## Runs inside a Session
+
+A **Run** is one execution against a Session, from the intent that opens it to
+the Claim that closes it. A Session you resume twice has several Runs.
+
+A Session has a Header — what to call it, and when it last moved. Nothing
+stores a Header. It is a fold over the Trace, like every other projection.
+
+## Start a new one
+
+```
+/clear
+```
+
+`/new` is the same command. It opens a new Session; it does not erase the old
+one.
+
+## Where they live
+
+Sessions are written under Eva's state directory, as JSONL. One file, appended
+to, one Event per line. You can read one with `cat`, and Eva can rebuild
+everything it shows from it.
+
+A Session record never contains your API key. See
+[connect a model](/connect-a-model).
+
+## Locations
+
+A Session belongs to a **Location** — the directory it was opened in. Eva holds
+many Locations and has no ambient one, so a Session opened in one repository
+does not follow you into another.
+
+## What is coming
+
+Resume, branch, and rewind all act on the Session, and land in a later stage.
+[The roadmap](/about/roadmap) says when.

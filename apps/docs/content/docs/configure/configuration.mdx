@@ -1,0 +1,66 @@
+---
+title: Configuration
+description: Where Eva reads configuration from, how the layers resolve, and how to ask Eva which layer a value actually came from.
+source: docs/reference/architecture.md
+---
+
+Eva reads configuration from several layers and merges them. To find out what
+Eva actually resolved, and where each value came from, ask it:
+
+```bash
+eva config show
+```
+
+That command prints every resolved key beside its origin. It is the answer to
+"why is this setting not taking effect", and it is faster than reasoning about
+precedence.
+
+## The shape
+
+Configuration is YAML. A plugin's keys live under that plugin's id:
+
+```yaml
+eva.themes:
+  theme: contrast
+
+eva.keymap:
+  bindings:
+    input.newline: ctrl+j
+```
+
+A key belongs to exactly one plugin, and a plugin declares the keys it reads.
+That declaration is what lets Eva tell you about a key nothing reads.
+
+## Overlay a file for one run
+
+```bash
+eva --config ./ci.eva.yaml
+```
+
+`--config` is repeatable. Later files overlay earlier ones.
+
+## A repository's own settings
+
+A repository can carry a `.eva` directory to share a team's setup. Eva reads it
+only after you run `eva trust` in that directory. See
+[trust](/configure/trust).
+
+## Unread keys are reported, not ignored
+
+If you write a key nothing reads — a typo, a setting from an older version, a
+key under the wrong plugin — Eva tells you. That is a **Finding**: it is
+written to stderr, it names the plugin whose options it was written under, and
+**it does not change the exit code**.
+
+Eva reports a finding rather than failing, because a stale key should not stop
+your work. Eva reports it rather than staying quiet, because a setting that
+silently does nothing is worse than one that errors.
+
+## Turn plugins on and off
+
+```bash
+eva --plugin some.plugin
+eva --without-plugin eva.themes
+```
+
+Both flags are repeatable, and both apply to one run.

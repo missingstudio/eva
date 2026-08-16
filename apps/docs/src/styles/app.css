@@ -1,0 +1,170 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+@import "@missingstudio/eva-brand/tokens.css";
+
+/*
+  Fumadocs paints from its own `--color-fd-*` variables. Map them onto the
+  brand tokens so the documentation, the marketing site, and the program all
+  read as one product rather than three.
+
+  This file maps and it never decides: every value below is a reference to a
+  token in the brand package. A literal here would be a token defined in a
+  surface stylesheet, which is the one thing a surface may not do.
+*/
+:root {
+  --color-fd-background: var(--eva-bg);
+  --color-fd-foreground: var(--eva-text);
+  --color-fd-card: var(--eva-card);
+  --color-fd-card-foreground: var(--eva-text);
+  --color-fd-popover: var(--eva-card);
+  --color-fd-popover-foreground: var(--eva-text);
+  --color-fd-muted-foreground: var(--eva-muted);
+  --color-fd-border: var(--eva-rule);
+  --color-fd-primary: var(--eva-accent);
+  --color-fd-ring: var(--eva-accent);
+
+  /*
+    Fumadocs paints its quiet fills — the search trigger, hover washes, tab
+    rests — from these three. Left unmapped they keep the preset's own greys,
+    and the preset's grey is a shade darker than this ground: muted ink on it
+    measured 4.44:1, just under AA. They are all the raised surface here, which
+    is the tonal step this system uses for a control at rest.
+  */
+  --color-fd-secondary: var(--eva-card);
+  --color-fd-secondary-foreground: var(--eva-text);
+  --color-fd-muted: var(--eva-card);
+  --color-fd-accent: var(--eva-card);
+  --color-fd-accent-foreground: var(--eva-text);
+
+  /*
+    One shape for a button across both surfaces. Fumadocs sizes its own radius
+    from this, so the preset's buttons land on the same 8px the marketing site
+    uses rather than on the preset's default.
+  */
+  --radius: 0.5rem;
+}
+
+/*
+  The page title and its sections take the display scale rather than the
+  preset's sizes. The values are the brand package's, so the two surfaces
+  cannot drift apart: this binds `h1` to display-md and `h2` to display-sm,
+  which is what the documentation column has room for.
+*/
+#nd-page h1 {
+  font-size: var(--text-display-md);
+  line-height: var(--text-display-md--line-height);
+  letter-spacing: var(--tracking-display-md);
+}
+#nd-page h2 {
+  font-size: var(--text-display-sm);
+  line-height: var(--text-display-sm--line-height);
+  letter-spacing: var(--tracking-display-sm);
+}
+
+#nd-page :is(h3, h4, h5, h6) {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/*
+  Long-form prose takes neither wrap mode. `balance` belongs to headings and
+  `pretty` to short descriptions; across a page of documentation the browser
+  re-flows several lines at every paragraph to save one orphan, which costs
+  more than it buys. Headings on this page keep `balance` from the base layer.
+*/
+#nd-page :is(p, li) {
+  text-wrap: auto;
+}
+
+/*
+  Code takes its size from the brand token, so a command shown here and the
+  same command on the marketing page are the same size. Inline code keeps the
+  line-height it inherits, which is what stops it breaking the prose rhythm.
+*/
+#nd-page :is(code, pre) {
+  font-size: var(--text-code);
+}
+
+/*
+  A code block is the terminal panel: the same dark field in both schemes, so
+  it matches the program it quotes. Its ink is pinned rather than flipped — a
+  component that reached for the scheme-aware accent here would land at 3.11:1
+  on a light page and fail AA.
+
+  Fumadocs builds the block as
+
+    figure.shiki > div.fd-scroll-container > pre
+
+  and the figure is the card: it owns the radius, the border and the overflow.
+  The field therefore has to be the figure. Painting the `pre` puts a dark
+  strip inside a white card — the `pre` is only as tall as its own lines, it is
+  `w-max` so it runs past the card's edge, and it sits inside the scroll
+  container's padding, which stays light above and below it.
+*/
+#nd-page figure.shiki {
+  background: var(--eva-panel-ink);
+  border-color: var(--eva-rule);
+  color: var(--eva-on-strong);
+  /* Depth is a hairline and a tonal step. The preset ships a shadow. */
+  box-shadow: none;
+}
+
+#nd-page figure.shiki pre {
+  background: transparent;
+}
+
+/*
+  The scroll container sets 13px, which sits between two steps of the scale.
+  It carries the size for the block, so it is the one that has to snap.
+*/
+#nd-page figure.shiki .fd-scroll-container {
+  font-size: var(--text-code);
+  line-height: var(--text-code--line-height);
+}
+
+/*
+  The copy control sits on that field, so it reads the pinned inks too. Left
+  alone it is `--eva-muted`, which is chosen for the page ground and fails
+  against the panel.
+*/
+#nd-page figure.shiki > div:first-child,
+#nd-page figure.shiki button {
+  color: var(--eva-on-strong-muted);
+}
+
+@media (hover: hover) {
+  #nd-page figure.shiki button:hover {
+    color: var(--eva-on-strong);
+  }
+}
+
+/*
+  Shiki emits both palettes on every token and the preset picks the light one
+  unless `.dark` is an ancestor. This field is dark in both schemes, so the
+  light palette lands on it in light mode and measures 1.21:1 — the same trap
+  the pinned ink above avoids, arriving through the highlighter. The dark
+  palette is the correct one here in both schemes.
+
+  Inline code is not on this field, so it is left to follow the scheme.
+*/
+#nd-page pre code span {
+  color: var(--shiki-dark);
+  font-style: var(--shiki-dark-font-style);
+}
+
+/*
+  A hairline separates two static surfaces and cannot say "this is a control".
+  An input is identified by its edge, so the search field and every other text
+  control takes the control boundary, which clears the 3:1 that SC 1.4.11 asks
+  for where the hairline reaches only about 1.2:1.
+*/
+#nd-page input,
+#nd-page textarea,
+#nd-page select,
+[role="dialog"] input[type="search"],
+[role="dialog"] input[type="text"] {
+  border-color: var(--eva-border-control);
+}
