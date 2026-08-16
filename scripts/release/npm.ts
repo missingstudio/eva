@@ -22,6 +22,11 @@ for (const target of TARGETS) {
     `${dir}/bin/${binaryOf(target)}`,
   )
   copyFileSync("LICENSE", `${dir}/LICENSE`)
+  // npm packs a README regardless of the files list, so the page is never bare.
+  writeFileSync(
+    `${dir}/README.md`,
+    `# ${name}\n\nThe eva binary for ${nameOf(target).slice(4)}. npm has no per-platform download,\nso [@missingstudio/eva](https://www.npmjs.com/package/@missingstudio/eva) names one binary package per platform as an\noptional dependency, and installing it selects the one that matches your\nmachine. Install that package; this one arrives with it.\n`,
+  )
   writeFileSync(
     `${dir}/package.json`,
     JSON.stringify(
@@ -47,6 +52,7 @@ const dir = `${DIST}/npm/eva`
 mkdirSync(`${dir}/bin`, { recursive: true })
 copyFileSync("scripts/release/shim.mjs", `${dir}/bin/eva.mjs`)
 copyFileSync("LICENSE", `${dir}/LICENSE`)
+copyFileSync("scripts/release/npm-readme.md", `${dir}/README.md`)
 writeFileSync(
   `${dir}/package.json`,
   JSON.stringify(
