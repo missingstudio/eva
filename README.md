@@ -6,7 +6,7 @@
   </picture>
 </p>
 
-<p align="center">An autonomous, AI-native software factory.</p>
+<p align="center">An AI-native software factory.</p>
 
 <p align="center">
   <a href="https://github.com/missingstudio/eva/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/missingstudio/eva/actions/workflows/ci.yml/badge.svg"></a>

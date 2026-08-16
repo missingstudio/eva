@@ -53,7 +53,7 @@ writeFileSync(
     {
       name: "@missingstudio/eva",
       version,
-      description: "An autonomous, AI-native software factory",
+      description: "An AI-native software factory",
       license,
       repository,
       bin: { eva: "./bin/eva.mjs" },
