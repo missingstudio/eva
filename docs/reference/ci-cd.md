@@ -191,10 +191,13 @@ attest. Then the channels, in an order chosen by what a late failure costs:
    token leaves a public release and a stale tap rather than a failed release.
    The recovery is a commit to the tap, not a re-run.
 
-A failed publish is re-entered by dispatching again with the explicit version;
-every step already published skips itself. Everything built is also uploaded
-as a workflow artifact for 14 days, so a failed publish still leaves the
-evidence of what was built.
+A failed publish is re-entered by dispatching again with `republish` naming
+the tag — a tag that exists is a release that already happened, so the version
+input refuses it. The republish job runs no gates and pushes nothing: it
+downloads the release's own assets, proves them against `checksums.txt`,
+rebuilds the packages from those bytes, and every channel already published
+skips itself. Everything built is also uploaded as a workflow artifact for 14
+days, so a failed publish still leaves the evidence of what was built.
 
 ## 5. The channels
 
@@ -426,7 +429,8 @@ Or from the browser: Actions → Release → Run workflow → choose the bump. O
 input, not both: `bump` for a normal release, `version` for what a bump cannot
 spell — `-f version=0.2.0-rc.1` for a candidate (npm `next`, GitHub
 prerelease, no tap), or the first release. Given both, the explicit version
-wins.
+wins. And `-f republish=v0.2.0` re-enters a release whose publish failed (§4),
+touching nothing already published.
 
 The run then does what §4 describes, in that order: the three gates, the
 version, the bump commit, five binaries, the guard, the tag push, the release
