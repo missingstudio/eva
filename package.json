@@ -30,9 +30,11 @@
     "pack": "vp run -r pack",
     "hooks:setup": "vp config",
     "eva": "bun apps/cli/src/eva.ts",
+    "rehearse": "bun scripts/release/snapshot.ts",
     "verify": "vp check && vp test && vp run -r pack && bun audit --audit-level=high"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.14",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "0.2.8",
