@@ -48,23 +48,23 @@ sink, one provider, and a terminal.
 
 ### Stage 1: Workflow
 
-**Builds on stage 0:** the kernel, the schema, and an empty harness domain. The pipeline is that domain's first entry.
+**Builds on stage 0:** the kernel, the schema, and an empty harness domain. A Workflow is that domain's first entry.
 
 Do this stage before agents. A team that goes straight to agency gets a
-nondeterministic system that does a job a 40-line pipeline does more reliably
+nondeterministic system that does a job a 40-line Workflow does more reliably
 and ten times more cheaply.
 
 **Plugins**
 
-| Plugin                    | Adds                                                         |
-| ------------------------- | ------------------------------------------------------------ |
-| `eva.prompt`              | prompt domain: templates, partials, variable injection       |
-| `eva.validator`           | slot `Validator`: JSON schema, repair loop on invalid output |
-| `eva.pipeline`            | harness domain entry: a declarative DAG, step → model → next |
-| `eva.provider.openai`     | catalog transform, hook `model.resolve`                      |
-| `eva.provider.compatible` | OpenAI-compatible endpoints, local models                    |
+| Plugin                    | Adds                                                                             |
+| ------------------------- | -------------------------------------------------------------------------------- |
+| `eva.prompt`              | prompt domain: Templates, includes, Variables                                    |
+| `eva.validator`           | slot `Validator`: judges a Candidate against a JSON Schema and names every Fault |
+| `eva.workflow`            | harness domain entry: a declared list of Steps, step → model → validate → next   |
+| `eva.provider.openai`     | hook `model.resolve`                                                             |
+| `eva.provider.compatible` | OpenAI-compatible endpoints, local models                                        |
 
-The pipeline is a **harness**. It is the second entry in the harness domain and
+A Workflow is a **harness**. It is the first entry in the harness domain and
 it has no agency at all. That is the point: the harness contract must hold for
 something deterministic before it holds for something that reasons.
 
@@ -74,16 +74,25 @@ git diff --staged | eva run commit-msg
 eva run review src/auth/login.ts
   ← structured findings: [{file, line, severity, claim}]
 eva run release-notes.yaml --input CHANGELOG.md
-  ← declarative DAG: step → model → validate → repair once → next
+  ← a declared list of Steps: Step → model → validate → repair once → next
 ```
 
-**In:** files, piped text, and pipeline YAML. **Out:** schema-validated
+**In:** files, piped text, and Workflow YAML. **Out:** schema-validated
 structured artifacts. The code owns the control flow. The model fills the slots.
 
 **Primitive:** structured output with a validation and repair loop.
 
-**Exit test:** five canned pipelines give ≥95% first-pass schema validity across
-100 runs. Each failure repairs within one retry.
+**Exit test, the gate:** `verdictFold` and `validityOf` over the vendored
+traces equal the committed golden; a scripted Provider that answers invalid
+then valid produces exactly one `verdict` per Candidate numbered 1 then 2; the
+same run with the Validator slot empty reports `unchecked` and no rate at all;
+and the demo block runs. All four run in `verify`.
+
+**Exit test, the measurement:** five canned Workflows over 100 Runs each give
+≥95% first-pass validity aggregated over the 500 Candidates, with a repair
+yield of ≥90%. It runs on a schedule against one named model, and it files an
+issue when the rate drops. Aggregate rather than five thresholds: at a true
+97% rate, five independent per-Workflow thresholds fail about 31% of runs.
 
 ### Stage 2: Tools and the loop
 
@@ -1140,30 +1149,32 @@ switch and check for a clean stop with no orphaned state.
 
 ## The extension points, by stage
 
-Every domain, slot, and hook, and the stage that introduces it. A stage may not
-add an extension point it does not itself use.
+Every domain, slot, hook, and broadcast, and the stage that introduces it. A
+stage may not add an extension point it does not itself use. A domain's
+`<name>.updated` topic is derived from the domain table, so it arrives with the
+domain and is listed on the same stage.
 
-| Stage | Domains added                                                         | Slots added                                                | Hooks added                                                                             |
-| ----- | --------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 0     | catalog, command, theme, keymap, agent, harness, integration, surface | Recorder, TraceSink, SessionStore, CredentialStore, Budget | `model.resolve`, `provider.request.before`, `provider.response.after`, `provider.retry` |
-| 1     | prompt                                                                | Validator                                                  | —                                                                                       |
-| 2     | tool                                                                  | Sandbox, FileSystem, Shell, DiffApplier                    | `tool.resolve`, `tool.execute.before`, `tool.execute.after`, `session.prompt.before`    |
-| 3     | —                                                                     | RepoMap, Retriever                                         | `session.compact`, `session.prompt.after`                                               |
-| 4     | workspace                                                             | Workspace, Snapshot                                        | —                                                                                       |
-| 5     | check                                                                 | Verifier                                                   | `run.retry.before`                                                                      |
-| 6     | memory                                                                | Memory                                                     | `trace.commit.before`                                                                   |
-| 6.5   | —                                                                     | —                                                          | —                                                                                       |
-| 7     | —                                                                     | —                                                          | `harness.prompt.before`, `harness.prompt.after`                                         |
-| 8     | —                                                                     | —                                                          | —                                                                                       |
-| 9a    | importer                                                              | TaskStore, Queue, Scheduler                                | —                                                                                       |
-| 9b    | —                                                                     | Identity                                                   | —                                                                                       |
-| 9c    | —                                                                     | —                                                          | `harness.request`, `harness.resume.rejected`                                            |
-| 9d    | skill                                                                 | —                                                          | —                                                                                       |
-| 10    | —                                                                     | MergeQueue                                                 | —                                                                                       |
-| 11    | —                                                                     | —                                                          | —                                                                                       |
-| 12    | —                                                                     | —                                                          | —                                                                                       |
-| 13    | signal                                                                | —                                                          | —                                                                                       |
-| 14    | —                                                                     | —                                                          | —                                                                                       |
+| Stage | Domains added                                                         | Slots added                                                | Hooks added                                                                             | Broadcasts added                                                                                                                                                                          |
+| ----- | --------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | catalog, command, theme, keymap, agent, harness, integration, surface | Recorder, TraceSink, SessionStore, CredentialStore, Budget | `model.resolve`, `provider.request.before`, `provider.response.after`, `provider.retry` | `plugin.added`, `plugin.removed`, `plugin.failed`, `config.changed`, `session.started`, `run.opened`, `run.finished`, `slot.filled`, `slot.emptied`, and `<name>.updated` for each domain |
+| 1     | prompt                                                                | Validator                                                  | —                                                                                       | `prompt.updated`                                                                                                                                                                          |
+| 2     | tool                                                                  | Sandbox, FileSystem, Shell, DiffApplier                    | `tool.resolve`, `tool.execute.before`, `tool.execute.after`, `session.prompt.before`    | `tool.updated`                                                                                                                                                                            |
+| 3     | —                                                                     | RepoMap, Retriever                                         | `session.compact`, `session.prompt.after`                                               | —                                                                                                                                                                                         |
+| 4     | workspace                                                             | Workspace, Snapshot                                        | —                                                                                       | `workspace.updated`                                                                                                                                                                       |
+| 5     | check                                                                 | Verifier                                                   | `run.retry.before`                                                                      | `check.updated`                                                                                                                                                                           |
+| 6     | memory                                                                | Memory                                                     | `trace.commit.before`                                                                   | `memory.updated`                                                                                                                                                                          |
+| 6.5   | —                                                                     | —                                                          | —                                                                                       | —                                                                                                                                                                                         |
+| 7     | —                                                                     | —                                                          | `harness.prompt.before`, `harness.prompt.after`                                         | —                                                                                                                                                                                         |
+| 8     | —                                                                     | —                                                          | —                                                                                       | —                                                                                                                                                                                         |
+| 9a    | importer                                                              | TaskStore, Queue, Scheduler                                | —                                                                                       | `importer.updated`                                                                                                                                                                        |
+| 9b    | —                                                                     | Identity                                                   | —                                                                                       | —                                                                                                                                                                                         |
+| 9c    | —                                                                     | —                                                          | `harness.request`, `harness.resume.rejected`                                            | —                                                                                                                                                                                         |
+| 9d    | skill                                                                 | —                                                          | —                                                                                       | `skill.updated`                                                                                                                                                                           |
+| 10    | —                                                                     | MergeQueue                                                 | —                                                                                       | —                                                                                                                                                                                         |
+| 11    | —                                                                     | —                                                          | —                                                                                       | —                                                                                                                                                                                         |
+| 12    | —                                                                     | —                                                          | —                                                                                       | —                                                                                                                                                                                         |
+| 13    | signal                                                                | —                                                          | —                                                                                       | `signal.updated`                                                                                                                                                                          |
+| 14    | —                                                                     | —                                                          | —                                                                                       | —                                                                                                                                                                                         |
 
 Stage 6.5 adds nothing to this table on purpose. It ships trust, distribution,
 and isolation for a surface that is already complete. That row being empty is

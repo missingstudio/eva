@@ -48,7 +48,8 @@ The config keys a plugin reads, and the reader they produce. One half goes
 beside the plugin's id and the other reads a key out of config, so a key is
 declared and read in one place. The key sweep asks the same reader, so a value
 it passes is a value the plugin can read.
-_Avoid_: Schema (a Declaration validates nothing and rejects nothing), options
+_Avoid_: Schema (a Declaration validates nothing and rejects nothing — the
+word belongs to JSON Schema, which does both), options
 
 **Seam**:
 A complete swappable capability, in three roles: the **Slot** that defines it,
@@ -124,6 +125,19 @@ human is an Outcome, not an error.
 **Claim**:
 An assertion of success by whatever did the work. A Claim is never Evidence,
 whatever its source. A failed Claim carries an Error Class.
+
+**Candidate**:
+One answer a Step produced, before anything judged it. A Verdict is about
+exactly one, and a repair loop counts Candidates rather than Provider Turns or
+Messages.
+_Avoid_: Output (that is what a Candidate becomes), result, Artifact (an
+artifact is what a release ships), payload (that is the record's)
+
+**Output**:
+The value a Candidate became once it satisfied the JSON Schema its Step
+declared. A Step that declared no JSON Schema has an Output too — the answer
+text — and that is not Degraded, because nothing was missing.
+_Avoid_: Result (a Claim is what a Run returns), Artifact, response, payload
 
 **Budget**:
 What a Run may spend: tokens, money, wall clock, and Steps. Exhausting it is an
@@ -270,9 +284,32 @@ How a Question ended: `answered`, `rejected`, `expired`, or `cancelled`. A
 inbox is a fold over the Questions with no Resolution.
 _Avoid_: Answer (that is the content), reply, outcome
 
+**Verdict**:
+What came of judging one Candidate: `valid`, `invalid`, or `unchecked`.
+`unchecked` is the caller's word for a Candidate nothing judged, because an
+empty Slot answers nothing, and it is held out of every rate rather than counted
+as either.
+_Avoid_: Result, status, Claim (a Claim asserts success about work; a Verdict
+judges form), Disposition (that is how a tool call ended)
+
+**Fault**:
+One thing a Candidate got wrong: where it is, as a JSON Pointer, and what the
+JSON Schema wanted there. A Verdict of `invalid` carries every one the Validator
+found, so the Repair that follows can be rebuilt from the Trace.
+_Avoid_: Error (an Error Class is why an attempt failed to reach a Provider),
+violation, issue, Finding (a Finding is config a run did not read)
+
+**Repair**:
+A second Step that asks for the same Candidate again with the Faults of the
+first named. It follows an answer that arrived and did not conform, so it waits
+for nothing and it is not a Retry.
+_Avoid_: Retry, fix, correction, reattempt, Remediation (stage 5's, which cleans
+an environment before another attempt)
+
 **Retry**:
-An attempt that spent money and wall clock and produced nothing. It is a record
-of its own.
+A refused Provider Turn that spent money and wall clock and produced nothing. It
+is a record of its own. An answer that arrived and did not conform is a Repair,
+not a Retry.
 _Avoid_: Backoff (that is the arithmetic, not the attempt), reattempt
 
 **Cursor**:
@@ -285,10 +322,24 @@ _Avoid_: Offset, pointer, checkpoint
 **Harness**:
 Something that fills the harness domain: it takes a Prompt and drives it to a
 Stop Reason behind the Agent Client Protocol. Eva's native loop, Claude Code,
-Codex, OpenCode, and DeepSeek Harness all are — and so is the stage 1 pipeline,
+Codex, OpenCode, and DeepSeek Harness all are — and so is the stage 1 Workflow,
 which has no agency at all. Every one is a plugin, and Eva's own holds no
 privileged position.
 _Avoid_: Orchestrator, engine, backend
+
+**Workflow**:
+A declared list of Steps, each one Instruction and one model request, where the
+code owns the control flow and the model fills the slots. It has no agency:
+nothing it does depends on what a model decided. It is a Unit and a Harness, and
+running one is a Run.
+_Avoid_: Pipeline (retired — a pipe is also what a shell does on the same
+command line), DAG, chain, script, recipe
+
+**Step**:
+One model request plus the tool executions its response causes; a Run holds zero
+or more. A Workflow's Step causes none, and a Repair is a Step. DeepSeek
+Harness's word, and precise.
+_Avoid_: Turn unqualified, stage, task, job
 
 **Agent half**:
 The side of the protocol a Harness implements: create a session, prompt, cancel,
@@ -312,6 +363,38 @@ _Avoid_: Connection, channel, protocol (a protocol is what a Transport speaks)
 What a person asks Eva, and what a Harness is handed to answer it. It is the one
 shape that crosses the harness seam.
 _Avoid_: Turn, request, base system prompt
+
+**Template**:
+A named body of text with named holes, held as one row of the prompt domain.
+Filling one produces an Instruction, and a Template may include another by name.
+_Avoid_: Partial (retired — an included Template is still a Template), snippet,
+fragment, prompt file, Schema (a Declaration already owns that _Avoid_ line)
+
+**Variable**:
+One named hole in a Template, and the text a caller binds to it. A hole nothing
+binds is a Gap, and no Instruction is built.
+_Avoid_: Placeholder, parameter, argument, Slot (a Slot is an extension point),
+token
+
+**Gap**:
+A hole a Template could not fill: a Variable nothing bound, an id that names no
+Template, or a Template that includes itself. It is data, and it stops the Run
+before it spends.
+_Avoid_: Error, warning, Finding (a Finding is config that reached nothing and
+stops nothing; a Gap stops a Run), missing key
+
+**Instruction**:
+The text one Step sends to a model, produced by filling a Template. It is not a
+Prompt: a Prompt is what a person asks Eva and the one shape that crosses the
+harness seam, and a Step's Instruction crosses nothing.
+_Avoid_: Prompt (that is the person's), rendered prompt, message, system prompt
+
+**Validator**:
+The Slot that judges whether one Candidate conforms to a JSON Schema, and names
+every Fault it found. It judges form, never truth, and it never calls a model.
+_Avoid_: Verifier (stage 5's, and it judges work rather than form), Check
+(stage 5's), Schema (that is what it checks against, not what checks), parser,
+linter
 
 **Provider**:
 A model behind one contract: a single method that begins a Provider Turn and
@@ -413,8 +496,7 @@ is allowed.
 
 | Term                                                | Arrives at |
 | --------------------------------------------------- | ---------- |
-| Workflow, Pipeline                                  | Stage 1    |
-| Loop, Tool, Step, Mode, Approval, Steering, Sandbox | Stage 2    |
+| Loop, Tool, Mode, Approval, Steering, Sandbox       | Stage 2    |
 | Repomap, Compaction, System Context, Context Source | Stage 3    |
 | Workspace, Snapshot, Isolation                      | Stage 4    |
 | Verifier, Check, Evidence, Remediation              | Stage 5    |
@@ -427,11 +509,9 @@ is allowed.
 | Skill, MCP                                          | Stage 9d   |
 | Merge queue, Review routing                         | Stage 10   |
 
-Three of these are worth naming early, because a system Eva drives already has
+Two of these are worth naming early, because a system Eva drives already has
 them and we will want the same word:
 
-- **Step** — one model request plus the tool executions its response causes; a
-  Run holds zero or more. DeepSeek Harness's word, and precise.
 - **System Context** and **Context Source** — OpenCode's vocabulary for what
   conditions a Provider Turn, and how one typed fact enters it.
 - **Shadowing** — most-specific-wins name resolution, where a scoped
@@ -450,3 +530,11 @@ which owns a tool-calling loop, and the Scheduler, which admits work to workers.
 service key is fixed at build time.
 
 **Phase**: Boot phases were removed. Dependencies decide load order.
+
+**Pipeline**: It meant a Workflow, and it also names the shell idiom on the same
+line as Stage 1's own demo (`git diff --staged | eva run commit-msg`). Two
+meanings on one line is what `turn` was retired for. Use Workflow.
+
+**Partial**: It named an included Template, which is a Template. One concept
+gets one name. Use Template, and say "a Template another Template includes"
+where the distinction matters.

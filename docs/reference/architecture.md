@@ -368,7 +368,7 @@ Adding one is a reviewed SDK change.
 | Domain        | Holds                                           | Finalizer does                                | Written by                                           |
 | ------------- | ----------------------------------------------- | --------------------------------------------- | ---------------------------------------------------- |
 | `catalog`     | providers, models, the default model            | validates policy, builds the lookup index     | `eva.catalog.models`, `eva.provider.*`, `eva.config` |
-| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists       | `eva.harness.*`, `eva.pipeline`                      |
+| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists       | `eva.harness.*`, `eva.workflow`                      |
 | `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set | `eva.tui`, `eva.print`, `eva.api`, `eva.web`         |
 | `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default     | `eva.agents`, `eva.profile`, `eva.config`            |
 | `command`     | slash commands and their handlers               | checks name and alias collisions              | `eva.commands`, `eva.print`, `eva.config`            |
@@ -506,25 +506,33 @@ The slots that exist through roadmap stage 2. Later stages add `RepoMap`,
 `Queue`, `Scheduler`, `Identity`, and `MergeQueue` —
 [roadmap.md](../roadmap.md#the-extension-points-by-stage) has the full table.
 
-| Slot              | Interface                                    | Default plugin               | Alternatives                  |
-| ----------------- | -------------------------------------------- | ---------------------------- | ----------------------------- |
-| `Recorder`        | the only path events take to the trace       | `eva.trace`                  | —                             |
-| `TraceSink`       | append-only event store                      | `eva.trace.jsonl`            | `eva.trace.memory`            |
-| `SessionStore`    | opens, folds, and persists a session         | `eva.session.jsonl`          | `eva.session.sqlite`          |
-| `Sandbox`         | runs a command under a policy                | `eva.sandbox.none` (stage 2) | `eva.sandbox.local` (stage 4) |
-| `FileSystem`      | reads and writes files under a root          | `eva.fs`                     | —                             |
-| `Shell`           | starts a process and streams its output      | `eva.shell`                  | —                             |
-| `CredentialStore` | stores and resolves credentials by mode      | `eva.auth`                   | —                             |
-| `Budget`          | accounts tokens, cost, wall time, and Steps  | `eva.budget`                 | —                             |
-| `Validator`       | checks output against a schema, repairs once | `eva.validator`              | —                             |
-| `DiffApplier`     | previews a structured edit, then applies it  | `eva.diff`                   | —                             |
+| Slot              | Interface                                                      | Default plugin               | Alternatives                  |
+| ----------------- | -------------------------------------------------------------- | ---------------------------- | ----------------------------- |
+| `Recorder`        | the only path events take to the trace                         | `eva.trace`                  | —                             |
+| `TraceSink`       | append-only event store                                        | `eva.trace.jsonl`            | `eva.trace.memory`            |
+| `SessionStore`    | opens, folds, and persists a session                           | `eva.session.jsonl`          | `eva.session.sqlite`          |
+| `Sandbox`         | runs a command under a policy                                  | `eva.sandbox.none` (stage 2) | `eva.sandbox.local` (stage 4) |
+| `FileSystem`      | reads and writes files under a root                            | `eva.fs`                     | —                             |
+| `Shell`           | starts a process and streams its output                        | `eva.shell`                  | —                             |
+| `CredentialStore` | stores and resolves credentials by mode                        | `eva.auth`                   | —                             |
+| `Budget`          | accounts tokens, cost, wall time, and Steps                    | `eva.budget`                 | —                             |
+| `Validator`       | judges a Candidate against a JSON Schema and names every Fault | `eva.validator`              | —                             |
+| `DiffApplier`     | previews a structured edit, then applies it                    | `eva.diff`                   | —                             |
 
 ### The slot interfaces
 
 ```ts
 // packages/core/src/contracts.ts — declared here, implemented by plugins
 import type { Effect, Stream } from "effect"
-import type { Claim, Event, Payload, RunID, SessionID, StopReason } from "@missingstudio/eva-schema"
+import type {
+  Claim,
+  Event,
+  Fault,
+  Payload,
+  RunID,
+  SessionID,
+  StopReason,
+} from "@missingstudio/eva-schema"
 
 /** The append-only store every Event lands in. A closed trace still parses. */
 export interface TraceSink {
@@ -582,6 +590,26 @@ export interface Budget {
   readonly state: Effect.Effect<BudgetState>
   /** Answers whether the next Provider Turn is affordable under the limits. */
   readonly check: Effect.Effect<BudgetDecision>
+}
+
+/**
+ * What `check` answers about one Candidate. `value` is the parsed Output, so
+ * the caller does not parse twice. A Validator never answers `unchecked`: an
+ * empty Slot answers nothing, and the caller writes that word.
+ */
+export type Judged =
+  | { readonly verdict: "valid"; readonly value: unknown }
+  | { readonly verdict: "invalid"; readonly faults: readonly Fault[] }
+
+/**
+ * Judges one Candidate against a JSON Schema. It judges form, never truth,
+ * and it never calls a model. The Repair is the caller's.
+ */
+export interface Validator {
+  /** Fails only when the JSON Schema itself cannot be read. */
+  readonly accepts: (schema: unknown) => Effect.Effect<void, ValidatorError>
+  /** Extract, parse, and check are one judgement over the Candidate's text. */
+  readonly check: (schema: unknown, candidate: string) => Effect.Effect<Judged, ValidatorError>
 }
 ```
 
@@ -931,15 +959,15 @@ many more that later stages add.
 
 **Workflow, scheduling, and approval**
 
-| Plugin id       | Package         | Contributes                                            |
-| --------------- | --------------- | ------------------------------------------------------ |
-| `eva.prompt`    | `eva-prompt`    | prompt domain: templates, partials, variable injection |
-| `eva.validator` | `eva-validator` | fills `Validator`: JSON schema, repair loop            |
-| `eva.pipeline`  | `eva-pipeline`  | harness domain: a declarative DAG with no agency       |
-| `eva.sched`     | `eva-sched`     | hook `tool.execute.before`: parallel-safety            |
-| `eva.steer`     | `eva-steer`     | hook `session.prompt.before`: mid-Run input            |
-| `eva.approval`  | `eva-approval`  | agent domain + hook: named permission modes            |
-| `eva.diff`      | `eva-diff`      | fills `DiffApplier`: dry-run preview, atomic apply     |
+| Plugin id       | Package         | Contributes                                         |
+| --------------- | --------------- | --------------------------------------------------- |
+| `eva.prompt`    | `eva-prompt`    | prompt domain: Templates, includes, Variables       |
+| `eva.validator` | `eva-validator` | fills `Validator`: judges a Candidate, names Faults |
+| `eva.workflow`  | `eva-workflow`  | harness domain: a declared list of Steps, no agency |
+| `eva.sched`     | `eva-sched`     | hook `tool.execute.before`: parallel-safety         |
+| `eva.steer`     | `eva-steer`     | hook `session.prompt.before`: mid-Run input         |
+| `eva.approval`  | `eva-approval`  | agent domain + hook: named permission modes         |
+| `eva.diff`      | `eva-diff`      | fills `DiffApplier`: dry-run preview, atomic apply  |
 
 **Execution environment**
 

@@ -147,6 +147,20 @@ probing — never protocol logic.
 product surface that changes without notice. _Field check:_ every maintained
 bridge targets the SDK or app-server.
 
+**The repair loop is the caller's, not the Validator's.** Two documents put it
+behind the Slot, and a Slot reaches no Provider Turn and no open Run, so a
+second Validator plugin would have shipped a second control flow. The Slot
+judges one Candidate; the Workflow owns the loop, the count, and the flush
+points. _Rejected:_ `compile(schema) => Checker`, which hands the caller a
+value made by a plugin that may unload.
+
+**A native Harness reaches Eva through two members, and `updates` is empty
+because it has no wire.** `HarnessInfo.open` is handed a `HarnessHost` that
+takes one Run and commits one group, so the ACP contract is unchanged and only
+`run` opens or closes a Run. The in-process transport is direct calls, which
+architecture.md §12.8 already says. _Rejected:_ a second set of step and run
+types at the same seam, with their own `close`.
+
 ## The trace
 
 **The payload union must carry an ACP session with no loss.** A missing kind
@@ -231,6 +245,13 @@ about, alongside recording where a borrowed term came from.
 record and the process-local notification, and the two contradict — one has
 exactly one versioned schema, the other none. The trace record keeps the name
 Event.
+
+**Pipeline and Partial are retired, and Workflow, Step, Candidate, Output,
+Verdict, Fault, Repair, Validator, Template, Variable, Gap and Instruction are
+promoted.** Pipeline collided with the shell idiom on the same line as Stage
+1's own demo, and Partial was a second name for Template. A Repair is not a
+Retry: `retry.errorClass` is required and all eight classes are about reaching
+a Provider.
 
 ## Documentation
 
@@ -411,7 +432,7 @@ bordered box of at most eight rows.
 
 **Config is YAML.** `~/.eva/config.yaml`, bundle overlays, and profiles share
 one format. Comments were the reason over plain JSON, and YAML carries them
-without JSONC's nonstandard parser; pipeline and task specs were YAML already.
+without JSONC's nonstandard parser; Workflow and task specs were YAML already.
 `package.json` stays JSON because npm owns it. **Proven** by `config.ts`.
 
 **A layer merges per key, and the plugin list is the exception.** A mapping

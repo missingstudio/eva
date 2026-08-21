@@ -7,8 +7,8 @@ person installs Eva from.
 
 Everything here is designed for what this tree is: a Bun monorepo that ships
 one compiled CLI. OpenCode ships the same shape — a Bun-compiled TUI, from a
-monorepo, to binaries and npm — and is the closest prior art, so its pipeline
-is cited where a decision follows it and where one deliberately does not.
+monorepo, to binaries and npm — and is the closest prior art, so its release
+path is cited where a decision follows it and where one deliberately does not.
 
 **Status.** All five workflow files, the release scripts in `scripts/release/`,
 and `scripts/install.sh` are in the tree, and the whole release path short of
