@@ -3,11 +3,6 @@
 What Eva builds, in what order, and the test each step can fail.
 [README.md](README.md) says what Eva is.
 
-Nineteen stages in four phases. Each stage ships a working CLI, adds one
-primitive, and has an exit test it can fail. **You may not start stage N+1 until
-stage N's exit test passes.** A skipped stage costs five times as much to add
-later.
-
 This document names the four extension points — **domain**, **slot**, **hook**,
 and **broadcast** — on nearly every line. [context.md](context.md) defines them, and
 [reference/architecture.md](reference/architecture.md) says how they work. Read
@@ -23,75 +18,12 @@ Each stage declares four things:
   the code says.
 - **The exit test** — what fails when the stage is not finished.
 
-## What changed when we went plugin-first
-
-The Go roadmap deferred the extension surface to stage 6.5, because the plan was
-to add a surface to a working monolith. Plugin-first inverts that. **The
-extension surface is stage 0.** The kernel, the SDK, and the four extension
-points ship before the first provider.
-
-That moves work, and it removes work:
-
-| Go roadmap                                     | This roadmap                                                         |
-| ---------------------------------------------- | -------------------------------------------------------------------- |
-| Stage 6.5 invents hooks and the host interface | Stage 0 ships them. 6.5 adds trust, distribution, and isolation only |
-| Stage 7 introduces the `Harness` interface     | The `harness` domain exists at stage 0; stage 7 adds profiles        |
-| Stage 2 "exposes the hook points"              | Stage 2 registers hooks that already exist                           |
-| `RegisterCheck`, `RegisterMonitor` are new API | Both are domains. No new API shape                                   |
-| First-party features are built in, then ported | They are plugins from the first commit                               |
-
-The rule that replaces stage 6.5's freeze rule: **a stage may not add an
-extension point it does not itself use.** We ship a domain when the first plugin
-writes to it, not before.
-
-## Adopting ACP, and where it lands
-
-Eva adopts the **Agent Client Protocol** as its harness contract and implements
-both halves of it. [reference/architecture.md](reference/architecture.md) covers
-what the protocol is and why we took it instead of inventing one.
-
-What belongs here is _when_. This is not a stage 9c decision — ACP shapes five
-stages, and four of them come before any adapter exists:
-
-| Stage | What ACP decides there                                                                |
-| ----- | ------------------------------------------------------------------------------------- |
-| 0     | The payload union carries an ACP session with no loss. **Hardest to change later.**   |
-| 2     | The tool gate is ACP's `requestPermission`, with its four permission options          |
-| 4     | `FileSystem` and `Shell` present as ACP's client half; `Sandbox` is the real boundary |
-| 7     | `eva.harness.loop` implements ACP's agent half in-process                             |
-| 9c    | `eva.harness.acp` drives any ACP agent; `eva serve --acp` makes Eva one               |
-
-**Do stage 0's part first, or pay for it forever.** Stage 6 makes
-`schemaVersion` a public contract. A payload union that cannot represent
-`agent_thought_chunk`, `tool_call_update`, `plan`, or `current_mode_update`
-forces every adapter to emit `unknown`, and by then the schema is frozen. Every
-one of those maps today.
-
-The rule cuts the other way too, and it cost us once. A field added before
-anything reads it is not free: the envelope carried a wire position nothing
-resumed from and a tenant that was always `local`, both inherited from a tree
-with a different roadmap, and both were removed. Front-load the kinds the
-protocol already defines. Do not front-load a field for a stage that has not
-been designed.
-
-**Do not wait for stage 9c to get value.** Because the client half lands at
-stages 2 and 4, Eva's own loop already runs under the same permission gate and
-inside the same workspace boundary that a foreign harness will later run under.
-That is the whole point: one code path, proven by Eva against itself before a
-second harness exists. Note which of the two is load-bearing — a foreign harness
-always answers the gate, and may or may not use the filesystem path, so the
-boundary is what makes the comparison fair.
-
 ## Phase I — Model to agent
 
 ### Stage 0: Wire — done
 
 The kernel, the plugin SDK, the ACP-shaped event schema, and a model client with
 a good terminal.
-
-Stage 0 was also the migration from the Go tree. Its working document has
-been deleted, as it said it would be; what survives is the decisions in
-[decisions.md](decisions.md) and the vocabulary in [context.md](context.md).
 
 ```
 eva > explain what this project does
