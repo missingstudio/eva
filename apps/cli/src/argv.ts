@@ -129,7 +129,7 @@ Environment
  */
 const program = (world: World, record: (invocation: Invocation) => void): Command => {
   const root = new Command("eva")
-    .description("a model client on a plugin kernel")
+    .description("Eva is an open-source, AI-native software factory")
     .exitOverride()
     .configureOutput({
       writeOut: world.out,

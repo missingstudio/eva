@@ -7,7 +7,7 @@
     "{\"id\":\"evt_synth_005\",\"seq\":5,\"at\":{\"wall\":\"2026-08-15T09:00:04.000000Z\"},\"version\":1,\"kind\":\"tool_update\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"id\":\"call_read_1\",\"status\":\"in_progress\",\"content\":[{\"type\":\"text\",\"text\":\"reading README.md\"}]}}",
     "{\"id\":\"evt_synth_006\",\"seq\":6,\"at\":{\"wall\":\"2026-08-15T09:00:05.000000Z\"},\"version\":1,\"kind\":\"tool_result\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"id\":\"call_read_1\",\"name\":\"read\",\"disposition\":\"ok\",\"bytes\":1420}}",
     "{\"id\":\"evt_synth_007\",\"seq\":7,\"at\":{\"wall\":\"2026-08-15T09:00:06.000000Z\"},\"version\":1,\"kind\":\"edit\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"path\":\"docs/summary.md\",\"hunks\":1}}",
-    "{\"id\":\"evt_synth_008\",\"seq\":8,\"at\":{\"wall\":\"2026-08-15T09:00:07.000000Z\"},\"version\":1,\"kind\":\"text\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"block\":0,\"content\":{\"type\":\"text\",\"text\":\"Eva is a model client on a plugin kernel.\"}}}",
+    "{\"id\":\"evt_synth_008\",\"seq\":8,\"at\":{\"wall\":\"2026-08-15T09:00:07.000000Z\"},\"version\":1,\"kind\":\"text\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"block\":0,\"content\":{\"type\":\"text\",\"text\":\"Eva is an open-source, AI-native software factory.\"}}}",
     "{\"id\":\"evt_synth_010\",\"seq\":10,\"at\":{\"wall\":\"2026-08-15T09:00:09.000000Z\"},\"version\":1,\"kind\":\"usage\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"model\":\"anthropic/claude-sonnet-4-5\",\"inputTokens\":1200,\"outputTokens\":340,\"cacheWriteTokens\":256,\"cacheReadTokens\":0,\"reasoningTokens\":0,\"serverToolTokens\":0,\"costTicks\":51000000000}}",
     "{\"id\":\"evt_synth_011\",\"seq\":11,\"at\":{\"wall\":\"2026-08-15T09:01:10.000000Z\"},\"version\":1,\"kind\":\"finished\",\"run\":\"run_synth_tools\",\"session\":\"sess_synth_tools\",\"parent\":null,\"payload\":{\"claim\":{\"result\":\"done\",\"summary\":\"answered\"},\"stopReason\":\"end_turn\"}}",
     "{\"id\":\"evt_synth_012\",\"seq\":1,\"at\":{\"wall\":\"2026-08-15T09:01:11.000000Z\"},\"version\":1,\"kind\":\"started\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"intent\":\"explain the trace format\"}}",
@@ -74,7 +74,7 @@
             "block": 0,
             "content": {
               "type": "text",
-              "text": "Eva is a model client on a plugin kernel."
+              "text": "Eva is an open-source, AI-native software factory."
             }
           }
         ]
@@ -270,7 +270,7 @@
         "result": "done",
         "summary": "answered"
       },
-      "text": "Eva is a model client on a plugin kernel."
+      "text": "Eva is an open-source, AI-native software factory."
     },
     "sess_synth_degraded": {
       "claim": {
