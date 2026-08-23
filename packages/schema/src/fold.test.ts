@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { toTicks } from "./cost.js"
 import { foldKeys, type Event } from "./event.js"
 import { eventID, runID, sessionID } from "./id.js"
-import { costFold, mergeText, transcriptFold, validityOf, verdictFold } from "./fold.js"
+import { answerFold, costFold, mergeText, transcriptFold, validityOf, verdictFold } from "./fold.js"
 import type { Payload, Verdict } from "./payload.js"
 import { samples } from "./samples.js"
 
@@ -396,5 +396,53 @@ describe("validityOf", () => {
     const summary = { firstPass: 4, firstPassValid: 3, settledValid: 4, unchecked: 1, held: 1 }
     expect(validityOf(summary)).toEqual({ kind: "rate", valid: 3, of: 4 })
     expect(validityOf(summary)).toMatchObject({ of: summary.firstPass })
+  })
+})
+
+describe("answerFold", () => {
+  const started = (intent: string): Payload => ({ kind: "started", intent })
+  const finished = (summary: string, result: "done" | "failed" = "done"): Payload => ({
+    kind: "finished",
+    claim: { result, summary },
+  })
+
+  it("carries no Claim when no Run closed", () => {
+    expect(answerFold([make(started("go")), make(text("half"))])).toEqual({ text: "" })
+  })
+
+  it("joins the chunks of the Run that closed last", () => {
+    const events = [
+      make(started("first")),
+      make(text("one ")),
+      make(text("two")),
+      make(finished("first")),
+    ]
+    expect(answerFold(events)).toEqual({
+      claim: { result: "done", summary: "first" },
+      text: "one two",
+    })
+  })
+
+  it("answers with the last Run, and leaves the Runs before it on the Trace", () => {
+    const events = [
+      make(started("outline")),
+      make(text("an outline")),
+      make(finished("outline")),
+      make(started("prose")),
+      make(text("the prose")),
+      make(finished("prose")),
+    ]
+    expect(answerFold(events)).toEqual({
+      claim: { result: "done", summary: "prose" },
+      text: "the prose",
+    })
+  })
+
+  it("keeps a refusal that wrote no text", () => {
+    const events = [make(started("go")), make(finished("the workflow cannot run", "failed"))]
+    expect(answerFold(events)).toEqual({
+      claim: { result: "failed", summary: "the workflow cannot run" },
+      text: "",
+    })
   })
 })

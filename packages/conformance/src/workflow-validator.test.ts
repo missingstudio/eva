@@ -7,15 +7,15 @@ import {
   type Payload,
 } from "@missingstudio/eva-schema"
 import { define, type Plugin } from "@missingstudio/eva-sdk"
-import { openRow, providing, scripted } from "@missingstudio/eva-testkit"
+import { committed, openRow, providing, scripted, withKernel } from "@missingstudio/eva-testkit"
 import { prompt } from "@missingstudio/eva-prompt"
 import { trace } from "@missingstudio/eva-trace"
-import { traceMemory, type MemorySink } from "@missingstudio/eva-trace-memory"
+import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { validator } from "@missingstudio/eva-validator"
 import { workflow } from "@missingstudio/eva-workflow"
 import { Cause, Effect, Exit, Fiber, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import { boot, buildOf, type Kernel } from "@missingstudio/eva-boot"
+import type { Kernel } from "@missingstudio/eva-boot"
 
 const SESSION = sessionID("sess_workflow_validator")
 
@@ -79,39 +79,34 @@ const started = <A>(
   body: (live: Live) => Effect.Effect<A>,
   plugins: readonly Plugin[] = PLUGINS,
 ): Promise<A> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const kernel = yield* boot({
-        scope,
-        resolved: plugins.map((one) => ({ id: one.id })),
-        build: buildOf([...plugins]),
-        config: CONFIG,
-      })
-      const open = (id: string) =>
-        Effect.map(openRow(kernel, scope, id, SESSION), (row) => row.harness)
+  withKernel(
+    plugins,
+    (kernel, scope) =>
+      Effect.gen(function* () {
+        const open = (id: string) =>
+          Effect.map(openRow(kernel, scope, id, SESSION), (row) => row.harness)
 
-      const events = () =>
-        Effect.runSync(Effect.map(kernel.slot.traceSink.get, (sink) => (sink as MemorySink).all()))
-      const memory = () => events().map((event) => event.payload)
+        // The record read through the Slot's own contract, so this suite
+        // needs no cast to the memory sink's type.
+        const events = () => Effect.runSync(committed(kernel))
+        const memory = () => events().map((event) => event.payload)
 
-      const result = yield* body({
-        kernel,
-        scope,
-        events,
-        memory,
-        prompt: (id, input) =>
-          Effect.flatMap(open(id), (harness) =>
-            harness.prompt(SESSION, { kind: "prompt", text: input }),
-          ),
-        promptFiber: (id, input) =>
-          Effect.flatMap(open(id), (harness) =>
-            Effect.forkChild(harness.prompt(SESSION, { kind: "prompt", text: input })),
-          ),
-      })
-      yield* Scope.close(scope, Exit.void)
-      return result
-    }),
+        return yield* body({
+          kernel,
+          scope,
+          events,
+          memory,
+          prompt: (id, input) =>
+            Effect.flatMap(open(id), (harness) =>
+              harness.prompt(SESSION, { kind: "prompt", text: input }),
+            ),
+          promptFiber: (id, input) =>
+            Effect.flatMap(open(id), (harness) =>
+              Effect.forkChild(harness.prompt(SESSION, { kind: "prompt", text: input })),
+            ),
+        })
+      }),
+    { config: CONFIG },
   )
 
 const verdicts = (payloads: readonly Payload[]) => payloads.filter((one) => one.kind === "verdict")

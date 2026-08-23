@@ -1,17 +1,20 @@
 # @missingstudio/eva-testkit
 
-The test helpers of [Eva](../../README.md). A test needs three things the
+The test helpers of [Eva](../../README.md). A test needs four things the
 production tree cannot give it: a Provider that answers a written script
-instead of a model, a replay of a recorded provider stream, and a way to run
-one plugin's `effect` against a real kernel. All three live here.
+instead of a model, a replay of a recorded provider stream, a live kernel
+over the plugins under test, and the record read back from behind it. All
+four live here.
 
 Eva is built on a plugin kernel: every capability is a plugin, and a plugin
 may not import the kernel — the layer rule in
 [architecture.md](../../docs/reference/architecture.md) holds. `withPlugin`
 is the one legal way a plugin's own tests boot it
 ([docs/decisions.md](../../docs/decisions.md) §"A plugin's tests may boot it,
-and only its tests"). The glossary in
-[docs/context.md](../../docs/context.md) defines the terms used here.
+and only its tests"), and `withKernel` is the same boot for several plugins
+at once (§"Booting several plugins as peers is `withKernel`, in the
+testkit"). The glossary in [docs/context.md](../../docs/context.md) defines
+the terms used here.
 
 ## Prerequisites
 
@@ -61,6 +64,34 @@ The third argument takes `options` (what the plugin reads through
 (plugins loaded ahead of it, because a Transform often writes onto rows
 another plugin made).
 
+Several plugins as peers is `withKernel`, which `withPlugin` is one call of.
+It takes them in load order — a bare plugin, or `{ plugin, options }` where
+the entry carries options — and hands the body the kernel and the scope,
+which `openRow` needs. The scope closes when the body returns, so a finalizer
+a plugin registered has already run. From
+[workflow-prompt.test.ts](../conformance/src/workflow-prompt.test.ts):
+
+```ts
+import { openRow, scripted, withKernel } from "@missingstudio/eva-testkit"
+
+const found = await withKernel(
+  [fakeCatalog, fake.plugin, prompt, workflow],
+  (kernel, scope) =>
+    Effect.gen(function* () {
+      const { harness, said } = yield* openRow(kernel, scope, "notes", SESSION)
+      const reason = yield* harness.prompt(SESSION, { kind: "prompt", text: "THE CHANGES" })
+      return { reason, said: said() }
+    }),
+  {
+    config: { prompts: { summarize: { text: "Summarize: {{changelog}}" } }, workflows: WORKFLOWS },
+  },
+)
+```
+
+A suite that wants the record rather than what the row reported reads
+`committed(kernel)`, which reads the Trace back through the `TraceSink`
+contract — so no test casts the Slot to one sink plugin's own type.
+
 To fake the model, `scripted` returns a plugin that answers one written turn
 per Provider Turn, and `seen()` holds every request it was handed — so a test
 can assert what a Repair carried. A request past the end of the script fails
@@ -69,15 +100,20 @@ repair test pass for the wrong reason.
 
 ## API
 
-- `withPlugin(plugin, body, options?)` — runs a plugin's `effect` against a
-  real kernel and hands the body what it registered into.
+- `withKernel(loaded, body, options?)` — boots a live kernel over the named
+  plugins, in load order, and hands the body the kernel and its scope.
+- `withPlugin(plugin, body, options?)` — one plugin under test, which is
+  `withKernel` with the plugin last.
+- `committed(kernel)` — every Event the sink behind the Recorder holds,
+  session by session in trace order.
 - `scripted(script)` — a Provider that answers a written script; returns
   `{ plugin, seen }`.
 - `recorded(cassette)` — a plugin that replays a vendored `Cassette`, chunk
   for chunk, one entry per Provider Turn.
 - `providing(provider, id?)` — wraps any `Provider` as a plugin that answers
   `model.resolve` the way a provider plugin does. Both fakes go through it.
-- `ScriptedTurn`, `Cassette`, `Scripted`, `LoadOptions` — the shapes above.
+- `ScriptedTurn`, `Cassette`, `Scripted`, `Loaded`, `KernelOptions`,
+  `LoadOptions` — the shapes above.
 - `FAKE_PROVIDER`, `RECORDED_PROVIDER` — the ids the two fakes register
   under.
 
@@ -92,8 +128,8 @@ everywhere it is used.
 
 ## Development
 
-Tests live in [src/provider.test.ts](src/provider.test.ts). Run the suite
-from the repository root:
+Tests live beside the sources in [src/](src/). Run the suite from the
+repository root:
 
 ```bash
 bun run test

@@ -2,7 +2,8 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { readTrace, writtenGolden } from "@missingstudio/eva-schema"
 import { describe, expect, it } from "vitest"
-import { ENDPOINT, readingOf, refuses, said, wrongEndpoint, WORKFLOWS } from "./score.js"
+import { WORKFLOWS } from "./fixture.js"
+import { readingOf, said } from "./score.js"
 
 const root = join(new URL(".", import.meta.url).pathname, "..")
 const traceOf = (name: string) => join(root, "traces", `${name}.jsonl`)
@@ -27,19 +28,24 @@ describe("the vendored traces against the committed goldens", () => {
   })
 })
 
-describe("the rules the measurement refuses under", () => {
-  it("reports a rate up to the stated share of Runs that produced no Candidate", () => {
-    expect(refuses(10, 500)).toBe(false)
-    expect(refuses(11, 500)).toBe(true)
-    // Nothing produced is not a rate of nothing.
-    expect(refuses(1, 5)).toBe(true)
+describe("the lines one reading prints", () => {
+  // The rate branch, pinned line by line: every figure is a counter from the
+  // one fold or a ratio of two of them.
+  it("prints the ratios of the one summary, aligned", () => {
+    const lines = said("classify", readingOf(readTrace(traceOf("classify"))), 0)
+    expect(lines).toEqual([
+      "classify",
+      "  first-pass validity  = 2/4 (50.0%)",
+      "  post-repair validity = 3/4 (75.0%)",
+      "  repair yield         = 1/2 (50.0%)",
+      "  coverage             = 4/4 (100.0%)",
+      "  unchecked 0, held 0, produced no Candidate 0",
+    ])
   })
 
-  it("refuses an endpoint the measurement is not pinned to", () => {
-    expect(wrongEndpoint(undefined, ENDPOINT)).toBe(false)
-    expect(wrongEndpoint(ENDPOINT, ENDPOINT)).toBe(false)
-    // A proxy answers as the model and the rate would name the wrong one.
-    expect(wrongEndpoint("https://gateway.example/v1", ENDPOINT)).toBe(true)
+  it("says there was nothing to repair rather than printing 0/0", () => {
+    const lines = said("commit-msg", readingOf(readTrace(traceOf("commit-msg"))))
+    expect(lines).toContain("  repair yield         = no first-pass failure to repair")
   })
 })
 

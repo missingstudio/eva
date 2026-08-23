@@ -87,9 +87,9 @@ export default defineConfig({
         ],
         "boot imports the kernel, the sdk, and the contracts below them",
       ),
-      // The testkit boots a plugin so its `effect` can be tested. It sits
-      // above boot and is a devDependency everywhere it is used, so nothing
-      // it reaches ends up in a shipped plugin.
+      // The testkit boots the plugins under test so their `effect` bodies can
+      // be tested. It sits above boot and is a devDependency everywhere it is
+      // used, so nothing it reaches ends up in a shipped plugin.
       layer(
         ["packages/testkit/**"],
         [

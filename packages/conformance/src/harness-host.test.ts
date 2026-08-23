@@ -1,9 +1,9 @@
 import type { HarnessHost, ModelRef } from "@missingstudio/eva-core"
 import { sessionID, type Payload } from "@missingstudio/eva-schema"
 import { define } from "@missingstudio/eva-sdk"
-import { scripted, scriptedHost } from "@missingstudio/eva-testkit"
+import { committed, scripted, scriptedHost } from "@missingstudio/eva-testkit"
 import { trace } from "@missingstudio/eva-trace"
-import { traceMemory, type MemorySink } from "@missingstudio/eva-trace-memory"
+import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { boot, buildOf, harnessHost } from "@missingstudio/eva-boot"
@@ -66,8 +66,9 @@ const liveSeam = async (): Promise<Seam> => {
       build: buildOf([trace, traceMemory, fake.plugin]),
     }),
   )
-  const events = () =>
-    Effect.runSync(Effect.map(kernel.slot.traceSink.get, (sink) => (sink as MemorySink).all()))
+  // The record read through the Slot's own contract, with no cast to the
+  // memory sink's own type.
+  const events = () => Effect.runSync(committed(kernel))
   let record: readonly Payload[] = []
   const payloads = () => record
 

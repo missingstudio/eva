@@ -1,0 +1,53 @@
+{
+  "passes": 3,
+  "turns": [
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "[{\"line\": 3, \"severity\": \"warn\", \"note\": \"jobs is typed any[]\"}]"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "[{\"line\": 19, \"severity\": \"error\", \"note\": \"a failed job is only logged\"}]"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "[{\"line\": \"31\", \"severity\": \"warning\", \"note\": \"clear() drops running state\"}]"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "[{\"line\": 31, \"severity\": \"warn\", \"note\": \"clear() drops running state\"}]"
+          }
+        }
+      ]
+    }
+  ]
+}

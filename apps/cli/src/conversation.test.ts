@@ -10,11 +10,11 @@ import {
 import { sessionID, type Event, type Payload } from "@missingstudio/eva-schema"
 import { trace } from "@missingstudio/eva-trace"
 import { makeJsonlSink, traceJsonl } from "@missingstudio/eva-trace-jsonl"
-import { Deferred, Effect, Exit, Fiber, Scope, Stream } from "effect"
+import { Deferred, Effect, Fiber, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import { FAKE_PROVIDER, providing, scripted } from "@missingstudio/eva-testkit"
+import { providing, scripted, withKernel } from "@missingstudio/eva-testkit"
 import type { Plugin } from "@missingstudio/eva-sdk"
-import { boot, buildOf, makeSessionAPI } from "@missingstudio/eva-boot"
+import { makeSessionAPI } from "@missingstudio/eva-boot"
 import { runPrint } from "./run.js"
 
 const SESSION = sessionID("sess_conversation")
@@ -40,23 +40,8 @@ const started = <A>(
   body: (api: SessionAPI, path: string) => Effect.Effect<A>,
 ): Promise<A> => {
   const path = join(mkdtempSync(join(tmpdir(), "eva-conv-")), "trace.jsonl")
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const kernel = yield* boot({
-        scope,
-        resolved: [
-          { id: "eva.trace" },
-          { id: "eva.trace.jsonl", options: { path } },
-          { id: FAKE_PROVIDER },
-        ],
-        build: buildOf([trace, traceJsonl, provider]),
-      })
-      const api = yield* makeSessionAPI(kernel, FAKE_MODEL, scope)
-      const result = yield* body(api.session, path)
-      yield* Scope.close(scope, Exit.void)
-      return result
-    }),
+  return withKernel([trace, { plugin: traceJsonl, options: { path } }, provider], (kernel, scope) =>
+    Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), (api) => body(api.session, path)),
   )
 }
 

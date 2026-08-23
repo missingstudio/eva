@@ -262,9 +262,47 @@ function takes the kinds it applies to, so the Trace coalesces `text` and the
 transcript `text` and `thought`.
 
 **Every projection lives with the others.** Three folds sat under a reviewed
-golden; the Session Header was hand-written in core with none. `headerFold`
-joined them and the golden pins four. `SessionHeader` stays in core, because a
-Session's identity is the Session API's to add.
+golden; the Session Header was hand-written in core with none, and the Answer
+was folded in `apps/cli`, where its only test surface was the composition
+root's own suite. `headerFold` and `answerFold` joined them and the golden pins
+five. `SessionHeader` stays in core, because a Session's identity is the
+Session API's to add.
+
+## The exit test
+
+**Running the fixture in-process has one home.** `runFixture` takes a fixture
+Workflow and hands back its Trace; the Build table is stated once beside it,
+so the recorder no longer mirrors the config's plugin ids by hand. The
+model-calling fan-out stays in `scripts/`, outside the test globs — the
+src/-scripts/ split plan 010 calls load-bearing holds.
+
+**The deterministic gate replays the vendored cassettes, not fold arithmetic
+alone.** Each cassette runs back through the real fixture — the Workflow
+harness, the Validator, the Repair — and its Trace must fold to the golden
+the vendored trace folds to, so trace, cassette and golden are three
+projections of one recording and `recorded` has a caller besides its own
+test. _Rejected:_ hand-written traces the gate merely re-folds, which pinned
+the arithmetic and nothing the fixture runs on.
+
+**The gate's verdict is one value.** `gate` reads the traces back, applies the
+no-Candidate share and the two thresholds, and answers what to print and why
+it failed; the runner prints and exits on that report. The repair yield was
+computed once to print and once to decide — `repairsOf` is the one
+computation both read.
+
+**The module that decides owns the rule it decides by.** The no-Candidate
+share and the endpoint pin sat in `score.ts`, whose whole job is to fold and
+print, so `gate.ts` imported its own verdict rule from the printer and
+`fixture.ts` reached the endpoint through `../src/score.js`. The share moved
+to `gate.ts` and the endpoint and `WORKFLOWS` to `fixture.ts`; the scorer
+folds and prints and knows nothing of the fixture.
+
+**Where a Run's Trace lands is one inline config layer.** The in-process half
+rewrote the resolved `eva.trace.jsonl` entry and the fan-out interpolated the
+path into a YAML string, so the measured half ran a mechanism the gate never
+proved and a path holding a quote wrote a file nobody read. `hermeticEnv`
+says it once, as JSON inside the layer both halves send. _Rejected:_ moving
+the fan-out under `src/`, which the load-bearing split forbids.
 
 ## Vocabulary
 
@@ -568,6 +606,23 @@ the app could be tested against the contract. `makeSessionAPI`, `runTurn`, and
 test may not import another plugin, so such a suite had one legal home — and
 `apps/cli` owned 482 lines never about the command line. `packages/conformance`
 ships nothing at all.
+
+**Booting several plugins as peers is `withKernel`, in the testkit.**
+`withPlugin` was deep for one plugin and absent for several, so seven suites
+re-spelled boot, build, scope and close — two of them under the name
+`withKernel` with different signatures — and six read the record back by
+casting the Slot to the memory sink's own type. `withKernel` owns the dance
+and `withPlugin` is one call of it; `committed` reads the Trace through the
+`TraceSink` contract, so no cast is needed. The two suites that call `boot`
+still are not this shape: one loads nothing and adds plugins mid-Run, and one
+hands out a seam whose scope outlives the call.
+
+**A test waits for the thing it asserts, never for a fixed pause.** The
+surface suite's `settle` was one 10ms sleep, so under a loaded suite three of
+its tests read state the loop had not reached yet — the file's own
+`drawnWhere` already said a fixed pause misses on a loaded host. `settle` is
+turns of the event loop, `drawnWhere` polls the screen, and `heldWhere` polls
+the spy, each bounded.
 
 **What a module needs from the machine lives in core.** `expand` was written
 twice character for character and the sixteen-character id three times, because

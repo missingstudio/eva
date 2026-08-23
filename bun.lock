@@ -146,6 +146,7 @@
         "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
         "@missingstudio/eva-session-jsonl": "workspace:*",
+        "@missingstudio/eva-testkit": "workspace:*",
         "@missingstudio/eva-trace": "workspace:*",
         "@missingstudio/eva-trace-jsonl": "workspace:*",
         "@missingstudio/eva-usage": "workspace:*",

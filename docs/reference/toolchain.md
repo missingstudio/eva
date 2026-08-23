@@ -218,9 +218,9 @@ and fails only at publish time.
 **`test.include` lists four globs over three directories, and a new directory is
 invisible until it is added.** Tests outside `apps/*/src`, `packages/*/src`, and
 `plugins/*/src` run nowhere, and `passWithNoTests` keeps the suite green while
-they do. `packages/exit-test` leans on exactly that line: its golden test sits
-in `src/`, so it runs in `verify` on every push, while its recorder and runner
-sit under `scripts/`, which the globs never reach — a run that needs a key, a
+they do. `packages/exit-test` leans on exactly that line: its tests sit in
+`src/`, so they run in `verify` on every push, while its recorder and runner sit
+under `scripts/`, which the globs never reach — a run that needs a key, a
 hundred minutes and $20 must not be in the gate, and the two deliberate generators
 (`packages/schema/fixtures/generate.ts`, `plugins/catalog-prices/fixtures/generate.ts`)
 are the precedent for that split.

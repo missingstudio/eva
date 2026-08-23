@@ -48,7 +48,12 @@ first that no workflow proves.
 event schema that carries an ACP session with no loss, a trace with a swappable
 sink, one provider, and a terminal.
 
-### Stage 1: Workflow
+### Stage 1: Workflow — built, the measurement unrun
+
+Every plugin below ships and the gate below passes. What is left is the
+measured half: the vendored cassettes hold synthetic streams, so the stage
+exits on the first recording against the pinned model at or above the line —
+[packages/exit-test](../packages/exit-test/README.md) is the build of it.
 
 **Builds on stage 0:** the kernel, the schema, and an empty harness domain. A Workflow is that domain's first entry.
 
@@ -85,17 +90,23 @@ structured artifacts. The code owns the control flow. The model fills the slots.
 **Primitive:** structured output with a validation and repair loop.
 
 **Exit test, the gate:** `verdictFold` and `validityOf` over the vendored
-traces equal the committed golden; a scripted Provider that answers invalid
-then valid produces exactly one `verdict` per Candidate numbered 1 then 2; the
-same run with the Validator slot empty reports `unchecked` and no rate at all;
-and the demo block runs. All four run in `verify`.
+traces equal the committed golden; every vendored cassette replays through the
+real fixture — the Workflow harness, the Validator, the Repair — and folds to
+that same golden, so trace, cassette and golden stay three projections of one
+recording; a scripted Provider that answers invalid then valid produces exactly
+one `verdict` per Candidate numbered 1 then 2; the same run with the Validator
+slot empty reports `unchecked` and no rate at all; the verdict the measurement
+exits on is one value a test asserts, thresholds and refusal share together;
+and the demo block runs. All six run in `verify`.
 
 **Exit test, the measurement:** five canned Workflows over 100 Runs each give
 ≥95% first-pass validity aggregated over the 500 Candidates, with a repair
-yield of ≥90%. A maintainer runs it against one named model and reads the
-ratios; no workflow runs it, because a full run costs about $12 to $20.
-Aggregate rather than five thresholds: at a true 97% rate, five independent
-per-Workflow thresholds fail about 31% of runs.
+yield of ≥90%. A Run that produced no Candidate is counted rather than dropped,
+and past 2% of the Runs no rate is reported at all — a thinned denominator
+would flatter the figure the stage exits on. A maintainer runs it against one
+named model and reads the ratios; no workflow runs it, because a full run costs
+about $12 to $20. Aggregate rather than five thresholds: at a true 97% rate,
+five independent per-Workflow thresholds fail about 31% of runs.
 
 ### Stage 2: Tools and the loop
 

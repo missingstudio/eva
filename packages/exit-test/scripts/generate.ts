@@ -8,7 +8,8 @@
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { readTrace, writtenGolden } from "@missingstudio/eva-schema"
-import { readingOf, WORKFLOWS, type Reading } from "../src/score.js"
+import { WORKFLOWS } from "../src/fixture.js"
+import { readingOf, type Reading } from "../src/score.js"
 
 const root = join(new URL(".", import.meta.url).pathname, "..")
 const traces = join(root, "traces")

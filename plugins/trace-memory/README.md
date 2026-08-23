@@ -55,7 +55,7 @@ eva --plugin eva.trace.memory
 A config entry loads after the built-in table, so this sink takes the
 `TraceSink` slot from `eva.trace.jsonl`, and the Recorder's next commit lands
 in memory — no restart needed. In tests, `makeMemorySink()` builds the sink
-directly, and `all()` is what an assertion reads.
+directly.
 
 ## How it differs from the JSONL sink
 
@@ -73,7 +73,10 @@ build that needs to read yesterday's trace needs the JSONL sink.
   sink.
 - `makeMemorySink(): Effect<MemorySink>` — the implementation. Beyond the
   `TraceSink` contract it adds one thing: `all()`, everything committed in
-  trace order, which is what a test asserts against.
+  trace order, across every session. That is what the swap suite reads,
+  because it is about which sink instance a commit landed in. A test that only
+  wants the record reads it through the contract, with the testkit's
+  `committed`.
 
 ## Development
 

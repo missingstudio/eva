@@ -1,7 +1,7 @@
 import { estimateTicks, type PriceLookup } from "./cost.js"
 import { sameFoldKeys, type Event } from "./event.js"
 import type { ActorKind } from "./id.js"
-import type { ContentBlock, Disposition, ToolKind, ToolStatus, Verdict } from "./payload.js"
+import type { Claim, ContentBlock, Disposition, ToolKind, ToolStatus, Verdict } from "./payload.js"
 
 const isText = (content: ContentBlock): content is Extract<ContentBlock, { type: "text" }> =>
   content.type === "text"
@@ -413,3 +413,35 @@ export const validityOf = (summary: VerdictSummary): Validity =>
   summary.firstPass === 0
     ? { kind: "none" }
     : { kind: "rate", valid: summary.firstPassValid, of: summary.firstPass }
+
+/**
+ * What a Harness answered: the Claim the Run that closed last carries, and
+ * the text that Run wrote. A Workflow is many Runs and each one closes, so
+ * the earlier Runs stay on the Trace and the answer is the last one's.
+ *
+ * An absent Claim is a record no Run closed in. It is not a failed Claim —
+ * the caller says in its own words what an empty record means to it.
+ */
+export interface Answer {
+  readonly claim?: Claim
+  // Empty when the Run that closed last wrote no text.
+  readonly text: string
+}
+
+export const answerFold = (events: readonly Event[]): Answer => {
+  let claim: Claim | undefined
+  let text = ""
+  // The Run in hand. A `started` opens one, so its text never carries over.
+  let buffered = ""
+  for (const { payload } of events) {
+    if (payload.kind === "started") buffered = ""
+    if (payload.kind === "text" && payload.content.type === "text") {
+      buffered += payload.content.text
+    }
+    if (payload.kind === "finished") {
+      claim = payload.claim
+      text = buffered
+    }
+  }
+  return claim === undefined ? { text } : { claim, text }
+}

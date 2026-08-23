@@ -2,19 +2,14 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { type ModelRef } from "@missingstudio/eva-core"
-import {
-  FAKE_PROVIDER,
-  scripted,
-  type Scripted,
-  type ScriptedTurn,
-} from "@missingstudio/eva-testkit"
+import { scripted, withKernel, type Scripted, type ScriptedTurn } from "@missingstudio/eva-testkit"
 import type { Payload } from "@missingstudio/eva-schema"
 import { sessionJsonl } from "@missingstudio/eva-session-jsonl"
 import { trace } from "@missingstudio/eva-trace"
 import { traceJsonl } from "@missingstudio/eva-trace-jsonl"
-import { Effect, Exit, Fiber, Scope, Stream } from "effect"
+import { Effect, Fiber, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import { boot, buildOf, makeSessionAPI, type Api } from "@missingstudio/eva-boot"
+import { makeSessionAPI, type Api } from "@missingstudio/eva-boot"
 
 const text = (value: string): Payload => ({
   kind: "text",
@@ -33,25 +28,9 @@ const turns = (...answers: readonly (readonly Payload[])[]): readonly ScriptedTu
 // exercised against the same slots the CLI fills.
 const withApi = <A>(fake: Scripted, body: (api: Api) => Effect.Effect<A>): Promise<A> => {
   const path = join(mkdtempSync(join(tmpdir(), "eva-api-")), "trace.jsonl")
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const kernel = yield* boot({
-        scope,
-        resolved: [
-          { id: "eva.trace" },
-          { id: "eva.trace.jsonl", options: { path } },
-          { id: "eva.session.jsonl" },
-          { id: FAKE_PROVIDER },
-        ],
-        build: buildOf([trace, traceJsonl, sessionJsonl, fake.plugin]),
-      })
-
-      const api = yield* makeSessionAPI(kernel, FAKE_MODEL, scope)
-      const result = yield* body(api)
-      yield* Scope.close(scope, Exit.void)
-      return result
-    }),
+  return withKernel(
+    [trace, { plugin: traceJsonl, options: { path } }, sessionJsonl, fake.plugin],
+    (kernel, scope) => Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), body),
   )
 }
 

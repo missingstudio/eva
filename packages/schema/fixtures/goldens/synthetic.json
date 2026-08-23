@@ -263,5 +263,36 @@
       "unchecked": 0,
       "held": 0
     }
+  },
+  "answers": {
+    "sess_synth_tools": {
+      "claim": {
+        "result": "done",
+        "summary": "answered"
+      },
+      "text": "Eva is a model client on a plugin kernel."
+    },
+    "sess_synth_degraded": {
+      "claim": {
+        "result": "failed",
+        "summary": "cancelled by user"
+      },
+      "text": "The trace is JSONL, one event per line."
+    },
+    "sess_synth_vclean": {
+      "text": ""
+    },
+    "sess_synth_vrepair": {
+      "text": ""
+    },
+    "sess_synth_vexhausted": {
+      "text": ""
+    },
+    "sess_synth_vunchecked": {
+      "text": ""
+    },
+    "sess_synth_vsteps": {
+      "text": ""
+    }
   }
 }

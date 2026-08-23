@@ -1,11 +1,10 @@
 import { sessionID, type Payload } from "@missingstudio/eva-schema"
-import { define, type Plugin } from "@missingstudio/eva-sdk"
-import { openRow, scripted } from "@missingstudio/eva-testkit"
+import { define } from "@missingstudio/eva-sdk"
+import { openRow, scripted, withKernel } from "@missingstudio/eva-testkit"
 import { prompt } from "@missingstudio/eva-prompt"
 import { REPAIR_TEMPLATE_ID, workflow } from "@missingstudio/eva-workflow"
-import { Effect, Exit, Scope } from "effect"
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { boot, buildOf, type Kernel } from "@missingstudio/eva-boot"
 
 const SESSION = sessionID("sess_workflow_prompt")
 
@@ -34,26 +33,6 @@ const WORKFLOWS = {
   },
 }
 
-const withKernel = <A>(
-  plugins: readonly Plugin[],
-  config: Record<string, unknown>,
-  body: (kernel: Kernel, scope: Scope.Scope) => Effect.Effect<A>,
-): Promise<A> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const kernel = yield* boot({
-        scope,
-        resolved: plugins.map((one) => ({ id: one.id })),
-        build: buildOf([...plugins]),
-        config,
-      })
-      const result = yield* body(kernel, scope)
-      yield* Scope.close(scope, Exit.void)
-      return result
-    }),
-  )
-
 /**
  * `eva.prompt` and `eva.workflow` only meet in a build: the Workflow names a
  * Template and the prompt plugin is what makes it a row. A Step refuses when
@@ -66,16 +45,18 @@ describe("a Workflow over the prompt domain", () => {
     const fake = scripted([{ payloads: [text("answered")] }])
     const found = await withKernel(
       [fakeCatalog, fake.plugin, prompt, workflow],
-      {
-        prompts: { summarize: { text: "Summarize: {{changelog}}" } },
-        workflows: WORKFLOWS,
-      },
       (kernel, scope) =>
         Effect.gen(function* () {
           const { harness, said } = yield* openRow(kernel, scope, "notes", SESSION)
           const reason = yield* harness.prompt(SESSION, { kind: "prompt", text: "THE CHANGES" })
           return { reason, said: said() }
         }),
+      {
+        config: {
+          prompts: { summarize: { text: "Summarize: {{changelog}}" } },
+          workflows: WORKFLOWS,
+        },
+      },
     )
 
     expect(found.reason).toBe("end_turn")
@@ -95,16 +76,18 @@ describe("a Workflow over the prompt domain", () => {
     const fake = scripted([{ payloads: [text("never")] }])
     const found = await withKernel(
       [fakeCatalog, fake.plugin, workflow],
-      {
-        prompts: { summarize: { text: "Summarize: {{changelog}}" } },
-        workflows: WORKFLOWS,
-      },
       (kernel, scope) =>
         Effect.gen(function* () {
           const { harness, said } = yield* openRow(kernel, scope, "notes", SESSION)
           const reason = yield* harness.prompt(SESSION, { kind: "prompt", text: "THE CHANGES" })
           return { reason, said: said() }
         }),
+      {
+        config: {
+          prompts: { summarize: { text: "Summarize: {{changelog}}" } },
+          workflows: WORKFLOWS,
+        },
+      },
     )
 
     expect(found.reason).toBe("end_turn")
@@ -123,14 +106,16 @@ describe("a Workflow over the prompt domain", () => {
   it("keeps a prompts entry with the built-in repair Template's id", async () => {
     const row = await withKernel(
       [fakeCatalog, scripted([{ payloads: [text("x")] }]).plugin, prompt, workflow],
-      {
-        prompts: { [REPAIR_TEMPLATE_ID]: { text: "My own repair: {{faults}}" } },
-        workflows: WORKFLOWS,
-      },
       (kernel) =>
         Effect.map(kernel.domains.prompt.get, (rows) =>
           rows.find((one) => one.id === REPAIR_TEMPLATE_ID),
         ),
+      {
+        config: {
+          prompts: { [REPAIR_TEMPLATE_ID]: { text: "My own repair: {{faults}}" } },
+          workflows: WORKFLOWS,
+        },
+      },
     )
 
     expect(row?.text).toBe("My own repair: {{faults}}")

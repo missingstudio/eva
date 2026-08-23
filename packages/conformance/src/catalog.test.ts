@@ -1,28 +1,18 @@
-import { boot, buildOf } from "@missingstudio/eva-boot"
 import { ANTHROPIC_MODELS, DEFAULT_MODEL, OPENAI_MODELS } from "@missingstudio/eva-catalog-models"
 import { CHECKED_AT, PRICES } from "@missingstudio/eva-catalog-prices"
 import { costFold, eventID, runID, sessionID, toTicks, type Event } from "@missingstudio/eva-schema"
 import { priceLookup } from "@missingstudio/eva-sdk"
 import { catalogModels } from "@missingstudio/eva-catalog-models"
 import { catalogPrices } from "@missingstudio/eva-catalog-prices"
-import { Effect, Exit, Scope } from "effect"
+import { withKernel } from "@missingstudio/eva-testkit"
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 
 // A live kernel with the two catalog plugins loaded, in the order a build
 // registers them: the prices write onto the rows the models made.
 const withCatalog = <A>(body: (prices: ReturnType<typeof priceLookup>) => A): Promise<A> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const kernel = yield* boot({
-        scope,
-        resolved: [{ id: "eva.catalog.models" }, { id: "eva.catalog.prices" }],
-        build: buildOf([catalogModels, catalogPrices]),
-      })
-      const result = body(priceLookup(yield* kernel.domains.catalog.get))
-      yield* Scope.close(scope, Exit.void)
-      return result
-    }),
+  withKernel([catalogModels, catalogPrices], (kernel) =>
+    Effect.map(kernel.domains.catalog.get, (catalog) => body(priceLookup(catalog))),
   )
 
 /**

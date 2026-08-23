@@ -1,0 +1,41 @@
+{
+  "passes": 3,
+  "turns": [
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"message\": \"fix(retry): tell the caller about every retry\"}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"message\": \"feat(export): stream reports while they build\"}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"message\": \"test(retry): cover the retry callback\"}"
+          }
+        }
+      ]
+    }
+  ]
+}

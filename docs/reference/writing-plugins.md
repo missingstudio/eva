@@ -157,8 +157,11 @@ plugin that dies on an empty slot ends a Run the design says should continue.
 ## 6. Adding a package
 
 ```bash
-mkdir -p plugins/my-plugin/{src,test}
+mkdir -p plugins/my-plugin/src
 ```
+
+A test file sits beside the source it tests: the globs are
+`plugins/*/src/**/*.test.ts`, so a `test/` directory holds tests nothing runs.
 
 `plugins/my-plugin/package.json`:
 

@@ -1813,9 +1813,9 @@ Rules the record holds:
 - A Question and its answer are both records, so an inbox is a fold.
 - `seq` is the only sequence, and the sink assigns it at commit.
 - Every projection of the record is a fold, and they live together in
-  `packages/schema/src/fold.ts` — the transcript, the cost, the Header, and the
-  coalescing rule the Trace and the transcript both use. One golden reviews all
-  four.
+  `packages/schema/src/fold.ts` — the transcript, the cost, the Header, the
+  verdict summary, what a Harness answered, and the coalescing rule the Trace
+  and the transcript both use. One golden reviews them all.
 
 Three rules the harness contract adds:
 

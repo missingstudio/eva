@@ -1,0 +1,53 @@
+{
+  "passes": 2,
+  "turns": [
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"highlights\": [\"Streamed exports\", \"A --filter flag on report list\"]}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"notes\": \"Exports now stream while they are built, and report list takes a --filter flag.\"}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"highlights\": [\"Duplicate upload chunks are fixed\", \"Digest DST handling is fixed\"]}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"notes\": \"Retried uploads no longer duplicate their first chunk, and weekly digests handle DST boundaries.\"}"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,6 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { boot, buildOf, type Kernel } from "@missingstudio/eva-boot"
 import { auth } from "@missingstudio/eva-auth"
 import { catalogModels } from "@missingstudio/eva-catalog-models"
 import { catalogPrices } from "@missingstudio/eva-catalog-prices"
@@ -10,36 +9,9 @@ import { costLine } from "@missingstudio/eva-print"
 import { providerCompatible } from "@missingstudio/eva-provider-compatible"
 import { costFold, eventID, runID, sessionID, type Event } from "@missingstudio/eva-schema"
 import { priceLookup } from "@missingstudio/eva-sdk"
-import type { Plugin } from "@missingstudio/eva-sdk"
-import { Effect, Exit, Scope } from "effect"
+import { withKernel, type Loaded } from "@missingstudio/eva-testkit"
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-
-interface Loaded {
-  readonly plugin: Plugin
-  readonly options?: Record<string, unknown>
-}
-
-// A live kernel over the named plugins, in the order a build registers them.
-const withKernel = <A>(
-  loaded: readonly Loaded[],
-  body: (kernel: Kernel) => Effect.Effect<A>,
-): Promise<A> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const kernel = yield* boot({
-        scope,
-        resolved: loaded.map((one) => ({
-          id: one.plugin.id,
-          ...(one.options === undefined ? {} : { options: one.options }),
-        })),
-        build: buildOf(loaded.map((one) => one.plugin)),
-      })
-      const result = yield* body(kernel)
-      yield* Scope.close(scope, Exit.void)
-      return result
-    }),
-  )
 
 /**
  * `eva.provider.compatible` + `eva.catalog.prices`: two plugins that only

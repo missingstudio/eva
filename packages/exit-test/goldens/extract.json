@@ -1,14 +1,14 @@
 {
   "summary": {
-    "firstPass": 3,
-    "firstPassValid": 2,
-    "settledValid": 3,
-    "unchecked": 1,
-    "held": 1
+    "firstPass": 4,
+    "firstPassValid": 3,
+    "settledValid": 4,
+    "unchecked": 0,
+    "held": 0
   },
   "validity": {
     "kind": "rate",
-    "valid": 2,
-    "of": 3
+    "valid": 3,
+    "of": 4
   }
 }

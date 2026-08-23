@@ -1,0 +1,65 @@
+{
+  "passes": 4,
+  "turns": [
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"meeting\": {\"date\": \"2026-08-11\", \"attendees\": [{\"name\": \"Dana Okafor\"}, {\"name\": \"Priya Natarajan\"}], \"decisions\": [{\"topic\": \"permissions migration ships before the workspace beta\", \"owner\": \"Dana Okafor\", \"due\": \"2026-09-05\"}]}}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"meeting\": {\"date\": \"2026-08-11\", \"attendees\": [{\"name\": \"Sam Whitlock\"}], \"decisions\": [{\"topic\": \"digest scheduler re-registration fix\", \"owner\": \"Priya Natarajan\", \"due\": \"2026-08-22\"}]}}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"meeting\": {\"date\": \"2026-08-11\", \"attendees\": [{\"name\": \"Dana Okafor\"}, {\"name\": \"Priya Natarajan\", \"email\": \"priya at example\"}], \"decisions\": [{\"topic\": \"reply to both open tickets\", \"owner\": \"Sam Whitlock\"}]}}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"meeting\": {\"date\": \"2026-08-11\", \"attendees\": [{\"name\": \"Dana Okafor\"}, {\"name\": \"Priya Natarajan\", \"email\": \"priya@example.com\"}], \"decisions\": [{\"topic\": \"reply to both open tickets\", \"owner\": \"Sam Whitlock\"}]}}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"meeting\": {\"date\": \"2026-08-11\", \"attendees\": [{\"name\": \"Dana Okafor\"}, {\"name\": \"Priya Natarajan\"}], \"decisions\": [{\"topic\": \"permissions migration ships before the workspace beta\", \"owner\": \"Dana Okafor\", \"due\": \"2026-09-05\"}]}}"
+          }
+        }
+      ]
+    }
+  ]
+}

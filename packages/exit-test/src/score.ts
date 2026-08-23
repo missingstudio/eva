@@ -6,10 +6,6 @@ import {
   type VerdictSummary,
 } from "@missingstudio/eva-schema"
 
-// The five canned Workflows, in fixture order. The measurement, the golden
-// and its test all read this list, so a sixth Workflow is added in one place.
-export const WORKFLOWS = ["commit-msg", "review", "release-notes", "classify", "extract"] as const
-
 // What one vendored trace came to. Both members come from packages/schema's
 // one fold, so five callers cannot compute five rates.
 export interface Reading {
@@ -22,35 +18,17 @@ export const readingOf = (events: readonly Event[]): Reading => {
   return { summary, validity: validityOf(summary) }
 }
 
-// The share of Runs that may produce no Candidate before no rate is
-// reported at all.
-export const NO_CANDIDATE_SHARE = 0.02
-
 /**
- * A Run that produced no Candidate is counted, never dropped: it left both
- * the numerator and the denominator, so past the stated share of the Runs
- * the measurement refuses to report a rate at all.
+ * The Repair arithmetic on the one summary: how many first passes failed,
+ * and how many of those reached valid. Computed here once, so the number the
+ * report prints and the number the gate acts on cannot drift apart.
  */
-export const refuses = (unproduced: number, runs: number): boolean =>
-  unproduced > runs * NO_CANDIDATE_SHARE
-
-/**
- * The endpoint the measurement is pinned to. The model is pinned in the
- * fixture's config.yaml, but the endpoint cannot be: the provider SDK reads
- * it from the environment, so a shell with `ANTHROPIC_BASE_URL` set sends
- * the Runs somewhere else and the same fixture then scores differently on
- * two machines.
- */
-export const ENDPOINT = "https://api.anthropic.com"
-
-/**
- * Whether the environment points the Runs somewhere other than the pinned
- * endpoint. A rate measured against another endpoint is a rate about that
- * endpoint, so the runner says which one it used and refuses an accidental
- * one rather than recording it silently.
- */
-export const wrongEndpoint = (ambient: string | undefined, pinned: string): boolean =>
-  ambient !== undefined && ambient !== pinned
+export const repairsOf = (
+  summary: VerdictSummary,
+): { readonly failed: number; readonly repaired: number } => ({
+  failed: summary.firstPass - summary.firstPassValid,
+  repaired: summary.settledValid - summary.firstPassValid,
+})
 
 const percent = (valid: number, of: number): string => `${((valid / of) * 100).toFixed(1)}%`
 
@@ -70,11 +48,11 @@ export const said = (name: string, reading: Reading, unproduced = 0): readonly s
   } else {
     lines.push(ratio("first-pass validity ", validity.valid, validity.of))
     lines.push(ratio("post-repair validity", summary.settledValid, summary.firstPass))
-    const failed = summary.firstPass - summary.firstPassValid
+    const repairs = repairsOf(summary)
     lines.push(
-      failed === 0
+      repairs.failed === 0
         ? "  repair yield         = no first-pass failure to repair"
-        : ratio("repair yield        ", summary.settledValid - summary.firstPassValid, failed),
+        : ratio("repair yield        ", repairs.repaired, repairs.failed),
     )
     lines.push(
       ratio(

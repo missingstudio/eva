@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { decodeLine, encodeLine } from "./codec.js"
 import { SCHEMA_VERSION } from "./event.js"
-import { costFold, headerFold, mergeText, transcriptFold, verdictFold } from "./fold.js"
+import { answerFold, costFold, headerFold, mergeText, transcriptFold, verdictFold } from "./fold.js"
 import { readTrace } from "./goldens.js"
 
 const dir = new URL("../fixtures", import.meta.url).pathname
@@ -41,6 +41,7 @@ describe.each(files)("fixture %s", (file) => {
       expect(costFold(own)).toEqual(golden.costs[session])
       expect(headerFold(own)).toEqual(golden.headers[session])
       expect(verdictFold(own)).toEqual(golden.verdicts[session])
+      expect(answerFold(own)).toEqual(golden.answers[session])
     }
   })
 })

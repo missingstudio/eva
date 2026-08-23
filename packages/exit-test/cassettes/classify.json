@@ -1,0 +1,77 @@
+{
+  "passes": 4,
+  "turns": [
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"category\": \"bug\", \"confidence\": 0.86}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"category\": \"question\", \"confidence\": 0.7}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"category\": \"duplicate-digest\", \"confidence\": 0.8}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"category\": \"bug\", \"confidence\": 0.8}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"category\": \"bug\", \"confidence\": 0.9, \"priority\": \"high\"}"
+          }
+        }
+      ]
+    },
+    {
+      "payloads": [
+        {
+          "kind": "text",
+          "block": 0,
+          "content": {
+            "type": "text",
+            "text": "{\"category\": \"bug\", \"confidence\": 0.9, \"note\": \"duplicate digest\"}"
+          }
+        }
+      ]
+    }
+  ]
+}

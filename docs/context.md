@@ -197,6 +197,14 @@ _Avoid_: Turn, invocation, execution, Session Drain (OpenCode's near-match —
 theirs is process-local with no durable identity), prompt turn (the protocol's
 word for it)
 
+**Answer**:
+What a Harness produced, as a fold over the Trace: the Claim the Run that
+closed last carries, and that Run's text. A Workflow is many Runs, so the
+earlier ones stay on the Trace and the Answer is the last one's. Nothing
+stores one.
+_Avoid_: Result (a Claim is what a Run returns), Output (that is what a
+Candidate became), reply
+
 **Provider Turn**:
 One exchange with a Provider: a request starts, and a stream is read to its end.
 It is not a unit of record.
@@ -282,7 +290,8 @@ _Avoid_: Disposition, state
 How a Question ended: `answered`, `rejected`, `expired`, or `cancelled`. A
 `needs_human` record and the `resolved` record that answers it are a pair, so an
 inbox is a fold over the Questions with no Resolution.
-_Avoid_: Answer (that is the content), reply, outcome
+_Avoid_: Answer (that is what a Harness produced, and a Question's reply is
+its content), reply, outcome
 
 **Verdict**:
 What came of judging one Candidate: `valid`, `invalid`, or `unchecked`.

@@ -10,7 +10,7 @@ import {
   type Resolution,
 } from "@missingstudio/eva-kernel"
 import { costLine } from "@missingstudio/eva-print"
-import { type Claim, type SessionID } from "@missingstudio/eva-schema"
+import { answerFold, type Claim, type SessionID } from "@missingstudio/eva-schema"
 import { Effect, Fiber, Scope, Stream } from "effect"
 import { BUILD, BUILT_IN_IDS, entriesOf, readsOf, uncarriedOf } from "./plugins.js"
 import type { World } from "./world.js"
@@ -191,22 +191,13 @@ export const runHarness = Effect.fn("cli.runHarness")(function* (
 
   const sink = yield* kernel.slot.traceSink.peek
   const events = sink === undefined ? [] : [...(yield* Stream.runCollect(sink.replay(session)))]
+  const answered = answerFold(events)
 
   // A build with no Trace has no record to answer from, and says so.
-  let claim: Claim = { result: "failed", summary: "the Workflow left no record" }
-  let text = ""
-  let buffered = ""
-  for (const { payload } of events) {
-    if (payload.kind === "started") buffered = ""
-    if (payload.kind === "text" && payload.content.type === "text") {
-      buffered += payload.content.text
-    }
-    if (payload.kind === "finished") {
-      claim = payload.claim
-      text = buffered
-    }
-  }
-  return { claim, text } satisfies HarnessResult
+  return {
+    claim: answered.claim ?? { result: "failed", summary: "the Workflow left no record" },
+    text: answered.text,
+  } satisfies HarnessResult
 })
 
 /**

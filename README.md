@@ -30,10 +30,11 @@ contract, with one trace, one verifier, and one bill. It runs on your laptop as
 a CLI and as a service you reach from anywhere; those are the same program.
 
 > [!NOTE]
-> **Eva is early.** Today it is a terminal client on a plugin kernel: a small
-> core loads plugins, and every capability — the model, the surface, the trace,
-> the themes — is one. Where this goes next is the
-> [roadmap](docs/roadmap.md).
+> **Eva is early.** Today it answers a prompt at a terminal and runs a declared
+> Workflow, on a plugin kernel: a small core loads plugins, and every capability
+> — the model, the surface, the trace, the themes, the Workflow itself — is one.
+> No agent yet, and nothing verifies work beyond the shape of it. Where this
+> goes next is the [roadmap](docs/roadmap.md).
 
 ### Install
 
@@ -60,29 +61,50 @@ also carries a provenance attestation:
 
 ### Connect a model
 
-Eva talks to Anthropic, so a key is the whole setup:
+Eva talks to Anthropic and to OpenAI, so a key is the whole setup:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY=sk-...
 eva
 ```
 
-Your key never reaches a settings file, a log, or the session record.
+Your key never reaches a settings file, a log, or the session record. Any
+OpenAI-compatible endpoint — Ollama, llama.cpp, vLLM, LM Studio, a hosted
+gateway — is named in config instead, and its models join `/model`:
+[provider-compatible](plugins/provider-compatible/README.md) has the keys.
 
 ### Use it
 
-| Command             | What it does                                            |
-| ------------------- | ------------------------------------------------------- |
-| `eva`               | Open the interactive surface                            |
-| `eva -p "<prompt>"` | Answer once, print to stdout, exit                      |
-| `eva trust`         | Read this directory's `.eva`, and record the grant      |
-| `eva untrust`       | Drop the grant for this directory                       |
-| `eva config show`   | Print the resolved config, and where each key came from |
-| `eva --version`     | What you have                                           |
+| Command                 | What it does                                            |
+| ----------------------- | ------------------------------------------------------- |
+| `eva`                   | Open the interactive surface                            |
+| `eva -p "<prompt>"`     | Answer once, print to stdout, exit                      |
+| `eva run <name> [file]` | Run a Workflow: one input in, the last Run's text out   |
+| `eva trust`             | Read this directory's `.eva`, and record the grant      |
+| `eva untrust`           | Drop the grant for this directory                       |
+| `eva config show`       | Print the resolved config, and where each key came from |
+| `eva --version`         | What you have                                           |
+
+A **Workflow** is a declared list of Steps — one Instruction and one model
+request each — where the file owns the control flow and the model fills the
+slots. A Step may name a JSON Schema, and a Candidate that does not conform is
+asked again with every Fault named — once by default. Nothing it does depends
+on what a model decided, which is why it comes before agents. You declare one under the
+`workflows` key or as `.eva/workflows/<name>.yaml`; none ship:
+
+```bash
+git diff --staged | eva run commit-msg     # piped standard input
+eva run review src/auth/login.ts           # a positional file
+eva run release-notes --input CHANGELOG.md # or --input
+```
+
+One route at a time — two at once is refused with both named.
+[eva-workflow](plugins/workflow/README.md) is the whole surface.
 
 In the chat, type `/` for the local commands: `/help`, `/model`, `/cost`, and
-`/clear`. They never reach a model, so they cost nothing. `eva -p` exits
-non-zero when the answer fails, which makes it safe in a pipeline.
+`/clear`. They never reach a model, so they cost nothing. `eva -p` and
+`eva run` exit non-zero when the answer fails, which makes them safe in a
+pipeline.
 
 The global flags are valid on every command: `--model provider/model` sets the
 model for this run, `--config <path>` overlays a config file, and `--plugin` /
@@ -105,7 +127,9 @@ every resolved key and where it came from.
 | [reference/architecture.md](docs/reference/architecture.md)       | The plugin model, the kernel, every interface |
 | [reference/writing-plugins.md](docs/reference/writing-plugins.md) | Author a plugin                               |
 | [reference/command-line.md](docs/reference/command-line.md)       | Every command and flag                        |
+| [reference/toolchain.md](docs/reference/toolchain.md)             | How to build and test, and CI's jobs          |
 | [reference/ci-cd.md](docs/reference/ci-cd.md)                     | How a change is checked and a release ships   |
+| [docs/product.md](docs/product.md)                                | What Eva is for, and who for                  |
 | [docs/roadmap.md](docs/roadmap.md)                                | What we build, in what order                  |
 | [docs/decisions.md](docs/decisions.md)                            | Every decision, and what it rejected          |
 

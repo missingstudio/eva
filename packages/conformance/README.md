@@ -34,9 +34,15 @@ holds test files only, and they run with the rest of the suite.
 
 ## Usage
 
-Every suite boots a real kernel through `boot` with the plugins under test —
-the same replay order and the same late-bound Slots a run gets. The Provider
-is scripted through `@missingstudio/eva-testkit`, so no suite calls a model.
+Every suite boots a real kernel with the plugins under test — the same
+replay order and the same late-bound Slots a run gets — through the
+testkit's `withKernel`, which owns the scope and closes it. The Provider is
+scripted through `@missingstudio/eva-testkit`, so no suite calls a model, and
+`committed` reads the record back through the `TraceSink` contract.
+
+Two suites still call `boot` themselves, because they are not this shape:
+`swap.test.ts` boots a kernel that loads nothing and adds plugins mid-Run,
+and `harness-host.test.ts` hands out a seam whose scope outlives the call.
 
 An implementation subscribes to a contract by adding one entry to the suite's
 table. In [src/sink-contract.test.ts](src/sink-contract.test.ts), every
