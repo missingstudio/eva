@@ -1,7 +1,13 @@
 import { providerTurn, type Provider, type ProviderRequest } from "@missingstudio/eva-core"
-import { sessionID, type Payload } from "@missingstudio/eva-schema"
+import {
+  sessionID,
+  validityOf,
+  verdictFold,
+  type Event,
+  type Payload,
+} from "@missingstudio/eva-schema"
 import { define, type Plugin } from "@missingstudio/eva-sdk"
-import { providing } from "@missingstudio/eva-testkit"
+import { providing, scripted } from "@missingstudio/eva-testkit"
 import { prompt } from "@missingstudio/eva-prompt"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory, type MemorySink } from "@missingstudio/eva-trace-memory"
@@ -61,6 +67,7 @@ interface Live {
   readonly kernel: Kernel
   readonly scope: Scope.Scope
   readonly said: readonly Payload[]
+  readonly events: () => readonly Event[]
   readonly memory: () => readonly Payload[]
   readonly prompt: (id: string, input: string) => Effect.Effect<unknown>
   readonly promptFiber: (id: string, input: string) => Effect.Effect<Fiber.Fiber<unknown, unknown>>
@@ -69,14 +76,17 @@ interface Live {
 // A live kernel with the record behind it, and the Workflow row opened over
 // boot's own HarnessHost. The Provider is added by the body, so a test can
 // close over the kernel — which is how one removes a plugin mid-Run.
-const started = <A>(body: (live: Live) => Effect.Effect<A>): Promise<A> =>
+const started = <A>(
+  body: (live: Live) => Effect.Effect<A>,
+  plugins: readonly Plugin[] = PLUGINS,
+): Promise<A> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const scope = yield* Scope.make()
       const kernel = yield* boot({
         scope,
-        resolved: PLUGINS.map((one) => ({ id: one.id })),
-        build: buildOf([...PLUGINS]),
+        resolved: plugins.map((one) => ({ id: one.id })),
+        build: buildOf([...plugins]),
         config: CONFIG,
       })
       const said: Payload[] = []
@@ -94,17 +104,15 @@ const started = <A>(body: (live: Live) => Effect.Effect<A>): Promise<A> =>
           )
         })
 
-      const memory = () =>
-        Effect.runSync(
-          Effect.map(kernel.slot.traceSink.get, (sink) =>
-            (sink as MemorySink).all().map((event) => event.payload),
-          ),
-        )
+      const events = () =>
+        Effect.runSync(Effect.map(kernel.slot.traceSink.get, (sink) => (sink as MemorySink).all()))
+      const memory = () => events().map((event) => event.payload)
 
       const result = yield* body({
         kernel,
         scope,
         said,
+        events,
         memory,
         prompt: (id, input) =>
           Effect.flatMap(open(id), (harness) =>
@@ -120,37 +128,45 @@ const started = <A>(body: (live: Live) => Effect.Effect<A>): Promise<A> =>
     }),
   )
 
-const scripted = (script: readonly (readonly Payload[])[], seen: ProviderRequest[]): Provider => {
-  let served = 0
-  return {
-    id: "eva.provider.fake",
-    available: () => true,
-    turn: (request) => {
-      seen.push(request)
-      const payloads = script[Math.min(served, script.length - 1)] ?? []
-      served += 1
-      return providerTurn(Stream.fromIterable(payloads), "end_turn")
-    },
-  }
-}
-
 const verdicts = (payloads: readonly Payload[]) => payloads.filter((one) => one.kind === "verdict")
+
+const wordOf = (message: { readonly blocks: readonly unknown[] } | undefined): string => {
+  const block = message?.blocks[0] as
+    | { type: string; content: { type: string; text: string } }
+    | undefined
+  return block?.type === "content" && block.content.type === "text" ? block.content.text : ""
+}
 
 describe("a refused Candidate over a live kernel", () => {
   it("repairs exactly once, and both Verdicts reach the record", async () => {
-    const seen: ProviderRequest[] = []
+    const fake = scripted([
+      { payloads: [text('{"entries": 1}')] },
+      { payloads: [text('{"entries":["a"]}')] },
+    ])
+    const atRequest: number[] = []
     const found = await started((live) =>
       Effect.gen(function* () {
-        yield* live.kernel.runtime.add(
-          providing(scripted([[text('{"entries": 1}')], [text('{"entries":["a"]}')]], seen)),
-        )
+        // How many Verdicts stand on the record at the moment each request
+        // leaves — the seen requests interleaved with the committed records.
+        const counting = define({
+          id: "test.counting",
+          effect: Effect.fn("test.counting")(function* (ctx) {
+            yield* ctx.provider["provider.request.before"](() => {
+              atRequest.push(live.memory().filter((one) => one.kind === "verdict").length)
+            })
+          }),
+        })
+        yield* live.kernel.runtime.add(counting)
+        yield* live.kernel.runtime.add(fake.plugin)
         yield* live.prompt("notes", "THE CHANGES")
-        return live.memory()
+        return live.events()
       }),
     )
 
+    const seen = fake.seen()
     expect(seen).toHaveLength(2)
-    expect(verdicts(found)).toEqual([
+    const payloads = found.map((event) => event.payload)
+    expect(verdicts(payloads)).toEqual([
       {
         kind: "verdict",
         step: "summarize",
@@ -160,10 +176,70 @@ describe("a refused Candidate over a live kernel", () => {
       },
       { kind: "verdict", step: "summarize", verdict: "valid", attempt: 2, faults: [] },
     ])
+
     // The Repair's Run carries the refused Candidate as the prior assistant
     // message, never inlined into a human one.
     const repair = seen[1]?.messages ?? []
     expect(repair.map((one) => one.author)).toEqual(["human", "agent", "human"])
+    expect(wordOf(repair[1])).toBe('{"entries": 1}')
+
+    // The repair Instruction names every Fault and never the JSON Schema:
+    // the Schema is already in the first-pass Instruction, and two copies
+    // can disagree.
+    const asked = wordOf(repair[2])
+    expect(asked).toContain("at /entries — wanted an array")
+    expect(asked).not.toContain("properties")
+    expect(asked).not.toContain("required")
+    expect(asked).not.toContain(JSON.stringify(SCHEMA))
+
+    // The repaired answer commits: the Workflow's last Run closes done.
+    const finished = payloads.filter((one) => one.kind === "finished")
+    expect(finished.at(-1)?.claim.result).toBe("done")
+
+    // The attempt-1 Verdict is on the record before the second request goes
+    // out: no Verdict stands at the first request, one at the second.
+    expect(atRequest).toEqual([0, 1])
+
+    // One fold, the one the measurement reads.
+    const summary = verdictFold(found)
+    expect(summary).toEqual({
+      firstPass: 1,
+      firstPassValid: 0,
+      settledValid: 1,
+      unchecked: 0,
+      held: 0,
+    })
+  })
+
+  // The empty slot from the first check: a build with no Validator degrades
+  // every Candidate and can never report a rate at all.
+  it("yields unchecked, degraded and no rate when the build holds no Validator", async () => {
+    const fake = scripted([{ payloads: [text('{"entries":["ok"]}')] }])
+    const found = await started(
+      (live) =>
+        Effect.gen(function* () {
+          yield* live.kernel.runtime.add(fake.plugin)
+          yield* live.prompt("notes", "THE CHANGES")
+          return live.events()
+        }),
+      PLUGINS.filter((one) => one.id !== "eva.validator"),
+    )
+
+    const payloads = found.map((event) => event.payload)
+    expect(verdicts(payloads)).toEqual([
+      { kind: "verdict", step: "summarize", verdict: "unchecked", attempt: 1, faults: [] },
+    ])
+    expect(payloads).toContainEqual({ kind: "degraded", missing: ["Validator"] })
+
+    const summary = verdictFold(found)
+    expect(summary).toEqual({
+      firstPass: 0,
+      firstPassValid: 0,
+      settledValid: 0,
+      unchecked: 1,
+      held: 1,
+    })
+    expect(validityOf(summary)).toEqual({ kind: "none" })
   })
 
   // The capture anti-pattern, on the Validator: the slot is read at every

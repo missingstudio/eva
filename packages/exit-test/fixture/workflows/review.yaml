@@ -1,0 +1,16 @@
+# An array of objects with an enum and an integer. The hardest first-pass
+# shape, and where enum misses and wrong types are observed at all.
+name: Findings over one source file
+steps:
+  - id: findings
+    template: review
+    with: { source: input }
+    schema:
+      type: array
+      items:
+        type: object
+        required: [line, severity, note]
+        properties:
+          line: { type: integer, minimum: 1 }
+          severity: { enum: [info, warn, error] }
+          note: { type: string }

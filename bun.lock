@@ -129,6 +129,33 @@
         "typescript": "catalog:",
       },
     },
+    "packages/exit-test": {
+      "name": "@missingstudio/eva-exit-test",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@missingstudio/eva-auth": "workspace:*",
+        "@missingstudio/eva-boot": "workspace:*",
+        "@missingstudio/eva-catalog-models": "workspace:*",
+        "@missingstudio/eva-catalog-prices": "workspace:*",
+        "@missingstudio/eva-config": "workspace:*",
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-kernel": "workspace:*",
+        "@missingstudio/eva-prompt": "workspace:*",
+        "@missingstudio/eva-provider-anthropic": "workspace:*",
+        "@missingstudio/eva-provider-retry": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "@missingstudio/eva-session-jsonl": "workspace:*",
+        "@missingstudio/eva-trace": "workspace:*",
+        "@missingstudio/eva-trace-jsonl": "workspace:*",
+        "@missingstudio/eva-usage": "workspace:*",
+        "@missingstudio/eva-validator": "workspace:*",
+        "@missingstudio/eva-workflow": "workspace:*",
+        "@types/node": "catalog:",
+        "effect": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/kernel": {
       "name": "@missingstudio/eva-kernel",
       "version": "0.0.0",
@@ -173,6 +200,7 @@
       "dependencies": {
         "@missingstudio/eva-boot": "workspace:*",
         "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
         "effect": "catalog:",
       },
@@ -582,6 +610,8 @@
     "@missingstudio/eva-conformance": ["@missingstudio/eva-conformance@workspace:packages/conformance"],
 
     "@missingstudio/eva-core": ["@missingstudio/eva-core@workspace:packages/core"],
+
+    "@missingstudio/eva-exit-test": ["@missingstudio/eva-exit-test@workspace:packages/exit-test"],
 
     "@missingstudio/eva-kernel": ["@missingstudio/eva-kernel@workspace:packages/kernel"],
 

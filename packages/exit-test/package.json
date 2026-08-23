@@ -1,0 +1,29 @@
+{
+  "name": "@missingstudio/eva-exit-test",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@missingstudio/eva-auth": "workspace:*",
+    "@missingstudio/eva-boot": "workspace:*",
+    "@missingstudio/eva-catalog-models": "workspace:*",
+    "@missingstudio/eva-catalog-prices": "workspace:*",
+    "@missingstudio/eva-config": "workspace:*",
+    "@missingstudio/eva-core": "workspace:*",
+    "@missingstudio/eva-kernel": "workspace:*",
+    "@missingstudio/eva-prompt": "workspace:*",
+    "@missingstudio/eva-provider-anthropic": "workspace:*",
+    "@missingstudio/eva-provider-retry": "workspace:*",
+    "@missingstudio/eva-schema": "workspace:*",
+    "@missingstudio/eva-sdk": "workspace:*",
+    "@missingstudio/eva-session-jsonl": "workspace:*",
+    "@missingstudio/eva-trace": "workspace:*",
+    "@missingstudio/eva-trace-jsonl": "workspace:*",
+    "@missingstudio/eva-usage": "workspace:*",
+    "@missingstudio/eva-validator": "workspace:*",
+    "@missingstudio/eva-workflow": "workspace:*",
+    "@types/node": "catalog:",
+    "effect": "catalog:",
+    "typescript": "catalog:"
+  }
+}

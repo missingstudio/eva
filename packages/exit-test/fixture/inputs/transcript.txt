@@ -1,0 +1,26 @@
+[10:02] Customer: Hi — since yesterday our weekly digest email goes out
+twice, about a minute apart. Same content both times.
+
+[10:03] Agent: Thanks for flagging. Did anything change on your side
+around then — schedule edits, new team members, a region change?
+
+[10:05] Customer: We were moved to the EU region on Tuesday, the account
+manager mentioned it. The duplicates started the morning after.
+
+[10:06] Agent: That lines up with something we are tracking. Does it
+happen for every recipient, or only some?
+
+[10:09] Customer: Every recipient on the Monday digest. The daily one
+looks fine so far.
+
+[10:10] Agent: Understood. I can link this ticket to the tracking issue so
+you get the fix notice. The duplicates are harmless but noisy — the
+scheduler registers twice after a region move.
+
+[10:12] Customer: Fine as long as it stops. Is there a date?
+
+[10:13] Agent: The fix is scheduled for the next patch release, targeted
+this month. The ticket will update when it ships.
+
+[10:14] Customer: OK, thanks. Please do link it, our ops channel is tired
+of deleting the second copy.

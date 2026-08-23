@@ -1,0 +1,46 @@
+diff --git a/src/retry.ts b/src/retry.ts
+index 3f1c2aa..9b04d71 100644
+--- a/src/retry.ts
++++ b/src/retry.ts
+@@ -12,10 +12,14 @@ export interface RetryOptions {
+   readonly attempts: number
+   readonly delayMs: number
+ }
+
+-export const withRetry = async <T>(work: () => Promise<T>, options: RetryOptions): Promise<T> => {
+-  for (let attempt = 1; ; attempt += 1) {
++export const withRetry = async <T>(
++  work: () => Promise<T>,
++  options: RetryOptions,
++  onRetry?: (attempt: number, cause: unknown) => void,
++): Promise<T> => {
++  for (let attempt = 1; ; attempt += 1) {
+     try {
+       return await work()
+     } catch (cause) {
+       if (attempt >= options.attempts) throw cause
++      onRetry?.(attempt, cause)
+       await new Promise((resolve) => setTimeout(resolve, options.delayMs * attempt))
+     }
+   }
+ }
+diff --git a/src/retry.test.ts b/src/retry.test.ts
+index 77d10e2..c4e8a90 100644
+--- a/src/retry.test.ts
++++ b/src/retry.test.ts
+@@ -31,4 +31,16 @@ describe("withRetry", () => {
+     await expect(withRetry(work, { attempts: 2, delayMs: 1 })).rejects.toThrow("boom")
+   })
++
++  it("tells the caller about every retry", async () => {
++    const noted: number[] = []
++    let calls = 0
++    const work = async () => {
++      calls += 1
++      if (calls < 3) throw new Error("flaky")
++      return "ok"
++    }
++    await withRetry(work, { attempts: 3, delayMs: 1 }, (attempt) => noted.push(attempt))
++    expect(noted).toEqual([1, 2])
++  })
+ })

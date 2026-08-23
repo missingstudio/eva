@@ -1,0 +1,25 @@
+# Reference resolution, Output-to-Instruction chaining, and a per-Step model
+# override. The only one where Step 2's Instruction is built from a validated
+# Output rather than raw text.
+name: Release notes from a CHANGELOG
+steps:
+  - id: highlights
+    template: release-highlights
+    with: { changelog: input }
+    schema:
+      type: object
+      required: [highlights]
+      properties:
+        highlights:
+          type: array
+          minItems: 1
+          items: { type: string }
+  - id: notes
+    template: release-notes
+    model: anthropic/claude-sonnet-5
+    with: { highlights: highlights.output.highlights }
+    schema:
+      type: object
+      required: [notes]
+      properties:
+        notes: { type: string, minLength: 1 }

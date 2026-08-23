@@ -1,0 +1,35 @@
+# A deep nested object with optional fields and format keywords, over a long
+# input. The only one that exercises pointer depth in Fault.at, which is what
+# a Repair Instruction is built from.
+name: Meeting facts from a long document
+steps:
+  - id: fields
+    template: extract
+    with: { document: input }
+    schema:
+      type: object
+      required: [meeting]
+      additionalProperties: false
+      properties:
+        meeting:
+          type: object
+          required: [date, attendees, decisions]
+          properties:
+            date: { type: string, format: date }
+            attendees:
+              type: array
+              items:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string }
+                  email: { type: string, format: email }
+            decisions:
+              type: array
+              items:
+                type: object
+                required: [topic, owner]
+                properties:
+                  topic: { type: string }
+                  owner: { type: string }
+                  due: { type: string, format: date }

@@ -1,0 +1,22 @@
+# The hermetic fixture for the Stage 1 measurement. It is reached by
+# EVA_CONFIG_DIR, which needs no trust grant. The model is pinned here and
+# never comes from the environment. The plugin list is explicit and not
+# discovered: the first entry turns every built-in off, and only what is
+# named after it, with `disabled: false`, loads.
+model: anthropic/claude-opus-5
+
+plugins:
+  - { id: "*", disabled: true }
+  - { id: eva.trace, disabled: false }
+  - { id: eva.trace.jsonl, disabled: false }
+  - { id: eva.session.jsonl, disabled: false }
+  - { id: eva.auth, disabled: false }
+  - { id: eva.catalog.models, disabled: false }
+  - { id: eva.catalog.prices, disabled: false }
+  - { id: eva.provider.anthropic, disabled: false }
+  - { id: eva.provider.retry, disabled: false }
+  - { id: eva.usage, disabled: false }
+  - { id: eva.validator, disabled: false }
+  - { id: eva.prompt, disabled: false }
+  - { id: eva.workflow, disabled: false }
+  - { id: eva.config, disabled: false }

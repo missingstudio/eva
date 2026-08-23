@@ -42,7 +42,10 @@ export default defineConfig({
   },
 
   lint: {
-    ignorePatterns: ["dist/**", "coverage/**"],
+    // The exit-test fixture inputs are vendored data the measurement reads,
+    // not code in the tree — one of them is a source file with deliberate
+    // smells for a review Workflow to find.
+    ignorePatterns: ["dist/**", "coverage/**", "packages/exit-test/fixture/inputs/**"],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -98,8 +101,9 @@ export default defineConfig({
         ],
         "the testkit imports boot and the contracts below it",
       ),
-      // packages/conformance has no import rule on purpose, and it is the
-      // only package below apps that has none. Holding two adapters to one
+      // packages/conformance has no import rule on purpose, and only
+      // packages/exit-test, which is the same test-only shape, shares
+      // that. Holding two adapters to one
       // contract is the job that needs several plugins at once: a plugin may
       // not import another plugin, and the testkit may not import one at all,
       // so before this package the only place a TraceSink suite could run was

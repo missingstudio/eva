@@ -1,13 +1,13 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { type ModelRef } from "@missingstudio/eva-core"
 import {
-  providerTurn,
-  type ModelRef,
-  type Provider,
-  type ProviderRequest,
-} from "@missingstudio/eva-core"
-import { FAKE_PROVIDER, providing } from "@missingstudio/eva-testkit"
+  FAKE_PROVIDER,
+  scripted,
+  type Scripted,
+  type ScriptedTurn,
+} from "@missingstudio/eva-testkit"
 import type { Payload } from "@missingstudio/eva-schema"
 import { sessionJsonl } from "@missingstudio/eva-session-jsonl"
 import { trace } from "@missingstudio/eva-trace"
@@ -24,23 +24,14 @@ const text = (value: string): Payload => ({
 
 const FAKE_MODEL: ModelRef = { provider: "fake", model: "model" }
 
-const scripted = (script: readonly (readonly Payload[])[], seen: ProviderRequest[]): Provider => {
-  let turn = 0
-  return {
-    id: "eva.provider.fake",
-    available: () => true,
-    turn: (request) => {
-      seen.push(request)
-      const payloads = script[Math.min(turn, script.length - 1)] ?? []
-      turn += 1
-      return providerTurn(Stream.fromIterable(payloads))
-    },
-  }
-}
+// Each turn's answer, in order. The testkit fails a turn past the script,
+// so a test that runs more Runs than it wrote answers for fails loudly.
+const turns = (...answers: readonly (readonly Payload[])[]): readonly ScriptedTurn[] =>
+  answers.map((payloads) => ({ payloads }))
 
 // A kernel with a real trace and session store behind it, so the API is
 // exercised against the same slots the CLI fills.
-const withApi = <A>(provider: Provider, body: (api: Api) => Effect.Effect<A>): Promise<A> => {
+const withApi = <A>(fake: Scripted, body: (api: Api) => Effect.Effect<A>): Promise<A> => {
   const path = join(mkdtempSync(join(tmpdir(), "eva-api-")), "trace.jsonl")
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -53,7 +44,7 @@ const withApi = <A>(provider: Provider, body: (api: Api) => Effect.Effect<A>): P
           { id: "eva.session.jsonl" },
           { id: FAKE_PROVIDER },
         ],
-        build: buildOf([trace, traceJsonl, sessionJsonl, providing(provider)]),
+        build: buildOf([trace, traceJsonl, sessionJsonl, fake.plugin]),
       })
 
       const api = yield* makeSessionAPI(kernel, FAKE_MODEL, scope)
@@ -66,7 +57,7 @@ const withApi = <A>(provider: Provider, body: (api: Api) => Effect.Effect<A>): P
 
 describe("create and list", () => {
   it("opens a Session the store then lists", async () => {
-    const found = await withApi(scripted([[]], []), (api) =>
+    const found = await withApi(scripted([]), (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         return { session, listed: yield* api.session.list }
@@ -78,7 +69,7 @@ describe("create and list", () => {
 
 describe("submit", () => {
   it("runs a Run and attaches the record it committed", async () => {
-    const messages = await withApi(scripted([[text("hello")]], []), (api) =>
+    const messages = await withApi(scripted(turns([text("hello")])), (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         yield* api.session.submit(session, { kind: "prompt", text: "hi" })
@@ -97,8 +88,8 @@ describe("submit", () => {
   // The second Run must see the first. The history comes from the record,
   // never from what the stream happened to show.
   it("carries the conversation into the next Run", async () => {
-    const seen: ProviderRequest[] = []
-    await withApi(scripted([[text("one")], [text("two")]], seen), (api) =>
+    const fake = scripted(turns([text("one")], [text("two")]))
+    await withApi(fake, (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         yield* api.session.submit(session, { kind: "prompt", text: "first" })
@@ -106,14 +97,15 @@ describe("submit", () => {
       }),
     )
 
+    const seen = fake.seen()
     expect(seen).toHaveLength(2)
     const second = seen[1]?.messages ?? []
     expect(second.length).toBeGreaterThan(seen[0]?.messages.length ?? 0)
   })
 
   it("prepends steering that arrived between Runs", async () => {
-    const seen: ProviderRequest[] = []
-    await withApi(scripted([[text("ok")]], seen), (api) =>
+    const fake = scripted(turns([text("ok")]))
+    await withApi(fake, (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         yield* api.session.submit(session, {
@@ -125,7 +117,7 @@ describe("submit", () => {
       }),
     )
 
-    const sent = seen[0]?.messages.at(-1)
+    const sent = fake.seen()[0]?.messages.at(-1)
     const block = sent?.blocks[0]
     expect(block?.type === "content" && block.content.type === "text" && block.content.text).toBe(
       "be brief\nexplain",
@@ -133,8 +125,8 @@ describe("submit", () => {
   })
 
   it("does not carry the same steering into a second Run", async () => {
-    const seen: ProviderRequest[] = []
-    await withApi(scripted([[text("a")], [text("b")]], seen), (api) =>
+    const fake = scripted(turns([text("a")], [text("b")]))
+    await withApi(fake, (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         yield* api.session.submit(session, { kind: "steer", text: "once", target: "next-run" })
@@ -143,7 +135,7 @@ describe("submit", () => {
       }),
     )
 
-    const last = seen[1]?.messages.at(-1)
+    const last = fake.seen()[1]?.messages.at(-1)
     const block = last?.blocks[0]
     expect(block?.type === "content" && block.content.type === "text" && block.content.text).toBe(
       "second",
@@ -153,7 +145,7 @@ describe("submit", () => {
 
 describe("watch", () => {
   it("shows the live stream while a Run is open", async () => {
-    const streamed = await withApi(scripted([[text("streamed")]], []), (api) =>
+    const streamed = await withApi(scripted(turns([text("streamed")])), (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         const collecting = yield* Effect.forkChild(
@@ -172,7 +164,7 @@ describe("watch", () => {
 
   // A surface that reconnects with a cursor sees what it missed, then tails.
   it("replays what committed after the cursor", async () => {
-    const replayed = await withApi(scripted([[text("first run")]], []), (api) =>
+    const replayed = await withApi(scripted(turns([text("first run")])), (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         yield* api.session.submit(session, { kind: "prompt", text: "go" })
@@ -189,7 +181,7 @@ describe("watch", () => {
   })
 
   it("shows nothing already committed when given no cursor", async () => {
-    const seen = await withApi(scripted([[text("done")]], []), (api) =>
+    const seen = await withApi(scripted(turns([text("done")], [text("again")])), (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         yield* api.session.submit(session, { kind: "prompt", text: "go" })
@@ -207,7 +199,7 @@ describe("watch", () => {
 
 describe("the session model", () => {
   it("starts at the model the kernel booted with", async () => {
-    const model = await withApi(scripted([[]], []), (api) =>
+    const model = await withApi(scripted([]), (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         return yield* api.session.model.get(session)
@@ -217,8 +209,7 @@ describe("the session model", () => {
   })
 
   it("sends the Run whatever model was set on the Session", async () => {
-    const seen: ProviderRequest[] = []
-    const model = await withApi(scripted([[text("x")]], seen), (api) =>
+    const model = await withApi(scripted(turns([text("x")])), (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         yield* api.session.model.set(session, { provider: "fake", model: "other" })
@@ -231,7 +222,7 @@ describe("the session model", () => {
   })
 
   it("keeps one Session's model off another", async () => {
-    const models = await withApi(scripted([[]], []), (api) =>
+    const models = await withApi(scripted([]), (api) =>
       Effect.gen(function* () {
         const first = yield* api.session.create(process.cwd())
         const second = yield* api.session.create(process.cwd())
@@ -250,7 +241,7 @@ describe("the session model", () => {
 
 describe("cancel", () => {
   it("passes over a Session with no Run open", async () => {
-    await withApi(scripted([[]], []), (api) =>
+    await withApi(scripted([]), (api) =>
       Effect.gen(function* () {
         const session = yield* api.session.create(process.cwd())
         yield* api.session.cancel(session, "user")
@@ -263,7 +254,7 @@ describe("answer", () => {
   // The request is open from the call, not from when its fiber runs, so an
   // answer that arrives immediately still lands.
   it("closes the request the surface was asked", async () => {
-    const given = await withApi(scripted([[]], []), (api) =>
+    const given = await withApi(scripted([]), (api) =>
       Effect.gen(function* () {
         const asking = yield* Effect.forkChild(api.request("req_1"))
         yield* api.session.answer("req_1", { kind: "permission", optionId: "allow" })
@@ -274,7 +265,7 @@ describe("answer", () => {
   })
 
   it("leaves a second answer to the same request with nothing to close", async () => {
-    const given = await withApi(scripted([[]], []), (api) =>
+    const given = await withApi(scripted([]), (api) =>
       Effect.gen(function* () {
         const asking = yield* Effect.forkChild(api.request("req_2"))
         yield* api.session.answer("req_2", { kind: "text", text: "first" })
@@ -287,8 +278,6 @@ describe("answer", () => {
 
   // A reconnecting surface may replay an answer nobody is waiting for.
   it("drops an answer to a request that was never opened", async () => {
-    await withApi(scripted([[]], []), (api) =>
-      api.session.answer("req_absent", { kind: "cancelled" }),
-    )
+    await withApi(scripted([]), (api) => api.session.answer("req_absent", { kind: "cancelled" }))
   })
 })

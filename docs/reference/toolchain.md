@@ -113,8 +113,9 @@ Every package carries a `tsconfig.json`, and every one of them is four lines:
 mode, resolution, and target belong to the base, in every package, in every
 environment. A leaf that needs to override one of them is a bug in the leaf or a
 bug in the base, and either way it is a conversation rather than a config line.
-Two leaves differ from the shape above today: `packages/schema` also includes
-`fixtures`, and `apps/cli` also includes its `vite.config.ts`.
+Three leaves differ from the shape above today: `packages/schema` also
+includes `fixtures`, `packages/exit-test` also includes `scripts`, and
+`apps/cli` also includes its `vite.config.ts`.
 
 The root `tsconfig.json` is no longer a program over the tree. It covers the one
 loose file and gives the editor a fallback:
@@ -213,7 +214,12 @@ and fails only at publish time.
 **`test.include` lists four globs over three directories, and a new directory is
 invisible until it is added.** Tests outside `apps/*/src`, `packages/*/src`, and
 `plugins/*/src` run nowhere, and `passWithNoTests` keeps the suite green while
-they do.
+they do. `packages/exit-test` leans on exactly that line: its golden test sits
+in `src/`, so it runs in `verify` on every push, while its recorder and runner
+sit under `scripts/`, which the globs never reach — a job that needs a key and
+a hundred minutes must not be in the gate, and the two deliberate generators
+(`packages/schema/fixtures/generate.ts`, `plugins/catalog-prices/fixtures/generate.ts`)
+are the precedent for that split.
 
 ## 5. CI
 

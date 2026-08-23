@@ -10,7 +10,7 @@ one compiled CLI. OpenCode ships the same shape — a Bun-compiled TUI, from a
 monorepo, to binaries and npm — and is the closest prior art, so its release
 path is cited where a decision follows it and where one deliberately does not.
 
-**Status.** All five workflow files, the release scripts in `scripts/release/`,
+**Status.** All seven workflow files, the release scripts in `scripts/release/`,
 and `scripts/install.sh` are in the tree, and the whole release path short of
 publishing runs at a desk with `bun run rehearse`. What remains is outside the
 repository: the npm trusted-publisher configuration on npmjs.com, the
@@ -18,18 +18,20 @@ repository: the npm trusted-publisher configuration on npmjs.com, the
 requires the gate and names the release workflow as the one actor allowed to
 push to `main`.
 
-## 1. Five files, one release path
+## 1. Seven files, one release path
 
 Each file exists because its verdict changes for a different reason, and a
 workflow that mixes two reasons for failing cannot be trusted at a glance.
 
-| File               | Verdict changes when     | Trigger                                    |
-| ------------------ | ------------------------ | ------------------------------------------ |
-| `ci.yml`           | the tree changes         | push to `main`, pull request               |
-| `security.yml`     | the tree changes         | push to `main`, pull request               |
-| `audit.yml`        | an advisory is published | push, pull request, **schedule**, dispatch |
-| `audit-report.yml` | a scheduled audit fails  | `workflow_run` on Audit                    |
-| `release.yml`      | a person cuts a release  | `workflow_dispatch`                        |
+| File                 | Verdict changes when          | Trigger                                    |
+| -------------------- | ----------------------------- | ------------------------------------------ |
+| `ci.yml`             | the tree changes              | push to `main`, pull request               |
+| `security.yml`       | the tree changes              | push to `main`, pull request               |
+| `audit.yml`          | an advisory is published      | push, pull request, **schedule**, dispatch |
+| `audit-report.yml`   | a scheduled audit fails       | `workflow_run` on Audit                    |
+| `release.yml`        | a person cuts a release       | `workflow_dispatch`                        |
+| `measure.yml`        | the model changes             | **schedule**, dispatch                     |
+| `measure-report.yml` | a scheduled measurement fails | `workflow_run` on Measure                  |
 
 `ci.yml` and `security.yml` are pure functions of the tree, so neither has a
 schedule — a scheduled run would spend a runner confirming the last commit's
@@ -52,6 +54,16 @@ a scheduled failure as a GitHub issue and comments on the open one rather than
 filing a second — a vulnerability unfixed for a month is one issue with four
 notes. A failure on a push or a pull request is already in front of the person
 who caused it and files nothing.
+
+`measure.yml` is the measured half of Stage 1's exit test: the five canned
+Workflows in `packages/exit-test/fixture`, run against the pinned model, with
+the ratios printed from the one fold. Its verdict changes when the model
+changes, not when the tree does, so it earns a schedule the way `audit.yml`
+does and can never live in `ci.yml`. The reason it is not a per-push gate is
+not cost — a full run is about $12 to $20 at the vendored rates — it is
+nondeterminism, wall clock, and a stored provider secret.
+`measure-report.yml` watches it from outside exactly as `audit-report.yml`
+watches the audit, and for the same permission reason.
 
 Branch protection requires exactly one check: `ci.yml`'s gate job, which
 asserts every job it needs actually succeeded. A skipped job is not a passing
@@ -324,18 +336,21 @@ answer.
 The default token is read-only everywhere; a job that needs more asks for it
 by name:
 
-| Job          | Permission            | For                                   |
-| ------------ | --------------------- | ------------------------------------- |
-| release      | `contents: write`     | the bump commit, the tag, the release |
-| release      | `id-token: write`     | cosign keyless signing, npm publish   |
-| release      | `attestations: write` | the provenance attestation            |
-| audit-report | `issues: write`       | filing the failure                    |
+| Job            | Permission            | For                                   |
+| -------------- | --------------------- | ------------------------------------- |
+| release        | `contents: write`     | the bump commit, the tag, the release |
+| release        | `id-token: write`     | cosign keyless signing, npm publish   |
+| release        | `attestations: write` | the provenance attestation            |
+| audit-report   | `issues: write`       | filing the failure                    |
+| measure-report | `issues: write`       | filing the failure                    |
 
 npm publishing uses trusted publishing: npm trusts this repository's release
 workflow through OIDC, so there is no `NPM_TOKEN` to store, and every publish
-carries npm provenance for free. That leaves exactly one stored secret:
+carries npm provenance for free. That leaves exactly two stored secrets:
 `HOMEBREW_TAP_TOKEN`, fine-grained, `contents: write` on the tap and nothing
-else, spent after the release is public.
+else, spent after the release is public; and `ANTHROPIC_API_KEY`, spent only
+by the scheduled measurement in `measure.yml`, which requests `contents:
+read` and nothing more.
 
 Named gaps, so nobody mistakes silence for coverage: the Windows binary is not
 Authenticode-signed and SmartScreen will say so; the macOS binary is not

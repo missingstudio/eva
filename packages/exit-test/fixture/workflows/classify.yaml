@@ -1,0 +1,15 @@
+# A strict enum plus a bounded number and additionalProperties: false. This
+# is the one chosen to fail sometimes: without a Workflow that fails on
+# purpose, the repair half of the measurement has no observations.
+name: One label for a support transcript
+steps:
+  - id: label
+    template: classify
+    with: { transcript: input }
+    schema:
+      type: object
+      required: [category, confidence]
+      properties:
+        category: { enum: [bug, feature, question, billing] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+      additionalProperties: false
