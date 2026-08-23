@@ -204,9 +204,35 @@ const withSurface = <A>(
     ),
   )
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 10))
-
 const pause = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+// Lets the surface's loop catch up. Several turns of the event loop rather
+// than one fixed pause: a single 10ms window lost the race on a loaded test
+// host, and a turn count does not care how slow the host is. An assertion
+// about a call the surface made waits for that call — `heldWhere` — rather
+// than for this.
+const settle = async () => {
+  for (let turn = 0; turn < 15; turn += 1) await pause(2)
+}
+
+// The frame once the screen shows a condition. A fixed pause misses on a
+// loaded test host, so this polls, bounded, and the assertion still reads
+// whatever was really drawn. The bound is generous because it costs nothing
+// on a run that passes: a loaded host missed a one-second one.
+const drawnWhere = async (fake: Fake, holds: (frame: Frame | undefined) => boolean) => {
+  const deadline = Date.now() + 5_000
+  while (!holds(fake.last()) && Date.now() < deadline) await pause(5)
+  return fake.last()
+}
+
+// The same bounded poll for what a test reads off the spy rather than off
+// the screen: an assertion about a call the surface made waits for that
+// call, so no wait has to be long enough by guess.
+const heldWhere = async <A>(read: () => A, holds: (value: A) => boolean): Promise<A> => {
+  const deadline = Date.now() + 5_000
+  while (!holds(read()) && Date.now() < deadline) await pause(5)
+  return read()
+}
 
 // The rows the keymap plugin registers for this surface.
 const KEYMAP: readonly KeymapInfo[] = [
@@ -404,13 +430,20 @@ describe("the prompt history", () => {
   it("recalls the last line on up, and submits it again", async () => {
     const submitted = await withSurface([], async (fake, spy) => {
       fake.press("ask once")
-      await settle()
+      await heldWhere(
+        () => spy.submitted,
+        (all) => all.length === 1,
+      )
       fake.key({ key: "up" })
-      await settle()
-      const recalled = fake.last()?.input
+      const recalled = (await drawnWhere(fake, (frame) => frame?.input === "ask once"))?.input
       fake.key({ key: "return" })
-      await settle()
-      return { recalled, submitted: spy.submitted }
+      return {
+        recalled,
+        submitted: await heldWhere(
+          () => spy.submitted,
+          (all) => all.length === 2,
+        ),
+      }
     })
 
     expect(submitted.recalled).toBe("ask once")
@@ -516,10 +549,9 @@ describe("a slash command", () => {
 
     const drawn = await withSurface(rows, async (fake) => {
       fake.press("a question")
-      await settle()
+      await drawnWhere(fake, (frame) => (frame?.session.length ?? 0) > 0)
       fake.press("/clear")
-      await settle()
-      return fake.last()
+      return drawnWhere(fake, (frame) => frame?.session.length === 0)
     })
 
     expect(drawn?.session).toEqual([])
