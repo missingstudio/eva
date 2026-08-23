@@ -170,7 +170,6 @@ describe("the plugin runtime", () => {
   })
 })
 
-// CI's plugin-reload job filters on the word "reload".
 describe("reload", () => {
   it("unloads and reloads every plugin in one process, leaking no scope", async () => {
     const ids = ["a", "b", "c", "d"]

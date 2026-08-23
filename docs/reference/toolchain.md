@@ -36,8 +36,9 @@ is in the runtime. Under Node it needs 26.4.0 with `--experimental-ffi`, plus
 That asymmetry stops at one module: `packages/tui/src/renderer.tsx`. The
 composition root reaches it through a dynamic import, so Node never loads it —
 the stream renderer draws the same `Frame` there instead. Everything else runs on
-Node with no flags, and §5's `opentui-renderer` job proves it by answering under
-Node and then asserting `opentui` never reaches the packed entry.
+Node with no flags, and `vp test` proves it on every push: Vitest runs its
+workers under Node 22, not under Bun, so every test in the tree answers under
+the runtime its package claims. §5 says what this leaves unproven.
 
 ## 2. Versions and the gate
 
@@ -53,17 +54,20 @@ runs `4.0.0-beta.83` with a patch, which is a fair signal of how much the line
 still moves.
 
 **`@types/node` is pinned to the 22 line, not the newest.** `engines` accepts
-Node 22 and CI runs it, so types from a later release would let a package call an
-API the oldest supported runtime lacks, and nothing would fail until someone ran
+Node 22.12 as the oldest runtime, so types from a later release would let a
+package call an API that runtime lacks, and nothing would fail until someone ran
 it there.
 
-**`vitest` is a direct devDependency even though Vite+ bundles Vitest.** CI's
-`node-portability` job runs `node ./node_modules/.bin/vitest` to prove the core
-packages work under plain Node, and that binary exists only because of this
-dependency. It looks redundant and is not.
+**`vitest` is a direct devDependency even though Vite+ bundles Vitest.** Every
+test file writes `import … from "vitest"`, and a declared import must not resolve
+through a hoisted transitive dependency. The catalog pins it to the exact version
+`vite-plus` carries, so the tree never holds two copies of Vitest.
 
-`verify` is the whole gate — `vp check && vp test && vp run -r pack && bun
-audit` — and CI runs the same four steps in the same order.
+`verify` is the desk gate — `vp check && vp test && vp run -r pack && bun audit
+--audit-level=high`. CI runs `check` and `test` the same way, then `build` in
+place of `pack`. The audit step is `audit.yml`'s, for the reason
+[ci-cd.md](ci-cd.md) §8 gives. `build` and `pack` are not the same step, and §5
+says what that costs.
 
 ## 3. One base, one tsconfig per package
 
@@ -136,8 +140,8 @@ That guarantee is only as strong as the claim, and a leaf can widen its claim in
 one line. This is why the Oxlint `no-restricted-globals` rule stays: it reads the
 code rather than the config, so it rejects the `Bun` global in every package
 however that package writes its `types`. Widen `types` to `["node", "bun"]` and
-the compiler goes quiet while lint still fails the build. CI's Node job stands
-behind both.
+the compiler goes quiet while lint still fails the build. `vp check` runs both,
+and `vp test` answers under Node behind them (§1).
 
 So a package that needs a Bun capability asks for it by feature — `bun:ffi`,
 named in its own `types` — and never through the `Bun` global, which nothing may
@@ -216,8 +220,8 @@ invisible until it is added.** Tests outside `apps/*/src`, `packages/*/src`, and
 `plugins/*/src` run nowhere, and `passWithNoTests` keeps the suite green while
 they do. `packages/exit-test` leans on exactly that line: its golden test sits
 in `src/`, so it runs in `verify` on every push, while its recorder and runner
-sit under `scripts/`, which the globs never reach — a job that needs a key and
-a hundred minutes must not be in the gate, and the two deliberate generators
+sit under `scripts/`, which the globs never reach — a run that needs a key, a
+hundred minutes and $20 must not be in the gate, and the two deliberate generators
 (`packages/schema/fixtures/generate.ts`, `plugins/catalog-prices/fixtures/generate.ts`)
 are the precedent for that split.
 
@@ -227,37 +231,73 @@ are the precedent for that split.
 no `setup-vp` action anywhere in this workflow — a second installer only adds a
 way for two copies to disagree.
 
-Add each job in the commit that makes it meaningful. A job that cannot fail is
-worse than no job.
-
 `.github/workflows/ci.yml` is the source of truth for how each job runs. What
 each one is _for_ is below, because a job whose purpose is not written down gets
 deleted the first time it is inconvenient.
 
-| Job                       | What fails it                                                                                |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| `verify`                  | the four gate steps, in order                                                                |
-| `plugin-reload`           | a plugin that cannot unload and reload in one live process, or that loses its order position |
-| `bare-kernel`             | every plugin disabled and the binary no longer starts — on Bun and on Node                   |
-| `isolated-plugin-disable` | one plugin disabled crashes the binary instead of degrading the Run                          |
-| `interactive-surface`     | the surface cannot run a provider-free slash command, or hangs instead of stopping           |
-| `no-surface-refuses`      | a build with no interactive surface exits 0 as though it had run                             |
-| `opentui-renderer`        | the native renderer cannot draw under Bun, or `opentui` reaches the packed entry             |
-| `node-portability`        | a Bun-only API leaked into the kernel, core, schema, or acp                                  |
+| Job        | What fails it                                          |
+| ---------- | ------------------------------------------------------ |
+| `verify`   | `bun run check`, `bun run test`, or `bun run build`    |
+| `rehearse` | the release path breaks on a change that can reach it  |
+| `gate`     | a job it needs did not succeed, a skipped job included |
 
-Two of these carry the asymmetry from §1. `opentui-renderer` draws a real frame
-under Bun and then greps the packed entry to prove `opentui` never reaches a
-runtime with no FFI. `node-portability` runs those four packages' tests under
-plain Node, through `node ./node_modules/.bin/vitest` rather than through `vp`,
-so the runtime under test is the one being claimed.
+**Three jobs, and the count is a decision.** A job asserts something about the
+tree, and so does a test — but a test says it in one file, runs at a desk, and
+costs no runner. The guarantees that once had a job of their own are tests
+instead:
+
+| The guarantee                                    | Where it is asserted                    |
+| ------------------------------------------------ | --------------------------------------- |
+| every plugin disabled resolves to an empty build | `packages/kernel/src/config.test.ts`    |
+| boot loads exactly what the config resolved to   | `packages/boot/src/boot.test.ts`        |
+| a plugin unloads and reloads in one live process | `packages/kernel/src/plugin.test.ts`    |
+| a disabled trace plugin degrades, never crashes  | `packages/boot/src/session.test.ts`     |
+| a sink is swapped with no restart                | `packages/conformance/src/swap.test.ts` |
+
+So `verify` covers nearly every way the tree itself can be wrong. `vp check`
+holds the runtime boundary of §3 and type-checks every leaf, and `vp test` runs
+the whole suite. A fourth job has to fail for a reason those two cannot, and
+when a test can hold the guarantee instead, write the test.
+
+`build` is the one step where CI and the desk part. `bun run build` is `vp run -r
+build`, and `apps/cli` holds the only `build` script in the tree, so CI packs the
+binary and nothing else. The desk's `vp run -r pack` packs all thirty-two
+packages. Nothing in CI does — `rehearse` compiles the binary and does not pack
+the workspace either.
+
+`rehearse` is the one job that is not about the tree, and
+[ci-cd.md](ci-cd.md) §7 owns it. `gate` is the one check branch protection
+requires, and [ci-cd.md](ci-cd.md) §1 says why it is a job rather than a list of
+job names in a ruleset.
+
+Add a job in the commit that makes it meaningful. A job that cannot fail is
+worse than no job. A job written into this table before it exists in `ci.yml` is
+worse still, because a reader trusts the table.
 
 Every job installs with `bun install --frozen-lockfile`, never `vp install`. `vp`
 delegates to the detected package manager, and going direct removes one layer of
 guessing from the least-proven seam in the stack.
 
-A job that drives the binary runs `bun run pack` first and then invokes
-`apps/cli/bin/eva.mjs`; there is no `dist/eva.mjs`. `plugin-reload` and
-`node-portability` run tests instead and never pack.
+**Three things no workflow proves.** Each is named here rather than papered
+over. A reader who trusts a green gate should know what the gate does not read.
+
+**The rich renderer's draw.** `packages/tui/src/render-check.tsx` draws eleven
+screens through the real `App` and asserts on `captureCharFrame()`. It cannot be
+a test file: Vitest runs its workers under Node, and OpenTUI's renderer needs
+Bun's FFI (§1). It is a Bun script instead, so `test.include` never reaches it
+(§4). This is the rich renderer's only gate, and it runs by hand:
+
+```bash
+bun packages/tui/src/render-check.tsx
+```
+
+**Every package packing.** A package whose `exports` names a file `pack` never
+writes fails at publish time and nowhere earlier (§4). `bun run verify` at a
+desk is what catches it.
+
+**The binary starting.** The tests above prove the config resolves to an empty
+build and that boot loads what it resolved — the bare kernel in parts. Nothing
+starts the packed CLI under Bun and under Node and asserts that it answers.
 
 ## 6. Day-to-day commands
 

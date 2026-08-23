@@ -11,7 +11,8 @@ export interface Step {
   readonly with: Readonly<Record<string, Reference>>
   // A JSON Schema, inline, judged by the Validator slot at the point of use.
   readonly schema?: unknown
-  // A per-Step ceiling on Repairs, over the plugin's `repairs` option.
+  // A per-Step ceiling on Repairs, a whole number of zero or more, over the
+  // plugin's `repairs` option.
   readonly repairs?: number
 }
 
@@ -106,7 +107,11 @@ export const readWorkflow = (id: string, raw: unknown): ReadWorkflow => {
     let repairs: number | undefined
     if (step["repairs"] !== undefined) {
       repairs = readShape(step["repairs"], "number")
-      if (repairs === undefined) problems.push(`step ${at}: repairs is not a number`)
+      if (repairs === undefined) {
+        problems.push(`step ${at}: repairs is not a number`)
+      } else if (!Number.isInteger(repairs) || repairs < 0) {
+        problems.push(`step ${at}: repairs is ${repairs}, not a whole number of zero or more`)
+      }
     }
 
     const binds: Record<string, Reference> = {}

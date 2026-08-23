@@ -122,6 +122,19 @@ describe("readWorkflow", () => {
       ],
     },
     {
+      case: "a repairs that is negative or fractional",
+      document: {
+        steps: [
+          { id: "one", template: "a", repairs: -1 },
+          { id: "two", template: "b", repairs: 0.5 },
+        ],
+      },
+      problems: [
+        "step one: repairs is -1, not a whole number of zero or more",
+        "step two: repairs is 0.5, not a whole number of zero or more",
+      ],
+    },
+    {
       case: "a with key that is not a name",
       document: {
         steps: [{ id: "one", template: "a", with: { "not a name": "input" } }],

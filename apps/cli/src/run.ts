@@ -210,7 +210,7 @@ export const runHarness = Effect.fn("cli.runHarness")(function* (
 })
 
 /**
- * The first Ctrl-C cancels the Run. The orchestrator commits the partial
+ * The first Ctrl-C cancels the Run. `submit` commits the partial
  * work and closes the Run `cancelled`, because an interrupted Run still
  * closes; a second signal exits immediately.
  */

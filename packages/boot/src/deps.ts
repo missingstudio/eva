@@ -28,11 +28,11 @@ const cell = <A>(initial: A) => {
 }
 
 /**
- * The orchestrator's dependencies, built from the kernel. Every hook the SDK
+ * The dependencies `submit` reads, built from the kernel. Every hook the SDK
  * declares is run here. A hook no plugin registered is a no-op, not a
  * missing feature.
  *
- * A Hook edits what it is given in place and the orchestrator wants an
+ * A Hook edits what it is given in place and `submit` wants an
  * answer back, so each of these holds the answer while the Hooks run and
  * returns what the last one left.
  */

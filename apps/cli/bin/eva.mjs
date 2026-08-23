@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The binary runs the packed build. In the workspace, run the source with
-// `bun packages/cli/src/eva.ts` instead.
+// `bun apps/cli/src/eva.ts` instead.
 import { run } from "../dist/index.mjs"
 
 run()

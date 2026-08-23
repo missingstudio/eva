@@ -91,7 +91,8 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
     }
 
     // The second pass, before the first model call: every template, model
-    // and schema for every Step, and every problem reported together.
+    // and schema for every Step, the repair Template a Repair would fill,
+    // and every problem reported together.
     const rows = yield* deps.prompts
     const catalog = yield* deps.catalog
     const problems: string[] = []
@@ -125,6 +126,22 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
         }
       }
     }
+
+    // The repair Template, resolved as the Repair resolves it and dry-filled,
+    // so a missing or broken row refuses here and not after a paid Provider
+    // Turn. Only a Step with a schema and a ceiling above zero can repair.
+    const couldRepair = workflow.steps.some(
+      (step) => step.schema !== undefined && (step.repairs ?? deps.repairs) > 0,
+    )
+    if (couldRepair) {
+      const named = `${deps.document.id}.repair`
+      const template = rows.some((row) => row.id === named) ? named : REPAIR_TEMPLATE_ID
+      const dry = instructionOf(rows, template, { instruction: "", faults: "" })
+      if (dry.kind === "refused") {
+        problems.push(`the Repair cannot fill ${template}: ${dry.gaps.map(gapWord).join("; ")}`)
+      }
+    }
+
     if (problems.length > 0) {
       return yield* close(`workflow ${deps.document.id} cannot run: ${problems.join("; ")}`)
     }

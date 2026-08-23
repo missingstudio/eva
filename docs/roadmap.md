@@ -40,7 +40,9 @@ holds nothing else.
 
 **Exit test:** the bare kernel boots on Bun and on Node with every plugin
 disabled; disabling the trace plugin degrades instead of crashing; and swapping
-the trace sink in a live process works with no restart. CI runs all three.
+the trace sink in a live process works with no restart. `verify` runs all three
+as tests, and [toolchain.md](reference/toolchain.md) §5 names the part of the
+first that no workflow proves.
 
 **What every later stage may then assume:** a working plugin kernel, a sealed
 event schema that carries an ACP session with no loss, a trace with a swappable
@@ -90,9 +92,10 @@ and the demo block runs. All four run in `verify`.
 
 **Exit test, the measurement:** five canned Workflows over 100 Runs each give
 ≥95% first-pass validity aggregated over the 500 Candidates, with a repair
-yield of ≥90%. It runs on a schedule against one named model, and it files an
-issue when the rate drops. Aggregate rather than five thresholds: at a true
-97% rate, five independent per-Workflow thresholds fail about 31% of runs.
+yield of ≥90%. A maintainer runs it against one named model and reads the
+ratios; no workflow runs it, because a full run costs about $12 to $20.
+Aggregate rather than five thresholds: at a true 97% rate, five independent
+per-Workflow thresholds fail about 31% of runs.
 
 ### Stage 2: Tools and the loop
 

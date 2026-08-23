@@ -164,7 +164,7 @@ describe("configPath", () => {
     expect(configPath({})).toMatch(/\.eva\/config\.yaml$/)
   })
 
-  it("honors EVA_CONFIG, which the bare-kernel job depends on", () => {
+  it("honors EVA_CONFIG, which a hermetic run depends on", () => {
     expect(configPath({ EVA_CONFIG: "/tmp/eva-test.yaml" })).toBe("/tmp/eva-test.yaml")
   })
 })

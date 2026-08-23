@@ -169,7 +169,7 @@ describe("one Step that validates", () => {
     const watched = watchedHost([{ text: '{"entries":["a","b"]}' }, { text: "grouped" }])
     const reason = await prompted(watched, {
       document,
-      prompts: Effect.succeed([...ROWS, { id: "group", text: "Group: {{entries}}" }]),
+      prompts: Effect.succeed([...ROWS, REPAIR_ROW, { id: "group", text: "Group: {{entries}}" }]),
       validator: Effect.succeed(judging([{ verdict: "valid", value: { entries: ["a", "b"] } }])),
     })
 
@@ -339,6 +339,67 @@ describe("refused before the first model call", () => {
     expect(finished?.kind === "finished" && finished.claim.summary).toContain(
       "step draft: no Template is draft, did you mean drafts",
     )
+  })
+
+  // A broken repair row used to surface mid-run, after a Provider Turn was
+  // paid for. The pre-flight pass dry-fills the row the Repair would use.
+  it("refuses a repair Template the prompt domain does not hold, with no run at all", async () => {
+    const watched = watchedHost()
+    const reason = await prompted(watched, { prompts: Effect.succeed(ROWS) })
+
+    expect(reason).toBe("end_turn")
+    expect(watched.runs).toHaveLength(0)
+    const finished = finishedOf(watched)[0]
+    expect(finished?.kind === "finished" && finished.claim.summary).toBe(
+      "workflow notes cannot run: the Repair cannot fill workflow.repair: template workflow.repair",
+    )
+  })
+
+  it("refuses a shadowing <workflow>.repair row that cannot fill", async () => {
+    const watched = watchedHost()
+    const reason = await prompted(watched, {
+      prompts: Effect.succeed([
+        ...ROWS,
+        REPAIR_ROW,
+        { id: "notes.repair", text: "Fix: {{schema}}" },
+      ]),
+    })
+
+    expect(reason).toBe("end_turn")
+    expect(watched.runs).toHaveLength(0)
+    const finished = finishedOf(watched)[0]
+    expect(finished?.kind === "finished" && finished.claim.summary).toBe(
+      "workflow notes cannot run: the Repair cannot fill notes.repair: variable schema",
+    )
+  })
+
+  // The other side: a Workflow that can never repair must not refuse over a
+  // row it would never read.
+  it("skips the repair Template when no Step could repair", async () => {
+    const document = readWorkflow("notes", {
+      model: "fake/model",
+      steps: [
+        // A schema with a ceiling of zero, and a ceiling with no schema:
+        // neither Step can reach a Repair.
+        {
+          id: "draft",
+          template: "draft",
+          with: { changelog: "input" },
+          schema: SCHEMA,
+          repairs: 0,
+        },
+        { id: "group", template: "draft", with: { changelog: "input" } },
+      ],
+    })
+    const watched = watchedHost([{ text: '{"entries":[]}' }])
+    const reason = await prompted(watched, {
+      document,
+      prompts: Effect.succeed(ROWS),
+      validator: Effect.succeed(judging([{ verdict: "valid", value: { entries: [] } }])),
+    })
+
+    expect(reason).toBe("end_turn")
+    expect(watched.runs).toHaveLength(2)
   })
 
   it("refuses a model the Catalog does not hold", async () => {

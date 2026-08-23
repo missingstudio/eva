@@ -28,8 +28,9 @@ could be a vitest file. It cannot: vitest workers here run under **Node
 "OpenTUI native FFI is not available for this runtime yet". The plan's named
 fallback was taken, and improved on: `packages/tui/src/render-check.tsx` is a
 type-checked Bun script that draws 11 screens through the real `App` and
-asserts on `captureCharFrame()`. CI runs it in the `opentui-renderer` job in
-place of the old `bun -e` blob.
+asserts on `captureCharFrame()`. It replaced the old `bun -e` blob, and it runs
+at a desk — no workflow runs it
+([toolchain.md](../docs/reference/toolchain.md) §5).
 
 The old gate proved only that `createCliRenderer()` resolved. It passed a
 Frame missing `banner`, `notes`, `cursor`, `took` and `work`, was never

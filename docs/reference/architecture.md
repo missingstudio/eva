@@ -365,17 +365,17 @@ write to them. `tool` arrives with the stage that needs it; later stages add
 `workspace`, `check`, `memory`, `skill`, `importer`, and `signal`. Adding one
 is a reviewed SDK change.
 
-| Domain        | Holds                                           | Finalizer does                                                                                       | Written by                                                  |
-| ------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `catalog`     | providers, models, the default model            | validates policy, builds the lookup index                                                            | `eva.catalog.models`, `eva.provider.*`, `eva.config`        |
-| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists — checked at selection, not at commit; see plans/stage-1/005 | `eva.harness.*`, `eva.workflow`                             |
-| `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set                                                        | `eva.tui`, `eva.print`, `eva.api`, `eva.web`                |
-| `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default                                                            | `eva.agents`, `eva.profile`, `eva.config`                   |
-| `prompt`      | Templates, one row per Template                 | —                                                                                                    | `eva.prompt`, `eva.workflow`, `eva.validator`, `eva.config` |
-| `command`     | slash commands and their handlers               | checks name and alias collisions                                                                     | `eva.commands`, `eva.print`, `eva.config`                   |
-| `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys                                                        | `eva.themes`, `eva.config`                                  |
-| `keymap`      | key bindings by surface                         | detects conflicting bindings                                                                         | `eva.keymap`, `eva.config`                                  |
-| `integration` | credential sources and auth methods             | projects live connections                                                                            | `eva.auth`, `eva.provider.*`                                |
+| Domain        | Holds                                           | Finalizer does                                                                                       | Written by                                           |
+| ------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `catalog`     | providers, models, the default model            | validates policy, builds the lookup index                                                            | `eva.catalog.models`, `eva.provider.*`, `eva.config` |
+| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists — checked at selection, not at commit; see plans/stage-1/005 | `eva.harness.*`, `eva.workflow`                      |
+| `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set                                                        | `eva.tui`, `eva.print`, `eva.api`, `eva.web`         |
+| `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default                                                            | `eva.agents`, `eva.profile`, `eva.config`            |
+| `prompt`      | Templates, one row per Template                 | —                                                                                                    | `eva.prompt`, `eva.workflow`, `eva.config`           |
+| `command`     | slash commands and their handlers               | checks name and alias collisions                                                                     | `eva.commands`, `eva.print`, `eva.config`            |
+| `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys                                                        | `eva.themes`, `eva.config`                           |
+| `keymap`      | key bindings by surface                         | detects conflicting bindings                                                                         | `eva.keymap`, `eva.config`                           |
+| `integration` | credential sources and auth methods             | projects live connections                                                                            | `eva.auth`, `eva.provider.*`                         |
 
 Each domain publishes `<name>.updated` after it commits.
 
@@ -434,8 +434,8 @@ export const AnthropicProvider = define({
         provider.name = "Anthropic"
         provider.api = "https://api.anthropic.com"
       })
-      catalog.model.update("anthropic", "claude-sonnet-4-5", (model) => {
-        model.contextWindow = 200_000
+      catalog.model.update("anthropic", "claude-sonnet-5", (model) => {
+        model.contextWindow = 1_000_000
         model.cost = { input: 3, output: 15 }
       })
     })
@@ -512,7 +512,7 @@ The slots that exist through roadmap stage 2. Later stages add `RepoMap`,
 | ----------------- | -------------------------------------------------------------- | ---------------------------- | ----------------------------- |
 | `Recorder`        | the only path events take to the trace                         | `eva.trace`                  | —                             |
 | `TraceSink`       | append-only event store                                        | `eva.trace.jsonl`            | `eva.trace.memory`            |
-| `SessionStore`    | opens, folds, and persists a session                           | `eva.session.jsonl`          | `eva.session.sqlite`          |
+| `SessionStore`    | opens, folds, and persists a session                           | `eva.session.jsonl`          | —                             |
 | `Sandbox`         | runs a command under a policy                                  | `eva.sandbox.none` (stage 2) | `eva.sandbox.local` (stage 4) |
 | `FileSystem`      | reads and writes files under a root                            | `eva.fs`                     | —                             |
 | `Shell`           | starts a process and streams its output                        | `eva.shell`                  | —                             |
@@ -872,7 +872,7 @@ earns one; see [decisions.md](../decisions.md).
 | `@missingstudio/eva-core`     | pure domain: `Spec`, `Outcome`, `Claim`, `Session`, `Transcript`, the `SessionAPI`, and every slot contract                                   | `schema`, `acp`  |
 | `@missingstudio/eva-kernel`   | the plugin runtime, domain machinery including the row Draft, slot table, broadcast bus, config source, location                              | `schema`, `core` |
 | `@missingstudio/eva-sdk`      | `PluginContext`, `define`, every domain draft, every hook type, every slot key                                                                | `schema`, `core` |
-| `@missingstudio/eva-boot`     | assembles the Kernel: every domain, every slot, every hook, the plugin context, the orchestrator's deps, and the `SessionAPI` a Surface calls | `kernel`, `sdk`  |
+| `@missingstudio/eva-boot`     | assembles the Kernel: every domain, every slot, every hook, the plugin context, the deps `submit` reads, and the `SessionAPI` a Surface calls | `kernel`, `sdk`  |
 | `@missingstudio/eva-tui-core` | `Keymap`, `ThemeColors`, `Frame`, `Renderer` contracts and the helpers beside them. No rendering code.                                        | `schema`         |
 | `@missingstudio/eva-tui`      | the terminal: the OpenTUI React renderer, and a stream renderer for everywhere else                                                           | `tui-core`       |
 
@@ -920,14 +920,13 @@ many more that later stages add.
 
 **Trace and session**
 
-| Plugin id            | Package              | Contributes                            |
-| -------------------- | -------------------- | -------------------------------------- |
-| `eva.trace`          | `eva-trace`          | fills `Recorder` — the one commit path |
-| `eva.trace.jsonl`    | `eva-trace-jsonl`    | fills `TraceSink` (JSONL)              |
-| `eva.trace.memory`   | `eva-trace-memory`   | fills `TraceSink` (in-memory)          |
-| `eva.session.jsonl`  | `eva-session-jsonl`  | fills `SessionStore`                   |
-| `eva.session.sqlite` | `eva-session-sqlite` | fills `SessionStore`                   |
-| `eva.compaction`     | `eva-compaction`     | hook `session.compact`                 |
+| Plugin id           | Package             | Contributes                            |
+| ------------------- | ------------------- | -------------------------------------- |
+| `eva.trace`         | `eva-trace`         | fills `Recorder` — the one commit path |
+| `eva.trace.jsonl`   | `eva-trace-jsonl`   | fills `TraceSink` (JSONL)              |
+| `eva.trace.memory`  | `eva-trace-memory`  | fills `TraceSink` (in-memory)          |
+| `eva.session.jsonl` | `eva-session-jsonl` | fills `SessionStore`                   |
+| `eva.compaction`    | `eva-compaction`    | hook `session.compact`                 |
 
 **Configuration and identity**
 
@@ -1040,15 +1039,15 @@ external.
 
 ```yaml
 # ~/.eva/config.yaml
-model: anthropic/claude-sonnet-4-5
+model: anthropic/claude-sonnet-5
 
 plugins:
   # A string enables a plugin with no options.
   - eva.tool.web
 
   # An object carries options. They arrive as ctx.options.
-  - id: eva.trace
-    options: { dir: "~/.eva/traces" }
+  - id: eva.trace.jsonl
+    options: { path: "~/.eva/trace.jsonl" }
 
   # A package that is not built in. Resolved with bun, then loaded.
   - id: acme.reviewer
@@ -1116,8 +1115,9 @@ Everything but steps 2 and 3 is what this tree resolves. Those two need bundles
 and profiles, which do not exist yet; the order above is where they land when
 they do, and there is one place to add them.
 
-`EVA_CONFIG` replaces the path at step 4 rather than adding a layer over it —
-CI's bare-kernel job depends on the replacement, and `--config` is the flag that
+`EVA_CONFIG` replaces the path at step 4 rather than adding a layer over it — a
+hermetic run depends on the replacement, because a bare kernel given a named
+config must not inherit the machine's file, and `--config` is the flag that
 overlays. A directory and its config file are two layers, and the file is
 second: the file is the one place a person goes to override, so it wins over a
 resource the same directory discovered.

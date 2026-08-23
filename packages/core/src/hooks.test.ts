@@ -70,7 +70,7 @@ const base = (impl: Recorder | undefined, one: Provider): RunDeps => ({
 const failing = (errorClass: ProviderError["errorClass"]) =>
   Stream.fail(new ProviderError({ provider: "eva.provider.fake", errorClass, message: "refused" }))
 
-// Every hook the orchestrator declares must actually run. Registering one
+// Every hook `RunDeps` declares must actually run. Registering one
 // that never fires is the failure this file exists to prevent.
 describe("provider.request.before", () => {
   it("hands the hook the request and sends what it returns", async () => {

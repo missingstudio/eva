@@ -40,9 +40,9 @@ export class ConfigError extends Error {
 }
 
 /**
- * `EVA_CONFIG` replaces this path rather than adding a layer over it. CI's
- * bare-kernel job depends on the replacement, and `--config` is the flag
- * that overlays.
+ * `EVA_CONFIG` replaces this path rather than adding a layer over it. A
+ * hermetic run depends on the replacement, and `--config` is the flag that
+ * overlays.
  */
 export const configPath = (env: NodeJS.ProcessEnv = process.env): string =>
   expand(env["EVA_CONFIG"] ?? "~/.eva/config.yaml")

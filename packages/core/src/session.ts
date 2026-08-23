@@ -12,7 +12,7 @@ import type { ModelRef, Spec } from "./spec.js"
 
 /**
  * Every dependency is an Effect that resolves the current implementation, so
- * the orchestrator reads a slot at the point of use and never captures it.
+ * `submit` reads a slot at the point of use and never captures it.
  * Replacing the plugin behind one takes effect on the next read.
  */
 export interface RunDeps {

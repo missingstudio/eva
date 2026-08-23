@@ -361,7 +361,7 @@ export const makeSessionAPI = (
         state.fiber = undefined
       }),
 
-      // Interrupting is what closes the Run: the orchestrator commits the
+      // Interrupting is what closes the Run: `submit` commits the
       // partial work and closes it `cancelled`.
       cancel: Effect.fn("session.cancel")(function* (id: SessionID, _cause: CancelCause) {
         const state = live.get(id)
