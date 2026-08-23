@@ -8,7 +8,7 @@
 import { writeFileSync } from "node:fs"
 import { fetchModels } from "tokenlens"
 
-const PROVIDERS = ["anthropic"] as const
+const PROVIDERS = ["anthropic", "openai"] as const
 
 const providers = await fetchModels()
 
@@ -24,13 +24,19 @@ for (const provider of PROVIDERS) {
     const input = ticks(cost["input"])
     const output = ticks(cost["output"])
     if (input === undefined || output === undefined) continue
+    // A zero rate names an embedding or image model, not a completion. The
+    // catalog offers none of them, and the snapshot's own invariants hold
+    // every rate above zero.
+    if (input <= 0 || output <= 0) continue
+    // A zero cache rate means the vendor offers no caching there, so the
+    // field stays absent rather than naming a free rate.
     const cacheRead = ticks(cost["cache_read"])
     const cacheWrite = ticks(cost["cache_write"])
     const fields = [
       `inputTicks: ${input}`,
       `outputTicks: ${output}`,
-      ...(cacheRead === undefined ? [] : [`cacheReadTicks: ${cacheRead}`]),
-      ...(cacheWrite === undefined ? [] : [`cacheWriteTicks: ${cacheWrite}`]),
+      ...(cacheRead === undefined || cacheRead <= 0 ? [] : [`cacheReadTicks: ${cacheRead}`]),
+      ...(cacheWrite === undefined || cacheWrite <= 0 ? [] : [`cacheWriteTicks: ${cacheWrite}`]),
     ]
     rows.push(`  { provider: "${provider}", model: "${id}", ${fields.join(", ")} },`)
   }

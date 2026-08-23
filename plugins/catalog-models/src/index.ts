@@ -12,6 +12,16 @@ export const ANTHROPIC_MODELS: readonly ModelInfo[] = [
   { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", contextWindow: 200_000, reasoning: true },
 ]
 
+// Confirmed against the models.dev snapshot the price generator reads, so
+// every id here has a rate and the conformance gate stays green.
+export const OPENAI_MODELS: readonly ModelInfo[] = [
+  { id: "gpt-5.6", name: "GPT-5.6", contextWindow: 1_050_000, reasoning: true },
+  { id: "gpt-5.4", name: "GPT-5.4", contextWindow: 1_050_000, reasoning: true },
+  { id: "gpt-5.4-mini", name: "GPT-5.4 mini", contextWindow: 400_000, reasoning: true },
+  { id: "gpt-5.4-nano", name: "GPT-5.4 nano", contextWindow: 400_000, reasoning: true },
+  { id: "gpt-4o-mini", name: "GPT-4o mini", contextWindow: 128_000, reasoning: false },
+]
+
 // The catalog owns the model data, so it owns the fallback too. The CLI
 // reads this one rather than keeping a second copy that can drift.
 export const DEFAULT_MODEL: ModelRef = { provider: "anthropic", model: "claude-opus-5" }
@@ -24,10 +34,17 @@ export const catalogModels = define({
         provider.name = "Anthropic"
         provider.api = "https://api.anthropic.com"
       })
+      catalog.provider.update("openai", (provider) => {
+        provider.name = "OpenAI"
+        provider.api = "https://api.openai.com"
+      })
       // The seed is the row, so a field added to `ModelInfo` arrives without
       // a copier here having to learn about it.
       for (const seed of ANTHROPIC_MODELS) {
         catalog.model.update("anthropic", seed.id, (model) => void Object.assign(model, seed))
+      }
+      for (const seed of OPENAI_MODELS) {
+        catalog.model.update("openai", seed.id, (model) => void Object.assign(model, seed))
       }
       if (catalog.model.default.get() === undefined) {
         catalog.model.default.set(DEFAULT_MODEL)

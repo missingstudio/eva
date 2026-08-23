@@ -40,6 +40,8 @@
     "@missingstudio/eva-print": "workspace:*",
     "@missingstudio/eva-prompt": "workspace:*",
     "@missingstudio/eva-provider-anthropic": "workspace:*",
+    "@missingstudio/eva-provider-compatible": "workspace:*",
+    "@missingstudio/eva-provider-openai": "workspace:*",
     "@missingstudio/eva-provider-retry": "workspace:*",
     "@missingstudio/eva-schema": "workspace:*",
     "@missingstudio/eva-sdk": "workspace:*",

@@ -4,7 +4,11 @@ import { ProviderError } from "@missingstudio/eva-core"
 import type { ErrorClass, Payload, StopReason, TranscriptMessage } from "@missingstudio/eva-schema"
 import { Cause, Effect, Queue, Stream } from "effect"
 
+// Two identifiers, never one. The first names the plugin in a ProviderError
+// and a Claim; the second is what appears in a ModelRef, a usage.model
+// prefix, the price lookup, and as the Credential id.
 export const PROVIDER_ID = "eva.provider.anthropic"
+export const NAMESPACE = "anthropic"
 
 // Anthropic reports token counts and never a request cost, so `costTicks`
 // stays absent and the Run reports the gap rather than computing a figure.
@@ -59,8 +63,9 @@ export const toStopReason = (reason: string | null | undefined): StopReason | un
   }
 }
 
-const counter = (value: number | null | undefined): number | null =>
-  value === null || value === undefined ? null : Math.max(0, Math.trunc(value))
+// Silence is not zero: a counter the provider did not report stays null.
+// Clamping belongs to `eva.usage`, not here.
+const reported = (value: number | null | undefined): number | null => value ?? null
 
 export interface AnthropicOptions {
   // Absent when no credential resolved. The provider still answers the model
@@ -161,11 +166,11 @@ export const makeAnthropicProvider = (options: AnthropicOptions): Provider => {
                     const usage = message.usage
                     Queue.offerUnsafe(queue, {
                       kind: "usage",
-                      model: `anthropic/${message.model}`,
-                      inputTokens: counter(usage.input_tokens),
-                      outputTokens: counter(usage.output_tokens),
-                      cacheWriteTokens: counter(usage.cache_creation_input_tokens),
-                      cacheReadTokens: counter(usage.cache_read_input_tokens),
+                      model: `${NAMESPACE}/${message.model}`,
+                      inputTokens: reported(usage.input_tokens),
+                      outputTokens: reported(usage.output_tokens),
+                      cacheWriteTokens: reported(usage.cache_creation_input_tokens),
+                      cacheReadTokens: reported(usage.cache_read_input_tokens),
                     })
                     Queue.endUnsafe(queue)
                   })

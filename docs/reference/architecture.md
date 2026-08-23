@@ -938,14 +938,14 @@ many more that later stages add.
 
 **Catalog and providers**
 
-| Plugin id                 | Package                   | Contributes                                      |
-| ------------------------- | ------------------------- | ------------------------------------------------ |
-| `eva.catalog.models`      | `eva-catalog-models`      | base catalog data, refresh                       |
-| `eva.provider.anthropic`  | `eva-provider-anthropic`  | catalog transform, `model.resolve` hook          |
-| `eva.provider.openai`     | `eva-provider-openai`     | catalog transform, `model.resolve` hook          |
-| `eva.provider.compatible` | `eva-provider-compatible` | OpenAI-compatible endpoints, local models        |
-| `eva.provider.retry`      | `eva-provider-retry`      | hook `provider.retry`: backoff and error class   |
-| `eva.usage`               | `eva-usage`               | hook `provider.response.after`: normalizes usage |
+| Plugin id                 | Package                   | Contributes                                                                    |
+| ------------------------- | ------------------------- | ------------------------------------------------------------------------------ |
+| `eva.catalog.models`      | `eva-catalog-models`      | base catalog data, refresh                                                     |
+| `eva.provider.anthropic`  | `eva-provider-anthropic`  | catalog transform, `model.resolve` hook                                        |
+| `eva.provider.openai`     | `eva-provider-openai`     | `model.resolve` hook                                                           |
+| `eva.provider.compatible` | `eva-provider-compatible` | catalog transform, `model.resolve` hook — one Provider per configured endpoint |
+| `eva.provider.retry`      | `eva-provider-retry`      | hook `provider.retry`: backoff and error class                                 |
+| `eva.usage`               | `eva-usage`               | hook `provider.response.after`: normalizes usage                               |
 
 **Tools**
 

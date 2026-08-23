@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { ANTHROPIC_MODELS, DEFAULT_MODEL } from "./index.js"
+import { ANTHROPIC_MODELS, DEFAULT_MODEL, OPENAI_MODELS } from "./index.js"
 
 describe("ANTHROPIC_MODELS", () => {
   it.each(ANTHROPIC_MODELS)("gives $id a name and a positive context window", (seed) => {
@@ -11,6 +11,20 @@ describe("ANTHROPIC_MODELS", () => {
   // The catalog keys a model by its id, so a repeat would overwrite a row.
   it("holds one seed per id", () => {
     const ids = ANTHROPIC_MODELS.map((seed) => seed.id)
+
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe("OPENAI_MODELS", () => {
+  it.each(OPENAI_MODELS)("gives $id a name and a positive context window", (seed) => {
+    expect(seed.id).not.toBe("")
+    expect(seed.name).not.toBe("")
+    expect(seed.contextWindow).toBeGreaterThan(0)
+  })
+
+  it("holds one seed per id", () => {
+    const ids = OPENAI_MODELS.map((seed) => seed.id)
 
     expect(new Set(ids).size).toBe(ids.length)
   })

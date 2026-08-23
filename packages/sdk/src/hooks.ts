@@ -10,7 +10,8 @@ import type { Payload } from "@missingstudio/eva-schema"
 // A hook changes an operation through purpose-built methods, never a field.
 export interface ModelResolve {
   readonly reference: ModelRef
-  // The strictest decision wins; a later hook sees what an earlier one set.
+  // A later hook replaces what an earlier one set, so load order decides.
+  // There is no read: a hook states its own answer and does not negotiate.
   resolve(resolution: ModelResolution): void
 }
 

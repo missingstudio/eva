@@ -8,6 +8,8 @@ import { keymap } from "@missingstudio/eva-keymap"
 import { print } from "@missingstudio/eva-print"
 import { prompt } from "@missingstudio/eva-prompt"
 import { providerAnthropic } from "@missingstudio/eva-provider-anthropic"
+import { providerCompatible } from "@missingstudio/eva-provider-compatible"
+import { providerOpenAI } from "@missingstudio/eva-provider-openai"
 import { providerRetry } from "@missingstudio/eva-provider-retry"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
 import type { ReviewedEntry } from "@missingstudio/eva-config"
@@ -55,6 +57,10 @@ export const BUILT_IN: readonly Plugin[] = [
   catalogModels,
   catalogPrices,
   providerAnthropic,
+  providerOpenAI,
+  // After `providerOpenAI`, so a person who names an endpoint `openai`
+  // overrides the first-party one: load order is the documented answer.
+  providerCompatible,
   providerRetry,
   usage,
   budget,

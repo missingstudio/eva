@@ -401,6 +401,14 @@ A model behind one contract: a single method that begins a Provider Turn and
 yields payloads of the one Event schema. It knows no Run and no Session.
 _Avoid_: Backend, vendor, client
 
+**Namespace**:
+The name a Provider claims in the Catalog and in a model reference —
+`anthropic`, `openai`. It is not the Provider's id: `eva.provider.openai` names
+the plugin and appears in `ProviderError.provider` and in a Claim, while
+`openai` appears in `ModelRef.provider`, in the `usage.model` prefix, in the
+price lookup, and as the Credential id.
+_Avoid_: Prefix, vendor, provider id (that is the other one)
+
 **Catalog**:
 The Domain that holds Providers, their models, and the default. Provider plugins
 write to it; nothing owns it.

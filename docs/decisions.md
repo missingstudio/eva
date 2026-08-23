@@ -171,6 +171,13 @@ harness reaches it, because it runs before a harness exists. _Rejected:_ a
 silent refusal, and one sentence for both mistakes — an id that names no row and
 a row without `open` are corrected differently.
 
+**Two plugins claiming one Catalog namespace resolve by load order.**
+`model.resolve` hands over a setter with no getter, so the last hook to answer
+wins and the comment claiming otherwise was wrong. It is the wanted behaviour:
+a person who names a compatible endpoint `openai` means it to override the
+first-party one. _Rejected:_ giving the hook a read, which no Stage 1 caller
+needs.
+
 ## The trace
 
 **The payload union must carry an ACP session with no loss.** A missing kind
@@ -221,6 +228,13 @@ and block boundaries are structure. _Rejected:_ recording every frame.
 a token cap is a budget fact.
 
 **Usage is keyed by model.** One Run can span several.
+
+**Counters are clamped once, in `eva.usage`.** The Anthropic provider clamped
+negatives and truncated fractions in its own mapper, while
+`provider.response.after` already does that work for every provider. A
+provider reports the counters as they arrived; silence stays null. _Rejected:_
+keeping the provider's copy as a guard — two rules for one concern drift
+apart.
 
 **The reader's schemas are tied to the union at compile time.** `{ kind,
 ...parsed.data } as Payload` let a body that dropped a field compile. Each body

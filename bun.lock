@@ -32,6 +32,8 @@
         "@missingstudio/eva-print": "workspace:*",
         "@missingstudio/eva-prompt": "workspace:*",
         "@missingstudio/eva-provider-anthropic": "workspace:*",
+        "@missingstudio/eva-provider-compatible": "workspace:*",
+        "@missingstudio/eva-provider-openai": "workspace:*",
         "@missingstudio/eva-provider-retry": "workspace:*",
         "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
@@ -87,12 +89,15 @@
       "name": "@missingstudio/eva-conformance",
       "version": "0.0.0",
       "devDependencies": {
+        "@missingstudio/eva-auth": "workspace:*",
         "@missingstudio/eva-boot": "workspace:*",
         "@missingstudio/eva-catalog-models": "workspace:*",
         "@missingstudio/eva-catalog-prices": "workspace:*",
         "@missingstudio/eva-core": "workspace:*",
         "@missingstudio/eva-keymap": "workspace:*",
+        "@missingstudio/eva-print": "workspace:*",
         "@missingstudio/eva-prompt": "workspace:*",
+        "@missingstudio/eva-provider-compatible": "workspace:*",
         "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
         "@missingstudio/eva-session-jsonl": "workspace:*",
@@ -349,6 +354,38 @@
         "typescript": "catalog:",
       },
     },
+    "plugins/provider-compatible": {
+      "name": "@missingstudio/eva-provider-compatible",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+        "openai": "7.5.0",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/provider-openai": {
+      "name": "@missingstudio/eva-provider-openai",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+        "openai": "7.5.0",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "plugins/provider-retry": {
       "name": "@missingstudio/eva-provider-retry",
       "version": "0.0.0",
@@ -555,6 +592,10 @@
     "@missingstudio/eva-prompt": ["@missingstudio/eva-prompt@workspace:plugins/prompt"],
 
     "@missingstudio/eva-provider-anthropic": ["@missingstudio/eva-provider-anthropic@workspace:plugins/provider-anthropic"],
+
+    "@missingstudio/eva-provider-compatible": ["@missingstudio/eva-provider-compatible@workspace:plugins/provider-compatible"],
+
+    "@missingstudio/eva-provider-openai": ["@missingstudio/eva-provider-openai@workspace:plugins/provider-openai"],
 
     "@missingstudio/eva-provider-retry": ["@missingstudio/eva-provider-retry@workspace:plugins/provider-retry"],
 
@@ -999,6 +1040,8 @@
     "node-gyp-build-optional-packages": ["node-gyp-build-optional-packages@5.2.2", "", { "dependencies": { "detect-libc": "^2.0.1" }, "bin": { "node-gyp-build-optional-packages": "bin.js", "node-gyp-build-optional-packages-optional": "optional.js", "node-gyp-build-optional-packages-test": "build-test.js" } }, "sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw=="],
 
     "obug": ["obug@2.1.4", "", {}, "sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA=="],
+
+    "openai": ["openai@7.5.0", "", { "peerDependencies": { "@aws-sdk/credential-provider-node": ">=3.972.0 <4", "@smithy/hash-node": ">=4.3.0 <5", "@smithy/signature-v4": ">=5.4.0 <6", "ws": "^8.18.0", "zod": "^3.25 || ^4.0" }, "optionalPeers": ["@aws-sdk/credential-provider-node", "@smithy/hash-node", "@smithy/signature-v4", "ws", "zod"] }, "sha512-ZbDBz8FSB8Mv8fFYIUvzTFMdV5vl93/octp1MdtK2lfYepSpfv/ewmeugpKz/cwGtFSx+YuUM4NwpZ2P55YiPA=="],
 
     "oxfmt": ["oxfmt@0.61.0", "", { "dependencies": { "tinypool": "2.1.0" }, "optionalDependencies": { "@oxfmt/binding-android-arm-eabi": "0.61.0", "@oxfmt/binding-android-arm64": "0.61.0", "@oxfmt/binding-darwin-arm64": "0.61.0", "@oxfmt/binding-darwin-x64": "0.61.0", "@oxfmt/binding-freebsd-x64": "0.61.0", "@oxfmt/binding-linux-arm-gnueabihf": "0.61.0", "@oxfmt/binding-linux-arm-musleabihf": "0.61.0", "@oxfmt/binding-linux-arm64-gnu": "0.61.0", "@oxfmt/binding-linux-arm64-musl": "0.61.0", "@oxfmt/binding-linux-ppc64-gnu": "0.61.0", "@oxfmt/binding-linux-riscv64-gnu": "0.61.0", "@oxfmt/binding-linux-riscv64-musl": "0.61.0", "@oxfmt/binding-linux-s390x-gnu": "0.61.0", "@oxfmt/binding-linux-x64-gnu": "0.61.0", "@oxfmt/binding-linux-x64-musl": "0.61.0", "@oxfmt/binding-openharmony-arm64": "0.61.0", "@oxfmt/binding-win32-arm64-msvc": "0.61.0", "@oxfmt/binding-win32-ia32-msvc": "0.61.0", "@oxfmt/binding-win32-x64-msvc": "0.61.0" }, "peerDependencies": { "svelte": "^5.0.0", "vite-plus": "*" }, "optionalPeers": ["svelte", "vite-plus"], "bin": { "oxfmt": "bin/oxfmt" } }, "sha512-DxdHBEMYpcEnHoUHjjOigUqV2TYKsvxLwUPXnVYBjgFdqrcQ/91OtwubtZ2PUodCs3sStI8R5Qw3fKNGK4e8wQ=="],
 

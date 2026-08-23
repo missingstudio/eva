@@ -1,5 +1,5 @@
 import { boot, buildOf } from "@missingstudio/eva-boot"
-import { ANTHROPIC_MODELS, DEFAULT_MODEL } from "@missingstudio/eva-catalog-models"
+import { ANTHROPIC_MODELS, DEFAULT_MODEL, OPENAI_MODELS } from "@missingstudio/eva-catalog-models"
 import { CHECKED_AT, PRICES } from "@missingstudio/eva-catalog-prices"
 import { costFold, eventID, runID, sessionID, toTicks, type Event } from "@missingstudio/eva-schema"
 import { priceLookup } from "@missingstudio/eva-sdk"
@@ -40,6 +40,22 @@ describe("the catalog and its prices", () => {
     expect(priced.has(`anthropic/${id}`)).toBe(true)
   })
 
+  it.each(OPENAI_MODELS.map((model) => model.id))("prices %s", (id) => {
+    expect(priced.has(`openai/${id}`)).toBe(true)
+  })
+
+  /**
+   * The provider reports `reasoningTokens` without subtracting them from the
+   * output count, because OpenAI bills reasoning inside it. That is safe only
+   * while no `openai` seed carries a `reasoningTicks` rate — a rate here
+   * would charge those tokens twice, quietly.
+   */
+  it("prices no openai model's reasoning separately", () => {
+    for (const seed of PRICES.filter((one) => one.provider === "openai")) {
+      expect(seed.reasoningTicks).toBeUndefined()
+    }
+  })
+
   it(`carries a snapshot taken on ${CHECKED_AT}`, () => {
     expect(PRICES.length).toBeGreaterThan(0)
   })
@@ -68,6 +84,18 @@ describe("the catalog and its prices", () => {
     const [dated, plain] = await withCatalog((prices) => [
       prices(`${DEFAULT_MODEL.provider}/${DEFAULT_MODEL.model}-20260101`),
       prices(`${DEFAULT_MODEL.provider}/${DEFAULT_MODEL.model}`),
+    ])
+
+    expect(dated).toEqual(plain)
+    expect(dated?.inputTicks).toBeGreaterThan(0)
+  })
+
+  // OpenAI writes the date with dashes where Anthropic writes it plain, and
+  // the fallback must read both or every real OpenAI Run prices nothing.
+  it("prices the dashed dated id an OpenAI response reports", async () => {
+    const [dated, plain] = await withCatalog((prices) => [
+      prices("openai/gpt-4o-mini-2024-07-18"),
+      prices("openai/gpt-4o-mini"),
     ])
 
     expect(dated).toEqual(plain)

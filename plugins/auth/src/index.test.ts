@@ -22,7 +22,7 @@ const secretOf = (store: CredentialStore, id: string) =>
 
 describe("ENV_KEYS", () => {
   it("names one environment variable per provider", () => {
-    expect(ENV_KEYS).toEqual({ anthropic: "ANTHROPIC_API_KEY" })
+    expect(ENV_KEYS).toEqual({ anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY" })
   })
 })
 
@@ -76,8 +76,8 @@ describe("the configured mode alone decides", () => {
   })
 
   it("finds nothing for a provider ENV_KEYS does not name", async () => {
-    const store = await Effect.runPromise(build({ OPENAI_API_KEY: "sk" }, "api_key"))
-    expect(await Effect.runPromise(store.get("openai"))).toBeUndefined()
+    const store = await Effect.runPromise(build({ MISTRAL_API_KEY: "sk" }, "api_key"))
+    expect(await Effect.runPromise(store.get("mistral"))).toBeUndefined()
   })
 
   // The secret is behind an Effect, so serialization reaches the mode only.
@@ -85,6 +85,43 @@ describe("the configured mode alone decides", () => {
     const store = await Effect.runPromise(build({ ANTHROPIC_API_KEY: "sk" }, "api_key"))
     const found = await Effect.runPromise(store.get("anthropic"))
     expect(JSON.parse(JSON.stringify(found))).toEqual({ mode: "api_key" })
+  })
+
+  // `ENV_KEYS` is static and which providers there are is known when this
+  // runs: a declared mapping merges over it, so an endpoint named at run
+  // time reaches the environment too.
+  it("answers for a run-time-named provider the keys mapping carries", async () => {
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const durable = yield* makeFileStore({ path: temp() })
+        const store = yield* makeCredentialStore({
+          env: { VLLM_API_KEY: "sk-vllm" },
+          mode: () => "api_key",
+          keys: { ...ENV_KEYS, vllm: "VLLM_API_KEY" },
+          durable,
+        })
+        return yield* secretOf(store, "vllm")
+      }),
+    )
+    expect(found).toBe("sk-vllm")
+  })
+
+  // `eva auth status` reads `store.list`, so a provider the mapping names is
+  // seen there too.
+  it("lists a run-time-named provider the keys mapping carries", async () => {
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const durable = yield* makeFileStore({ path: temp() })
+        const store = yield* makeCredentialStore({
+          env: { VLLM_API_KEY: "sk-vllm" },
+          mode: () => "api_key",
+          keys: { ...ENV_KEYS, vllm: "VLLM_API_KEY" },
+          durable,
+        })
+        return yield* store.list
+      }),
+    )
+    expect(found).toEqual([{ id: "vllm", mode: "api_key" }])
   })
 
   it("lists only what the chosen mode can answer with", async () => {

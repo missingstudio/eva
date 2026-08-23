@@ -177,8 +177,10 @@ export interface IntegrationInfo {
 }
 
 // A release date on a model id. A response names the model it really ran,
-// which carries one where the Catalog's id does not.
-const RELEASED = /-\d{8}$/
+// which carries one where the Catalog's id does not. Two spellings, because
+// two vendors write it two ways: `claude-opus-5-20260101` and
+// `gpt-4o-mini-2024-07-18`.
+const RELEASED = /-(\d{8}|\d{4}-\d{2}-\d{2})$/
 
 /**
  * The Catalog's prices, as the fold reads them. A usage record names its
