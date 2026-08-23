@@ -4,6 +4,7 @@ import type {
   Recorder,
   SessionStore,
   TraceSink,
+  Validator,
 } from "@missingstudio/eva-core"
 import type { Plugin, Slots } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Scope, Stream } from "effect"
@@ -17,6 +18,7 @@ const SLOTS: readonly [keyof Slots, string, unknown][] = [
   ["sessionStore", "SessionStore", {} as SessionStore],
   ["credentialStore", "CredentialStore", {} as CredentialStore],
   ["budget", "Budget", {} as Budget],
+  ["validator", "Validator", {} as Validator],
 ]
 
 /**

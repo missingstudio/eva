@@ -44,6 +44,18 @@ export interface RunResult {
   // The slots that were empty when the Run needed them.
   readonly degraded: readonly string[]
   readonly attempts: number
+  /**
+   * The `text` payloads this Run produced, joined. A caller that must read the
+   * answer takes it from here: it may not read it back from a Trace it is
+   * still writing, and a build whose Recorder slot is empty records nothing at
+   * all and still answers.
+   *
+   * A Workflow's Step is one Run, so this is where its Candidate comes from.
+   *
+   * A retried Run joins every attempt, because every attempt is on the record
+   * and a fold of that record joins them the same way.
+   */
+  readonly text: string
 }
 
 const blockOf = (payload: Payload): number | undefined =>
@@ -61,6 +73,7 @@ const blockOf = (payload: Payload): number | undefined =>
 export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: RunInput) {
   const degraded: string[] = []
   const buffer: Payload[] = []
+  const spoken: string[] = []
   let block: number | undefined
   let attempts = 0
 
@@ -68,6 +81,8 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
   // show a payload on the stream that the Trace never received.
   const report = Effect.fn("core.report")(function* (payload: Payload) {
     buffer.push(payload)
+    if (payload.kind === "text" && payload.content.type === "text")
+      spoken.push(payload.content.text)
     yield* deps.emit(payload)
   })
 
@@ -114,6 +129,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
       ...(stopReason === undefined ? {} : { stopReason }),
       degraded,
       attempts,
+      text: spoken.join(""),
     } satisfies RunResult
   })
 

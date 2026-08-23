@@ -12,4 +12,12 @@ describe("samples", () => {
       expect(payload.kind).toBe(kind)
     }
   })
+
+  // The verdict sample shows the shape that carries data.
+  it("populates the verdict sample with faults", () => {
+    const sample = samples().verdict
+    if (sample.kind !== "verdict") throw new Error("wrong kind")
+    expect(sample.verdict).toBe("invalid")
+    expect(sample.faults).not.toHaveLength(0)
+  })
 })

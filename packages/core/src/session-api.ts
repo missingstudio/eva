@@ -4,7 +4,19 @@ import type { ModelRef } from "./spec.js"
 import type { SessionHeader, Transcript } from "./transcript.js"
 
 export type SubmitInput =
-  | { readonly kind: "prompt"; readonly text: string }
+  | {
+      readonly kind: "prompt"
+      readonly text: string
+      /**
+       * Which harness row answers this Prompt. Absent keeps the behaviour a
+       * Prompt has always had: one Run against the resolved model, no Harness
+       * involved — so `eva --print` and the Console are untouched.
+       *
+       * It rides the Prompt rather than a config key. A Workflow selected by a
+       * file the Run does not name is a Run nobody can reproduce.
+       */
+      readonly harness?: string
+    }
   | { readonly kind: "steer"; readonly text: string; readonly target: "next-run" | "next-step" }
 
 export type CancelCause = "user" | "budget" | "shutdown"

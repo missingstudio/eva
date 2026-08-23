@@ -156,10 +156,20 @@ value made by a plugin that may unload.
 
 **A native Harness reaches Eva through two members, and `updates` is empty
 because it has no wire.** `HarnessInfo.open` is handed a `HarnessHost` that
-takes one Run and commits one group, so the ACP contract is unchanged and only
-`run` opens or closes a Run. The in-process transport is direct calls, which
-architecture.md §12.8 already says. _Rejected:_ a second set of step and run
-types at the same seam, with their own `close`.
+takes one Run and commits one group, so the ACP contract is unchanged and, of
+the two members, only `run` opens or closes a Run. The in-process transport is
+direct calls, which architecture.md §12.8 already says. _Rejected:_ a second set
+of step and run types at the same seam, with their own `close`.
+
+**A Prompt that names a harness nothing can run is refused as a Run of its
+own.** `SessionAPI.submit` opens one, closes it with a failed Claim and a near
+miss, and takes no Provider Turn, so a person reads the refusal where every
+other outcome is read. The Claim is classed `other`, the way `submit` classes a
+cancelled Run: the eight Error Classes name provider faults, and this Run
+reached no provider. It is the one Run boot opens outside `submit`, and no
+harness reaches it, because it runs before a harness exists. _Rejected:_ a
+silent refusal, and one sentence for both mistakes — an id that names no row and
+a row without `open` are corrected differently.
 
 ## The trace
 

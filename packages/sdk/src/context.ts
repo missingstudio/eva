@@ -7,6 +7,7 @@ import type {
   SessionStore,
   Slot,
   TraceSink,
+  Validator,
 } from "@missingstudio/eva-core"
 import type { PriceLookup } from "@missingstudio/eva-schema"
 import type { Effect } from "effect"
@@ -42,6 +43,7 @@ export interface Slots {
   readonly sessionStore: Slot<SessionStore>
   readonly credentialStore: Slot<CredentialStore>
   readonly budget: Slot<Budget>
+  readonly validator: Slot<Validator>
 }
 
 export type ProviderHooks = Hooks<ProviderHookSpec>

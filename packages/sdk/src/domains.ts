@@ -1,6 +1,8 @@
 import {
   modelRef,
   type Domain,
+  type Harness,
+  type HarnessHost,
   type ModelRef,
   type Row,
   type SessionAPI,
@@ -132,9 +134,26 @@ export interface AgentInfo {
   tools?: readonly string[]
 }
 
+export interface PromptInfo {
+  id: string
+  /**
+   * The Template text. A row with no text is not a Template, so this is
+   * required, and the projection drops an empty one rather than registering a
+   * row that fills to nothing and then fails at the wire.
+   */
+  text: string
+}
+
+/**
+ * A harness row is a factory, not an instance: five Claude Code sessions in
+ * five worktrees are five instances of one harness kind. A row without `open`
+ * describes a harness the build knows of but cannot run — the same rule
+ * `SurfaceInfo.start` states.
+ */
 export interface HarnessInfo {
   id: string
   name: string
+  open?: (host: HarnessHost) => Effect.Effect<Harness, never, Scope.Scope>
 }
 
 /**
@@ -201,6 +220,7 @@ export interface RowInfos {
   readonly theme: ThemeInfo
   readonly keymap: KeymapInfo
   readonly agent: AgentInfo
+  readonly prompt: PromptInfo
   readonly harness: HarnessInfo
   readonly surface: SurfaceInfo
   readonly integration: IntegrationInfo

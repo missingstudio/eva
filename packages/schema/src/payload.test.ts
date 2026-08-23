@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { dispositions, errorClasses, kinds, resolutions } from "./payload.js"
+import { dispositions, errorClasses, kinds, resolutions, verdicts } from "./payload.js"
 
 // The glossary in docs/context.md fixes these sets. Drift fails here.
 describe("the closed sets", () => {
-  it("holds twenty payload kinds", () => {
-    expect(kinds()).toHaveLength(20)
-    expect(new Set(kinds()).size).toBe(20)
+  it("holds twenty-one payload kinds", () => {
+    expect(kinds()).toHaveLength(21)
+    expect(new Set(kinds()).size).toBe(21)
+  })
+
+  it("holds the three verdicts", () => {
+    expect([...verdicts()]).toEqual(["valid", "invalid", "unchecked"])
   })
 
   // A Question that cannot be answered in the record is a Trace that

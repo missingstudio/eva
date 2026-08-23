@@ -360,26 +360,28 @@ scope, so a plugin's transforms disappear when the plugin unloads.
 
 ### 4.2 The domain list
 
-The eight domains the SDK declares today, their state, and the plugins that
-write to them. `tool` and `prompt` arrive with the stages that need them; later
-stages add `workspace`, `check`, `memory`, `skill`, `importer`, and `signal`.
-Adding one is a reviewed SDK change.
+The nine domains the SDK declares today, their state, and the plugins that
+write to them. `tool` arrives with the stage that needs it; later stages add
+`workspace`, `check`, `memory`, `skill`, `importer`, and `signal`. Adding one
+is a reviewed SDK change.
 
-| Domain        | Holds                                           | Finalizer does                                | Written by                                           |
-| ------------- | ----------------------------------------------- | --------------------------------------------- | ---------------------------------------------------- |
-| `catalog`     | providers, models, the default model            | validates policy, builds the lookup index     | `eva.catalog.models`, `eva.provider.*`, `eva.config` |
-| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists       | `eva.harness.*`, `eva.workflow`                      |
-| `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set | `eva.tui`, `eva.print`, `eva.api`, `eva.web`         |
-| `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default     | `eva.agents`, `eva.profile`, `eva.config`            |
-| `command`     | slash commands and their handlers               | checks name and alias collisions              | `eva.commands`, `eva.print`, `eva.config`            |
-| `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys | `eva.themes`, `eva.config`                           |
-| `keymap`      | key bindings by surface                         | detects conflicting bindings                  | `eva.keymap`, `eva.config`                           |
-| `integration` | credential sources and auth methods             | projects live connections                     | `eva.auth`, `eva.provider.*`                         |
+| Domain        | Holds                                           | Finalizer does                                                                                       | Written by                                                  |
+| ------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `catalog`     | providers, models, the default model            | validates policy, builds the lookup index                                                            | `eva.catalog.models`, `eva.provider.*`, `eva.config`        |
+| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists — checked at selection, not at commit; see plans/stage-1/005 | `eva.harness.*`, `eva.workflow`                             |
+| `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set                                                        | `eva.tui`, `eva.print`, `eva.api`, `eva.web`                |
+| `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default                                                            | `eva.agents`, `eva.profile`, `eva.config`                   |
+| `prompt`      | Templates, one row per Template                 | —                                                                                                    | `eva.prompt`, `eva.workflow`, `eva.validator`, `eva.config` |
+| `command`     | slash commands and their handlers               | checks name and alias collisions                                                                     | `eva.commands`, `eva.print`, `eva.config`                   |
+| `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys                                                        | `eva.themes`, `eva.config`                                  |
+| `keymap`      | key bindings by surface                         | detects conflicting bindings                                                                         | `eva.keymap`, `eva.config`                                  |
+| `integration` | credential sources and auth methods             | projects live connections                                                                            | `eva.auth`, `eva.provider.*`                                |
 
 Each domain publishes `<name>.updated` after it commits.
 
-A row that describes an action carries the action. `CommandInfo.run` and
-`SurfaceInfo.start` are both optional, so one plugin may name a command and
+A row that describes an action carries the action. `CommandInfo.run`,
+`SurfaceInfo.start` and `HarnessInfo.open` are all optional, so one plugin may
+name a command and
 another supply what it does: `eva.commands` declares `/cost`, and `eva.print`
 fills in its handler, because the formatter it needs belongs to the plugin that
 prints. A row with the field absent names something the build knows of but
@@ -1338,10 +1340,11 @@ so `eva.harness.conform` measures it rather than assuming it.
 ### 12.3 The agent half — what a harness implements
 
 This is the shape a harness implements when stage 9c registers the first one.
-`packages/core/src/harness.ts` today holds the stage-0 subset — `id`,
-`capabilities`, `initialize`, `createSession`, `resumeSession`, `prompt`,
-`cancel`, and `updates` — because the harness domain exists and holds nothing.
-The rest lands with the row that needs it.
+`packages/core/src/harness.ts` today holds the subset a native harness needs —
+`id`, `capabilities`, `initialize`, `createSession`, `resumeSession`, `prompt`,
+`cancel`, and `updates`. The rest lands with the row that needs it, and `Harness`
+itself did not change when the harness domain gained a runnable row: what a
+native harness is handed is §12.3b, not a second contract.
 
 ```ts
 export interface Harness {
@@ -1422,6 +1425,50 @@ wraps a system that has its own plugin ecosystem.
 An adapter may expose those as host-scoped points, so a DeepSeek Harness plugin
 keeps working under Eva. Eva does not flatten another system's extensibility
 into a single opaque row.
+
+### 12.3b What Eva hands a native harness
+
+A harness that runs in this process has no wire and no model access of its own,
+so Eva hands it one contract of two members. This is the in-process transport of
+§12.8, and it is the whole of it.
+
+```ts
+// packages/core/src/harness.ts
+export interface HarnessHost {
+  readonly run: (input: RunInput) => Effect.Effect<RunResult>
+  readonly report: (payloads: readonly Payload[]) => Effect.Effect<void>
+}
+```
+
+`run` is `submit` with the kernel's slots and hooks bound. It is the only thing
+here that opens a Run and the only thing that closes one, so a native harness
+gets the same Recorder open, block grouping, provider hooks, Budget charge and
+close-on-interrupt every other caller gets.
+
+`report` commits one group through the same Recorder, outside any Run. The
+second member is there for one reason: a `verdict` is known only after the Run
+that produced the Candidate has closed, and it has to be on the Trace before a
+Repair is paid for. Without it an interrupt loses the first-pass record, and a
+rate measured from the Trace then counts fewer Candidates than ran.
+
+`HarnessInfo.open` is what a plugin fills to receive it, and a row without
+`open` names a harness the build knows of and cannot run. `SessionAPI.submit`
+refuses an unknown id at selection with a failed Claim and a near miss, and
+resolves no model. The Claim is classed `other`, the way a cancelled Run is: the
+eight Error Classes name provider faults, and this Run reached no provider.
+
+**A native harness's `updates` is `Stream.empty`, because it has no wire.** The
+field's own comment ties it to the wire format, and `payloads` in the acp
+package is what reads it. Synthesizing ACP updates so that reader could run
+would renumber block indices a Provider Turn already assigned, and it would give
+the seam a second record path. Empty is the truthful value, not a gap. The
+client half goes unused for the same reason: a native harness with no tools
+never calls `requestPermission`, and one with no wire never calls
+`sessionUpdate`.
+
+A refusal is itself a Run, so `SessionAPI.submit` opens and closes one without
+taking a Provider Turn. That is the only Run boot opens outside `submit`, and no
+harness reaches it — it runs before a harness exists.
 
 ### 12.4 The client half — what Eva provides
 

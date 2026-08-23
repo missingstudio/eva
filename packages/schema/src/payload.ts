@@ -71,6 +71,24 @@ export interface Claim {
   readonly errorClass?: ErrorClass
 }
 
+/**
+ * What came of judging one Candidate. `unchecked` is the caller's word, never
+ * a Validator's: an empty Slot answers nothing, so the caller writes it and
+ * every rate holds it out.
+ */
+export type Verdict = "valid" | "invalid" | "unchecked"
+
+/**
+ * One thing a Candidate got wrong: where, and what the JSON Schema wanted
+ * there. `at` is a JSON Pointer and "" is the root. It carries no value found,
+ * because the Candidate itself is recorded as `text`, and because Stage 6's
+ * redaction should confirm that rule rather than discover it.
+ */
+export interface Fault {
+  readonly at: string
+  readonly wanted: string
+}
+
 export interface PlanEntry {
   readonly content: string
   readonly priority: "high" | "medium" | "low"
@@ -167,6 +185,27 @@ export type Payload =
       readonly delayMs: number
       readonly errorClass: ErrorClass
     }
+  | {
+      readonly kind: "verdict"
+      /**
+       * Which Step of a Workflow produced the Candidate. A projection pairs
+       * attempts by this and by the Session, not by the Run, because a
+       * Repair is its own Run. It is in the payload and not on the envelope:
+       * a key nothing folds by does not earn a place on every record, and
+       * only this kind is folded by it.
+       */
+      readonly step: string
+      readonly verdict: Verdict
+      /**
+       * 1 is the first pass and a Repair is 2. This counts Candidates, so a
+       * `retry` record between two attempts does not advance it: that was a
+       * Provider Turn that produced nothing, and this one produced an answer.
+       */
+      readonly attempt: number
+      // Every Fault the Validator found, so the Repair is rebuildable from
+      // the Trace. Empty unless the verdict is `invalid`.
+      readonly faults: readonly Fault[]
+    }
   | { readonly kind: "edit"; readonly path: string; readonly hunks: number }
   | { readonly kind: "needs_human"; readonly question: string; readonly resume: Cursor }
   | {
@@ -203,6 +242,7 @@ const KINDS = [
   "info",
   "usage",
   "retry",
+  "verdict",
   "edit",
   "needs_human",
   "resolved",
@@ -247,7 +287,10 @@ const RESOLUTIONS = [
   "cancelled",
 ] as const satisfies readonly Resolution[]
 
+const VERDICTS = ["valid", "invalid", "unchecked"] as const satisfies readonly Verdict[]
+
 export const kinds = (): readonly Kind[] => KINDS
 export const errorClasses = (): readonly ErrorClass[] => ERROR_CLASSES
 export const dispositions = (): readonly Disposition[] => DISPOSITIONS
 export const resolutions = (): readonly Resolution[] => RESOLUTIONS
+export const verdicts = (): readonly Verdict[] => VERDICTS

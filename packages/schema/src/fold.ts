@@ -1,7 +1,7 @@
 import { estimateTicks, type PriceLookup } from "./cost.js"
 import { sameFoldKeys, type Event } from "./event.js"
 import type { ActorKind } from "./id.js"
-import type { ContentBlock, Disposition, ToolKind, ToolStatus } from "./payload.js"
+import type { ContentBlock, Disposition, ToolKind, ToolStatus, Verdict } from "./payload.js"
 
 const isText = (content: ContentBlock): content is Extract<ContentBlock, { type: "text" }> =>
   content.type === "text"
@@ -310,3 +310,106 @@ export const transcriptFold = (events: readonly Event[]): readonly TranscriptMes
   }
   return messages
 }
+
+/**
+ * What a run of Candidates came to. Five counters, and each one is divided by
+ * or reported. There is no `settledInvalid` and no `repaired`: both are
+ * arithmetic on these, and a counter nothing divides by does not land.
+ *
+ * A Candidate is the run of `verdict` records with the same Session and the
+ * same `step`, whose `attempt` starts at 1 and rises by one. An attempt that
+ * returns to 1 starts the next Candidate. The Run is not part of the key,
+ * because a Repair is its own Run.
+ */
+export interface VerdictSummary {
+  // Candidates that were judged on their first pass, in a Run that lost no
+  // slot. The denominator of both ratios.
+  readonly firstPass: number
+  // Of those, how many conformed at once. Records with attempt 1 and verdict
+  // `valid`.
+  readonly firstPassValid: number
+  // Of those, how many reached `valid` at any attempt. Post-repair validity is
+  // this over `firstPass`, so the two ratios share one denominator.
+  readonly settledValid: number
+  /**
+   * Candidates nothing judged, because the Validator slot was empty. Held out
+   * of both ratios and reported, so an absent Validator lowers coverage and
+   * can never raise the rate.
+   */
+  readonly unchecked: number
+  /**
+   * Candidates from a Run that committed any `degraded` record. Held out of
+   * both ratios and reported, because Eva keeps Degraded data, marks it, and
+   * holds it out of eval scoring. An `unchecked` Candidate is normally held
+   * too — the caller reports `degraded` naming `Validator` — so the two
+   * counters overlap on purpose and neither enters a ratio.
+   */
+  readonly held: number
+}
+
+interface Candidate {
+  // The verdict of the attempt-1 record. Null when the trace lost it, which
+  // keeps an interrupted Candidate out of the denominator.
+  first: Verdict | null
+  settledValid: boolean
+  held: boolean
+}
+
+export const verdictFold = (events: readonly Event[]): VerdictSummary => {
+  // A `degraded` record can land after the verdicts of its Run, so the held
+  // mark needs the whole trace before any Candidate is tallied.
+  const degradedRuns = new Set<string>()
+  for (const event of events) {
+    if (event.payload.kind === "degraded") degradedRuns.add(event.run)
+  }
+
+  const candidates: Candidate[] = []
+  const open = new Map<string, Candidate>()
+  for (const event of events) {
+    if (event.payload.kind !== "verdict") continue
+    const record = event.payload
+    const key = `${event.session}\u0000${record.step}`
+    let candidate = open.get(key)
+    if (candidate === undefined || record.attempt === 1) {
+      candidate = {
+        first: record.attempt === 1 ? record.verdict : null,
+        settledValid: false,
+        held: false,
+      }
+      candidates.push(candidate)
+      open.set(key, candidate)
+    }
+    candidate.settledValid ||= record.verdict === "valid"
+    candidate.held ||= degradedRuns.has(event.run)
+  }
+
+  let firstPass = 0
+  let firstPassValid = 0
+  let settledValid = 0
+  let unchecked = 0
+  let held = 0
+  for (const candidate of candidates) {
+    if (candidate.held) held += 1
+    if (candidate.first === "unchecked") unchecked += 1
+    if (candidate.held || candidate.first === "unchecked" || candidate.first === null) continue
+    firstPass += 1
+    if (candidate.first === "valid") firstPassValid += 1
+    if (candidate.settledValid) settledValid += 1
+  }
+  return { firstPass, firstPassValid, settledValid, unchecked, held }
+}
+
+/**
+ * A rate over nothing is not zero. This mirrors `spendOf`, so a measurement
+ * that judged nothing cannot print 0% or 100%.
+ */
+export type Validity =
+  | { readonly kind: "none" }
+  | { readonly kind: "rate"; readonly valid: number; readonly of: number }
+
+// First-pass validity. `of` is `firstPass`, the one denominator: post-repair
+// validity is `settledValid` over the same figure, never over a second one.
+export const validityOf = (summary: VerdictSummary): Validity =>
+  summary.firstPass === 0
+    ? { kind: "none" }
+    : { kind: "rate", valid: summary.firstPassValid, of: summary.firstPass }

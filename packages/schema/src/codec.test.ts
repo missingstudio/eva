@@ -97,6 +97,38 @@ describe("decode", () => {
   })
 })
 
+describe("the verdict body", () => {
+  const body = {
+    step: "draft",
+    verdict: "invalid",
+    attempt: 1,
+    faults: [{ at: "/title", wanted: "a string" }],
+  }
+
+  it("round-trips", () => {
+    const event = wrap(samples().verdict)
+    expect(decodeLine(encodeLine(event)).payload).toEqual(samples().verdict)
+  })
+
+  it.each([0, -1])("refuses attempt %d", (attempt) => {
+    expect(() => decodeLine(line("verdict", { ...body, attempt }))).toThrow(CodecError)
+  })
+
+  it("refuses a verdict word outside the three", () => {
+    expect(() => decodeLine(line("verdict", { ...body, verdict: "passed" }))).toThrow(CodecError)
+  })
+
+  it.each(["valid", "unchecked"])("accepts empty faults on %s", (verdict) => {
+    expect(() => decodeLine(line("verdict", { ...body, verdict, faults: [] }))).not.toThrow()
+  })
+
+  // An empty Step id is a caller's problem, not the codec's: refusing it
+  // would put a Workflow rule in the wire table.
+  it("accepts an empty step", () => {
+    expect(() => decodeLine(line("verdict", { ...body, step: "" }))).not.toThrow()
+  })
+})
+
 describe("encode", () => {
   // A record in memory carries no version, so the writer is the one place
   // a version is decided and there is nothing to disagree with it.

@@ -9,6 +9,7 @@ import {
   headerFold,
   mergeText,
   transcriptFold,
+  verdictFold,
 } from "../src/index.js"
 
 const dir = new URL(".", import.meta.url).pathname
@@ -27,6 +28,9 @@ for (const file of readdirSync(dir).filter((name) => name.endsWith(".jsonl"))) {
     ),
     headers: Object.fromEntries(
       sessions.map((s) => [s, headerFold(events.filter((e) => e.session === s))]),
+    ),
+    verdicts: Object.fromEntries(
+      sessions.map((s) => [s, verdictFold(events.filter((e) => e.session === s))]),
     ),
   }
   const out = join(dir, "goldens", file.replace(".jsonl", ".json"))

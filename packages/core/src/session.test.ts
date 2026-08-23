@@ -86,6 +86,15 @@ const deps = (
 
 const kinds = (payloads: readonly Payload[]) => payloads.map((payload) => payload.kind)
 
+// What the Run said, read off the record the same way `RunResult.text` reads
+// it off the stream — so the two cannot drift apart unnoticed.
+const spoken = (payloads: readonly Payload[]) =>
+  payloads
+    .map((payload) =>
+      payload.kind === "text" && payload.content.type === "text" ? payload.content.text : "",
+    )
+    .join("")
+
 describe("submit", () => {
   it("opens, commits the turn, and closes with a Claim", async () => {
     const recorder = fakeRecorder()
@@ -181,6 +190,40 @@ describe("submit", () => {
     expect(recorder.groups.flatMap(kinds)).toContain("finished")
   })
 
+  it("answers with every text payload the turn produced, joined in arrival order", async () => {
+    const stream = Stream.fromIterable([text("One "), text("two "), text("three"), usage])
+    const result = await Effect.runPromise(
+      submit(deps(fakeRecorder(), fakeProvider(stream)), input),
+    )
+
+    expect(result.text).toBe("One two three")
+  })
+
+  // A caller that has to judge the answer reads one field, so a Run that said
+  // nothing answers the empty string rather than nothing at all.
+  it("answers the empty string when the turn produced no text", async () => {
+    const result = await Effect.runPromise(
+      submit(deps(fakeRecorder(), fakeProvider(Stream.fromIterable([usage]))), input),
+    )
+
+    expect(result.text).toBe("")
+  })
+
+  it("answers the empty string when nothing answers the model reference", async () => {
+    const result = await Effect.runPromise(submit(deps(fakeRecorder(), undefined), input))
+
+    expect(result.text).toBe("")
+    expect(result.claim).toMatchObject({ result: "failed", errorClass: "no_such_model" })
+  })
+
+  it("answers the empty string when the provider has no usable credential", async () => {
+    const provider = fakeProvider(Stream.fromIterable([text("never sent")]), false)
+    const result = await Effect.runPromise(submit(deps(fakeRecorder(), provider), input))
+
+    expect(result.text).toBe("")
+    expect(result.claim).toMatchObject({ result: "failed", errorClass: "auth_failed" })
+  })
+
   it("closes cancelled and keeps the partial work when interrupted mid-stream", async () => {
     const recorder = fakeRecorder()
     const program = Effect.gen(function* () {
@@ -214,5 +257,13 @@ describe("submit", () => {
     const committed = recorder.groups.flat()
     expect(kinds(committed)).toContain("text")
     expect(committed.at(-1)).toMatchObject({ kind: "finished", stopReason: "cancelled" })
+
+    // The text that arrived is on the record, and it is a prefix of what the
+    // provider would have said. `RunResult.text` joins exactly these payloads;
+    // an interrupted Run's result reaches no caller, because interruption
+    // propagates, so the record is where the partial answer can be read.
+    const partial = spoken(committed)
+    expect(partial).not.toBe("")
+    expect("Partial".startsWith(partial)).toBe(true)
   })
 })

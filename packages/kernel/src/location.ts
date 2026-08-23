@@ -9,6 +9,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { Effect } from "effect"
 import { configPath, directoryLayer, fileLayer, type Layer } from "./config.js"
+import { RESOURCE_DIRECTORIES } from "./resources.js"
 
 /**
  * Where Eva is running, whether that directory is trusted, and the layers
@@ -20,7 +21,8 @@ export interface Location {
   readonly trusted: boolean
   // Lowest precedence first: the user directory and file, then the project.
   readonly chain: readonly Layer[]
-  // Project files that are there and were not read, so a run can say so.
+  // Project config files and resource directories that are there and were
+  // not read, so a run can say so.
   readonly ignored: readonly string[]
 }
 
@@ -144,6 +146,16 @@ const layersFor = (directory: string): readonly Layer[] => [
   fileLayer(join(directory, CONFIG_FILE)),
 ]
 
+/**
+ * What an untrusted directory holds and was not read: the config file, and
+ * every resource directory that is there. A person with prompts and no
+ * config.yaml is told what a grant would have opened.
+ */
+const skipped = (directory: string): readonly string[] =>
+  [CONFIG_FILE, ...RESOURCE_DIRECTORIES]
+    .map((name) => join(directory, name))
+    .filter((path) => existsSync(path))
+
 export const resolveLocation = (
   directory: string = process.cwd(),
   env: NodeJS.ProcessEnv = process.env,
@@ -164,8 +176,6 @@ export const resolveLocation = (
         ...(custom === undefined ? [] : layersFor(custom)),
         ...(trusted ? project.flatMap(layersFor) : []),
       ],
-      ignored: trusted
-        ? []
-        : project.map((one) => join(one, CONFIG_FILE)).filter((one) => existsSync(one)),
+      ignored: trusted ? [] : project.flatMap(skipped),
     }
   })

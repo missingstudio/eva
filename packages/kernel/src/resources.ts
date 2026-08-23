@@ -64,6 +64,12 @@ const collect = (
   return { raw, origin }
 }
 
+// A YAML resource is the mapping its file holds, or nothing at all.
+const mapping = (source: string): Record<string, unknown> => {
+  const parsed: unknown = parse(source)
+  return isMapping(parsed) ? parsed : {}
+}
+
 const under = (key: string, found: Resources): Resources =>
   Object.keys(found.raw).length === 0
     ? { raw: {}, origin: {} }
@@ -75,10 +81,24 @@ const under = (key: string, found: Resources): Resources =>
       }
 
 /**
- * Every resource a directory holds, as one mapping. The directories are
- * the concepts the tree has: an agent, a command, and a theme. A directory
- * for a concept that does not exist yet would be structure inviting
- * occupants, so there is none.
+ * The directories a `.eva` may hold, which are the concepts the tree has: an
+ * agent, a command, a prompt, a theme, and a workflow. `resolveLocation`
+ * reads this to name what an untrusted checkout holds and was skipped, so the
+ * list is not spelled a second time there.
+ */
+export const RESOURCE_DIRECTORIES = [
+  "agents",
+  "commands",
+  "prompts",
+  "themes",
+  "workflows",
+] as const
+
+/**
+ * Every resource a directory holds, as one mapping. The directories are the
+ * concepts the tree has: an agent, a command, a prompt, a theme, and a
+ * workflow. A directory for a concept that does not exist yet would be
+ * structure inviting occupants, so there is no other.
  */
 export const resources = (directory: string): Resources => {
   const found = [
@@ -98,12 +118,14 @@ export const resources = (directory: string): Resources => {
       }),
     ),
     under(
-      "themes",
-      collect(join(directory, "themes"), ".yaml", (source) => {
-        const parsed: unknown = parse(source)
-        return isMapping(parsed) ? parsed : {}
+      "prompts",
+      collect(join(directory, "prompts"), ".md", (source) => {
+        const { data, body } = document(source)
+        return { ...data, ...(body === "" ? {} : { text: body }) }
       }),
     ),
+    under("themes", collect(join(directory, "themes"), ".yaml", mapping)),
+    under("workflows", collect(join(directory, "workflows"), ".yaml", mapping)),
   ]
 
   return {

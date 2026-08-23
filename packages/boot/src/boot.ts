@@ -4,6 +4,7 @@ import type {
   Recorder,
   SessionStore,
   TraceSink,
+  Validator,
 } from "@missingstudio/eva-core"
 import {
   batch,
@@ -149,6 +150,7 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     sessionStore: yield* slotOf<SessionStore>("SessionStore"),
     credentialStore: yield* slotOf<CredentialStore>("CredentialStore"),
     budget: yield* slotOf<Budget>("Budget"),
+    validator: yield* slotOf<Validator>("Validator"),
   }
 
   // The topic is derived from the name, so a domain cannot be wired up with
@@ -167,6 +169,7 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     theme: yield* rowsOf("theme"),
     keymap: yield* rowsOf("keymap"),
     agent: yield* rowsOf("agent"),
+    prompt: yield* rowsOf("prompt"),
     harness: yield* rowsOf("harness"),
     surface: yield* rowsOf("surface"),
     integration: yield* rowsOf("integration"),

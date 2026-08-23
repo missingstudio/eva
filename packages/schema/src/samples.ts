@@ -65,6 +65,13 @@ export const samples = (): Record<Kind, Payload> => ({
     serverToolTokens: null,
   },
   retry: { kind: "retry", attempt: 1, max: 3, delayMs: 2000, errorClass: "overloaded" },
+  verdict: {
+    kind: "verdict",
+    step: "summarize",
+    verdict: "invalid",
+    attempt: 1,
+    faults: [{ at: "/summary", wanted: "a string" }],
+  },
   edit: { kind: "edit", path: "src/index.ts", hunks: 2 },
   needs_human: {
     kind: "needs_human",

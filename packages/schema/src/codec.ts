@@ -144,6 +144,12 @@ const bodies = {
     delayMs: z.number().int().nonnegative(),
     errorClass,
   }),
+  verdict: z.strictObject({
+    step: z.string(),
+    verdict: z.enum(["valid", "invalid", "unchecked"]),
+    attempt: z.number().int().positive(),
+    faults: z.array(z.strictObject({ at: z.string(), wanted: z.string() })),
+  }),
   edit: z.strictObject({ path: z.string(), hunks: z.number().int().nonnegative() }),
   needs_human: z.strictObject({ question: z.string(), resume: cursor }),
   resolved: z.strictObject({

@@ -56,6 +56,32 @@ describe("resources", () => {
     })
   })
 
+  it("takes a prompt's id from its file name and its text from the body", () => {
+    const directory = scratch()
+    const path = write(directory, "prompts/commit-msg.md", "Write one line for {{diff}}.")
+
+    expect(resources(directory).raw["prompts"]).toEqual({
+      "commit-msg": { text: "Write one line for {{diff}}." },
+    })
+    expect(resources(directory).origin).toEqual({ "prompts.commit-msg.text": path })
+  })
+
+  it("reads a prompt's frontmatter beside the body", () => {
+    const directory = scratch()
+    write(directory, "prompts/commit-msg.md", "---\nnote: terse\n---\nWrite one line.")
+
+    expect(resources(directory).raw["prompts"]).toEqual({
+      "commit-msg": { note: "terse", text: "Write one line." },
+    })
+  })
+
+  it("holds no prompts when the directory has none, which is not an error", () => {
+    const directory = scratch()
+    write(directory, "agents/review.md", "Read the diff.")
+
+    expect(resources(directory).raw["prompts"]).toBeUndefined()
+  })
+
   it("reads a theme as the mapping its file holds", () => {
     const directory = scratch()
     write(directory, "themes/dusk.yaml", "name: Dusk\ncolors:\n  foreground: '#eee'\n")
@@ -63,6 +89,23 @@ describe("resources", () => {
     expect(resources(directory).raw["themes"]).toEqual({
       dusk: { name: "Dusk", colors: { foreground: "#eee" } },
     })
+  })
+
+  it("reads a workflow as the mapping its file holds, keyed by its base name", () => {
+    const directory = scratch()
+    const path = write(
+      directory,
+      "workflows/release-notes.yaml",
+      "name: Release notes\nsteps:\n  - id: summarize\n    template: release/summarize\n",
+    )
+
+    expect(resources(directory).raw["workflows"]).toEqual({
+      "release-notes": {
+        name: "Release notes",
+        steps: [{ id: "summarize", template: "release/summarize" }],
+      },
+    })
+    expect(resources(directory).origin["workflows.release-notes.name"]).toBe(path)
   })
 
   it("passes over a file the directory does not claim", () => {

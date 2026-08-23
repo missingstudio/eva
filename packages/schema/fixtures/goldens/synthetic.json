@@ -22,7 +22,18 @@
     "{\"id\":\"evt_synth_021\",\"seq\":10,\"at\":{\"wall\":\"2026-08-15T09:02:20.000000Z\"},\"version\":1,\"kind\":\"needs_human\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"question\":\"Overwrite the existing file?\",\"resume\":{\"session\":\"sess_synth_degraded\",\"seq\":9}}}",
     "{\"id\":\"evt_synth_021b\",\"seq\":11,\"at\":{\"wall\":\"2026-08-15T09:02:25.000000Z\"},\"version\":1,\"kind\":\"resolved\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"question\":\"evt_synth_021\",\"resolution\":\"answered\",\"content\":{\"type\":\"text\",\"text\":\"Yes, overwrite it.\"}}}",
     "{\"id\":\"evt_synth_022\",\"seq\":12,\"at\":{\"wall\":\"2026-08-15T09:02:21.000000Z\"},\"version\":1,\"kind\":\"usage\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"model\":\"anthropic/claude-sonnet-4-5\",\"inputTokens\":900,\"outputTokens\":120,\"cacheWriteTokens\":null,\"cacheReadTokens\":40,\"reasoningTokens\":null,\"serverToolTokens\":null}}",
-    "{\"id\":\"evt_synth_023\",\"seq\":13,\"at\":{\"wall\":\"2026-08-15T09:02:22.000000Z\"},\"version\":1,\"kind\":\"finished\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"claim\":{\"result\":\"failed\",\"summary\":\"cancelled by user\"},\"stopReason\":\"cancelled\"}}"
+    "{\"id\":\"evt_synth_023\",\"seq\":13,\"at\":{\"wall\":\"2026-08-15T09:02:22.000000Z\"},\"version\":1,\"kind\":\"finished\",\"run\":\"run_synth_degraded\",\"session\":\"sess_synth_degraded\",\"parent\":null,\"payload\":{\"claim\":{\"result\":\"failed\",\"summary\":\"cancelled by user\"},\"stopReason\":\"cancelled\"}}",
+    "{\"id\":\"evt_synth_024\",\"seq\":1,\"at\":{\"wall\":\"2026-08-15T09:03:00.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vclean\",\"session\":\"sess_synth_vclean\",\"parent\":null,\"payload\":{\"step\":\"draft\",\"verdict\":\"valid\",\"attempt\":1,\"faults\":[]}}",
+    "{\"id\":\"evt_synth_025\",\"seq\":2,\"at\":{\"wall\":\"2026-08-15T09:03:01.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vclean\",\"session\":\"sess_synth_vclean\",\"parent\":null,\"payload\":{\"step\":\"title\",\"verdict\":\"valid\",\"attempt\":1,\"faults\":[]}}",
+    "{\"id\":\"evt_synth_026\",\"seq\":1,\"at\":{\"wall\":\"2026-08-15T09:03:02.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vrepair_1\",\"session\":\"sess_synth_vrepair\",\"parent\":null,\"payload\":{\"step\":\"draft\",\"verdict\":\"invalid\",\"attempt\":1,\"faults\":[{\"at\":\"/title\",\"wanted\":\"a string\"}]}}",
+    "{\"id\":\"evt_synth_027\",\"seq\":2,\"at\":{\"wall\":\"2026-08-15T09:03:03.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vrepair_2\",\"session\":\"sess_synth_vrepair\",\"parent\":null,\"payload\":{\"step\":\"draft\",\"verdict\":\"valid\",\"attempt\":2,\"faults\":[]}}",
+    "{\"id\":\"evt_synth_028\",\"seq\":1,\"at\":{\"wall\":\"2026-08-15T09:03:04.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vexhausted_1\",\"session\":\"sess_synth_vexhausted\",\"parent\":null,\"payload\":{\"step\":\"draft\",\"verdict\":\"invalid\",\"attempt\":1,\"faults\":[{\"at\":\"\",\"wanted\":\"an object\"}]}}",
+    "{\"id\":\"evt_synth_029\",\"seq\":2,\"at\":{\"wall\":\"2026-08-15T09:03:05.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vexhausted_2\",\"session\":\"sess_synth_vexhausted\",\"parent\":null,\"payload\":{\"step\":\"draft\",\"verdict\":\"invalid\",\"attempt\":2,\"faults\":[{\"at\":\"\",\"wanted\":\"an object\"}]}}",
+    "{\"id\":\"evt_synth_030\",\"seq\":1,\"at\":{\"wall\":\"2026-08-15T09:03:06.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vunchecked\",\"session\":\"sess_synth_vunchecked\",\"parent\":null,\"payload\":{\"step\":\"draft\",\"verdict\":\"unchecked\",\"attempt\":1,\"faults\":[]}}",
+    "{\"id\":\"evt_synth_031\",\"seq\":2,\"at\":{\"wall\":\"2026-08-15T09:03:07.000000Z\"},\"version\":1,\"kind\":\"degraded\",\"run\":\"run_synth_vunchecked\",\"session\":\"sess_synth_vunchecked\",\"parent\":null,\"payload\":{\"missing\":[\"Validator\"]}}",
+    "{\"id\":\"evt_synth_032\",\"seq\":1,\"at\":{\"wall\":\"2026-08-15T09:03:08.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vsteps_1\",\"session\":\"sess_synth_vsteps\",\"parent\":null,\"payload\":{\"step\":\"outline\",\"verdict\":\"invalid\",\"attempt\":1,\"faults\":[{\"at\":\"/sections\",\"wanted\":\"at least two entries\"}]}}",
+    "{\"id\":\"evt_synth_033\",\"seq\":2,\"at\":{\"wall\":\"2026-08-15T09:03:09.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vsteps_1\",\"session\":\"sess_synth_vsteps\",\"parent\":null,\"payload\":{\"step\":\"summary\",\"verdict\":\"valid\",\"attempt\":1,\"faults\":[]}}",
+    "{\"id\":\"evt_synth_034\",\"seq\":3,\"at\":{\"wall\":\"2026-08-15T09:03:10.000000Z\"},\"version\":1,\"kind\":\"verdict\",\"run\":\"run_synth_vsteps_2\",\"session\":\"sess_synth_vsteps\",\"parent\":null,\"payload\":{\"step\":\"outline\",\"verdict\":\"valid\",\"attempt\":2,\"faults\":[]}}"
   ],
   "transcripts": {
     "sess_synth_tools": [
@@ -109,7 +120,12 @@
           }
         ]
       }
-    ]
+    ],
+    "sess_synth_vclean": [],
+    "sess_synth_vrepair": [],
+    "sess_synth_vexhausted": [],
+    "sess_synth_vunchecked": [],
+    "sess_synth_vsteps": []
   },
   "costs": {
     "sess_synth_tools": {
@@ -131,6 +147,56 @@
       "serverToolTokens": null,
       "costTicks": null,
       "estimatedCostTicks": null
+    },
+    "sess_synth_vclean": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheWriteTokens": null,
+      "cacheReadTokens": null,
+      "reasoningTokens": null,
+      "serverToolTokens": null,
+      "costTicks": null,
+      "estimatedCostTicks": null
+    },
+    "sess_synth_vrepair": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheWriteTokens": null,
+      "cacheReadTokens": null,
+      "reasoningTokens": null,
+      "serverToolTokens": null,
+      "costTicks": null,
+      "estimatedCostTicks": null
+    },
+    "sess_synth_vexhausted": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheWriteTokens": null,
+      "cacheReadTokens": null,
+      "reasoningTokens": null,
+      "serverToolTokens": null,
+      "costTicks": null,
+      "estimatedCostTicks": null
+    },
+    "sess_synth_vunchecked": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheWriteTokens": null,
+      "cacheReadTokens": null,
+      "reasoningTokens": null,
+      "serverToolTokens": null,
+      "costTicks": null,
+      "estimatedCostTicks": null
+    },
+    "sess_synth_vsteps": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "cacheWriteTokens": null,
+      "cacheReadTokens": null,
+      "reasoningTokens": null,
+      "serverToolTokens": null,
+      "costTicks": null,
+      "estimatedCostTicks": null
     }
   },
   "headers": {
@@ -140,6 +206,62 @@
     "sess_synth_degraded": {
       "title": "Trace format",
       "updatedAt": "2026-08-15T09:05:00Z"
+    },
+    "sess_synth_vclean": {},
+    "sess_synth_vrepair": {},
+    "sess_synth_vexhausted": {},
+    "sess_synth_vunchecked": {},
+    "sess_synth_vsteps": {}
+  },
+  "verdicts": {
+    "sess_synth_tools": {
+      "firstPass": 0,
+      "firstPassValid": 0,
+      "settledValid": 0,
+      "unchecked": 0,
+      "held": 0
+    },
+    "sess_synth_degraded": {
+      "firstPass": 0,
+      "firstPassValid": 0,
+      "settledValid": 0,
+      "unchecked": 0,
+      "held": 0
+    },
+    "sess_synth_vclean": {
+      "firstPass": 2,
+      "firstPassValid": 2,
+      "settledValid": 2,
+      "unchecked": 0,
+      "held": 0
+    },
+    "sess_synth_vrepair": {
+      "firstPass": 1,
+      "firstPassValid": 0,
+      "settledValid": 1,
+      "unchecked": 0,
+      "held": 0
+    },
+    "sess_synth_vexhausted": {
+      "firstPass": 1,
+      "firstPassValid": 0,
+      "settledValid": 0,
+      "unchecked": 0,
+      "held": 0
+    },
+    "sess_synth_vunchecked": {
+      "firstPass": 0,
+      "firstPassValid": 0,
+      "settledValid": 0,
+      "unchecked": 1,
+      "held": 1
+    },
+    "sess_synth_vsteps": {
+      "firstPass": 2,
+      "firstPassValid": 1,
+      "settledValid": 2,
+      "unchecked": 0,
+      "held": 0
     }
   }
 }

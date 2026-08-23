@@ -38,6 +38,7 @@
     "@missingstudio/eva-kernel": "workspace:*",
     "@missingstudio/eva-keymap": "workspace:*",
     "@missingstudio/eva-print": "workspace:*",
+    "@missingstudio/eva-prompt": "workspace:*",
     "@missingstudio/eva-provider-anthropic": "workspace:*",
     "@missingstudio/eva-provider-retry": "workspace:*",
     "@missingstudio/eva-schema": "workspace:*",
@@ -50,6 +51,8 @@
     "@missingstudio/eva-tui": "workspace:*",
     "@missingstudio/eva-tui-surface": "workspace:*",
     "@missingstudio/eva-usage": "workspace:*",
+    "@missingstudio/eva-validator": "workspace:*",
+    "@missingstudio/eva-workflow": "workspace:*",
     "commander": "catalog:",
     "effect": "catalog:"
   },

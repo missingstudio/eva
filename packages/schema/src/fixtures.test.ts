@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { decodeLine, encodeLine } from "./codec.js"
 import { SCHEMA_VERSION } from "./event.js"
-import { costFold, headerFold, mergeText, transcriptFold } from "./fold.js"
+import { costFold, headerFold, mergeText, transcriptFold, verdictFold } from "./fold.js"
 
 const dir = new URL("../fixtures", import.meta.url).pathname
 const files = readdirSync(dir).filter((name) => name.endsWith(".jsonl"))
@@ -39,6 +39,7 @@ describe.each(files)("fixture %s", (file) => {
       expect(JSON.parse(JSON.stringify(transcriptFold(own)))).toEqual(golden.transcripts[session])
       expect(costFold(own)).toEqual(golden.costs[session])
       expect(headerFold(own)).toEqual(golden.headers[session])
+      expect(verdictFold(own)).toEqual(golden.verdicts[session])
     }
   })
 })

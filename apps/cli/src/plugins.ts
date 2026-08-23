@@ -6,6 +6,7 @@ import { commands } from "@missingstudio/eva-commands"
 import { config } from "@missingstudio/eva-config"
 import { keymap } from "@missingstudio/eva-keymap"
 import { print } from "@missingstudio/eva-print"
+import { prompt } from "@missingstudio/eva-prompt"
 import { providerAnthropic } from "@missingstudio/eva-provider-anthropic"
 import { providerRetry } from "@missingstudio/eva-provider-retry"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
@@ -17,8 +18,10 @@ import { themes } from "@missingstudio/eva-themes"
 import { trace } from "@missingstudio/eva-trace"
 import { traceJsonl } from "@missingstudio/eva-trace-jsonl"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
+import { validator } from "@missingstudio/eva-validator"
 import { makeTui } from "@missingstudio/eva-tui-surface"
 import { usage } from "@missingstudio/eva-usage"
+import { workflow } from "@missingstudio/eva-workflow"
 import { VERSION } from "./version.js"
 
 /**
@@ -55,9 +58,17 @@ export const BUILT_IN: readonly Plugin[] = [
   providerRetry,
   usage,
   budget,
+  validator,
   commands,
   themes,
   keymap,
+  // After every plugin that seeds a built-in Template, so the person's
+  // config wins the same-id replace.
+  prompt,
+  // After `prompt`, `catalogModels`, `catalogPrices`, the providers and
+  // `validator`: load order is transform-replay precedence, and the built-in
+  // repair Template fills only a row the person's config left empty.
+  workflow,
   config,
   print,
   tui,

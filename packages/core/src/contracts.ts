@@ -1,4 +1,12 @@
-import type { Claim, Event, Payload, RunID, SessionID, StopReason } from "@missingstudio/eva-schema"
+import type {
+  Claim,
+  Event,
+  Fault,
+  Payload,
+  RunID,
+  SessionID,
+  StopReason,
+} from "@missingstudio/eva-schema"
 import { Data } from "effect"
 import type { Effect, Stream } from "effect"
 import type { BudgetDecision, BudgetState, Usage } from "./spec.js"
@@ -92,4 +100,48 @@ export interface Budget {
   readonly state: Effect.Effect<BudgetState>
   // Answers whether the next Provider Turn is affordable under the limits.
   readonly check: Effect.Effect<BudgetDecision>
+}
+
+export class ValidatorError extends Data.TaggedError("ValidatorError")<{
+  readonly message: string
+}> {}
+
+/**
+ * What `check` answers about one Candidate. `value` is the parsed Output, so
+ * the caller does not parse twice; it never reaches a record, because the
+ * Candidate is already in the Trace as `text`.
+ *
+ * The field is spelled `verdict` in both variants and on the record, so there
+ * is one word and one spelling. A Validator never answers `unchecked`: an
+ * empty Slot answers nothing, and the caller writes that word.
+ */
+export type Judged =
+  | { readonly verdict: "valid"; readonly value: unknown }
+  | { readonly verdict: "invalid"; readonly faults: readonly Fault[] }
+
+/**
+ * Judges one Candidate against a JSON Schema. It judges form, never truth, and
+ * it never calls a model. The Repair is the caller's.
+ *
+ * Faults are one per instance location, after reduction. A Validator that
+ * reports one Fault per document and one that reports one per location give
+ * different numbers for the same Runs, and the Slot exists to allow the swap —
+ * so the rule lives here, where a second Validator plugin will read it.
+ */
+export interface Validator {
+  /**
+   * Fails only when the JSON Schema itself cannot be read. A Workflow calls
+   * this once per Step before it opens a Run, so an author's broken schema
+   * stops the Workflow instead of reading as a Candidate the model got wrong
+   * and lowering the measured rate for the wrong reason.
+   */
+  readonly accepts: (schema: unknown) => Effect.Effect<void, ValidatorError>
+  /**
+   * `candidate` is text, because at Stage 1 a Candidate is the Step's `text`
+   * payloads joined and `ProviderRequest` has no response-format field.
+   * Extract, parse and check are one judgement, so a Candidate that is not
+   * JSON at all gets one Verdict and one Fault set rather than a parse failure
+   * the caller has to word itself.
+   */
+  readonly check: (schema: unknown, candidate: string) => Effect.Effect<Judged, ValidatorError>
 }

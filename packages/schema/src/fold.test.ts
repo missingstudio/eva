@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 import { toTicks } from "./cost.js"
 import { foldKeys, type Event } from "./event.js"
 import { eventID, runID, sessionID } from "./id.js"
-import { costFold, mergeText, transcriptFold } from "./fold.js"
-import type { Payload } from "./payload.js"
+import { costFold, mergeText, transcriptFold, validityOf, verdictFold } from "./fold.js"
+import type { Payload, Verdict } from "./payload.js"
 import { samples } from "./samples.js"
 
 let counter = 0
@@ -303,5 +303,98 @@ describe("transcriptFold", () => {
       { type: "content", block: 0, content: { type: "text", text: "mine" } },
       { type: "content", block: 0, content: { type: "text", text: "theirs" } },
     ])
+  })
+
+  // A Verdict is not conversation content.
+  it("keeps a verdict out of the transcript", () => {
+    expect(transcriptFold([make(samples().verdict)])).toEqual([])
+  })
+})
+
+const verdict = (
+  step: string,
+  word: Verdict,
+  attempt: number,
+  faults: readonly { at: string; wanted: string }[] = [],
+): Payload => ({ kind: "verdict", step, verdict: word, attempt, faults })
+
+const fault = { at: "/title", wanted: "a string" }
+
+describe("verdictFold", () => {
+  const none = { firstPass: 0, firstPassValid: 0, settledValid: 0, unchecked: 0, held: 0 }
+
+  it("counts every Candidate that conforms on the first pass", () => {
+    const summary = verdictFold([
+      make(verdict("draft", "valid", 1)),
+      make(verdict("title", "valid", 1)),
+    ])
+    expect(summary).toEqual({ ...none, firstPass: 2, firstPassValid: 2, settledValid: 2 })
+  })
+
+  it("pairs a Repair across two Runs into one Candidate", () => {
+    const summary = verdictFold([
+      make(verdict("draft", "invalid", 1, [fault])),
+      make(verdict("draft", "valid", 2), { run: runID("run_b") }),
+    ])
+    expect(summary).toEqual({ ...none, firstPass: 1, firstPassValid: 0, settledValid: 1 })
+  })
+
+  it("does not move settledValid when every attempt fails", () => {
+    const summary = verdictFold([
+      make(verdict("draft", "invalid", 1, [fault])),
+      make(verdict("draft", "invalid", 2, [fault]), { run: runID("run_b") }),
+    ])
+    expect(summary).toEqual({ ...none, firstPass: 1 })
+  })
+
+  it("holds an unchecked Candidate out of both ratios", () => {
+    const summary = verdictFold([
+      make(verdict("draft", "unchecked", 1)),
+      make({ kind: "degraded", missing: ["Validator"] }),
+    ])
+    expect(summary).toEqual({ ...none, unchecked: 1, held: 1 })
+  })
+
+  it("pairs attempts by step and not by adjacency", () => {
+    const summary = verdictFold([
+      make(verdict("outline", "invalid", 1, [fault])),
+      make(verdict("summary", "valid", 1)),
+      make(verdict("outline", "valid", 2), { run: runID("run_b") }),
+    ])
+    expect(summary).toEqual({ ...none, firstPass: 2, firstPassValid: 1, settledValid: 2 })
+  })
+
+  // The retry was a Provider Turn that produced nothing; the attempt
+  // counts Candidates.
+  it("does not let a retry between attempts split the Candidate", () => {
+    const summary = verdictFold([
+      make(verdict("draft", "invalid", 1, [fault])),
+      make(samples().retry),
+      make(verdict("draft", "valid", 2), { run: runID("run_b") }),
+    ])
+    expect(summary).toEqual({ ...none, firstPass: 1, firstPassValid: 0, settledValid: 1 })
+  })
+
+  // This stops a build that quietly lost a slot from reporting a rate it
+  // did not earn.
+  it("holds every Candidate of a Run that committed a degraded, whatever it lost", () => {
+    const summary = verdictFold([
+      make(verdict("draft", "valid", 1)),
+      make({ kind: "degraded", missing: ["TraceSink"] }),
+    ])
+    expect(summary).toEqual({ ...none, held: 1 })
+  })
+})
+
+describe("validityOf", () => {
+  it("answers none over nothing, whatever unchecked holds", () => {
+    const summary = { firstPass: 0, firstPassValid: 0, settledValid: 0, unchecked: 3, held: 0 }
+    expect(validityOf(summary)).toEqual({ kind: "none" })
+  })
+
+  it("answers the rate over firstPass, the one denominator", () => {
+    const summary = { firstPass: 4, firstPassValid: 3, settledValid: 4, unchecked: 1, held: 1 }
+    expect(validityOf(summary)).toEqual({ kind: "rate", valid: 3, of: 4 })
+    expect(validityOf(summary)).toMatchObject({ of: summary.firstPass })
   })
 })
