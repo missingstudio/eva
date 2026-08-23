@@ -1,5 +1,5 @@
 import { modelRef, type ModelRef, type SessionAPI } from "@missingstudio/eva-core"
-import { boot, type Kernel } from "@missingstudio/eva-boot"
+import { boot, type Build, type Kernel } from "@missingstudio/eva-boot"
 import { DEFAULT_MODEL } from "@missingstudio/eva-catalog-models"
 import { findings, KEYS, type Finding } from "@missingstudio/eva-config"
 import {
@@ -72,14 +72,19 @@ export const resolveConfig = Effect.fn("cli.resolveConfig")(function* (
  * Every plugin the config resolves to, loaded from this build's table. It
  * takes a resolution the caller already has, so a run that reported on the
  * config does not resolve it a second time and risk two answers.
+ *
+ * The table is a parameter with the build as its default, so a test hands
+ * over one whose provider is scripted and every branch of `main` runs
+ * without a key.
  */
 export const startFrom = Effect.fn("cli.startFrom")(function* (
   scope: Scope.Scope,
   settled: ResolvedConfig,
+  build: Build = BUILD,
 ) {
   const { config, model, plugins: resolved } = settled
 
-  const kernel = yield* boot({ scope, resolved, build: BUILD, config: config.raw })
+  const kernel = yield* boot({ scope, resolved, build, config: config.raw })
 
   return { kernel, config, model } satisfies Started
 })
@@ -143,6 +148,65 @@ export const runPrint = Effect.fn("cli.runPrint")(function* (
 
   const transcript = yield* Effect.scoped(api.attach(session))
   return { claim, session, costLine: costLine(transcript.cost()) } satisfies PrintResult
+})
+
+export interface HarnessResult {
+  readonly claim: Claim
+  // The text of the Run that closed last. Empty when no Run wrote any.
+  readonly text: string
+}
+
+export interface HarnessInput {
+  // The harness row id the verb named.
+  readonly harness: string
+  // The one input, as the Prompt text.
+  readonly text: string
+  // The directory the new Session belongs to.
+  readonly location: string
+}
+
+/**
+ * One Prompt through the Harness the verb named, and the answer read back
+ * from the record. A Workflow is many Runs and each one reports its text, so
+ * the surface filters: the last Run's text is the answer, and the Runs
+ * before it are in the Trace, where they belong.
+ *
+ * The record rather than the live stream, because the stream never says
+ * which `finished` is the last one — `submit` returning is what says the
+ * Workflow is over, and by then everything is committed.
+ */
+export const runHarness = Effect.fn("cli.runHarness")(function* (
+  kernel: Kernel,
+  api: SessionAPI,
+  input: HarnessInput,
+) {
+  const session = yield* api.create(input.location)
+
+  // Being asked to stop is a cancel, so the Run still closes and the
+  // partial work is kept.
+  yield* Effect.onInterrupt(
+    api.submit(session, { kind: "prompt", text: input.text, harness: input.harness }),
+    () => api.cancel(session, "user"),
+  )
+
+  const sink = yield* kernel.slot.traceSink.peek
+  const events = sink === undefined ? [] : [...(yield* Stream.runCollect(sink.replay(session)))]
+
+  // A build with no Trace has no record to answer from, and says so.
+  let claim: Claim = { result: "failed", summary: "the Workflow left no record" }
+  let text = ""
+  let buffered = ""
+  for (const { payload } of events) {
+    if (payload.kind === "started") buffered = ""
+    if (payload.kind === "text" && payload.content.type === "text") {
+      buffered += payload.content.text
+    }
+    if (payload.kind === "finished") {
+      claim = payload.claim
+      text = buffered
+    }
+  }
+  return { claim, text } satisfies HarnessResult
 })
 
 /**

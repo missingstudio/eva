@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { COMMANDS, parseArgv } from "./argv.js"
 import { VERSION } from "./version.js"
@@ -7,7 +10,7 @@ import type { World } from "./world.js"
  * One parse against a World that writes into arrays. Nothing here reaches the
  * process, so every message the command line makes is readable in a test.
  */
-const ran = (args: readonly string[]) => {
+const ran = (args: readonly string[], stdin: () => string | undefined = () => undefined) => {
   const out: string[] = []
   const err: string[] = []
   const world: World = {
@@ -16,6 +19,7 @@ const ran = (args: readonly string[]) => {
     cwd: "/",
     out: (text) => void out.push(text),
     err: (text) => void err.push(text),
+    stdin,
   }
   return { invocation: parseArgv(world), out: out.join(""), err: err.join("") }
 }
@@ -84,6 +88,97 @@ describe("parseArgv", () => {
     expect(found.invocation).toEqual({ kind: "answered", code: 0 })
     for (const command of COMMANDS) expect(found.out).toContain(command)
     expect(found.out).toContain("EVA_CONFIG_CONTENT")
+  })
+})
+
+describe("eva run", () => {
+  const written = (text: string): string => {
+    const path = join(mkdtempSync(join(tmpdir(), "eva-argv-")), "input.txt")
+    writeFileSync(path, text)
+    return path
+  }
+
+  it("names the harness, with the empty input, when standard input is a terminal", () => {
+    expect(ran(["run", "commit-msg"]).invocation).toEqual({
+      kind: "run",
+      harness: "commit-msg",
+      input: "",
+      overlays: {},
+    })
+  })
+
+  // `.eva/workflows/release-notes.yaml` is keyed by its base name, and the
+  // roadmap's own demo types the file name.
+  it.each(["release-notes.yaml", "release-notes.yml"])("strips the extension off %s", (name) => {
+    expect(ran(["run", name]).invocation).toMatchObject({
+      kind: "run",
+      harness: "release-notes",
+    })
+  })
+
+  it("reads a positional file into the input", () => {
+    const path = written("the file's text")
+    expect(ran(["run", "review", path]).invocation).toMatchObject({
+      kind: "run",
+      harness: "review",
+      input: "the file's text",
+    })
+  })
+
+  it("reads the --input file into the input", () => {
+    const path = written("changelog text")
+    expect(ran(["run", "release-notes", "--input", path]).invocation).toMatchObject({
+      kind: "run",
+      input: "changelog text",
+    })
+  })
+
+  it("carries the global flags as overlays", () => {
+    expect(ran(["run", "commit-msg", "--model", "a/b"]).invocation).toMatchObject({
+      kind: "run",
+      overlays: { model: "a/b" },
+    })
+  })
+
+  it("reads piped standard input into the input", () => {
+    expect(ran(["run", "commit-msg"], () => "the piped diff").invocation).toMatchObject({
+      kind: "run",
+      input: "the piped diff",
+    })
+  })
+
+  it("refuses a positional file and --input together, naming both", () => {
+    const found = ran(["run", "x", "one.txt", "--input", "two.txt"])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain("one.txt")
+    expect(found.err).toContain("two.txt")
+  })
+
+  // A pipe is a route like the other two.
+  it("refuses piped standard input and --input together, naming both", () => {
+    const path = written("from the flag")
+    const found = ran(["run", "x", "--input", path], () => "from the pipe")
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain(path)
+    expect(found.err).toContain("standard input")
+  })
+
+  it("refuses a file it cannot read, naming the path", () => {
+    const found = ran(["run", "x", "--input", "/nowhere/missing.txt"])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain("/nowhere/missing.txt")
+  })
+
+  it("names run for the word that likely meant it", () => {
+    expect(ran(["rnu", "commit-msg"]).err).toContain("did you mean run?")
+  })
+
+  // The app has not booted, so it cannot know the row ids.
+  it("refuses run with no name, and says nothing about Workflows", () => {
+    const found = ran(["run"])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain("name")
+    expect(found.err).not.toMatch(/workflow/i)
   })
 })
 

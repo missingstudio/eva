@@ -43,14 +43,19 @@ export interface HarnessHost {
    */
   readonly run: (input: RunInput) => Effect.Effect<RunResult>
   /**
-   * Commits one group through the same Recorder, outside any Run. It opens no
-   * Run, closes none, and groups nothing by block, so `run` is still the one
-   * Run path.
+   * Commits one group through the same Recorder, outside any Run. It groups
+   * nothing by block, so `run` is still the one path that runs a model.
    *
    * A Workflow needs it for a `verdict`: a Verdict is known only after the Run
    * that produced the Candidate has closed, and it must be on the Trace before
    * a Repair is paid for. Without it an interrupt loses the first-pass record,
    * and a rate measured from the Trace then counts fewer Candidates than ran.
+   *
+   * One group is an exception to "outside any Run": a group that opens with
+   * `started` — the refusal a Harness reports before its first Run — is a
+   * whole Run of its own, and the host records it through the Recorder's
+   * open and close. Before the first Run the Recorder has none open, so a
+   * bare commit would have no Run to land the refusal in.
    *
    * An empty Recorder slot commits nothing and does not fail, which is the
    * rule `submit` already follows.

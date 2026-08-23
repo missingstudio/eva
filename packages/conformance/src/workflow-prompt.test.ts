@@ -69,7 +69,7 @@ const opened = (kernel: Kernel, scope: Scope.Scope, id: string): Effect.Effect<O
     const said: Payload[] = []
     const emit = (payload: Payload) => Effect.sync(() => void said.push(payload))
     const harness = yield* Effect.provideService(
-      row.open(harnessHost(kernel, emit)),
+      row.open(harnessHost(kernel, SESSION, emit)),
       Scope.Scope,
       scope,
     )

@@ -8,9 +8,13 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Effect } from "effect"
+import { buildOf, type Build } from "@missingstudio/eva-boot"
+import { providerTurn, type Provider } from "@missingstudio/eva-core"
+import type { Payload } from "@missingstudio/eva-schema"
+import { providing } from "@missingstudio/eva-testkit"
+import { Effect, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import { main } from "./index.js"
+import { BUILT_IN, main, OPTIONAL } from "./index.js"
 import { VERSION } from "./version.js"
 import type { World } from "./world.js"
 
@@ -34,7 +38,8 @@ const ran = async (
   args: readonly string[],
   directory: string,
   env: NodeJS.ProcessEnv = {},
-): Promise<{ code: number; out: string; err: string }> => {
+  given: { build?: Build; stdin?: () => string | undefined } = {},
+): Promise<{ code: number; out: string; err: string; outs: readonly string[] }> => {
   const out: string[] = []
   const err: string[] = []
   const world: World = {
@@ -43,10 +48,53 @@ const ran = async (
     cwd: directory,
     out: (text) => void out.push(text),
     err: (text) => void err.push(text),
+    stdin: given.stdin ?? (() => undefined),
   }
-  const code = await Effect.runPromise(main(world))
-  return { code, out: out.join(""), err: err.join("") }
+  const code = await Effect.runPromise(main(world, given.build))
+  return { code, out: out.join(""), err: err.join(""), outs: out }
 }
+
+const answer = (value: string): Payload => ({
+  kind: "text",
+  block: 0,
+  content: { type: "text", text: value },
+})
+
+// Answers with whatever the script says, one entry per Provider Turn.
+const scripted = (script: readonly string[]): Provider => {
+  let turn = 0
+  return {
+    id: "eva.provider.scripted",
+    available: () => true,
+    turn: () => {
+      const said = script[Math.min(turn, script.length - 1)] ?? ""
+      turn += 1
+      return providerTurn(Stream.fromIterable([answer(said)]))
+    },
+  }
+}
+
+// This build with its provider scripted: the same table, the same resolved
+// ids, and no key. The scripted plugin answers under the anthropic id
+// because that id is what the resolved list already carries.
+const buildWith = (provider: Provider): Build =>
+  buildOf([
+    ...BUILT_IN.filter((plugin) => plugin.id !== "eva.provider.anthropic"),
+    ...OPTIONAL,
+    providing(provider, "eva.provider.anthropic"),
+  ])
+
+// The trace and the auth store under the scratch directory, so a booted run
+// writes nothing into the person's own home directory.
+const contained = (directory: string): string => `
+plugins:
+  - id: eva.trace.jsonl
+    options:
+      path: "${join(directory, "trace.jsonl")}"
+  - id: eva.auth
+    options:
+      authStore: "${join(directory, "auth.json")}"
+`
 
 describe("what answers before anything loads", () => {
   it("prints the version and exits 0", async () => {
@@ -257,5 +305,261 @@ describe("config show", () => {
 
     expect(found.out).toContain("model      anthropic/inline")
     expect(found.out).toContain("EVA_CONFIG_CONTENT")
+  })
+})
+
+describe("eva run", () => {
+  const declared = (directory: string): string => `${contained(directory)}
+prompts:
+  say:
+    text: "Answer: {{input}}"
+  next:
+    text: "Continue from: {{prior}}"
+workflows:
+  one-step:
+    name: One step
+    steps:
+      - id: only
+        template: say
+        with:
+          input: input
+  three-step:
+    name: Three steps
+    steps:
+      - id: first
+        template: say
+        with:
+          input: input
+      - id: second
+        template: next
+        with:
+          prior: first.output
+      - id: third
+        template: next
+        with:
+          prior: second.output
+  no-template:
+    name: Broken
+    steps:
+      - id: only
+        template: nowhere
+`
+
+  it("runs the named row and the last Run's text reaches the output exactly once", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", declared(directory))
+
+    const found = await ran(
+      ["run", "one-step"],
+      directory,
+      {},
+      {
+        build: buildWith(scripted(["one answer"])),
+      },
+    )
+
+    expect(found.code).toBe(0)
+    expect(found.outs).toEqual(["one answer"])
+  })
+
+  // The filter assertion: every Step reports its answer as text, and the
+  // surface prints the Run that closed last, nowhere the Runs before it.
+  it("writes one answer for a three-Step Workflow, not three", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", declared(directory))
+
+    const found = await ran(
+      ["run", "three-step"],
+      directory,
+      {},
+      {
+        build: buildWith(scripted(["first said", "second said", "third said"])),
+      },
+    )
+
+    expect(found.code).toBe(0)
+    expect(found.outs).toEqual(["third said"])
+  })
+
+  it("prints a near miss over the row ids when nothing answers the name", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", declared(directory))
+
+    const found = await ran(["run", "one-stpe"], directory)
+
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("no harness answers one-stpe")
+    expect(found.err).toContain("did you mean one-step?")
+    expect(found.outs).toEqual([])
+  })
+
+  // A Gap has no Finding path, so the failed Claim's summary is where an
+  // unfillable Workflow reaches a person.
+  it("prints the failed Claim's summary on the error stream and exits 1", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", declared(directory))
+
+    const found = await ran(
+      ["run", "no-template"],
+      directory,
+      {},
+      {
+        build: buildWith(scripted([])),
+      },
+    )
+
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("no Template is nowhere")
+    expect(found.outs).toEqual([])
+  })
+
+  // A blocked --version is the failure the lazy stdin read exists to prevent.
+  it("answers the version without reading standard input", async () => {
+    const found = await ran(
+      ["--version"],
+      scratch(),
+      {},
+      {
+        stdin: () => {
+          throw new Error("standard input was read")
+        },
+      },
+    )
+
+    expect(found).toMatchObject({ code: 0, out: `${VERSION}\n` })
+  })
+})
+
+/**
+ * The roadmap's Stage 1 demo block, line by line, against a scratch fixture
+ * and a scripted Provider. This is the one test that fails when the verb,
+ * the routing, the filter or the Workflow is wrong — which no unit test
+ * above covers together.
+ */
+describe("the Stage 1 demo block", () => {
+  // git diff --staged | eva run commit-msg
+  it("answers a piped diff with one commit message", async () => {
+    const directory = scratch()
+    write(
+      directory,
+      "user.yaml",
+      `${contained(directory)}
+prompts:
+  commit:
+    text: "Write one conventional commit message for this diff: {{input}}"
+workflows:
+  commit-msg:
+    name: Commit message
+    steps:
+      - id: message
+        template: commit
+        with:
+          input: input
+`,
+    )
+
+    const found = await ran(
+      ["run", "commit-msg"],
+      directory,
+      {},
+      {
+        build: buildWith(scripted(["feat(auth): add the login gate"])),
+        stdin: () => "diff --git a/login.ts b/login.ts\n+export const login = () => {}\n",
+      },
+    )
+
+    expect(found.code).toBe(0)
+    expect(found.outs).toEqual(["feat(auth): add the login gate"])
+  })
+
+  // eva run review src/auth/login.ts
+  it("reads the positional file and answers structured findings", async () => {
+    const directory = scratch()
+    const finding = { file: "src/auth/login.ts", line: 1, severity: "info", claim: "looks fine" }
+    write(directory, join("src", "auth", "login.ts"), "export const login = () => {}\n")
+    write(
+      directory,
+      "user.yaml",
+      `${contained(directory)}
+prompts:
+  review:
+    text: "Review this file and answer findings as JSON: {{input}}"
+workflows:
+  review:
+    name: Review
+    steps:
+      - id: findings
+        template: review
+        with:
+          input: input
+        schema:
+          type: array
+          items:
+            type: object
+            required: [file, line, severity, claim]
+            properties:
+              file: { type: string }
+              line: { type: number }
+              severity: { type: string }
+              claim: { type: string }
+`,
+    )
+
+    const found = await ran(
+      ["run", "review", join("src", "auth", "login.ts")],
+      directory,
+      {},
+      {
+        build: buildWith(scripted([JSON.stringify([finding])])),
+      },
+    )
+
+    expect(found.code).toBe(0)
+    expect(JSON.parse(found.out)).toEqual([finding])
+  })
+
+  // eva run release-notes.yaml --input CHANGELOG.md
+  it("runs the .eva workflow by its file name, over the --input file", async () => {
+    const directory = scratch()
+    write(
+      directory,
+      "user.yaml",
+      `${contained(directory)}
+prompts:
+  summarize:
+    text: "Summarize this changelog: {{input}}"
+  notes:
+    text: "Write release notes from: {{draft}}"
+`,
+    )
+    write(
+      directory,
+      join(".eva", "workflows", "release-notes.yaml"),
+      `name: Release notes
+steps:
+  - id: summarize
+    template: summarize
+    with:
+      input: input
+  - id: notes
+    template: notes
+    with:
+      draft: summarize.output
+`,
+    )
+    write(directory, "CHANGELOG.md", "## Unreleased\n- the login gate\n")
+    await ran(["trust"], directory)
+
+    const found = await ran(
+      ["run", "release-notes.yaml", "--input", "CHANGELOG.md"],
+      directory,
+      {},
+      {
+        build: buildWith(scripted(["- the login gate landed", "## v1.0\n- the login gate landed"])),
+      },
+    )
+
+    expect(found.code).toBe(0)
+    expect(found.outs).toEqual(["## v1.0\n- the login gate landed"])
   })
 })

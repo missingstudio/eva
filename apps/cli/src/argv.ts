@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import type { Overlays } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
 import { Command, CommanderError } from "commander"
@@ -17,9 +19,17 @@ export type Invocation =
   | { readonly kind: "showConfig"; readonly overlays: Overlays }
   | { readonly kind: "trust" }
   | { readonly kind: "untrust" }
+  | {
+      readonly kind: "run"
+      // The harness row id, with any .yaml or .yml already stripped.
+      readonly harness: string
+      // The one input. Empty when nothing named one.
+      readonly input: string
+      readonly overlays: Overlays
+    }
 
 // The verbs, for the suggestion a stray word gets.
-export const COMMANDS: readonly string[] = ["config", "trust", "untrust"]
+export const COMMANDS: readonly string[] = ["config", "run", "trust", "untrust"]
 
 // A repeatable flag keeps every value. Without this the last one wins.
 const collect = (value: string, previous: readonly string[] = []): readonly string[] => [
@@ -57,6 +67,46 @@ const reportStray = (stray: readonly string[], world: World): void => {
         : `eva: no command ${word}, did you mean ${meant}?\n`,
     )
   }
+}
+
+/**
+ * The one input a Workflow takes, from one of three routes: `--input <file>`,
+ * a positional path, or piped standard input. Two routes at once is refused
+ * with both named, and a file that cannot be read is refused with its path —
+ * neither reaches the kernel. None of the three is the empty string, so a
+ * Workflow whose Templates bind no `input` reference still runs.
+ *
+ * `command.error` throws, which is how every other parse error leaves here.
+ */
+const inputOf = (
+  positional: string | undefined,
+  flagged: string | undefined,
+  command: Command,
+  world: World,
+): string => {
+  const readInput = (path: string): string => {
+    try {
+      return readFileSync(resolve(world.cwd, path), "utf8")
+    } catch {
+      return command.error(`eva run cannot read ${path}`)
+    }
+  }
+
+  const piped = world.stdin()
+  const routes: { readonly name: string; readonly read: () => string }[] = []
+  if (flagged !== undefined)
+    routes.push({ name: `--input ${flagged}`, read: () => readInput(flagged) })
+  if (positional !== undefined) {
+    routes.push({ name: `the file ${positional}`, read: () => readInput(positional) })
+  }
+  if (piped !== undefined) routes.push({ name: "piped standard input", read: () => piped })
+
+  if (routes.length > 1) {
+    command.error(
+      `eva run takes one input; it got ${routes.map((route) => route.name).join(" and ")}`,
+    )
+  }
+  return routes[0]?.read() ?? ""
 }
 
 // The three variables the resolution order reads. Commander knows the flags
@@ -107,6 +157,23 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
         : { kind: "print", prompt: options.print, overlays },
     )
   })
+
+  root
+    .command("run")
+    .description("run a workflow: one input in, the last Run's text out")
+    .argument("<name>", "a harness row id; a trailing .yaml or .yml is stripped")
+    .argument("[file]", "the one input, read from a file")
+    .option("--input <file>", "the one input, read from a file")
+    .action(
+      (name: string, file: string | undefined, options: { input?: string }, command: Command) => {
+        record({
+          kind: "run",
+          harness: name.replace(/\.ya?ml$/, ""),
+          input: inputOf(file, options.input, command, world),
+          overlays: overlaysOf(command.optsWithGlobals()),
+        })
+      },
+    )
 
   root
     .command("trust")

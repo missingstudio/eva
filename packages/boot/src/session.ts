@@ -45,9 +45,11 @@ export interface TurnInput {
 
 // `HarnessHost` over this kernel. `run` binds the kernel's slots and hooks
 // into `submit`, so a Harness needs no kernel of its own. The contract itself
-// is in packages/core/src/harness.ts.
+// is in packages/core/src/harness.ts. The session is what a reported group
+// that opens its own Run is recorded under.
 export const harnessHost = (
   kernel: Kernel,
+  session: SessionID,
   emit: (payload: Payload) => Effect.Effect<void>,
 ): HarnessHost => ({
   run: (input) => submit(runDeps(kernel, emit), input),
@@ -61,13 +63,32 @@ export const harnessHost = (
   report: Effect.fn("session.report")(function* (payloads: readonly Payload[]) {
     for (const payload of payloads) yield* emit(payload)
     const recorder = yield* kernel.slot.recorder.peek
-    if (recorder !== undefined) yield* recorder.commit(payloads)
+    if (recorder === undefined) return
+
+    /**
+     * A group that opens with `started` is a whole Run of its own: the
+     * refusal a Harness reports before its first Run. It goes through the
+     * Recorder's open and close like every Run, because before the first
+     * Run the Recorder has none open and a bare commit has no Run to land
+     * in — the record would lose the refusal.
+     */
+    if (payloads[0]?.kind === "started") {
+      yield* recorder.open(session)
+      yield* recorder.commit(payloads.filter((payload) => payload.kind !== "finished"))
+      const finished = payloads.find(
+        (payload): payload is Extract<Payload, { kind: "finished" }> => payload.kind === "finished",
+      )
+      if (finished !== undefined) yield* recorder.close(finished.claim, finished.stopReason)
+      return
+    }
+
+    yield* recorder.commit(payloads)
   }),
 })
 
 // One Run against the resolved model, with every hook and the Budget wired.
 export const runTurn = Effect.fn("session.runTurn")(function* (kernel: Kernel, input: TurnInput) {
-  return yield* harnessHost(kernel, input.emit).run({
+  return yield* harnessHost(kernel, input.session, input.emit).run({
     session: input.session,
     spec: { intent: input.prompt },
     model: input.model,
@@ -259,7 +280,7 @@ export const makeSessionAPI = (
       }
 
       const harness = yield* Effect.provideService(
-        row.open(harnessHost(kernel, emit)),
+        row.open(harnessHost(kernel, session, emit)),
         Scope.Scope,
         scope,
       )

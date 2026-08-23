@@ -323,7 +323,7 @@ describe("harnessHost", () => {
           history: [],
           emit,
         })
-        const viaHost = yield* harnessHost(wiring.kernel, emit).run({
+        const viaHost = yield* harnessHost(wiring.kernel, session, emit).run({
           session,
           spec: { intent: "two" },
           model: MODEL,
@@ -347,7 +347,7 @@ describe("harnessHost", () => {
           { kind: "verdict", step: "draft", attempt: 1, verdict: "valid", faults: [] },
           text("judged"),
         ]
-        yield* harnessHost(wiring.kernel, (payload) =>
+        yield* harnessHost(wiring.kernel, sessionID("sess_report"), (payload) =>
           Effect.sync(() => void said.push(payload)),
         ).report(group)
         return { said, groups: wiring.recorder.groups }
@@ -363,13 +363,40 @@ describe("harnessHost", () => {
     ])
   })
 
+  /**
+   * The refusal a Harness reports before its first Run is a `started` and a
+   * `finished`. It is a whole Run of its own, so the host records it through
+   * the Recorder's open and close — a bare commit before the first Run has
+   * no Run to land in, and the record would lose the refusal.
+   */
+  it("records a group that opens with started through open and close", async () => {
+    const claim: Claim = { result: "failed", summary: "workflow w cannot run" }
+    const seen = await wired({}, (wiring) =>
+      Effect.gen(function* () {
+        yield* harnessHost(wiring.kernel, sessionID("sess_refused"), () => Effect.void).report([
+          { kind: "started", intent: "refuse me" },
+          { kind: "finished", claim },
+        ])
+        return {
+          opened: wiring.recorder.opened,
+          groups: wiring.recorder.groups,
+          closed: wiring.recorder.closed,
+        }
+      }),
+    )
+
+    expect(seen.opened).toEqual([sessionID("sess_refused")])
+    expect(seen.groups).toEqual([[{ kind: "started", intent: "refuse me" }]])
+    expect(seen.closed).toEqual([claim])
+  })
+
   // Stage 0's exit test says disabling the trace plugin degrades rather than
   // crashing. This is that rule one level up.
   it("commits nothing and still emits when the Recorder slot is empty", async () => {
     const said = await wired({ recorder: false }, (wiring) =>
       Effect.gen(function* () {
         const seen: Payload[] = []
-        yield* harnessHost(wiring.kernel, (payload) =>
+        yield* harnessHost(wiring.kernel, sessionID("sess_report"), (payload) =>
           Effect.sync(() => void seen.push(payload)),
         ).report([text("unrecorded")])
         return { seen, groups: wiring.recorder.groups }

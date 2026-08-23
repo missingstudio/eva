@@ -47,10 +47,23 @@ The three mode flags are commands.
 ```
 eva                                 start the interactive surface
 eva --print <prompt>                answer once and exit
+eva run <name> [file]               run a workflow: one input in, the last Run's text out
 eva trust                           read this directory's .eva, and record the grant
 eva untrust                         drop the grant for this directory
 eva config show                     print the resolved config, and where each key came from
 ```
+
+`eva run` names a harness row. A trailing `.yaml` or `.yml` is stripped before
+the lookup, because `.eva/workflows/release-notes.yaml` is keyed by its base
+name. The one input comes from one of three routes — `--input <file>`, the
+positional file, or piped standard input — and two routes at once is a parse
+error with both named. The Run that closed last is the answer: its text goes
+to standard output on a `done` Claim and exits 0, and a failed Claim's summary
+goes to standard error and exits 1.
+
+A positional argument is safe under `eva run` and it is not safe at the root:
+the verb is already named, so the positional cannot swallow a misspelled one.
+The rule below about the bare prompt still holds where it was made.
 
 Global flags. They are valid on every command, before it or after it:
 
@@ -88,6 +101,10 @@ they land so two stages do not choose two shapes:
 A command named `plugin` and a flag named `--plugin` coexist. This is verified,
 not assumed.
 
+`eva run` was missing from this table, which is how Stage 1's own demo block
+ended up with a verb nobody had designed. Write the next reserved verb down
+here before its stage needs it.
+
 ### A plugin does not add a command
 
 The command table is static, and the app owns it. A plugin cannot contribute a
@@ -95,8 +112,8 @@ command, because the command line is parsed before the kernel boots — that is
 what makes `--version` answer with every plugin disabled.
 
 So when a reserved verb needs a plugin, the app declares the verb and the plugin
-implements the behaviour behind a slot. `eva harness list` reads the harness
-Domain; it is not registered by a harness. A plugin that wants a verb of its own
+implements the behaviour behind a slot or a Domain. `eva run` and `eva harness
+list` read the harness Domain; neither is registered by a harness. A plugin that wants a verb of its own
 registers a slash command in the command Domain, which
 [architecture.md](architecture.md) §4.2 owns, and the surface runs it.
 
@@ -139,6 +156,14 @@ export type Invocation =
   | { readonly kind: "showConfig"; readonly overlays: Overlays }
   | { readonly kind: "trust" }
   | { readonly kind: "untrust" }
+  | {
+      readonly kind: "run"
+      // The harness row id, with any .yaml or .yml already stripped.
+      readonly harness: string
+      // The one input. Empty when nothing named one.
+      readonly input: string
+      readonly overlays: Overlays
+    }
 ```
 
 `Overlays` is the kernel's own type, so the parser produces what

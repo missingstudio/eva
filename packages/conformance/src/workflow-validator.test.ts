@@ -88,7 +88,7 @@ const started = <A>(body: (live: Live) => Effect.Effect<A>): Promise<A> =>
           const row = rows.find((one) => one.id === id)
           if (row?.open === undefined) throw new Error(`no runnable harness row ${id}`)
           return yield* Effect.provideService(
-            row.open(harnessHost(kernel, emit)),
+            row.open(harnessHost(kernel, SESSION, emit)),
             Scope.Scope,
             scope,
           )
