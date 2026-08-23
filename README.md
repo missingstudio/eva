@@ -128,6 +128,7 @@ every resolved key and where it came from.
 | [reference/writing-plugins.md](docs/reference/writing-plugins.md) | Author a plugin                               |
 | [reference/command-line.md](docs/reference/command-line.md)       | Every command and flag                        |
 | [reference/toolchain.md](docs/reference/toolchain.md)             | How to build and test, and CI's jobs          |
+| [docs/development.md](docs/development.md)                        | How a change is made, and where each stage is |
 | [reference/ci-cd.md](docs/reference/ci-cd.md)                     | How a change is checked and a release ships   |
 | [docs/product.md](docs/product.md)                                | What Eva is for, and who for                  |
 | [docs/roadmap.md](docs/roadmap.md)                                | What we build, in what order                  |
@@ -140,7 +141,9 @@ bun install && bun run verify
 ```
 
 That is exactly what CI checks on every change. Read [AGENTS.md](AGENTS.md)
-before you open a pull request.
+for the commit and branch rules, and
+[docs/development.md](docs/development.md) for the loop one change goes
+through, before you open a pull request.
 
 ---
 

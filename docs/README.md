@@ -22,6 +22,7 @@ Then, as you need them:
 
 | You want to                 | Read                                                         |
 | --------------------------- | ------------------------------------------------------------ |
+| Make a change here          | [development.md](development.md)                             |
 | Write a plugin              | [reference/writing-plugins.md](reference/writing-plugins.md) |
 | Type a command or a flag    | [reference/command-line.md](reference/command-line.md)       |
 | Build or test the repo      | [reference/toolchain.md](reference/toolchain.md)             |
@@ -35,6 +36,7 @@ Then, as you need them:
 docs/
 ├── README.md          this map
 ├── context.md         the words Eva uses — read first
+├── development.md     how a change is made, and where each stage is
 ├── product.md         what Eva is for, and who for
 ├── roadmap.md         nineteen stages, each with an exit test it can fail
 ├── decisions.md       every decision, grouped by what it decided
@@ -60,17 +62,18 @@ to that document. Two copies of a fact become two different facts.
 
 **One document owns one subject:**
 
-| Document             | Owns                                     |
-| -------------------- | ---------------------------------------- |
-| `context.md`         | what every term means                    |
-| `architecture.md`    | how the mechanisms work                  |
-| `writing-plugins.md` | how to author a plugin, and the traps    |
-| `command-line.md`    | every command and flag, and the parse    |
-| `toolchain.md`       | how to build and test, and CI's jobs     |
-| `ci-cd.md`           | the workflows, the release, the channels |
-| `roadmap.md`         | what we build, in what order             |
-| `decisions.md`       | what we decided, and what we rejected    |
-| `product.md`         | what Eva is for, and who for             |
+| Document             | Owns                                         |
+| -------------------- | -------------------------------------------- |
+| `context.md`         | what every term means                        |
+| `architecture.md`    | how the mechanisms work                      |
+| `writing-plugins.md` | how to author a plugin, and the traps        |
+| `command-line.md`    | every command and flag, and the parse        |
+| `toolchain.md`       | how to build and test, and CI's jobs         |
+| `ci-cd.md`           | the workflows, the release, the channels     |
+| `roadmap.md`         | what we build, in what order                 |
+| `development.md`     | how a change is made, and each stage's state |
+| `decisions.md`       | what we decided, and what we rejected        |
+| `product.md`         | what Eva is for, and who for                 |
 
 When two documents disagree, one is wrong. Fix it — do not reconcile by copying.
 
