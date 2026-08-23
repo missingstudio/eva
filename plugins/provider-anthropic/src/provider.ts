@@ -1,8 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk"
-import type { Credential, Provider, ProviderRequest } from "@missingstudio/eva-core"
-import { ProviderError } from "@missingstudio/eva-core"
-import type { ErrorClass, Payload, StopReason, TranscriptMessage } from "@missingstudio/eva-schema"
-import { Cause, Effect, Queue, Stream } from "effect"
+import type { Credential, Provider } from "@missingstudio/eva-core"
+import type { ErrorClass, StopReason } from "@missingstudio/eva-schema"
+import {
+  chatMessages,
+  classifyWire,
+  missingCredential,
+  reported,
+  secretOf,
+  streamingProvider,
+} from "@missingstudio/eva-sdk"
+import { Effect } from "effect"
 
 // Two identifiers, never one. The first names the plugin in a ProviderError
 // and a Claim; the second is what appears in a ModelRef, a usage.model
@@ -15,38 +22,19 @@ export const NAMESPACE = "anthropic"
 export const REPORTS_COST = false
 const DEFAULT_MAX_TOKENS = 64_000
 
-const text = (blocks: TranscriptMessage["blocks"]): string =>
-  blocks
-    .filter((block) => block.type === "content" || block.type === "thought")
-    .map((block) => {
-      const content = (block as { content: { type: string; text?: string } }).content
-      return content.type === "text" ? (content.text ?? "") : ""
-    })
-    .join("")
-
-export const toMessages = (history: readonly TranscriptMessage[]) =>
-  history
-    .map((message) => ({
-      role: message.author === "human" ? ("user" as const) : ("assistant" as const),
-      content: text(message.blocks),
-    }))
-    .filter((message) => message.content.length > 0)
-
-// The eight classes the glossary fixes. An absent class means nobody
-// classified the failure, so every branch here names one.
-export const classify = (cause: unknown): ErrorClass => {
-  if (cause instanceof Anthropic.APIConnectionError) return "unreachable"
-  if (cause instanceof Anthropic.APIError) {
-    const status = cause.status
-    if (cause.type === "billing_error") return "billing"
-    if (status === 401 || status === 403) return "auth_failed"
-    if (status === 404) return "no_such_model"
-    if (status === 429) return "rate_limit"
-    if (status === 529) return "overloaded"
-    if (status !== undefined && status >= 500) return "server_error"
-  }
-  return "other"
-}
+// The Anthropic SDK's failure, read into the one wire table. `billing_error`
+// is the vendor's own marker and outranks whatever status carried it.
+export const classify = (cause: unknown): ErrorClass =>
+  classifyWire(
+    cause instanceof Anthropic.APIConnectionError
+      ? { connection: true }
+      : cause instanceof Anthropic.APIError
+        ? {
+            ...(cause.status === undefined ? {} : { status: cause.status }),
+            billing: cause.type === "billing_error",
+          }
+        : undefined,
+  )
 
 // ACP's five reasons. Anthropic's tool_use and pause_turn cannot arrive at
 // stage 0, which ships no tools, and a stop sequence ends the turn. A message
@@ -63,10 +51,6 @@ export const toStopReason = (reason: string | null | undefined): StopReason | un
   }
 }
 
-// Silence is not zero: a counter the provider did not report stays null.
-// Clamping belongs to `eva.usage`, not here.
-const reported = (value: number | null | undefined): number | null => value ?? null
-
 export interface AnthropicOptions {
   // Absent when no credential resolved. The provider still answers the model
   // reference and reports itself unavailable, so a Run says the credential is
@@ -76,125 +60,76 @@ export interface AnthropicOptions {
   readonly client?: Anthropic
 }
 
-export const makeAnthropicProvider = (options: AnthropicOptions): Provider => {
-  // The secret is resolved per attempt, never captured: a session outlives an
-  // access token, so a client built once would send a stale one for the rest
-  // of the session. An injected client is a test's, and answers as it is.
-  const clientFor = Effect.fn("eva.provider.anthropic.client")(function* () {
-    if (options.client !== undefined) return options.client
-    if (options.credential === undefined) {
-      return yield* Effect.fail(
-        new ProviderError({
-          provider: PROVIDER_ID,
-          errorClass: "auth_failed",
-          message: "no credential for anthropic",
-        }),
-      )
-    }
-    const key = yield* Effect.mapError(
-      options.credential.secret(),
-      (cause) =>
-        new ProviderError({
-          provider: PROVIDER_ID,
-          errorClass: "auth_failed",
-          message: cause.message,
-        }),
-    )
-    return new Anthropic({ apiKey: key, maxRetries: 0 })
-  })
-
-  return {
+export const makeAnthropicProvider = (options: AnthropicOptions): Provider =>
+  streamingProvider<Anthropic>({
     id: PROVIDER_ID,
     available: () => options.client !== undefined || options.credential !== undefined,
+    classify,
 
-    turn: (request: ProviderRequest) => {
-      // Set when the message settles. `stopReason` is read after the stream
-      // drains; an early read answers undefined, which is what an unreported
-      // reason means.
-      let reason: StopReason | undefined
-      const payloads = Stream.unwrap(
-        Effect.map(clientFor(), (client) =>
-          Stream.callback<Payload, ProviderError>((queue) =>
-            Effect.acquireRelease(
-              Effect.sync(() => {
-                const stream = client.messages.stream({
-                  model: request.model.model,
-                  max_tokens: options.maxTokens ?? request.maxTokens ?? DEFAULT_MAX_TOKENS,
-                  ...(request.system === undefined ? {} : { system: request.system }),
-                  messages: toMessages(request.messages),
-                })
+    clientFor: Effect.fn("eva.provider.anthropic.client")(function* () {
+      if (options.client !== undefined) return options.client
+      if (options.credential === undefined) {
+        return yield* Effect.fail(missingCredential(PROVIDER_ID, NAMESPACE))
+      }
+      const key = yield* secretOf(options.credential, PROVIDER_ID)
+      return new Anthropic({ apiKey: key, maxRetries: 0 })
+    }),
 
-                stream.on("streamEvent", (event) => {
-                  // Framing — the block boundaries and the message envelope —
-                  // is structure and not content, and the `usage` record and
-                  // the Run's close already carry what it says.
-                  if (event.type !== "content_block_delta") return
+    start: (client, request, emit) => {
+      const stream = client.messages.stream({
+        model: request.model.model,
+        max_tokens: options.maxTokens ?? request.maxTokens ?? DEFAULT_MAX_TOKENS,
+        ...(request.system === undefined ? {} : { system: request.system }),
+        messages: [...chatMessages(request.messages)],
+      })
 
-                  const delta = event.delta
-                  if (delta.type === "text_delta") {
-                    Queue.offerUnsafe(queue, {
-                      kind: "text",
-                      block: event.index,
-                      content: { type: "text", text: delta.text },
-                    })
-                    return
-                  }
+      stream.on("streamEvent", (event) => {
+        // Framing — the block boundaries and the message envelope — is
+        // structure and not content, and the `usage` record and the Run's
+        // close already carry what it says.
+        if (event.type !== "content_block_delta") return
 
-                  if (delta.type === "thinking_delta") {
-                    Queue.offerUnsafe(queue, {
-                      kind: "thought",
-                      block: event.index,
-                      content: { type: "text", text: delta.thinking },
-                    })
-                    return
-                  }
+        const delta = event.delta
+        if (delta.type === "text_delta") {
+          emit.payload({
+            kind: "text",
+            block: event.index,
+            content: { type: "text", text: delta.text },
+          })
+          return
+        }
 
-                  // A delta is content the model produced. One the union has
-                  // no kind for is preserved rather than dropped, so a stage
-                  // that maps it later reads a Trace that kept it.
-                  Queue.offerUnsafe(queue, {
-                    kind: "unknown",
-                    originalKind: delta.type,
-                    raw: event,
-                  })
-                })
+        if (delta.type === "thinking_delta") {
+          emit.payload({
+            kind: "thought",
+            block: event.index,
+            content: { type: "text", text: delta.thinking },
+          })
+          return
+        }
 
-                stream
-                  .finalMessage()
-                  .then((message) => {
-                    reason = toStopReason(message.stop_reason)
-                    const usage = message.usage
-                    Queue.offerUnsafe(queue, {
-                      kind: "usage",
-                      model: `${NAMESPACE}/${message.model}`,
-                      inputTokens: reported(usage.input_tokens),
-                      outputTokens: reported(usage.output_tokens),
-                      cacheWriteTokens: reported(usage.cache_creation_input_tokens),
-                      cacheReadTokens: reported(usage.cache_read_input_tokens),
-                    })
-                    Queue.endUnsafe(queue)
-                  })
-                  .catch((cause: unknown) => {
-                    Queue.failCauseUnsafe(
-                      queue,
-                      Cause.fail(
-                        new ProviderError({
-                          provider: PROVIDER_ID,
-                          errorClass: classify(cause),
-                          message: cause instanceof Error ? cause.message : String(cause),
-                        }),
-                      ),
-                    )
-                  })
+        // A delta is content the model produced. One the union has no kind
+        // for is preserved rather than dropped, so a stage that maps it later
+        // reads a Trace that kept it.
+        emit.payload({ kind: "unknown", originalKind: delta.type, raw: event })
+      })
 
-                return stream
-              }),
-              (stream) => Effect.sync(() => stream.abort()),
-            ),
-          ),
-        ),
-      )
-      return { payloads, stopReason: Effect.sync(() => reason) }
+      stream
+        .finalMessage()
+        .then((message) => {
+          const usage = message.usage
+          emit.payload({
+            kind: "usage",
+            model: `${NAMESPACE}/${message.model}`,
+            inputTokens: reported(usage.input_tokens),
+            outputTokens: reported(usage.output_tokens),
+            cacheWriteTokens: reported(usage.cache_creation_input_tokens),
+            cacheReadTokens: reported(usage.cache_read_input_tokens),
+          })
+          emit.end(toStopReason(message.stop_reason))
+        })
+        .catch((cause: unknown) => emit.fail(cause))
+
+      return { abort: () => stream.abort() }
     },
-  }
-}
+  })

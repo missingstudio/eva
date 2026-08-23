@@ -1,6 +1,6 @@
 import { declare, define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-import { readEntries } from "./entry.js"
+import { endpointOf, readEntries } from "./entry.js"
 import { PLUGIN_ID, makeCompatibleProvider } from "./provider.js"
 
 export * from "./entry.js"
@@ -14,7 +14,10 @@ const OPTIONS = declare({ providers: "mapping" })
  * Any OpenAI-compatible endpoint answers, named in config. This plugin owns
  * the Chat Completions dialect — Ollama, llama.cpp, vLLM, LM Studio and the
  * hosted compatibles all speak it — where `eva.provider.openai` owns the
- * Responses API. Two plugins over two wires share nothing on purpose.
+ * Responses API. The two dialects share nothing on purpose; the wire-agnostic
+ * Provider body — the stream drain, the error table, the credential
+ * resolution — is the sdk's `streamingProvider`, shared by every provider
+ * plugin.
  */
 export const providerCompatible = define({
   id: PLUGIN_ID,
@@ -27,24 +30,14 @@ export const providerCompatible = define({
         const entry = entries.find((one) => one.namespace === event.reference.provider)
         if (entry === undefined) return
         const store = yield* ctx.slot.credentialStore.peek
-        const credential = !entry.credential
-          ? undefined
-          : store === undefined
-            ? undefined
-            : yield* store.get(entry.namespace)
-        // Resolve either way: `available()` carries whether the Credential
-        // the entry asked for was found, so the Run reports auth_failed
-        // rather than no_such_model.
+        const found = store === undefined ? undefined : yield* store.get(entry.namespace)
+        // Resolve either way: `endpointOf` decides the Credential tri-state,
+        // and `available()` carries whether the Credential the entry asked
+        // for was found, so the Run reports auth_failed rather than
+        // no_such_model.
         event.resolve({
           model: event.reference,
-          provider: makeCompatibleProvider({
-            id: `${PLUGIN_ID}:${entry.namespace}`,
-            namespace: entry.namespace,
-            api: entry.api,
-            ...(entry.credential ? { credential: credential ?? false } : {}),
-            ...(entry.maxTokens === undefined ? {} : { maxTokens: entry.maxTokens }),
-            ...(entry.usage ? {} : { usage: false }),
-          }),
+          provider: makeCompatibleProvider(endpointOf(entry, found)),
         })
       }),
     )

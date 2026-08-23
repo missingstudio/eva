@@ -1,14 +1,13 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { decodeLine, type Event, type SessionID } from "@missingstudio/eva-schema"
+import { readTrace, type Event, type SessionID } from "@missingstudio/eva-schema"
 import { describe, expect, it } from "vitest"
 import { foldTranscript, headerOf } from "./transcript.js"
 
 const fixtures = new URL("../../schema/fixtures", import.meta.url).pathname
 const files = readdirSync(fixtures).filter((name) => name.endsWith(".jsonl"))
 
-const load = (file: string): readonly Event[] =>
-  readFileSync(join(fixtures, file), "utf8").split("\n").filter(Boolean).map(decodeLine)
+const load = (file: string): readonly Event[] => readTrace(join(fixtures, file))
 
 // The fold runs against core, not a test double, and still reproduces the
 // reviewed goldens.

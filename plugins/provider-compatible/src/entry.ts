@@ -1,4 +1,6 @@
+import type { Credential } from "@missingstudio/eva-core"
 import { readShape } from "@missingstudio/eva-sdk"
+import { PLUGIN_ID, type CompatibleOptions } from "./provider.js"
 
 /**
  * One configured endpoint, read. The key is the Catalog namespace and the
@@ -65,3 +67,25 @@ export const readEntries = (providers: Record<string, unknown>): readonly Compat
       },
     ]
   })
+
+/**
+ * The whole decision for one endpoint, Credential state included: what the
+ * Provider is handed, as a value a plain test can assert. The tri-state is
+ * the part that can actually be wrong — a keyless endpoint carries no
+ * credential and stays available, an entry that asked and was answered
+ * carries the Credential, and an entry that asked and got nothing carries
+ * `false` so the Run closes auth_failed before the wire. `found` is read
+ * only when the entry asked, so a stray store answer cannot turn a keyless
+ * endpoint into a keyed one.
+ */
+export const endpointOf = (
+  entry: CompatibleEntry,
+  found: Credential | undefined,
+): CompatibleOptions => ({
+  id: `${PLUGIN_ID}:${entry.namespace}`,
+  namespace: entry.namespace,
+  api: entry.api,
+  ...(entry.credential ? { credential: found ?? false } : {}),
+  ...(entry.maxTokens === undefined ? {} : { maxTokens: entry.maxTokens }),
+  ...(entry.usage ? {} : { usage: false }),
+})

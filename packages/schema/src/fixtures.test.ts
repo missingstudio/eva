@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import { decodeLine, encodeLine } from "./codec.js"
 import { SCHEMA_VERSION } from "./event.js"
 import { costFold, headerFold, mergeText, transcriptFold, verdictFold } from "./fold.js"
+import { readTrace } from "./goldens.js"
 
 const dir = new URL("../fixtures", import.meta.url).pathname
 const files = readdirSync(dir).filter((name) => name.endsWith(".jsonl"))
@@ -12,7 +13,7 @@ const files = readdirSync(dir).filter((name) => name.endsWith(".jsonl"))
 // migrates, re-encodes stably, and folds to its reviewed golden.
 describe.each(files)("fixture %s", (file) => {
   const lines = readFileSync(join(dir, file), "utf8").split("\n").filter(Boolean)
-  const events = lines.map(decodeLine)
+  const events = readTrace(join(dir, file))
 
   it("decodes every record with none in unknown", () => {
     for (const event of events) {

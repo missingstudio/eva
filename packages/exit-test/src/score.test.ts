@@ -1,16 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { readTrace, writtenGolden } from "@missingstudio/eva-schema"
 import { describe, expect, it } from "vitest"
-import {
-  ENDPOINT,
-  eventsOf,
-  readingOf,
-  refuses,
-  said,
-  wrongEndpoint,
-  writtenOf,
-  WORKFLOWS,
-} from "./score.js"
+import { ENDPOINT, readingOf, refuses, said, wrongEndpoint, WORKFLOWS } from "./score.js"
 
 const root = join(new URL(".", import.meta.url).pathname, "..")
 const traceOf = (name: string) => join(root, "traces", `${name}.jsonl`)
@@ -26,12 +18,12 @@ describe("the vendored traces against the committed goldens", () => {
   })
 
   it.each(traced)("%s folds to its golden, byte for byte", (name) => {
-    expect(writtenOf(readingOf(eventsOf(traceOf(name))))).toBe(goldenOf(name))
+    expect(writtenGolden(readingOf(readTrace(traceOf(name))))).toBe(goldenOf(name))
   })
 
   it("aggregates the five Workflows to the golden aggregate", () => {
-    const events = WORKFLOWS.flatMap((name) => [...eventsOf(traceOf(name))])
-    expect(writtenOf(readingOf(events))).toBe(goldenOf("aggregate"))
+    const events = WORKFLOWS.flatMap((name) => [...readTrace(traceOf(name))])
+    expect(writtenGolden(readingOf(events))).toBe(goldenOf("aggregate"))
   })
 })
 
@@ -53,7 +45,7 @@ describe("the rules the measurement refuses under", () => {
 
 describe("a trace with no first pass", () => {
   it("prints no rate, and the golden says so", () => {
-    const reading = readingOf(eventsOf(traceOf("no-validator")))
+    const reading = readingOf(readTrace(traceOf("no-validator")))
     expect(reading.validity).toEqual({ kind: "none" })
     expect(JSON.parse(goldenOf("no-validator"))).toMatchObject({ validity: { kind: "none" } })
 

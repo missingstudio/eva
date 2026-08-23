@@ -89,11 +89,18 @@ export interface Scripted {
  * A Provider that answers a written script, one entry per Provider Turn.
  * Every request it was handed is kept, so a test can assert what a Repair
  * carried.
+ *
+ * `id` is for a test whose resolved list already names a real provider — the
+ * scripted one then answers under that id, and the build stays the shipped
+ * table.
  */
-export const scripted = (script: readonly ScriptedTurn[]): Scripted => {
+export const scripted = (script: readonly ScriptedTurn[], id: string = FAKE_PROVIDER): Scripted => {
   const seen: ProviderRequest[] = []
   return {
-    plugin: providing(answering(FAKE_PROVIDER, script, (request) => void seen.push(request))),
+    plugin: providing(
+      answering(id, script, (request) => void seen.push(request)),
+      id,
+    ),
     seen: () => seen,
   }
 }

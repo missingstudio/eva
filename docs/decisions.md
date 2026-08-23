@@ -178,6 +178,16 @@ a person who names a compatible endpoint `openai` means it to override the
 first-party one. _Rejected:_ giving the hook a read, which no Stage 1 caller
 needs.
 
+**The wire-agnostic Provider body is one sdk module; a provider plugin keeps
+its dialect.** Three plugins spelled the same history mapping, error table,
+credential resolution and stream drain, so a fix landed in one and missed two.
+"Two plugins over two wires share nothing" stands for the dialects — event
+mapping, stop reasons, usage counters — not for `streamingProvider`,
+`classifyWire`, `chatMessages` and the credential helpers. One consequence is
+deliberate: 529 now reads `overloaded` on every wire, where the OpenAI dialects
+read `server_error`. _Rejected:_ a fourth package for the body — the sdk is
+already the layer every plugin imports.
+
 ## The trace
 
 **The payload union must carry an ACP session with no loss.** A missing kind

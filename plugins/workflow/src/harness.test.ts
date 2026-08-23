@@ -1,15 +1,8 @@
-import type {
-  Budget,
-  BudgetState,
-  HarnessHost,
-  Judged,
-  RunInput,
-  RunResult,
-  Validator,
-} from "@missingstudio/eva-core"
+import type { Budget, BudgetState, Judged, Validator } from "@missingstudio/eva-core"
 import { ValidatorError } from "@missingstudio/eva-core"
 import { sessionID, type Fault, type Payload } from "@missingstudio/eva-schema"
 import type { CatalogState, PromptInfo } from "@missingstudio/eva-sdk"
+import { scriptedHost, type ScriptedHost } from "@missingstudio/eva-testkit"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { readWorkflow } from "./document.js"
@@ -36,49 +29,6 @@ const catalogOf = (held: boolean): CatalogState => ({
     ? new Map([["fake", new Map([["model", { id: "model", name: "model" }]])]])
     : new Map(),
 })
-
-interface Watched {
-  readonly host: HarnessHost
-  // The interleave log the ordering assertions read.
-  readonly calls: string[]
-  readonly runs: RunInput[]
-  readonly reports: Payload[][]
-}
-
-const watchedHost = (script: readonly Partial<RunResult>[] = []): Watched => {
-  const calls: string[] = []
-  const runs: RunInput[] = []
-  const reports: Payload[][] = []
-  let served = 0
-
-  return {
-    host: {
-      run: (input) =>
-        Effect.sync(() => {
-          calls.push("run")
-          runs.push(input)
-          const scripted = script[Math.min(served, Math.max(script.length - 1, 0))] ?? {}
-          served += 1
-          return {
-            claim: { result: "done", summary: "answered" },
-            stopReason: "end_turn",
-            degraded: [],
-            attempts: 1,
-            text: "",
-            ...scripted,
-          } satisfies RunResult
-        }),
-      report: (payloads) =>
-        Effect.sync(() => {
-          calls.push(`report:${payloads.map((one) => one.kind).join("+")}`)
-          reports.push([...payloads])
-        }),
-    },
-    calls,
-    runs,
-    reports,
-  }
-}
 
 const judging = (answers: readonly Judged[]): Validator => {
   let at = 0
@@ -125,17 +75,17 @@ const deps = (over: Partial<WorkflowDeps>): WorkflowDeps => ({
   ...over,
 })
 
-const prompted = (watched: Watched, over: Partial<WorkflowDeps>, text = "CHANGES") =>
+const prompted = (watched: ScriptedHost, over: Partial<WorkflowDeps>, text = "CHANGES") =>
   Effect.runPromise(
     makeWorkflowHarness(watched.host, deps(over)).prompt(SESSION, { kind: "prompt", text }),
   )
 
-const finishedOf = (watched: Watched): Payload[] =>
+const finishedOf = (watched: ScriptedHost): readonly Payload[] =>
   watched.reports.flat().filter((one) => one.kind === "finished")
 
 describe("one Step that validates", () => {
   it("fills the Template, runs once, and commits one valid verdict", async () => {
-    const watched = watchedHost([{ text: '{"entries":["a"]}' }])
+    const watched = scriptedHost([{ text: '{"entries":["a"]}' }])
     const reason = await prompted(watched, {
       validator: Effect.succeed(judging([{ verdict: "valid", value: { entries: ["a"] } }])),
     })
@@ -166,7 +116,7 @@ describe("one Step that validates", () => {
         { id: "group", template: "group", with: { entries: "draft.output.entries" } },
       ],
     })
-    const watched = watchedHost([{ text: '{"entries":["a","b"]}' }, { text: "grouped" }])
+    const watched = scriptedHost([{ text: '{"entries":["a","b"]}' }, { text: "grouped" }])
     const reason = await prompted(watched, {
       document,
       prompts: Effect.succeed([...ROWS, REPAIR_ROW, { id: "group", text: "Group: {{entries}}" }]),
@@ -186,7 +136,7 @@ describe("a refused Candidate and its Repair", () => {
     ])
 
   it("commits exactly two verdicts, attempts 1 and 2, on the same Step", async () => {
-    const watched = watchedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
+    const watched = scriptedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
     const reason = await prompted(watched, { validator: Effect.succeed(repaired()) })
 
     expect(reason).toBe("end_turn")
@@ -200,14 +150,14 @@ describe("a refused Candidate and its Repair", () => {
   // The one place an interrupt can cost the measurement a denominator: the
   // first-pass verdict must be on the record before the Repair is paid for.
   it("reports the first verdict before the Repair's Run opens", async () => {
-    const watched = watchedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
+    const watched = scriptedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
     await prompted(watched, { validator: Effect.succeed(repaired()) })
 
     expect(watched.calls).toEqual(["run", "report:verdict", "run", "report:verdict"])
   })
 
   it("carries the refused Candidate as the prior assistant message", async () => {
-    const watched = watchedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
+    const watched = scriptedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
     await prompted(watched, { validator: Effect.succeed(repaired()) })
 
     const history = watched.runs[1]?.history ?? []
@@ -220,7 +170,7 @@ describe("a refused Candidate and its Repair", () => {
   })
 
   it("asks again with the task, every Fault, and never the JSON Schema", async () => {
-    const watched = watchedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
+    const watched = scriptedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
     await prompted(watched, { validator: Effect.succeed(repaired()) })
 
     const instruction = watched.runs[1]?.spec.intent ?? ""
@@ -230,7 +180,7 @@ describe("a refused Candidate and its Repair", () => {
   })
 
   it("prefers a Template named <workflow>.repair when the domain holds one", async () => {
-    const watched = watchedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
+    const watched = scriptedHost([{ text: "not json" }, { text: '{"entries":[]}' }])
     await prompted(watched, {
       prompts: Effect.succeed([
         ...ROWS,
@@ -246,7 +196,7 @@ describe("a refused Candidate and its Repair", () => {
 
 describe("a Candidate refused twice", () => {
   it("closes with a failed Claim, no Error Class and no Stop Reason", async () => {
-    const watched = watchedHost([{ text: "bad" }, { text: "still bad" }])
+    const watched = scriptedHost([{ text: "bad" }, { text: "still bad" }])
     const reason = await prompted(watched, {
       validator: Effect.succeed(
         judging([
@@ -274,7 +224,7 @@ describe("a Candidate refused twice", () => {
   })
 
   it("never repairs when the ceiling is zero", async () => {
-    const watched = watchedHost([{ text: "bad" }])
+    const watched = scriptedHost([{ text: "bad" }])
     await prompted(watched, {
       validator: Effect.succeed(judging([{ verdict: "invalid", faults: FAULTS }])),
       repairs: 0,
@@ -287,7 +237,7 @@ describe("a Candidate refused twice", () => {
 
 describe("an empty Validator slot", () => {
   it("degrades, commits unchecked, and the answer still arrives", async () => {
-    const watched = watchedHost([{ text: "plain answer" }])
+    const watched = scriptedHost([{ text: "plain answer" }])
     const reason = await prompted(watched, { validator: Effect.succeed(undefined) })
 
     expect(reason).toBe("end_turn")
@@ -302,7 +252,7 @@ describe("an empty Validator slot", () => {
 
 describe("refused before the first model call", () => {
   it("refuses a JSON Schema the Validator cannot read, with no run at all", async () => {
-    const watched = watchedHost()
+    const watched = scriptedHost()
     const reason = await prompted(watched, {
       validator: Effect.succeed({
         accepts: () =>
@@ -328,7 +278,7 @@ describe("refused before the first model call", () => {
   })
 
   it("refuses a Template the prompt domain does not hold, naming the near miss", async () => {
-    const watched = watchedHost()
+    const watched = scriptedHost()
     const reason = await prompted(watched, {
       prompts: Effect.succeed<readonly PromptInfo[]>([{ id: "drafts", text: "x" }]),
     })
@@ -344,7 +294,7 @@ describe("refused before the first model call", () => {
   // A broken repair row used to surface mid-run, after a Provider Turn was
   // paid for. The pre-flight pass dry-fills the row the Repair would use.
   it("refuses a repair Template the prompt domain does not hold, with no run at all", async () => {
-    const watched = watchedHost()
+    const watched = scriptedHost()
     const reason = await prompted(watched, { prompts: Effect.succeed(ROWS) })
 
     expect(reason).toBe("end_turn")
@@ -356,7 +306,7 @@ describe("refused before the first model call", () => {
   })
 
   it("refuses a shadowing <workflow>.repair row that cannot fill", async () => {
-    const watched = watchedHost()
+    const watched = scriptedHost()
     const reason = await prompted(watched, {
       prompts: Effect.succeed([
         ...ROWS,
@@ -391,7 +341,7 @@ describe("refused before the first model call", () => {
         { id: "group", template: "draft", with: { changelog: "input" } },
       ],
     })
-    const watched = watchedHost([{ text: '{"entries":[]}' }])
+    const watched = scriptedHost([{ text: '{"entries":[]}' }, { text: '{"entries":[]}' }])
     const reason = await prompted(watched, {
       document,
       prompts: Effect.succeed(ROWS),
@@ -403,7 +353,7 @@ describe("refused before the first model call", () => {
   })
 
   it("refuses a model the Catalog does not hold", async () => {
-    const watched = watchedHost()
+    const watched = scriptedHost()
     const reason = await prompted(watched, { catalog: Effect.succeed(catalogOf(false)) })
 
     expect(reason).toBe("end_turn")
@@ -415,7 +365,7 @@ describe("refused before the first model call", () => {
   })
 
   it("refuses a document that failed the load pass, naming every problem", async () => {
-    const watched = watchedHost()
+    const watched = scriptedHost()
     const reason = await prompted(watched, {
       document: readWorkflow("broken", { steps: [] }),
     })
@@ -432,7 +382,7 @@ describe("refused before the first model call", () => {
 describe("the Budget", () => {
   it("is checked before every Step, Repairs included", async () => {
     const counting = countingBudget()
-    const watched = watchedHost([{ text: "bad" }, { text: '{"entries":[]}' }])
+    const watched = scriptedHost([{ text: "bad" }, { text: '{"entries":[]}' }])
     await prompted(watched, {
       validator: Effect.succeed(
         judging([
@@ -456,7 +406,7 @@ describe("the Budget", () => {
       ],
     })
     const counting = countingBudget(2)
-    const watched = watchedHost([{ text: "first" }])
+    const watched = scriptedHost([{ text: "first" }])
     const reason = await prompted(watched, {
       document,
       budget: Effect.succeed(counting.budget),
@@ -479,7 +429,7 @@ describe("the Budget", () => {
 
 describe("steering", () => {
   it("changes nothing and commits nothing", async () => {
-    const watched = watchedHost()
+    const watched = scriptedHost()
     const harness = makeWorkflowHarness(watched.host, deps({}))
     const reason = await Effect.runPromise(
       harness.prompt(SESSION, { kind: "steer", text: "faster", target: "next-step" }),
@@ -490,7 +440,7 @@ describe("steering", () => {
   })
 
   it("answers the Stop Reason the last prompt reached", async () => {
-    const watched = watchedHost([{ stopReason: "max_tokens", text: "cut" }])
+    const watched = scriptedHost([{ stopReason: "max_tokens", text: "cut" }])
     const harness = makeWorkflowHarness(
       watched.host,
       deps({
@@ -518,7 +468,7 @@ describe("the Step that stopped the Workflow", () => {
         { id: "group", template: "draft", with: { changelog: "input" } },
       ],
     })
-    const watched = watchedHost([{ stopReason: "refusal", text: "" }])
+    const watched = scriptedHost([{ stopReason: "refusal", text: "" }])
     const reason = await prompted(watched, { document })
 
     expect(reason).toBe("refusal")
@@ -526,7 +476,7 @@ describe("the Step that stopped the Workflow", () => {
   })
 
   it("stops on a Step whose Run failed, adding no second story", async () => {
-    const watched = watchedHost([
+    const watched = scriptedHost([
       { claim: { result: "failed", summary: "no provider", errorClass: "no_such_model" } },
     ])
     const reason = await prompted(watched, {
@@ -543,7 +493,7 @@ describe("the Step that stopped the Workflow", () => {
 
 describe("sessions", () => {
   it("mints with createSession and resumes only what it minted", async () => {
-    const harness = makeWorkflowHarness(watchedHost().host, deps({}))
+    const harness = makeWorkflowHarness(scriptedHost().host, deps({}))
     const found = await Effect.runPromise(
       Effect.gen(function* () {
         const session = yield* harness.createSession("/anywhere")

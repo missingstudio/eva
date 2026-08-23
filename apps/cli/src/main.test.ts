@@ -9,10 +9,9 @@ import {
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
-import { providerTurn, type Provider } from "@missingstudio/eva-core"
 import type { Payload } from "@missingstudio/eva-schema"
-import { providing } from "@missingstudio/eva-testkit"
-import { Effect, Stream } from "effect"
+import { scripted } from "@missingstudio/eva-testkit"
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { BUILT_IN, main, OPTIONAL } from "./index.js"
 import { VERSION } from "./version.js"
@@ -60,28 +59,17 @@ const answer = (value: string): Payload => ({
   content: { type: "text", text: value },
 })
 
-// Answers with whatever the script says, one entry per Provider Turn.
-const scripted = (script: readonly string[]): Provider => {
-  let turn = 0
-  return {
-    id: "eva.provider.scripted",
-    available: () => true,
-    turn: () => {
-      const said = script[Math.min(turn, script.length - 1)] ?? ""
-      turn += 1
-      return providerTurn(Stream.fromIterable([answer(said)]))
-    },
-  }
-}
-
 // This build with its provider scripted: the same table, the same resolved
 // ids, and no key. The scripted plugin answers under the anthropic id
 // because that id is what the resolved list already carries.
-const buildWith = (provider: Provider): Build =>
+const buildWith = (script: readonly string[]): Build =>
   buildOf([
     ...BUILT_IN.filter((plugin) => plugin.id !== "eva.provider.anthropic"),
     ...OPTIONAL,
-    providing(provider, "eva.provider.anthropic"),
+    scripted(
+      script.map((said) => ({ payloads: [answer(said)] })),
+      "eva.provider.anthropic",
+    ).plugin,
   ])
 
 // The trace and the auth store under the scratch directory, so a booted run
@@ -354,7 +342,7 @@ workflows:
       directory,
       {},
       {
-        build: buildWith(scripted(["one answer"])),
+        build: buildWith(["one answer"]),
       },
     )
 
@@ -373,7 +361,7 @@ workflows:
       directory,
       {},
       {
-        build: buildWith(scripted(["first said", "second said", "third said"])),
+        build: buildWith(["first said", "second said", "third said"]),
       },
     )
 
@@ -404,7 +392,7 @@ workflows:
       directory,
       {},
       {
-        build: buildWith(scripted([])),
+        build: buildWith([]),
       },
     )
 
@@ -463,7 +451,7 @@ workflows:
       directory,
       {},
       {
-        build: buildWith(scripted(["feat(auth): add the login gate"])),
+        build: buildWith(["feat(auth): add the login gate"]),
         stdin: () => "diff --git a/login.ts b/login.ts\n+export const login = () => {}\n",
       },
     )
@@ -510,7 +498,7 @@ workflows:
       directory,
       {},
       {
-        build: buildWith(scripted([JSON.stringify([finding])])),
+        build: buildWith([JSON.stringify([finding])]),
       },
     )
 
@@ -555,7 +543,7 @@ steps:
       directory,
       {},
       {
-        build: buildWith(scripted(["- the login gate landed", "## v1.0\n- the login gate landed"])),
+        build: buildWith(["- the login gate landed", "## v1.0\n- the login gate landed"]),
       },
     )
 

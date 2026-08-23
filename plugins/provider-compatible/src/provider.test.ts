@@ -11,14 +11,7 @@ import {
 import { Effect, Stream } from "effect"
 import OpenAI from "openai"
 import { describe, expect, it } from "vitest"
-import {
-  classify,
-  makeCompatibleProvider,
-  makeBlocks,
-  toMessages,
-  toStopReason,
-  toUsage,
-} from "./provider.js"
+import { classify, makeCompatibleProvider, makeBlocks, toStopReason, toUsage } from "./provider.js"
 
 const key: Credential = { mode: "api_key", secret: () => Effect.succeed("sk-test") }
 
@@ -33,25 +26,8 @@ const human = (text: string): TranscriptMessage => ({
   blocks: [{ type: "content", block: 0, content: { type: "text", text } }],
 })
 
-const agent = (text: string): TranscriptMessage => ({
-  author: "agent",
-  blocks: [{ type: "content", block: 0, content: { type: "text", text } }],
-})
-
-describe("toMessages", () => {
-  it("names the human user and everything else assistant", () => {
-    expect(toMessages([human("ask"), agent("answer")])).toEqual([
-      { role: "user", content: "ask" },
-      { role: "assistant", content: "answer" },
-    ])
-  })
-
-  it("drops a message with no text", () => {
-    const empty: TranscriptMessage = { author: "agent", blocks: [] }
-    expect(toMessages([human("ask"), empty])).toHaveLength(1)
-  })
-})
-
+// The wire table itself is the sdk body's, proved there. What is this
+// dialect's own is how the OpenAI SDK's errors are read into it.
 describe("classify", () => {
   const api = (status: number, code?: string) => {
     const error = Object.create(OpenAI.APIError.prototype) as {
@@ -63,15 +39,9 @@ describe("classify", () => {
     return error
   }
 
-  it.each([
-    [401, "auth_failed"],
-    [403, "auth_failed"],
-    [404, "no_such_model"],
-    [429, "rate_limit"],
-    [500, "server_error"],
-    [503, "server_error"],
-  ])("reads status %i as %s", (status, expected) => {
-    expect(classify(api(status))).toBe(expected)
+  it("reads the status through the wire table", () => {
+    expect(classify(api(401))).toBe("auth_failed")
+    expect(classify(api(500))).toBe("server_error")
   })
 
   // A dead account arrives as HTTP 429, and reading the status alone would

@@ -3,14 +3,7 @@ import type { Payload, TranscriptMessage } from "@missingstudio/eva-schema"
 import { Effect, Stream } from "effect"
 import OpenAI from "openai"
 import { describe, expect, it } from "vitest"
-import {
-  classify,
-  makeBlocks,
-  makeOpenAIProvider,
-  toInput,
-  toStopReason,
-  toUsage,
-} from "./provider.js"
+import { classify, makeBlocks, makeOpenAIProvider, toStopReason, toUsage } from "./provider.js"
 
 const key: Credential = { mode: "api_key", secret: () => Effect.succeed("sk-test") }
 
@@ -19,44 +12,8 @@ const human = (text: string): TranscriptMessage => ({
   blocks: [{ type: "content", block: 0, content: { type: "text", text } }],
 })
 
-const agent = (text: string): TranscriptMessage => ({
-  author: "agent",
-  blocks: [{ type: "content", block: 0, content: { type: "text", text } }],
-})
-
-describe("toInput", () => {
-  it("names the human user and everything else assistant", () => {
-    expect(toInput([human("ask"), agent("answer")])).toEqual([
-      { role: "user", content: "ask" },
-      { role: "assistant", content: "answer" },
-    ])
-  })
-
-  it("joins the blocks of one message into one content string", () => {
-    const split: TranscriptMessage = {
-      author: "agent",
-      blocks: [
-        { type: "content", block: 0, content: { type: "text", text: "one " } },
-        { type: "content", block: 1, content: { type: "text", text: "two" } },
-      ],
-    }
-    expect(toInput([split])[0]?.content).toBe("one two")
-  })
-
-  it("keeps a thought block, because it is what the model said", () => {
-    const thought: TranscriptMessage = {
-      author: "agent",
-      blocks: [{ type: "thought", block: 0, content: { type: "text", text: "thinking" } }],
-    }
-    expect(toInput([thought])[0]?.content).toBe("thinking")
-  })
-
-  it("drops a message with no text", () => {
-    const empty: TranscriptMessage = { author: "agent", blocks: [] }
-    expect(toInput([human("ask"), empty])).toHaveLength(1)
-  })
-})
-
+// The wire table itself is the sdk body's, proved there. What is this
+// dialect's own is how the OpenAI SDK's errors are read into it.
 describe("classify", () => {
   const api = (status: number, code?: string) => {
     const error = Object.create(OpenAI.APIError.prototype) as {
@@ -68,15 +25,9 @@ describe("classify", () => {
     return error
   }
 
-  it.each([
-    [401, "auth_failed"],
-    [403, "auth_failed"],
-    [404, "no_such_model"],
-    [429, "rate_limit"],
-    [500, "server_error"],
-    [503, "server_error"],
-  ])("reads status %i as %s", (status, expected) => {
-    expect(classify(api(status))).toBe(expected)
+  it("reads the status through the wire table", () => {
+    expect(classify(api(429))).toBe("rate_limit")
+    expect(classify(api(503))).toBe("server_error")
   })
 
   // A dead account arrives as HTTP 429, and reading the status alone would

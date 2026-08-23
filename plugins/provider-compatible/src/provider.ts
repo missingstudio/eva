@@ -1,7 +1,15 @@
-import type { Credential, Provider, ProviderRequest } from "@missingstudio/eva-core"
-import { ProviderError } from "@missingstudio/eva-core"
-import type { ErrorClass, Payload, StopReason, TranscriptMessage } from "@missingstudio/eva-schema"
-import { Cause, Effect, Queue, Stream } from "effect"
+import type { Credential, Provider } from "@missingstudio/eva-core"
+import type { ErrorClass, Payload, StopReason } from "@missingstudio/eva-schema"
+import {
+  chatMessages,
+  classifyWire,
+  missingCredential,
+  reported,
+  secretOf,
+  streamingProvider,
+  type TurnEmitter,
+} from "@missingstudio/eva-sdk"
+import { Effect } from "effect"
 import OpenAI from "openai"
 
 /**
@@ -11,45 +19,26 @@ import OpenAI from "openai"
  */
 export const PLUGIN_ID = "eva.provider.compatible"
 
-const text = (blocks: TranscriptMessage["blocks"]): string =>
-  blocks
-    .filter((block) => block.type === "content" || block.type === "thought")
-    .map((block) => {
-      const content = (block as { content: { type: string; text?: string } }).content
-      return content.type === "text" ? (content.text ?? "") : ""
-    })
-    .join("")
-
-export const toMessages = (
-  history: readonly TranscriptMessage[],
-): readonly { readonly role: "user" | "assistant"; readonly content: string }[] =>
-  history
-    .map((message) => ({
-      role: message.author === "human" ? ("user" as const) : ("assistant" as const),
-      content: text(message.blocks),
-    }))
-    .filter((message) => message.content.length > 0)
-
 /**
- * The eight classes the glossary fixes. `insufficient_quota` arrives as HTTP
- * 429, and reading the status alone would classify a dead account as
- * `rate_limit`, which the retry policy retries three times. A 400 — a prompt
- * that does not fit a small local model's context — lands in `other` with
- * the server's own message, because all eight classes are about reaching a
- * Provider and none fits.
+ * The OpenAI SDK's failure, read into the one wire table — this dialect
+ * speaks through the same SDK as `eva.provider.openai`, so the reader is the
+ * same eight lines. A 400 — a prompt that does not fit a small local model's
+ * context — lands in `other` with the server's own message, because all
+ * eight classes are about reaching a Provider and none fits.
  */
-export const classify = (cause: unknown): ErrorClass => {
-  if (cause instanceof OpenAI.APIConnectionError) return "unreachable"
-  if (cause instanceof OpenAI.APIError) {
-    const status = cause.status
-    const quota = cause.code === "insufficient_quota" || cause.type === "insufficient_quota"
-    if (status === 429) return quota ? "billing" : "rate_limit"
-    if (status === 401 || status === 403) return "auth_failed"
-    if (status === 404) return "no_such_model"
-    if (status !== undefined && status >= 500) return "server_error"
-  }
-  return "other"
-}
+export const classify = (cause: unknown): ErrorClass =>
+  classifyWire(
+    cause instanceof OpenAI.APIConnectionError
+      ? { connection: true }
+      : cause instanceof OpenAI.APIError
+        ? {
+            ...(cause.status === undefined ? {} : { status: cause.status }),
+            billing:
+              cause.status === 429 &&
+              (cause.code === "insufficient_quota" || cause.type === "insufficient_quota"),
+          }
+        : undefined,
+  )
 
 /**
  * Chat Completions puts a content filter in `finish_reason`, the provider's
@@ -70,10 +59,6 @@ export const toStopReason = (reason: string | null | undefined): StopReason | un
       return undefined
   }
 }
-
-// Silence is not zero: a counter the provider did not report stays null.
-// Clamping belongs to `eva.usage`, not here.
-const reported = (value: number | null | undefined): number | null => value ?? null
 
 /**
  * `prompt_tokens_details.cached_tokens` is a subset of `prompt_tokens`, so
@@ -172,164 +157,101 @@ export interface CompatibleOptions {
   readonly client?: OpenAI
 }
 
-export const makeCompatibleProvider = (options: CompatibleOptions): Provider => {
-  // The secret is resolved per attempt, never captured: a session outlives a
-  // credential, so a client built once would send a stale one for the rest
-  // of the session. An injected client is a test's, and answers as it is.
-  const clientFor = Effect.fn("eva.provider.compatible.client")(function* () {
-    if (options.client !== undefined) return options.client
-    if (options.credential === false) {
-      return yield* Effect.fail(
-        new ProviderError({
-          provider: options.id,
-          errorClass: "auth_failed",
-          message: `no credential for ${options.namespace}`,
-        }),
-      )
-    }
-    if (options.credential === undefined) {
-      // A keyless endpoint. The SDK demands a key at construction, so a
-      // placeholder satisfies it and the explicit null omits the
-      // Authorization header from every request.
-      return new OpenAI({
-        baseURL: options.api,
-        apiKey: "keyless",
-        defaultHeaders: { Authorization: null },
-        maxRetries: 0,
-      })
-    }
-    const key = yield* Effect.mapError(
-      options.credential.secret(),
-      (cause) =>
-        new ProviderError({
-          provider: options.id,
-          errorClass: "auth_failed",
-          message: cause.message,
-        }),
-    )
-    // Zero retries: a retry is a record of its own, and a hidden one is
-    // missing from the Trace that exists to show it.
-    return new OpenAI({ baseURL: options.api, apiKey: key, maxRetries: 0 })
-  })
-
-  return {
+export const makeCompatibleProvider = (options: CompatibleOptions): Provider =>
+  streamingProvider<OpenAI>({
     id: options.id,
     available: () => options.client !== undefined || options.credential !== false,
+    classify,
 
-    turn: (request: ProviderRequest) => {
-      // Set when the stream drains. `stopReason` is read after that; an
-      // early read answers undefined, which is what an unreported reason
-      // means.
-      let reason: StopReason | undefined
-      const payloads = Stream.unwrap(
-        Effect.map(clientFor(), (client) =>
-          Stream.callback<Payload, ProviderError>((queue) =>
-            Effect.acquireRelease(
-              Effect.sync(() => {
-                const controller = new AbortController()
-                // The queue can end two ways — the drain finishing and the
-                // abort on release — so the first to settle wins and the
-                // other returns.
-                let settled = false
-                const fail = (cause: unknown) => {
-                  if (settled) return
-                  settled = true
-                  Queue.failCauseUnsafe(
-                    queue,
-                    Cause.fail(
-                      new ProviderError({
-                        provider: options.id,
-                        errorClass: classify(cause),
-                        message: cause instanceof Error ? cause.message : String(cause),
-                      }),
-                    ),
-                  )
-                }
+    clientFor: Effect.fn("eva.provider.compatible.client")(function* () {
+      if (options.client !== undefined) return options.client
+      if (options.credential === false) {
+        return yield* Effect.fail(missingCredential(options.id, options.namespace))
+      }
+      if (options.credential === undefined) {
+        // A keyless endpoint. The SDK demands a key at construction, so a
+        // placeholder satisfies it and the explicit null omits the
+        // Authorization header from every request.
+        return new OpenAI({
+          baseURL: options.api,
+          apiKey: "keyless",
+          defaultHeaders: { Authorization: null },
+          maxRetries: 0,
+        })
+      }
+      const key = yield* secretOf(options.credential, options.id)
+      // Zero retries: a retry is a record of its own, and a hidden one is
+      // missing from the Trace that exists to show it.
+      return new OpenAI({ baseURL: options.api, apiKey: key, maxRetries: 0 })
+    }),
 
-                const drain = async () => {
-                  // The raw chunk stream, not the SDK's accumulating helper:
-                  // the helper throws on a snapshot a sloppy server left
-                  // incomplete, and a missing finish_reason must degrade to
-                  // an unreported one rather than fail the Run.
-                  const stream = await client.chat.completions.create(
-                    {
-                      model: request.model.model,
-                      messages: [
-                        ...(request.system === undefined
-                          ? []
-                          : [{ role: "system" as const, content: request.system }]),
-                        ...toMessages(request.messages),
-                      ],
-                      stream: true,
-                      ...(options.usage === false
-                        ? {}
-                        : { stream_options: { include_usage: true } }),
-                      ...((options.maxTokens ?? 0) > 0 ? { max_tokens: options.maxTokens } : {}),
-                    },
-                    { signal: controller.signal },
-                  )
-
-                  const blocks = makeBlocks()
-                  let finish: string | undefined
-                  let usage: Parameters<typeof toUsage>[2]
-                  let model: string | undefined
-
-                  for await (const chunk of stream) {
-                    if (typeof chunk.model === "string" && chunk.model !== "") model = chunk.model
-                    // Kept even under `usage: false`: a counter the server
-                    // volunteered anyway is not silence, and throwing it
-                    // away loses the Budget's input.
-                    if (chunk.usage != null) usage = chunk.usage
-                    const choice = chunk.choices?.[0]
-                    if (choice == null) continue
-                    if (choice.finish_reason != null) finish = choice.finish_reason
-                    const delta = choice.delta as Record<string, unknown> | null | undefined
-                    if (delta == null) continue
-
-                    for (const [field, value] of Object.entries(delta)) {
-                      // `role` is framing, not content, and a null field says
-                      // nothing.
-                      if (field === "role" || value == null) continue
-                      const kind = DELTA_KINDS[field]
-                      // A delta is content the model produced. One the union
-                      // has no kind for is preserved rather than dropped, so
-                      // a stage that maps it later reads a Trace that kept it.
-                      if (kind === undefined) {
-                        Queue.offerUnsafe(queue, {
-                          kind: "unknown",
-                          originalKind: field,
-                          raw: chunk,
-                        })
-                        continue
-                      }
-                      if (typeof value !== "string" || value === "") continue
-                      Queue.offerUnsafe(queue, {
-                        kind,
-                        block: blocks(field),
-                        content: { type: "text", text: value },
-                      })
-                    }
-                  }
-
-                  if (settled) return
-                  settled = true
-                  reason = toStopReason(finish)
-                  Queue.offerUnsafe(
-                    queue,
-                    toUsage(options.namespace, model ?? request.model.model, usage),
-                  )
-                  Queue.endUnsafe(queue)
-                }
-
-                drain().catch(fail)
-                return controller
-              }),
-              (controller) => Effect.sync(() => controller.abort()),
-            ),
-          ),
-        ),
-      )
-      return { payloads, stopReason: Effect.sync(() => reason) }
+    start: (client, request, emit) => {
+      const controller = new AbortController()
+      drain(options, client, request, emit, controller).catch(emit.fail)
+      return { abort: () => controller.abort() }
     },
+  })
+
+/**
+ * The raw chunk stream, not the SDK's accumulating helper: the helper throws
+ * on a snapshot a sloppy server left incomplete, and a missing finish_reason
+ * must degrade to an unreported one rather than fail the Run.
+ */
+const drain = async (
+  options: CompatibleOptions,
+  client: OpenAI,
+  request: Parameters<Provider["turn"]>[0],
+  emit: TurnEmitter,
+  controller: AbortController,
+): Promise<void> => {
+  const stream = await client.chat.completions.create(
+    {
+      model: request.model.model,
+      messages: [
+        ...(request.system === undefined
+          ? []
+          : [{ role: "system" as const, content: request.system }]),
+        ...chatMessages(request.messages),
+      ],
+      stream: true,
+      ...(options.usage === false ? {} : { stream_options: { include_usage: true } }),
+      ...((options.maxTokens ?? 0) > 0 ? { max_tokens: options.maxTokens } : {}),
+    },
+    { signal: controller.signal },
+  )
+
+  const blocks = makeBlocks()
+  let finish: string | undefined
+  let usage: Parameters<typeof toUsage>[2]
+  let model: string | undefined
+
+  for await (const chunk of stream) {
+    if (typeof chunk.model === "string" && chunk.model !== "") model = chunk.model
+    // Kept even under `usage: false`: a counter the server volunteered
+    // anyway is not silence, and throwing it away loses the Budget's input.
+    if (chunk.usage != null) usage = chunk.usage
+    const choice = chunk.choices?.[0]
+    if (choice == null) continue
+    if (choice.finish_reason != null) finish = choice.finish_reason
+    const delta = choice.delta as Record<string, unknown> | null | undefined
+    if (delta == null) continue
+
+    for (const [field, value] of Object.entries(delta)) {
+      // `role` is framing, not content, and a null field says nothing.
+      if (field === "role" || value == null) continue
+      const kind = DELTA_KINDS[field]
+      // A delta is content the model produced. One the union has no kind for
+      // is preserved rather than dropped, so a stage that maps it later
+      // reads a Trace that kept it.
+      if (kind === undefined) {
+        emit.payload({ kind: "unknown", originalKind: field, raw: chunk })
+        continue
+      }
+      if (typeof value !== "string" || value === "") continue
+      emit.payload({ kind, block: blocks(field), content: { type: "text", text: value } })
+    }
   }
+
+  emit.payload(toUsage(options.namespace, model ?? request.model.model, usage))
+  emit.end(toStopReason(finish))
 }

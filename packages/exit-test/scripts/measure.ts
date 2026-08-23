@@ -20,11 +20,10 @@ import { spawn } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { Event } from "@missingstudio/eva-schema"
+import { readTrace, type Event } from "@missingstudio/eva-schema"
 import { hermeticEnv, inputOf, INPUTS } from "./fixture.js"
 import {
   ENDPOINT,
-  eventsOf,
   readingOf,
   refuses,
   said,
@@ -127,7 +126,7 @@ for (const name of WORKFLOWS) {
 for (const task of tasks) {
   let events: readonly Event[] = []
   try {
-    events = existsSync(task.tracePath) ? eventsOf(task.tracePath) : []
+    events = existsSync(task.tracePath) ? readTrace(task.tracePath) : []
   } catch {
     events = []
   }

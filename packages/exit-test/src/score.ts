@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs"
 import {
-  decodeLine,
   validityOf,
   verdictFold,
   type Event,
@@ -23,13 +21,6 @@ export const readingOf = (events: readonly Event[]): Reading => {
   const summary = verdictFold(events)
   return { summary, validity: validityOf(summary) }
 }
-
-export const eventsOf = (path: string): readonly Event[] =>
-  readFileSync(path, "utf8").split("\n").filter(Boolean).map(decodeLine)
-
-// The exact bytes a golden file holds, so the generator and the test cannot
-// drift apart on formatting.
-export const writtenOf = (reading: Reading): string => JSON.stringify(reading, null, 2) + "\n"
 
 // The share of Runs that may produce no Candidate before no rate is
 // reported at all.

@@ -5,8 +5,6 @@ import {
   foldTranscript,
   providerTurn,
   type ModelRef,
-  type Provider,
-  type ProviderRequest,
   type SessionAPI,
 } from "@missingstudio/eva-core"
 import { sessionID, type Event, type Payload } from "@missingstudio/eva-schema"
@@ -14,7 +12,8 @@ import { trace } from "@missingstudio/eva-trace"
 import { makeJsonlSink, traceJsonl } from "@missingstudio/eva-trace-jsonl"
 import { Deferred, Effect, Exit, Fiber, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import { FAKE_PROVIDER, providing } from "@missingstudio/eva-testkit"
+import { FAKE_PROVIDER, providing, scripted } from "@missingstudio/eva-testkit"
+import type { Plugin } from "@missingstudio/eva-sdk"
 import { boot, buildOf, makeSessionAPI } from "@missingstudio/eva-boot"
 import { runPrint } from "./run.js"
 
@@ -36,24 +35,8 @@ const usage = (input: number, output: number): Payload => ({
   cacheReadTokens: 0,
 })
 
-// Answers with whatever the script says, and records what history it was
-// handed so the test can check the conversation carried forward.
-const scripted = (script: readonly (readonly Payload[])[], seen: ProviderRequest[]): Provider => {
-  let turn = 0
-  return {
-    id: "eva.provider.fake",
-    available: () => true,
-    turn: (request) => {
-      seen.push(request)
-      const payloads = script[Math.min(turn, script.length - 1)] ?? []
-      turn += 1
-      return providerTurn(Stream.fromIterable(payloads))
-    },
-  }
-}
-
 const started = <A>(
-  provider: Provider,
+  provider: Plugin,
   body: (api: SessionAPI, path: string) => Effect.Effect<A>,
 ): Promise<A> => {
   const path = join(mkdtempSync(join(tmpdir(), "eva-conv-")), "trace.jsonl")
@@ -67,7 +50,7 @@ const started = <A>(
           { id: "eva.trace.jsonl", options: { path } },
           { id: FAKE_PROVIDER },
         ],
-        build: buildOf([trace, traceJsonl, providing(provider)]),
+        build: buildOf([trace, traceJsonl, provider]),
       })
       const api = yield* makeSessionAPI(kernel, FAKE_MODEL, scope)
       const result = yield* body(api.session, path)
@@ -89,14 +72,10 @@ const onDisk = (path: string, session = SESSION) =>
 // output, and reports what it spent.
 describe("a conversation over several Runs", () => {
   it("keeps every Run in one session's fold, in order", async () => {
-    const seen: ProviderRequest[] = []
-    const provider = scripted(
-      [
-        [text("first answer"), usage(10, 4)],
-        [text("second answer"), usage(20, 6)],
-      ],
-      seen,
-    )
+    const provider = scripted([
+      { payloads: [text("first answer"), usage(10, 4)] },
+      { payloads: [text("second answer"), usage(20, 6)] },
+    ]).plugin
 
     const found = await started(provider, (api, path) =>
       Effect.gen(function* () {
@@ -117,9 +96,10 @@ describe("a conversation over several Runs", () => {
   })
 
   it("streams the output as it arrives rather than after the Run", async () => {
-    const seen: ProviderRequest[] = []
     const chunks: string[] = []
-    const provider = scripted([[text("st"), text("rea"), text("med"), usage(1, 3)]], seen)
+    const provider = scripted([
+      { payloads: [text("st"), text("rea"), text("med"), usage(1, 3)] },
+    ]).plugin
 
     await started(provider, (api) =>
       runPrint(api, "stream it", { write: (piece) => void chunks.push(piece) }),
@@ -129,8 +109,7 @@ describe("a conversation over several Runs", () => {
   })
 
   it("reports the whole session's spend, and says so when cost is unreported", async () => {
-    const seen: ProviderRequest[] = []
-    const provider = scripted([[text("hi"), usage(1200, 340)]], seen)
+    const provider = scripted([{ payloads: [text("hi"), usage(1200, 340)] }]).plugin
 
     const printed = await started(provider, (api) => runPrint(api, "spend", { write: () => {} }))
 
@@ -146,8 +125,7 @@ describe("a conversation over several Runs", () => {
       cacheWriteTokens: null,
       cacheReadTokens: null,
     }
-    const seen: ProviderRequest[] = []
-    const provider = scripted([[text("hi"), usage(10, 4), silent]], seen)
+    const provider = scripted([{ payloads: [text("hi"), usage(10, 4), silent] }]).plugin
 
     const printed = await started(provider, (api) => runPrint(api, "silent", { write: () => {} }))
     expect(printed.costLine).toBe("cost unreported")
@@ -156,9 +134,8 @@ describe("a conversation over several Runs", () => {
 
 describe("cancelling mid-stream", () => {
   it("keeps the partial work and closes the Run cancelled, leaving a foldable trace", async () => {
-    const seen: ProviderRequest[] = []
     const found = await started(
-      {
+      providing({
         id: "eva.provider.hanging",
         available: () => true,
         turn: () =>
@@ -167,7 +144,7 @@ describe("cancelling mid-stream", () => {
               Stream.concat(Stream.fromEffect(Effect.never)),
             ),
           ),
-      },
+      }),
       (api, path) =>
         Effect.gen(function* () {
           const streaming = yield* Deferred.make<void>()
@@ -186,7 +163,6 @@ describe("cancelling mid-stream", () => {
         }),
     )
 
-    void seen
     const closing = found.at(-1)
     expect(closing?.payload).toMatchObject({ kind: "finished", stopReason: "cancelled" })
     // The partial answer survived, and every record still parses — a
@@ -198,8 +174,7 @@ describe("cancelling mid-stream", () => {
 
 describe("the trace a killed process leaves", () => {
   it("still parses, record by record", async () => {
-    const seen: ProviderRequest[] = []
-    const provider = scripted([[text("hi"), usage(1, 1)]], seen)
+    const provider = scripted([{ payloads: [text("hi"), usage(1, 1)] }]).plugin
     const lines = await started(provider, (api, path) =>
       Effect.gen(function* () {
         yield* runPrint(api, "record me", { write: () => {} })
