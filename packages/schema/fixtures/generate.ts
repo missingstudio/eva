@@ -3,6 +3,7 @@
 import { readdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
+  answerFold,
   costFold,
   encodeLine,
   headerFold,
@@ -31,6 +32,9 @@ for (const file of readdirSync(dir).filter((name) => name.endsWith(".jsonl"))) {
     ),
     verdicts: Object.fromEntries(
       sessions.map((s) => [s, verdictFold(events.filter((e) => e.session === s))]),
+    ),
+    answers: Object.fromEntries(
+      sessions.map((s) => [s, answerFold(events.filter((e) => e.session === s))]),
     ),
   }
   const out = join(dir, "goldens", file.replace(".jsonl", ".json"))
