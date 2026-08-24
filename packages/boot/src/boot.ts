@@ -152,7 +152,12 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
   // swap rather than the two that were wired by hand.
   const slotOf = <Filling>(name: string) =>
     makeSlot<Filling>(name, {
-      filled: (slot, by) => broadcast.publish("slot.filled", { slot, by }),
+      filled: (slot, by, evicted) =>
+        broadcast.publish("slot.filled", {
+          slot,
+          by,
+          ...(evicted === undefined ? {} : { evicted }),
+        }),
       emptied: (slot) => broadcast.publish("slot.emptied", { slot }),
     })
 

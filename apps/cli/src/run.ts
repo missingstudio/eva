@@ -14,7 +14,7 @@ import { answerFold, type Claim, type SessionID } from "@missingstudio/eva-schem
 import type { Domains } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Scope, Stream } from "effect"
 import { BUILD, BUILT_IN_IDS, entriesOf, readsOf, uncarriedOf } from "./plugins.js"
-import { sayMiss } from "./report.js"
+import { sayEvicted, sayMiss } from "./report.js"
 import type { World } from "./world.js"
 
 export { DEFAULT_MODEL } from "@missingstudio/eva-catalog-models"
@@ -71,13 +71,14 @@ export const resolveConfig = Effect.fn("cli.resolveConfig")(function* (
 })
 
 /**
- * Says each distinct miss once, in `say`'s voice. Subscribed through
- * `observe`, before boot loads anything, because a Broadcast has no replay.
- * A persistent miss recurs on every rebuild by design, so the lines
- * deduplicate across rebuilds.
+ * Says what the kernel's broadcast reports, in `say`'s voice: each distinct
+ * miss once — a persistent miss recurs on every rebuild by design, so the
+ * lines deduplicate across rebuilds — and every slot eviction as it happens.
+ * Subscribed through `observe`, before boot loads anything, because a
+ * Broadcast has no replay.
  */
-export const watchMisses = (scope: Scope.Scope, err: (text: string) => void) =>
-  Effect.fn("cli.watchMisses")(function* (kernel: Kernel) {
+export const watchKernel = (scope: Scope.Scope, err: (text: string) => void) =>
+  Effect.fn("cli.watchKernel")(function* (kernel: Kernel) {
     const said = new Set<string>()
     const topics = Object.keys(kernel.domains) as (keyof Domains)[]
     yield* Effect.forEach(topics, (name) =>
@@ -94,6 +95,15 @@ export const watchMisses = (scope: Scope.Scope, err: (text: string) => void) =>
         ),
         scope,
       ),
+    )
+    yield* Effect.forkIn(
+      Stream.runForEach(kernel.broadcast.subscribe("slot.filled"), (payload) =>
+        Effect.sync(() => {
+          if (payload.evicted !== undefined)
+            err(sayEvicted(payload.slot, payload.by, payload.evicted))
+        }),
+      ),
+      scope,
     )
     // One yield, so the subscribers attach before the load batch publishes.
     yield* Effect.yieldNow
@@ -122,7 +132,7 @@ export const startFrom = Effect.fn("cli.startFrom")(function* (
     resolved,
     build,
     config: config.raw,
-    ...(say === undefined ? {} : { observe: watchMisses(scope, say) }),
+    ...(say === undefined ? {} : { observe: watchKernel(scope, say) }),
   })
 
   return { kernel, config, model } satisfies Started

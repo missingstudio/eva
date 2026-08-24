@@ -10,11 +10,17 @@ interface Sink {
 const events = () => {
   const filled: string[] = []
   const emptied: string[] = []
+  const evictions: (string | undefined)[] = []
   return {
     filled,
     emptied,
+    evictions,
     handlers: {
-      filled: (slot: string, by: string) => Effect.sync(() => void filled.push(`${slot}:${by}`)),
+      filled: (slot: string, by: string, evicted?: string) =>
+        Effect.sync(() => {
+          filled.push(`${slot}:${by}`)
+          evictions.push(evicted)
+        }),
       emptied: (slot: string) => Effect.sync(() => void emptied.push(slot)),
     },
   }
@@ -83,11 +89,13 @@ describe("a slot", () => {
     expect(found).toBeUndefined()
   })
 
-  // A replaced provider's finalizer must not empty the slot the new one fills.
+  // A replaced provider's finalizer must not empty the slot the new one
+  // fills — and the fill that displaced it names what it displaced.
   it("leaves the slot alone when a replaced provider is disposed", async () => {
+    const log = events()
     const found = await Effect.runPromise(
       Effect.gen(function* () {
-        const slot = yield* makeSlot<Sink>("TraceSink")
+        const slot = yield* makeSlot<Sink>("TraceSink", log.handlers)
         const first = yield* Scope.make()
         const second = yield* Scope.make()
         yield* slot
@@ -101,6 +109,46 @@ describe("a slot", () => {
       }),
     )
     expect(found?.id).toBe("memory")
+    expect(log.evictions).toEqual([undefined, "eva.trace.jsonl"])
+  })
+
+  // Last-writer-wins stays — a bundle overlay must be able to replace a
+  // default sink. What changes is the silence: the eviction is named.
+  it("names the displaced holder when a different plugin takes a live slot", async () => {
+    const log = events()
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const scope = yield* Scope.make()
+        const slot = yield* makeSlot<Sink>("TraceSink", log.handlers)
+        yield* slot
+          .provide("eva.trace.memory", { id: "memory" })
+          .pipe(Effect.provideService(Scope.Scope, scope))
+        yield* slot
+          .provide("eva.trace.jsonl", { id: "jsonl" })
+          .pipe(Effect.provideService(Scope.Scope, scope))
+        return yield* slot.get
+      }),
+    )
+    expect(found.id).toBe("jsonl")
+    expect(log.evictions).toEqual([undefined, "eva.trace.memory"])
+  })
+
+  // Hot replacement of a plugin's own implementation, exactly as today.
+  it("carries no eviction on a same-id re-provide", async () => {
+    const log = events()
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const scope = yield* Scope.make()
+        const slot = yield* makeSlot<Sink>("TraceSink", log.handlers)
+        yield* slot
+          .provide("eva.trace.jsonl", { id: "one" })
+          .pipe(Effect.provideService(Scope.Scope, scope))
+        yield* slot
+          .provide("eva.trace.jsonl", { id: "two" })
+          .pipe(Effect.provideService(Scope.Scope, scope))
+      }),
+    )
+    expect(log.evictions).toEqual([undefined, undefined])
   })
 
   it("broadcasts filled and emptied", async () => {

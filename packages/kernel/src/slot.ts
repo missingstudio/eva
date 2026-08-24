@@ -2,7 +2,9 @@ import { EmptySlotError, type Registration, type Slot } from "@missingstudio/eva
 import { Effect, Scope } from "effect"
 
 export interface SlotEvents {
-  readonly filled: (slot: string, by: string) => Effect.Effect<void>
+  // `evicted` names a live holder with a different id that this fill
+  // displaced. A same-id re-provide is a hot swap and carries none.
+  readonly filled: (slot: string, by: string, evicted?: string) => Effect.Effect<void>
   readonly emptied: (slot: string) => Effect.Effect<void>
 }
 
@@ -22,8 +24,11 @@ export const makeSlot = <T>(name: string, events: SlotEvents = silent): Effect.E
       id: string,
       implementation: T,
     ) {
+      // Last-writer-wins stays — load order is precedence everywhere in Eva
+      // — but a displaced holder's work is discarded, so it is named.
+      const displaced = held !== undefined && held.id !== id ? held.id : undefined
       held = { id, implementation }
-      yield* events.filled(name, id)
+      yield* events.filled(name, id, displaced)
 
       let disposed = false
       const dispose = Effect.gen(function* () {

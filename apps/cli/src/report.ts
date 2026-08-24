@@ -41,3 +41,8 @@ export const report = (settled: ResolvedConfig, world: World): void => {
  */
 export const sayMiss = (domain: string, miss: DomainMiss): string =>
   `eva: ${miss.owner ?? "something"} edited ${domain} "${miss.id}", and nothing had registered it\n`
+
+// A slot eviction, as one line: a displaced filler's work was money spent
+// on nothing, so the displacement is never silent.
+export const sayEvicted = (slot: string, by: string, evicted: string): string =>
+  `eva: ${slot} now answers from ${by}; ${evicted} filled it first\n`

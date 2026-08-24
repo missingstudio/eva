@@ -6,7 +6,7 @@ import { eventID, runID, sessionID, type Event, type Payload } from "@missingstu
 import { trace } from "@missingstudio/eva-trace"
 import { makeJsonlSink, traceJsonl } from "@missingstudio/eva-trace-jsonl"
 import { traceMemory, type MemorySink } from "@missingstudio/eva-trace-memory"
-import { Effect, Exit, Scope, Stream } from "effect"
+import { Effect, Exit, Fiber, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 import { boot, type Kernel } from "@missingstudio/eva-boot"
 
@@ -76,6 +76,27 @@ describe("a slot hot-swaps", () => {
 
     expect(found.file).toEqual(["text"])
     expect(found.memory).toEqual(["text", "finished"])
+  })
+
+  // The swap that replaces one plugin's sink with a second plugin's names
+  // what it displaced; a filler whose work goes silent is never unannounced.
+  it("names the sink it displaced when a second plugin takes the slot", async () => {
+    const found = await started((kernel) =>
+      Effect.gen(function* () {
+        yield* kernel.runtime.add(traceJsonl)
+        const watching = yield* Effect.forkChild(
+          kernel.broadcast.subscribe("slot.filled").pipe(Stream.take(1), Stream.runCollect),
+        )
+        yield* Effect.yieldNow
+        yield* kernel.runtime.add(traceMemory)
+        return [...(yield* Fiber.join(watching))]
+      }),
+    )
+    expect(found[0]).toEqual({
+      slot: "TraceSink",
+      by: "eva.trace.memory",
+      evicted: "eva.trace.jsonl",
+    })
   })
 
   it("keeps numbering the new sink's records from 1", async () => {

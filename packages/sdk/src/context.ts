@@ -38,7 +38,8 @@ export interface BroadcastMap extends DomainUpdated {
   "session.started": { readonly session: string }
   "run.opened": { readonly run: string; readonly session: string }
   "run.finished": { readonly run: string; readonly session: string }
-  "slot.filled": { readonly slot: string; readonly by: string }
+  // `evicted` names a live holder with a different id this fill displaced.
+  "slot.filled": { readonly slot: string; readonly by: string; readonly evicted?: string }
   "slot.emptied": { readonly slot: string }
 }
 

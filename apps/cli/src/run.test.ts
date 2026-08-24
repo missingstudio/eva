@@ -1,9 +1,14 @@
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { boot, buildOf } from "@missingstudio/eva-boot"
 import { commands } from "@missingstudio/eva-commands"
 import { print } from "@missingstudio/eva-print"
+import { traceJsonl } from "@missingstudio/eva-trace-jsonl"
+import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"
-import { watchMisses } from "./run.js"
+import { watchKernel } from "./run.js"
 
 /**
  * The walkthrough's own example, as the exit test: `eva.print` supplies the
@@ -22,7 +27,7 @@ describe("a miss is said once", () => {
           scope,
           resolved: [{ id: "eva.print" }, { id: "eva.commands" }],
           build: buildOf([print, commands]),
-          observe: watchMisses(scope, (text) => void said.push(text)),
+          observe: watchKernel(scope, (text) => void said.push(text)),
         })
         // A rebuild replays everything and publishes the same miss again;
         // the dedup keeps it to one line.
@@ -44,7 +49,7 @@ describe("a miss is said once", () => {
           scope,
           resolved: [{ id: "eva.commands" }, { id: "eva.print" }],
           build: buildOf([print, commands]),
-          observe: watchMisses(scope, (text) => void said.push(text)),
+          observe: watchKernel(scope, (text) => void said.push(text)),
         })
         yield* Effect.yieldNow
         yield* Scope.close(scope, Exit.void)
@@ -52,5 +57,33 @@ describe("a miss is said once", () => {
     )
 
     expect(said).toEqual([])
+  })
+})
+
+/**
+ * Two configured trace sinks both load and one silently wins whichever
+ * loaded last. The eviction rides `slot.filled`, and the terminal says it.
+ */
+describe("a slot eviction is named", () => {
+  it("says which sink filled it first", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "eva-run-")), "trace.jsonl")
+    const said: string[] = []
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const scope = yield* Scope.make()
+        yield* boot({
+          scope,
+          resolved: [{ id: "eva.trace.jsonl", options: { path } }, { id: "eva.trace.memory" }],
+          build: buildOf([traceJsonl, traceMemory]),
+          observe: watchKernel(scope, (text) => void said.push(text)),
+        })
+        yield* Effect.yieldNow
+        yield* Scope.close(scope, Exit.void)
+      }),
+    )
+
+    expect(said).toEqual([
+      "eva: TraceSink now answers from eva.trace.memory; eva.trace.jsonl filled it first\n",
+    ])
   })
 })
