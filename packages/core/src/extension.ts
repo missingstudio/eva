@@ -20,12 +20,16 @@ export interface Registration {
 export type TransformCallback<Draft> = (draft: Draft) => void
 
 /**
- * What a transform may return: anything but an Effect. `void` alone is not
- * the rule — TypeScript accepts any return where void is expected — so the
- * refusal has to name what it refuses.
+ * What a transform may return: anything but an Effect or a promise. `void`
+ * alone is not the rule — TypeScript accepts any return where void is
+ * expected — so the refusal has to name what it refuses.
  */
 export type Synchronous<Result> =
-  Result extends Effect.Effect<infer _A, infer _E, infer _R> ? never : Result
+  Result extends Effect.Effect<infer _A, infer _E, infer _R>
+    ? never
+    : Result extends PromiseLike<infer _P>
+      ? never
+      : Result
 
 /**
  * An edit that reached no row: the id it reached for, and the plugin whose

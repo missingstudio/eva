@@ -133,12 +133,19 @@ describe("a domain", () => {
     expect(after).toEqual([])
   })
 
-  // The type is the rule: if this call ever compiles again, the unused
-  // expectation below turns into the compile error that says so.
+  // The type is the rule: if these calls ever compile again, the unused
+  // expectations below turn into the compile errors that say so.
   it("refuses a transform that returns an Effect", () => {
     const use = (domain: Domain<Row[], Draft>) =>
       // @ts-expect-error a transform is synchronous
       domain.transform(() => Effect.void)
+    expect(typeof use).toBe("function")
+  })
+
+  it("refuses a transform that returns a promise", () => {
+    const use = (domain: Domain<Row[], Draft>) =>
+      // @ts-expect-error a transform is synchronous
+      domain.transform(async () => {})
     expect(typeof use).toBe("function")
   })
 
