@@ -146,7 +146,13 @@ export interface BootOptions {
  * a plugin later still reaches `runtime.add`.
  */
 export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.fn.Return<Kernel> {
-  const broadcast = yield* makeBroadcast<BroadcastMap>()
+  // An `.updated` payload is a snapshot — a count and the current misses —
+  // so a lagging subscriber that reads only the latest commit has lost
+  // nothing. Every other topic is an event a consumer counts, and stays
+  // unbounded.
+  const broadcast = yield* makeBroadcast<BroadcastMap>((type) =>
+    String(type).endsWith(".updated") ? 1 : undefined,
+  )
 
   // One rule for every Slot, so a surface watching the traffic sees every
   // swap rather than the two that were wired by hand.
