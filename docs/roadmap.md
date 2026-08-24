@@ -198,6 +198,19 @@ Because the gate is a hook and hooks run in registration order with
 most-restrictive-wins, a repo-checked-in profile may **narrow** a mandate and
 never widen it. That is a property of the hook contract, not a special case.
 
+**A hook that dies fails toward its boundary's safe side.** This stage brings
+the first hooks that decide rather than observe, so it is where the failure
+rule lands, and the two kinds need opposite rules. A hook at an **observing**
+boundary — trace decoration, usage counting — that dies is reported and
+skipped: a broken observer must never end a Run. A hook at a **deciding**
+boundary — `tool.execute.before`, the gate itself — that dies is a denial: a
+gate that fails open because a policy plugin threw is not a gate. The boundary
+declares which it is, because only the caller of the hooks knows what they
+decide. Stage 0's four provider hooks are all observers, which is why the rule
+waits here rather than shipping against zero deciders
+([plans/kernel-contracts.md](../plans/kernel-contracts.md) holds the review
+that found it).
+
 ```
 eva > rename UserSvc to UserService across this package
   ← parallel reads and greps, then serial edits; every write previewed, y/n
@@ -219,7 +232,8 @@ it. `echo x > $VAR` is one opaque invocation and fails closed. `eva policy
 check` rejects a malformed rule set in CI. Changing a live session from
 `autonomous` to `read-only` takes effect before the next tool call. Two
 parallel-safe reads overlap and you can show it. A write between them is a
-barrier. Results land in source order.
+barrier. Results land in source order. A policy hook that throws denies its
+tool call; an observing hook that throws is reported and the Run continues.
 
 **Skip cost:** without `eva.approval` you can never run unattended. That stops
 stage 9 and everything after it.
