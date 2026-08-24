@@ -365,17 +365,17 @@ write to them. `tool` arrives with the stage that needs it; later stages add
 `workspace`, `check`, `memory`, `skill`, `importer`, and `signal`. Adding one
 is a reviewed SDK change.
 
-| Domain        | Holds                                           | Finalizer does                                                                                       | Written by                                           |
-| ------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `catalog`     | providers, models, the default model            | validates policy, builds the lookup index                                                            | `eva.catalog.models`, `eva.provider.*`, `eva.config` |
-| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists — checked at selection, not at commit; see plans/stage-1/005 | `eva.harness.*`, `eva.workflow`                      |
-| `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set                                                        | `eva.tui`, `eva.print`, `eva.api`, `eva.web`         |
-| `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default                                                            | `eva.agents`, `eva.profile`, `eva.config`            |
-| `prompt`      | Templates, one row per Template                 | —                                                                                                    | `eva.prompt`, `eva.workflow`, `eva.config`           |
-| `command`     | slash commands and their handlers               | checks name and alias collisions                                                                     | `eva.commands`, `eva.print`, `eva.config`            |
-| `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys                                                        | `eva.themes`, `eva.config`                           |
-| `keymap`      | key bindings by surface                         | detects conflicting bindings                                                                         | `eva.keymap`, `eva.config`                           |
-| `integration` | credential sources and auth methods             | projects live connections                                                                            | `eva.auth`, `eva.provider.*`                         |
+| Domain        | Holds                                           | Finalizer does                                                                | Written by                                           |
+| ------------- | ----------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `catalog`     | providers, models, the default model            | validates policy, builds the lookup index                                     | `eva.catalog.models`, `eva.provider.*`, `eva.config` |
+| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists — checked at selection, not at commit | `eva.harness.*`, `eva.workflow`                      |
+| `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set                                 | `eva.tui`, `eva.print`, `eva.api`, `eva.web`         |
+| `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default                                     | `eva.agents`, `eva.profile`, `eva.config`            |
+| `prompt`      | Templates, one row per Template                 | —                                                                             | `eva.prompt`, `eva.workflow`, `eva.config`           |
+| `command`     | slash commands and their handlers               | checks name and alias collisions                                              | `eva.commands`, `eva.print`, `eva.config`            |
+| `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys                                 | `eva.themes`, `eva.config`                           |
+| `keymap`      | key bindings by surface                         | detects conflicting bindings                                                  | `eva.keymap`, `eva.config`                           |
+| `integration` | credential sources and auth methods             | projects live connections                                                     | `eva.auth`, `eva.provider.*`                         |
 
 Each domain publishes `<name>.updated` after it commits.
 

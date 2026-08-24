@@ -3,8 +3,6 @@
 The Stage 1 exit test of [Eva](../../README.md), in two halves: a
 deterministic half that gates every push, and a measured number a maintainer
 runs deliberately against the pinned model.
-[plans/stage-1](../../plans/stage-1/README.md) §"The exit test, and where
-each half runs" is the design; this package is the build of it.
 
 Eva is built on a plugin kernel: every capability is a plugin, and the exit
 test drives the shipped ones — workflow, prompt, validator, the Anthropic

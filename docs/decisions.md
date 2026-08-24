@@ -64,37 +64,35 @@ Console assembled them itself, which is how the terminal answered an unknown
 command with no suggestion. `dispatch` owns parse, resolve, suggest, run, and
 the words it says.
 
-**A plugin loads whole, or not at all** — provisional, plan in
-[plans/kernel-contracts.md](../plans/kernel-contracts.md). A failing effect
-today keeps its partial registrations, stays in `list`, and fires `added`.
-The fix closes the scope and leaves the plugin absent. _Rejected:_ keeping
-the partial load beside a `failed` broadcast — a half-loaded plugin matches
-no plugin list anyone wrote.
+**A plugin loads whole, or not at all.** A failing effect used to keep its
+partial registrations, stay in `list`, and fire `added`. The rollback closes
+the scope and leaves the plugin absent. _Rejected:_ keeping the partial load
+beside a `failed` broadcast — a half-loaded plugin matches no plugin list
+anyone wrote.
 
-**A Transform is synchronous** — provisional, same plan. A rebuild replays
-every transform, so an Effect return lets a transform run I/O that
-multiplies with plugin count. Work runs once in the plugin's effect; the
-transform registers the result. _Rejected:_ keeping the Effect return as a
-convention — a compile error enforces the rule, and a convention does not.
+**A Transform is synchronous.** A rebuild replays every transform, so an
+Effect return lets a transform run I/O that multiplies with plugin count.
+Work runs once in the plugin's effect; the transform registers the result.
+_Rejected:_ keeping the Effect return as a convention — a compile error
+enforces the rule, and a convention does not.
 
-**An edit that reached no row is reported, not solved with a graph** —
-provisional, same plan. An `update` before its row's `set` no-ops on every
-rebuild forever, in silence. The miss rides the `<name>.updated` payload
-naming the id and the owning plugin, and the terminal says it once.
-_Rejected:_ Cordis-style declared dependencies — a manifest on every plugin
-to prevent what one line now reports. Revisit at stage 6.5 with evidence.
+**An edit that reached no row is reported, not solved with a graph.** An
+`update` before its row's `set` no-ops on every rebuild, and used to do so
+in silence. The miss rides the `<name>.updated` payload naming the id and
+the owning plugin, and the terminal says it once. _Rejected:_ Cordis-style
+declared dependencies — a manifest on every plugin to prevent what one line
+now reports. Revisit at stage 6.5 with evidence.
 
-**A second filler of a live Slot is named** — provisional, same plan.
-Last-writer-wins stays, because load order is precedence everywhere else and
-a bundle overlay must be able to replace a default. The eviction rides
-`slot.filled` as `evicted`. _Rejected:_ refusing the second fill.
+**A second filler of a live Slot is named.** Last-writer-wins stays, because
+load order is precedence everywhere else and a bundle overlay must be able
+to replace a default. The eviction rides `slot.filled` as `evicted`.
+_Rejected:_ refusing the second fill.
 
-**An `.updated` topic keeps only the latest** — provisional, same plan. The
-payload is a snapshot and a Broadcast carries no control flow, so a lagging
-subscriber that sees only the newest commit has lost nothing. Sliding,
-capacity one; every other topic stays unbounded. _Rejected:_ unbounded
-buffers on coalescible topics — a wedged surface grows the heap for as long
-as the process lives.
+**An `.updated` topic keeps only the latest.** The payload is a snapshot and
+a Broadcast carries no control flow, so a lagging subscriber that sees only
+the newest commit has lost nothing. Sliding, capacity one; every other topic
+stays unbounded. _Rejected:_ unbounded buffers on coalescible topics — a
+wedged surface grows the heap for as long as the process lives.
 
 **A hook dies toward its boundary's safe side** — provisional, lands with
 stage 2's gate. An observing hook that dies is reported and skipped; a

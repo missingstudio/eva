@@ -240,7 +240,7 @@ key reads `auth_failed`, and an endpoint that does not answer reads
 
 ## The loop for one change
 
-1. Read the plan in `plans/stage-<n>/`, or write one before you start.
+1. Read the stage's plan, or write one before you start.
 2. Cut a branch. `type/kebab-case-description`.
 3. Make the smallest correct change. Keep the package boundaries.
 4. Run the package's tests while you work, and `bun run verify` before you
@@ -266,8 +266,7 @@ provider, and the terminal all ship, and `verify` runs the three exit tests.
 **Stage 1 — Workflow.** Every plugin ships and the deterministic gate passes in
 `verify`. The measured half is unrun, and the stage exits on the first
 recording at or above the line.
-[../plans/stage-1/README.md](../plans/stage-1/README.md) holds the ten plans and
-what landed. Three steps stay outside the tree, each owned by a maintainer:
+Three steps stay outside the tree, each owned by a maintainer:
 sign off on the pinned model and the five inputs, export `ANTHROPIC_API_KEY`
 for the run, then run `packages/exit-test/scripts/record.ts` once, review the
 diff, and regenerate the goldens.
@@ -275,7 +274,7 @@ diff, and regenerate the goldens.
 run and what a full measurement costs.
 
 **Stage 2 — Tools and the loop.** Not started. Execution starts the same way
-Stage 1 did: read the roadmap's stage, then write `plans/stage-2/` as one ticket
-per plan, with a priority, an effort, and what it depends on. Build the tickets
-in dependency order, one commit each, and record the result in the stage's own
-`README.md` as it lands.
+Stage 1 did: read the roadmap's stage, then write the stage's plan as one
+ticket per plan, with a priority, an effort, and what it depends on. Build the
+tickets in dependency order, one commit each, and record the result as each
+lands.

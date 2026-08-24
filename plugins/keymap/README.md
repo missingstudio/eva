@@ -59,8 +59,7 @@ and a same-id row replaces the shipped one.
 that chord without the kitty keyboard protocol, which nothing in this tree
 speaks. Typing a newline needs a terminal that can say the chord. A pasted
 block keeps its newlines regardless, because a paste never reaches the
-keymap. This is a recorded decision, not an oversight — see
-[plans/README.md](../../plans/README.md).
+keymap. This is a recorded decision, not an oversight.
 
 ## What it does not do
 

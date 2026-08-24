@@ -207,9 +207,7 @@ boundary — `tool.execute.before`, the gate itself — that dies is a denial: a
 gate that fails open because a policy plugin threw is not a gate. The boundary
 declares which it is, because only the caller of the hooks knows what they
 decide. Stage 0's four provider hooks are all observers, which is why the rule
-waits here rather than shipping against zero deciders
-([plans/kernel-contracts.md](../plans/kernel-contracts.md) holds the review
-that found it).
+waits here rather than shipping against zero deciders.
 
 ```
 eva > rename UserSvc to UserService across this package
