@@ -8,7 +8,7 @@ interface Events {
   "command.updated": { count: number }
 }
 
-// The capacity boot passes: `.updated` snapshots slide, events stay whole.
+// The capacity boot passes: `.updated` snapshots slide, events stay unbounded.
 const sliding = (type: keyof Events) => (String(type).endsWith(".updated") ? 1 : undefined)
 
 describe("the broadcast bus", () => {

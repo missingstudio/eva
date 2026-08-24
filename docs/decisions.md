@@ -72,10 +72,10 @@ the partial load beside a `failed` broadcast — a half-loaded plugin matches
 no plugin list anyone wrote.
 
 **A Transform is synchronous** — provisional, same plan. A rebuild replays
-every transform, so an Effect return is an invitation to I/O that multiplies
-with plugin count. Work runs once in the plugin's effect; the transform
-registers the result. _Rejected:_ keeping the Effect return as a convention
-— a type error beats a rule nobody reads.
+every transform, so an Effect return lets a transform run I/O that
+multiplies with plugin count. Work runs once in the plugin's effect; the
+transform registers the result. _Rejected:_ keeping the Effect return as a
+convention — a compile error enforces the rule, and a convention does not.
 
 **An edit that reached no row is reported, not solved with a graph** —
 provisional, same plan. An `update` before its row's `set` no-ops on every

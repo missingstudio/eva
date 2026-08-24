@@ -35,8 +35,8 @@ export const makeRowDomain = <Info extends { id: string }>(
           if (found >= 0) rows[found] = made
           else rows.push(made)
         },
-        // An edit that reached no row is left alone and reported: the report
-        // is the fix's messenger, not the fix.
+        // An edit that reached no row is reported and not applied: the
+        // report makes the defect visible, it does not repair it.
         update: (id, update) => {
           const found = rows.find((row) => row.id === id)
           if (found === undefined) return miss(id)

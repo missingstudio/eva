@@ -155,8 +155,8 @@ describe("an edit that reached no row is reported", () => {
     )
 
     // Registration order replays the update first, so the miss persists and
-    // the row keeps the describer's words: the report is the fix's
-    // messenger, not the fix.
+    // the row keeps the describer's words: the report makes the defect
+    // visible, it does not repair it.
     expect(result.last?.missed).toEqual([{ id: "cost", owner: "eva.print" }])
     expect(result.rows).toEqual([{ id: "cost", description: "described" }])
   })

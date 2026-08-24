@@ -8,7 +8,8 @@ import { Effect, PubSub, Stream } from "effect"
  * `capacity` bounds a topic: a number means sliding with that bound, so a
  * lagging subscriber sees the latest values and nothing grows; absent means
  * unbounded. Only a topic whose payload is a snapshot may slide — an event
- * a consumer counts stays unbounded, because dropping one is a lie.
+ * a consumer counts stays unbounded, because a dropped event makes the
+ * count wrong.
  */
 export const makeBroadcast = <Map>(
   capacity?: (type: keyof Map) => number | undefined,
