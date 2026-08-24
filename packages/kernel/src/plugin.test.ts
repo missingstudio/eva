@@ -1,21 +1,24 @@
 import { PluginCycleError } from "@missingstudio/eva-core"
 import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"
+import { makeDomain } from "./domain.js"
 import { makePluginRuntime, type PluginEntry, type PluginRuntime } from "./plugin.js"
 
 interface Recording {
   readonly loads: string[]
   readonly unloads: string[]
+  readonly added: string[]
   readonly failures: { id: string; cause: unknown }[]
 }
 
-const record = (): Recording => ({ loads: [], unloads: [], failures: [] })
+const record = (): Recording => ({ loads: [], unloads: [], added: [], failures: [] })
 
 // The runtime scope closes after the body returns, which appends more
 // unloads, so a body that inspects the log copies it first.
 const snapshot = (log: Recording): Recording => ({
   loads: [...log.loads],
   unloads: [...log.unloads],
+  added: [...log.added],
   failures: [...log.failures],
 })
 
@@ -28,7 +31,7 @@ const withRuntime = <A>(
       const scope = yield* Scope.make()
       const log = record()
       const runtime = yield* makePluginRuntime(scope, () => log, {
-        added: () => Effect.void,
+        added: (id) => Effect.sync(() => void log.added.push(id)),
         removed: () => Effect.void,
         failed: (id, cause) => Effect.sync(() => void log.failures.push({ id, cause })),
       })
@@ -128,7 +131,7 @@ describe("the plugin runtime", () => {
     )
     expect(result.log.failures).toHaveLength(1)
     expect(result.log.loads).toEqual(["good"])
-    expect(result.listed).toContain("good")
+    expect(result.listed).toEqual(["good"])
   })
 
   it("names the cycle when a plugin adds itself", async () => {
@@ -167,6 +170,102 @@ describe("the plugin runtime", () => {
       }),
     )
     expect(String(exit)).toContain("first → second → first")
+  })
+})
+
+/**
+ * A failing plugin used to keep everything it registered before it died: its
+ * scope stayed open, its id stayed in `list`, and `added` still fired. The
+ * rollback closes the scope and leaves the plugin absent.
+ */
+describe("a plugin loads whole, or not at all", () => {
+  // Registers a finalizer, then dies. The finalizer running is the rollback
+  // made observable.
+  const dying = (id: string): PluginEntry<Recording> => ({
+    id,
+    effect: (log) =>
+      Effect.gen(function* () {
+        const scope = yield* Effect.scope
+        yield* Scope.addFinalizer(
+          scope,
+          Effect.sync(() => void log.unloads.push(id)),
+        )
+        return yield* Effect.die(new Error("boom"))
+      }),
+  })
+
+  it("runs every finalizer a dying plugin registered", async () => {
+    const log = await withRuntime((runtime, log) =>
+      Effect.gen(function* () {
+        yield* runtime.add(dying("bad"))
+        return snapshot(log)
+      }),
+    )
+    expect(log.unloads).toEqual(["bad"])
+  })
+
+  it("leaves the domain as if a dying plugin never loaded", async () => {
+    const rows = await Effect.runPromise(
+      Effect.gen(function* () {
+        const scope = yield* Scope.make()
+        const domain = yield* makeDomain<string[], { add: (row: string) => void }>({
+          name: "rows",
+          initial: () => [],
+          draft: (state) => ({ add: (row) => void state.push(row) }),
+        })
+        const runtime = yield* makePluginRuntime(scope, () => domain)
+        yield* runtime.add({
+          id: "bad",
+          effect: (ctx) =>
+            Effect.gen(function* () {
+              yield* ctx.transform((draft) => draft.add("ghost"))
+              return yield* Effect.die(new Error("boom"))
+            }),
+        })
+        const state = yield* domain.get
+        yield* Scope.close(scope, Exit.void)
+        return state
+      }),
+    )
+    expect(rows).toEqual([])
+  })
+
+  it("fires failed once and never added for a failing plugin", async () => {
+    const log = await withRuntime((runtime, log) =>
+      Effect.gen(function* () {
+        yield* runtime.add({ id: "bad", effect: () => Effect.die(new Error("boom")) })
+        return snapshot(log)
+      }),
+    )
+    expect(log.added).toEqual([])
+    expect(log.failures).toHaveLength(1)
+  })
+
+  // The old instance is already closed when the new effect runs, and
+  // resurrecting it would run its effect twice. Absent is the honest state.
+  it("unloads the old instance once and leaves the id absent when a replace fails", async () => {
+    const result = await withRuntime((runtime, log) =>
+      Effect.gen(function* () {
+        yield* runtime.add(plugin("p"))
+        yield* runtime.add({ id: "p", effect: () => Effect.die(new Error("boom")) })
+        return { listed: yield* runtime.list, log: snapshot(log) }
+      }),
+    )
+    expect(result.log.unloads).toEqual(["p"])
+    expect(result.listed).toEqual([])
+    expect(result.log.failures).toHaveLength(1)
+  })
+
+  // `wait` means the load attempt finished, and `list` says how.
+  it("returns from wait on a plugin that failed", async () => {
+    const waited = await withRuntime((runtime) =>
+      Effect.gen(function* () {
+        yield* runtime.add({ id: "bad", effect: () => Effect.die(new Error("boom")) })
+        yield* runtime.wait("bad")
+        return true
+      }),
+    )
+    expect(waited).toBe(true)
   })
 })
 

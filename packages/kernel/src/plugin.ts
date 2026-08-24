@@ -71,18 +71,29 @@ export const makePluginRuntime = <Context>(
       loaded.set(plugin.id, { scope, done })
 
       loading.push(plugin.id)
-      const run = plugin.effect(context(plugin.id)).pipe(
-        Effect.provideService(Scope.Scope, scope),
-        Effect.catchCause((cause) => {
-          const squashed = Cause.squash(cause)
-          return squashed instanceof PluginCycleError
-            ? Effect.die(squashed)
-            : events.failed(plugin.id, squashed)
-        }),
-        Effect.ensuring(Effect.sync(() => void loading.pop())),
-      )
+      const exit = yield* plugin
+        .effect(context(plugin.id))
+        .pipe(
+          Effect.provideService(Scope.Scope, scope),
+          Effect.exit,
+          Effect.ensuring(Effect.sync(() => void loading.pop())),
+        )
 
-      yield* run
+      if (Exit.isFailure(exit)) {
+        const squashed = Cause.squash(exit.cause)
+        if (squashed instanceof PluginCycleError) return yield* Effect.die(squashed)
+        // A failed load rolls back. Closing the scope runs every finalizer
+        // the effect registered, so no partial registration survives. The
+        // Deferred still succeeds: `wait` means the load attempt finished,
+        // and `list` says how it went.
+        yield* close(plugin.id)
+        const at = order.indexOf(plugin.id)
+        if (at >= 0) order.splice(at, 1)
+        yield* Deferred.succeed(done, undefined)
+        yield* events.failed(plugin.id, squashed)
+        return
+      }
+
       yield* Deferred.succeed(done, undefined)
       yield* events.added(plugin.id)
     })
