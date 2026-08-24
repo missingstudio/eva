@@ -13,8 +13,9 @@ The workers of this factory are harnesses.
 - Conventional Commits format `type(scope): description`
 - Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `ci`, `build`
 - Scope optional, use package name when relevant (e.g., `kernel`, `sdk`)
-- Lowercase, no period, imperative mood
-- Example: `feat(kernel): batch domain rebuilds during boot`
+- Lowercase, no period. The description is a sentence that says what is true
+  after the change.
+- Example: `fix(kernel): a plugin loads whole, or not at all`
 - One logical change per commit. Work spanning several gets several commits.
 
 ## Branch Naming
