@@ -127,6 +127,35 @@ describe("a domain", () => {
     expect(after).toEqual([])
   })
 
+  // The type is the rule: if this call ever compiles again, the unused
+  // expectation below turns into the compile error that says so.
+  it("refuses a transform that returns an Effect", () => {
+    const use = (domain: Domain<Row[], Draft>) =>
+      // @ts-expect-error a transform is synchronous
+      domain.transform(() => Effect.void)
+    expect(typeof use).toBe("function")
+  })
+
+  // The replay loop is a plain loop: a transform is a synchronous draft
+  // edit, run once per rebuild and never awaited. Work that awaits belongs
+  // in the plugin's effect, once, before the transform is registered.
+  it("runs each transform synchronously, once per rebuild", async () => {
+    const calls: string[] = []
+    const seen = await withDomain((domain, scope) =>
+      Effect.gen(function* () {
+        yield* domain
+          .transform(() => void calls.push("a"))
+          .pipe(Effect.provideService(Scope.Scope, scope))
+        yield* domain
+          .transform(() => void calls.push("b"))
+          .pipe(Effect.provideService(Scope.Scope, scope))
+        return [...calls]
+      }),
+    )
+    // Registering "a" rebuilds with [a]; registering "b" rebuilds with [a, b].
+    expect(seen).toEqual(["a", "a", "b"])
+  })
+
   it("runs the finalizer after every transform and before the state is visible", async () => {
     const result = await withDomain(
       (domain, scope, seen) =>

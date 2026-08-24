@@ -49,8 +49,7 @@ export const makeDomain = <State, Draft>(
       const fresh = options.initial()
       const draft = options.draft(fresh)
       for (const transform of replaying) {
-        const result = transform(draft)
-        if (result !== undefined) yield* result
+        transform(draft)
       }
       if (options.finalize !== undefined) {
         const result = options.finalize(draft, fresh)

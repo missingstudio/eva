@@ -11,12 +11,26 @@ export interface Registration {
   readonly dispose: Effect.Effect<void>
 }
 
-export type TransformCallback<Draft> = (draft: Draft) => Effect.Effect<void> | void
+/**
+ * A transform is a synchronous draft edit, because a rebuild replays every
+ * transform on every plugin load, unload, and replace. Work that runs once —
+ * a fetch, a file read — belongs in the plugin's effect; the transform
+ * closes over the result and registers the fact.
+ */
+export type TransformCallback<Draft> = (draft: Draft) => void
+
+/**
+ * What a transform may return: anything but an Effect. `void` alone is not
+ * the rule — TypeScript accepts any return where void is expected — so the
+ * refusal has to name what it refuses.
+ */
+export type Synchronous<Result> =
+  Result extends Effect.Effect<infer _A, infer _E, infer _R> ? never : Result
 
 export interface Domain<State, Draft> {
   readonly get: Effect.Effect<State>
-  readonly transform: (
-    callback: TransformCallback<Draft>,
+  readonly transform: <Result>(
+    callback: (draft: Draft) => Synchronous<Result>,
   ) => Effect.Effect<Registration, never, Scope.Scope>
   readonly reload: Effect.Effect<void>
 }

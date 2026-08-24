@@ -32,6 +32,16 @@ leaves alone an id nothing registered — use it only to add to another plugin's
 row, the way `eva.print` supplies the `run` for the `/cost` that `eva.commands`
 describes.
 
+**A transform replays.** The domain is rebuilt from initial state on every
+plugin load, unload, and replace, and every registered transform runs again
+each time. So a transform is a pure edit of its draft: no I/O, no side
+effects, nothing counted outside it. Work that runs once — a fetch, a file
+read — belongs in the plugin's effect, before the `transform` call; the
+transform closes over the result and registers the fact. For the same reason
+a Domain holds only what transforms put there: state that accumulates at
+runtime lives behind a Slot or in the Trace, because the next rebuild wipes
+anything else without a word.
+
 ## 2. Naming the config keys you read
 
 A plugin declares the keys it reads, and reads them through that declaration.
