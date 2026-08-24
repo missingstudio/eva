@@ -1,4 +1,4 @@
-import type { Domain } from "@missingstudio/eva-core"
+import type { Domain, DomainMiss } from "@missingstudio/eva-core"
 import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { batch, makeDomain } from "./domain.js"
@@ -16,6 +16,7 @@ interface Draft {
 interface Seen {
   finalized: string[][]
   commits: number
+  misses: (readonly DomainMiss[])[]
 }
 
 // Closing the scope disposes every transform, and each disposal rebuilds, so
@@ -24,18 +25,19 @@ const withDomain = <A>(
   body: (domain: Domain<Row[], Draft>, scope: Scope.Closeable, seen: Seen) => Effect.Effect<A>,
   options: { finalize?: boolean } = {},
 ): Promise<A> => {
-  const seen = { finalized: [] as string[][], commits: 0 }
+  const seen: Seen = { finalized: [], commits: 0, misses: [] }
   return Effect.runPromise(
     Effect.gen(function* () {
       const scope = yield* Scope.make()
       const domain = yield* makeDomain<Row[], Draft>({
         name: "rows",
         initial: () => [],
-        draft: (state) => ({
+        draft: (state, miss) => ({
           add: (row) => void state.push(row),
           update: (id, change) => {
             const found = state.find((row) => row.id === id)
-            if (found !== undefined) change(found)
+            if (found === undefined) return miss(id)
+            change(found)
           },
         }),
         ...(options.finalize === true
@@ -44,7 +46,11 @@ const withDomain = <A>(
                 void seen.finalized.push(state.map((row) => row.id)),
             }
           : {}),
-        onCommit: () => Effect.sync(() => void (seen.commits += 1)),
+        onCommit: (_state, missed) =>
+          Effect.sync(() => {
+            seen.commits += 1
+            seen.misses.push(missed)
+          }),
       })
       const result = yield* body(domain, scope, seen)
       yield* Scope.close(scope, Exit.void)
@@ -199,5 +205,46 @@ describe("boot batching", () => {
       }),
     )
     expect(rebuilds).toBe(3)
+  })
+})
+
+describe("misses", () => {
+  const reach = (domain: Domain<Row[], Draft>, scope: Scope.Closeable, owner: string) =>
+    domain
+      .transform((draft) => draft.update("ghost", (row) => void (row.weight = 9)), owner)
+      .pipe(Effect.provideService(Scope.Scope, scope))
+
+  it("names the owner of the transform that reached", async () => {
+    const missed = await withDomain((domain, scope, seen) =>
+      Effect.gen(function* () {
+        yield* reach(domain, scope, "plug.a")
+        return seen.misses.at(-1)
+      }),
+    )
+    expect(missed).toEqual([{ id: "ghost", owner: "plug.a" }])
+  })
+
+  it("keeps the owner across replays", async () => {
+    const missed = await withDomain((domain, scope, seen) =>
+      Effect.gen(function* () {
+        yield* reach(domain, scope, "plug.a")
+        yield* add(domain, scope, { id: "other", weight: 1 })
+        return seen.misses.at(-1)
+      }),
+    )
+    expect(missed).toEqual([{ id: "ghost", owner: "plug.a" }])
+  })
+
+  // Misses are collected per rebuild, so a miss the replay no longer makes
+  // is absent from the next commit on its own.
+  it("clears once the reaching transform is disposed", async () => {
+    const missed = await withDomain((domain, scope, seen) =>
+      Effect.gen(function* () {
+        const registration = yield* reach(domain, scope, "plug.a")
+        yield* registration.dispose
+        return seen.misses.at(-1)
+      }),
+    )
+    expect(missed).toEqual([])
   })
 })

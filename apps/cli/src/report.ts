@@ -1,3 +1,4 @@
+import type { DomainMiss } from "@missingstudio/eva-core"
 import type { Finding } from "@missingstudio/eva-config"
 import type { ResolvedConfig } from "./run.js"
 import type { World } from "./world.js"
@@ -33,3 +34,10 @@ export const say = (finding: Finding): string => {
 export const report = (settled: ResolvedConfig, world: World): void => {
   for (const finding of settled.findings) world.err(say(finding))
 }
+
+/**
+ * An edit that reached no row, as one line. The kernel counts these and the
+ * broadcast carries them; this decides only how a person reads one.
+ */
+export const sayMiss = (domain: string, miss: DomainMiss): string =>
+  `eva: ${miss.owner ?? "something"} edited ${domain} "${miss.id}", and nothing had registered it\n`

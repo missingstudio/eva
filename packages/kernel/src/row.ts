@@ -1,4 +1,4 @@
-import type { Domain, Row } from "@missingstudio/eva-core"
+import type { Domain, DomainMiss, Row } from "@missingstudio/eva-core"
 import type { Effect } from "effect"
 import { makeDomain } from "./domain.js"
 
@@ -15,12 +15,12 @@ import { makeDomain } from "./domain.js"
  */
 export const makeRowDomain = <Info extends { id: string }>(
   name: string,
-  publish: (count: number) => Effect.Effect<void>,
+  publish: (count: number, missed: readonly DomainMiss[]) => Effect.Effect<void>,
 ): Effect.Effect<Domain<readonly Info[], Row<Info>>> =>
   makeDomain<readonly Info[], Row<Info>>({
     name,
     initial: () => [] as Info[],
-    draft: (state) => {
+    draft: (state, miss) => {
       const rows = state as Info[]
       const at = (id: string) => rows.findIndex((row) => row.id === id)
       return {
@@ -35,15 +35,19 @@ export const makeRowDomain = <Info extends { id: string }>(
           if (found >= 0) rows[found] = made
           else rows.push(made)
         },
+        // An edit that reached no row is left alone and reported: the report
+        // is the fix's messenger, not the fix.
         update: (id, update) => {
           const found = rows.find((row) => row.id === id)
-          if (found !== undefined) update(found)
+          if (found === undefined) return miss(id)
+          update(found)
         },
+        // Removing what is absent is idempotence, not a miss.
         remove: (id) => {
           const found = at(id)
           if (found >= 0) rows.splice(found, 1)
         },
       }
     },
-    onCommit: (state) => publish(state.length),
+    onCommit: (state, missed) => publish(state.length, missed),
   })

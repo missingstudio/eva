@@ -2,6 +2,7 @@ import type {
   Broadcast,
   Budget,
   CredentialStore,
+  DomainMiss,
   Hooks,
   Recorder,
   SessionStore,
@@ -21,7 +22,12 @@ import type { ProviderHookSpec } from "./hooks.js"
  * Slots once ended up publishing nothing.
  */
 export type DomainUpdated = {
-  readonly [Name in keyof Domains as `${Name}.updated`]: { readonly count: number }
+  readonly [Name in keyof Domains as `${Name}.updated`]: {
+    readonly count: number
+    // The edits that reached no row this rebuild, each naming the id it
+    // reached for and the plugin whose transform reached.
+    readonly missed: readonly DomainMiss[]
+  }
 }
 
 export interface BroadcastMap extends DomainUpdated {

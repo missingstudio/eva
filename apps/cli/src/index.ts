@@ -70,7 +70,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       report(settled, world)
 
       const scope = yield* Scope.make()
-      const started = yield* startFrom(scope, settled, build)
+      const started = yield* startFrom(scope, settled, build, world.err)
 
       // Refused before a Run is spent. The kernel refuses the same id again
       // as a failed Claim, so this check only buys the near miss.
@@ -117,7 +117,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       report(settled, world)
 
       const scope = yield* Scope.make()
-      const started = yield* startFrom(scope, settled, build)
+      const started = yield* startFrom(scope, settled, build, world.err)
 
       // No prompt means the interactive surface. A build with none says so
       // rather than printing help and exiting as though it had run.

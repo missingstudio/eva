@@ -11,8 +11,10 @@ import {
 } from "@missingstudio/eva-kernel"
 import { costLine } from "@missingstudio/eva-print"
 import { answerFold, type Claim, type SessionID } from "@missingstudio/eva-schema"
+import type { Domains } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Scope, Stream } from "effect"
 import { BUILD, BUILT_IN_IDS, entriesOf, readsOf, uncarriedOf } from "./plugins.js"
+import { sayMiss } from "./report.js"
 import type { World } from "./world.js"
 
 export { DEFAULT_MODEL } from "@missingstudio/eva-catalog-models"
@@ -69,6 +71,35 @@ export const resolveConfig = Effect.fn("cli.resolveConfig")(function* (
 })
 
 /**
+ * Says each distinct miss once, in `say`'s voice. Subscribed through
+ * `observe`, before boot loads anything, because a Broadcast has no replay.
+ * A persistent miss recurs on every rebuild by design, so the lines
+ * deduplicate across rebuilds.
+ */
+export const watchMisses = (scope: Scope.Scope, err: (text: string) => void) =>
+  Effect.fn("cli.watchMisses")(function* (kernel: Kernel) {
+    const said = new Set<string>()
+    const topics = Object.keys(kernel.domains) as (keyof Domains)[]
+    yield* Effect.forEach(topics, (name) =>
+      Effect.forkIn(
+        Stream.runForEach(kernel.broadcast.subscribe(`${name}.updated`), (payload) =>
+          Effect.sync(() => {
+            for (const miss of payload.missed) {
+              const key = `${name} ${miss.id} ${miss.owner ?? ""}`
+              if (said.has(key)) continue
+              said.add(key)
+              err(sayMiss(name, miss))
+            }
+          }),
+        ),
+        scope,
+      ),
+    )
+    // One yield, so the subscribers attach before the load batch publishes.
+    yield* Effect.yieldNow
+  })
+
+/**
  * Every plugin the config resolves to, loaded from this build's table. It
  * takes a resolution the caller already has, so a run that reported on the
  * config does not resolve it a second time and risk two answers.
@@ -81,10 +112,18 @@ export const startFrom = Effect.fn("cli.startFrom")(function* (
   scope: Scope.Scope,
   settled: ResolvedConfig,
   build: Build = BUILD,
+  // Where boot-time reports land. A caller that hands nothing watches nothing.
+  say?: (text: string) => void,
 ) {
   const { config, model, plugins: resolved } = settled
 
-  const kernel = yield* boot({ scope, resolved, build, config: config.raw })
+  const kernel = yield* boot({
+    scope,
+    resolved,
+    build,
+    config: config.raw,
+    ...(say === undefined ? {} : { observe: watchMisses(scope, say) }),
+  })
 
   return { kernel, config, model } satisfies Started
 })

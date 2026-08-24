@@ -27,10 +27,24 @@ export type TransformCallback<Draft> = (draft: Draft) => void
 export type Synchronous<Result> =
   Result extends Effect.Effect<infer _A, infer _E, infer _R> ? never : Result
 
+/**
+ * An edit that reached no row: the id it reached for, and the plugin whose
+ * transform reached. Collected per rebuild and published with the commit,
+ * so a persistent miss reappears on every rebuild and one the replay no
+ * longer makes disappears on its own.
+ */
+export interface DomainMiss {
+  readonly id: string
+  readonly owner?: string
+}
+
 export interface Domain<State, Draft> {
   readonly get: Effect.Effect<State>
+  // `owner` names the plugin registering the transform, so a miss can say
+  // which plugin reached for the row.
   readonly transform: <Result>(
     callback: (draft: Draft) => Synchronous<Result>,
+    owner?: string,
   ) => Effect.Effect<Registration, never, Scope.Scope>
   readonly reload: Effect.Effect<void>
 }

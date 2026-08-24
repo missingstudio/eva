@@ -30,7 +30,9 @@ export default define({
 replacing one keeps its position. `update` edits a row that already exists and
 leaves alone an id nothing registered — use it only to add to another plugin's
 row, the way `eva.print` supplies the `run` for the `/cost` that `eva.commands`
-describes.
+describes. An `update` that found no row is reported after boot with your
+plugin's name against the id, so a wrong load order is a line you read rather
+than a command that silently lost its `run`.
 
 **A transform replays.** The domain is rebuilt from initial state on every
 plugin load, unload, and replace, and every registered transform runs again

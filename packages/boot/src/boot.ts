@@ -1,6 +1,8 @@
 import type {
   Budget,
   CredentialStore,
+  Domain,
+  DomainMiss,
   Recorder,
   SessionStore,
   TraceSink,
@@ -38,10 +40,14 @@ import { Effect, type Scope } from "effect"
 
 // The catalog is hand-built, because it is the one domain that is not rows.
 // Every other domain is `makeRowDomain`, which the kernel owns.
-const catalogDomain = (publish: (count: number) => Effect.Effect<void>) =>
+const catalogDomain = (
+  publish: (count: number, missed: readonly DomainMiss[]) => Effect.Effect<void>,
+) =>
   makeDomain<CatalogState, CatalogDraft>({
     name: "catalog",
     initial: () => ({ providers: new Map(), models: new Map() }),
+    // The catalog's `update`s mint what they do not find — the seed is the
+    // row — so an edit always reaches and there is nothing to miss here.
     draft: (state) => ({
       provider: {
         list: () => [...state.providers.values()],
@@ -69,7 +75,7 @@ const catalogDomain = (publish: (count: number) => Effect.Effect<void>) =>
         },
       },
     }),
-    onCommit: (state) => publish(state.providers.size),
+    onCommit: (state, missed) => publish(state.providers.size, missed),
   })
 
 export interface Kernel {
@@ -123,6 +129,12 @@ export interface BootOptions {
    */
   readonly build?: Build
   readonly config?: Record<string, unknown>
+  /**
+   * Runs after the kernel is assembled and before anything loads. A
+   * Broadcast has no replay, so a caller that wants to see boot's own
+   * commits — a domain's misses, a slot's fills — subscribes here.
+   */
+  readonly observe?: (kernel: Kernel) => Effect.Effect<void>
 }
 
 /**
@@ -156,7 +168,9 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
   // The topic is derived from the name, so a domain cannot be wired up with
   // the wrong one or with none.
   const rowsOf = <Name extends RowDomainName>(name: Name) =>
-    makeRowDomain<RowInfos[Name]>(name, (count) => broadcast.publish(`${name}.updated`, { count }))
+    makeRowDomain<RowInfos[Name]>(name, (count, missed) =>
+      broadcast.publish(`${name}.updated`, { count, missed }),
+    )
 
   /**
    * Every domain the kernel holds. `satisfies Domains` ties this to the SDK's
@@ -164,7 +178,9 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
    * error, the same way `ProviderHooks` holds the hook map to its spec.
    */
   const domains = {
-    catalog: yield* catalogDomain((count) => broadcast.publish("catalog.updated", { count })),
+    catalog: yield* catalogDomain((count, missed) =>
+      broadcast.publish("catalog.updated", { count, missed }),
+    ),
     command: yield* rowsOf("command"),
     theme: yield* rowsOf("theme"),
     keymap: yield* rowsOf("keymap"),
@@ -201,11 +217,27 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     },
   )
 
+  // A domain handed to a plugin stamps the plugin's own id on every
+  // transform, so a miss can say which plugin reached for the row.
+  const withOwner = <State, Draft>(domain: Domain<State, Draft>, owner: string) =>
+    ({
+      ...domain,
+      transform: (callback, explicit) => domain.transform(callback, explicit ?? owner),
+    }) satisfies Domain<State, Draft>
+
   function context(id: string): PluginContext {
     return {
       id,
       options: optionsFor.get(id) ?? {},
-      ...domains,
+      catalog: withOwner(domains.catalog, id),
+      command: withOwner(domains.command, id),
+      theme: withOwner(domains.theme, id),
+      keymap: withOwner(domains.keymap, id),
+      agent: withOwner(domains.agent, id),
+      prompt: withOwner(domains.prompt, id),
+      harness: withOwner(domains.harness, id),
+      surface: withOwner(domains.surface, id),
+      integration: withOwner(domains.integration, id),
       slot,
       provider,
       broadcast,
@@ -221,6 +253,24 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
 
   const build = options.build ?? CARRIES_NOTHING
 
+  const kernel: Kernel = {
+    runtime,
+    slot,
+    broadcast,
+    hooks,
+    domains,
+    prices,
+    // The same predicate the report asked before booting, so a run and the
+    // findings printed above it cannot name different plugins.
+    missing: options.resolved
+      .filter((entry) => build.carries(entry.id) === undefined)
+      .map((entry) => entry.id),
+  }
+
+  // Assembled but not yet loaded: the seam where a subscriber still sees
+  // everything the batch below will publish.
+  if (options.observe !== undefined) yield* options.observe(kernel)
+
   // One batch, so each domain rebuilds once at the end rather than once per
   // transform. The rule lives here because this is the only place that loads.
   yield* batch(
@@ -234,17 +284,5 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     ),
   )
 
-  return {
-    runtime,
-    slot,
-    broadcast,
-    hooks,
-    domains,
-    prices,
-    // The same predicate the report asked before booting, so a run and the
-    // findings printed above it cannot name different plugins.
-    missing: options.resolved
-      .filter((entry) => build.carries(entry.id) === undefined)
-      .map((entry) => entry.id),
-  }
+  return kernel
 })

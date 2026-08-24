@@ -6,7 +6,7 @@ import type {
   TraceSink,
   Validator,
 } from "@missingstudio/eva-core"
-import type { Plugin, Slots } from "@missingstudio/eva-sdk"
+import type { BroadcastMap, Plugin, Slots } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 import { boot, buildOf } from "./boot.js"
@@ -155,6 +155,55 @@ describe("boot loads what the config resolved to", () => {
     })
 
     expect(found.missing).toEqual([])
+  })
+})
+
+/**
+ * An edit that reached no row rides the `.updated` payload, naming the
+ * plugin whose transform reached — boot stamps each context's domains with
+ * the plugin's own id. A Broadcast has no replay, so the subscriber arrives
+ * through `observe`, the seam between assembly and the load batch.
+ */
+describe("an edit that reached no row is published", () => {
+  it("names the id and the owning plugin in the topic payload", async () => {
+    const writer: Plugin = {
+      id: "acme.writer",
+      effect: Effect.fn(function* (ctx) {
+        yield* ctx.command.transform((draft) =>
+          draft.update("ghost", (row) => void (row.description = "edited")),
+        )
+      }),
+    }
+
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const scope = yield* Scope.make()
+        const seen: BroadcastMap["command.updated"][] = []
+        yield* boot({
+          scope,
+          resolved: [{ id: "acme.writer" }],
+          build: buildOf([writer]),
+          observe: (kernel) =>
+            Effect.gen(function* () {
+              yield* Effect.forkIn(
+                Stream.runForEach(kernel.broadcast.subscribe("command.updated"), (payload) =>
+                  Effect.sync(() => void seen.push(payload)),
+                ),
+                scope,
+              )
+              yield* Effect.yieldNow
+            }),
+        })
+        // Let the subscriber drain what the batch published, and read before
+        // the scope closes: the teardown disposes the transform and rebuilds.
+        yield* Effect.yieldNow
+        const published = [...seen]
+        yield* Scope.close(scope, Exit.void)
+        return published
+      }),
+    )
+
+    expect(found.at(-1)).toEqual({ count: 0, missed: [{ id: "ghost", owner: "acme.writer" }] })
   })
 })
 
