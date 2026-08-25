@@ -30,6 +30,7 @@ export default defineConfig({
     passWithNoTests: true,
     include: [
       "apps/*/src/**/*.test.ts",
+      "apps/*/src/**/*.test.tsx",
       "packages/*/src/**/*.test.ts",
       "packages/*/src/**/*.test.tsx",
       "plugins/*/src/**/*.test.ts",

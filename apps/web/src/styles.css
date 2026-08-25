@@ -1,0 +1,55 @@
+/**
+ * Plain local styling, and deliberately little of it. The brand the two
+ * websites stand on is `packages/brand`, which holds a README and nothing
+ * else on this branch — so the page takes a readable default now and adopts
+ * the tokens when that branch lands.
+ */
+:root {
+  color-scheme: light dark;
+  --ink: #16161a;
+  --paper: #fbfbfa;
+  --quiet: #6a6a72;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ececed;
+    --paper: #121214;
+    --quiet: #8d8d96;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    16px/1.55 ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+main {
+  margin: 0 auto;
+  max-width: 34rem;
+  padding: 4rem 1.5rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+p {
+  margin: 0.25rem 0;
+}
+
+.build,
+.note {
+  color: var(--quiet);
+}
+
+code {
+  font-family: ui-monospace, monospace;
+}
