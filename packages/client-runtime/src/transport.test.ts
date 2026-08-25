@@ -164,9 +164,10 @@ describe("the transport seam", () => {
       }),
     )
 
-    expect(both.through.session).toBe(both.bare.session)
-    expect(both.through.at).toEqual(both.bare.at)
-    expect(spoken(both.through)).toBe(spoken(both.bare))
-    expect(spoken(both.through)).toBe("partial")
+    expect(both.through.transcript.session).toBe(both.bare.transcript.session)
+    expect(both.through.transcript.at).toEqual(both.bare.transcript.at)
+    expect(both.through.answer).toEqual(both.bare.answer)
+    expect(spoken(both.through.transcript)).toBe(spoken(both.bare.transcript))
+    expect(spoken(both.through.transcript)).toBe("partial")
   })
 })

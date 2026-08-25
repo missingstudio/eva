@@ -1,7 +1,13 @@
-import type { SessionAPI, SubmitInput, Transcript } from "@missingstudio/eva-core"
+import type { SessionAPI, SubmitInput } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import { Effect, Stream, SubscriptionRef } from "effect"
-import { runPrompt, type ClientState, type RunOptions, type RunSignal } from "./run.js"
+import {
+  runPrompt,
+  type ClientState,
+  type RunOptions,
+  type RunOutcome,
+  type RunSignal,
+} from "./run.js"
 import type { Transport } from "./transport.js"
 
 /**
@@ -18,7 +24,7 @@ export interface Client {
     input: SubmitInput,
     each: (signal: RunSignal) => void,
     options?: RunOptions,
-  ) => Effect.Effect<Transcript>
+  ) => Effect.Effect<RunOutcome>
 }
 
 /**

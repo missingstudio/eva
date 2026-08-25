@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { readTrace, type Event, type SessionID } from "@missingstudio/eva-schema"
+import { answerFold, readTrace, type Event, type SessionID } from "@missingstudio/eva-schema"
 import { describe, expect, it } from "vitest"
 import { foldTranscript, headerOf } from "./transcript.js"
 
@@ -85,6 +85,41 @@ describe("where a fold ends", () => {
     expect(foldTranscript(session, [...events].reverse()).at).toEqual(
       foldTranscript(session, events).at,
     )
+  })
+})
+
+describe("what a Run answered", () => {
+  const events = load(files[0]!)
+  const session = events[0]!.session
+
+  it("is the fold the record already holds, not a second read of the Trace", () => {
+    const own = events.filter((event) => event.session === session)
+    expect(foldTranscript(session, events).answer()).toEqual(answerFold(own))
+  })
+
+  it("carries the Claim the Run that closed last said, and that Run's words", () => {
+    const answered = foldTranscript(session, events).answer()
+    const closes = events.filter(
+      (event) => event.session === session && event.payload.kind === "finished",
+    )
+    const last = closes.at(-1)
+    expect(answered.claim).toEqual((last?.payload as { claim: unknown } | undefined)?.claim)
+  })
+
+  it("answers no Claim and no words when it folded nothing", () => {
+    expect(foldTranscript(session, []).answer()).toEqual({ text: "" })
+  })
+
+  it("hands out a deep copy, as every other read of the record does", () => {
+    const transcript = foldTranscript(session, events)
+    expect(transcript.answer()).not.toBe(transcript.answer())
+    expect(transcript.answer()).toEqual(transcript.answer())
+  })
+
+  it("folds only the session it was asked for", () => {
+    const other = events.find((event) => event.session !== session)!.session
+    const own = events.filter((event) => event.session === other)
+    expect(foldTranscript(other, events).answer()).toEqual(answerFold(own))
   })
 })
 

@@ -517,6 +517,24 @@ still has the compiler tell it when that stops being true. _Rejected:_ a
 separate callback for the fold, which two consumers would have to order by
 hand.
 
+**The Answer is a fold on the record, so nothing folds the Trace twice.**
+`Transcript` says `answer()` beside `messages()` and `cost()`, because it is
+the same thing they are. Before it, the harness path read the trace sink out
+of the kernel and folded the Answer itself — the one Slot read in shipped code
+outside boot — while the print path scraped the Claim off the live stream. One
+question, two answers, one file. Both now read what the runtime gives back.
+_Rejected:_ a Session API method of its own — `attach` already returns the
+record, and a second call would be a second read of the same events.
+
+**The Run protocol gives back what the Run answered, and falls back once.**
+`runPrompt` returns a `RunOutcome`: the record, and the Answer. The Answer is
+the record's own fold, except where the record holds no Claim and the stream
+said one — a build with no Trace has nothing to fold, and the Run still
+answered. The fallback lives in the protocol rather than in each caller,
+because two callers with the same fallback is how the print path and the
+harness path came to disagree in the first place. It is the one-Run case it is
+written for: a Workflow with no Trace cannot answer at all.
+
 **A fold while a Run is open is a repaint, not an ending.** The Console reset
 its mode to `ready` on every fold, because until now a fold only ever arrived
 at close. It reads the Run's own spinner instead: a Run says when it is over,

@@ -1,7 +1,17 @@
 import type { Payload } from "@missingstudio/eva-schema"
 import { Deferred, Effect, Fiber, SubscriptionRef } from "effect"
 import { describe, expect, it } from "vitest"
-import { CLOSE, fakeApi, given, PROMPT, SESSION, spoken, text, type Fake } from "./fake-api.js"
+import {
+  CLAIM,
+  CLOSE,
+  fakeApi,
+  given,
+  PROMPT,
+  SESSION,
+  spoken,
+  text,
+  type Fake,
+} from "./fake-api.js"
 import { runPrompt, SETTLE, type ClientState, type RunSignal } from "./run.js"
 import { localTransport } from "./transport.js"
 
@@ -42,23 +52,26 @@ describe("one Run, over the Session API", () => {
     expect(seen.filter((one) => one.kind === "folded")).toEqual([])
   })
 
-  it("returns the record's own fold, `at` included", async () => {
-    const transcript = await Effect.runPromise(
+  it("returns the record's own fold, `at` included, and what the Run answered", async () => {
+    const outcome = await Effect.runPromise(
       Effect.gen(function* () {
         const fake = yield* fakeApi([text("par"), text("tial")])
         return yield* runPrompt(yield* over(fake), PROMPT, () => {}, { settle: BOUND })
       }),
     )
 
-    expect(transcript.session).toBe(SESSION)
+    expect(outcome.transcript.session).toBe(SESSION)
     // Two words and the close: the position a reconnect resumes from.
-    expect(transcript.at).toEqual({ session: SESSION, seq: 3 })
-    expect(spoken(transcript)).toBe("partial")
+    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 3 })
+    expect(spoken(outcome.transcript)).toBe("partial")
+    // The Answer is the record's own fold, not the stream scraped a second
+    // time: the Claim the Run closed with, and the words that Run said.
+    expect(outcome.answer).toEqual({ claim: CLAIM, text: "partial" })
   })
 
   it("returns once `submit` has, even when the watch never says `finished`", async () => {
     const started = Date.now()
-    const transcript = await Effect.runPromise(
+    const outcome = await Effect.runPromise(
       Effect.gen(function* () {
         const fake = yield* fakeApi([text("par"), text("tial")], "silent")
         return yield* runPrompt(yield* over(fake), PROMPT, () => {}, { settle: BOUND })
@@ -68,7 +81,10 @@ describe("one Run, over the Session API", () => {
     // The drain stopped on the injected bound rather than on the default,
     // and never on the close that was not coming.
     expect(Date.now() - started).toBeLessThan(SETTLE)
-    expect(transcript.at).toEqual({ session: SESSION, seq: 2 })
+    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 2 })
+    // A Run that never closed answered no Claim, and the words it did say
+    // are still the record's.
+    expect(outcome.answer).toEqual({ text: "" })
   })
 
   it("cancels the Run when it is interrupted, and the record still folds", async () => {

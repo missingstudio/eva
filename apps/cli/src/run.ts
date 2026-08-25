@@ -11,7 +11,7 @@ import {
   type Resolution,
 } from "@missingstudio/eva-kernel"
 import { costLine } from "@missingstudio/eva-print"
-import { answerFold, type Claim, type SessionID } from "@missingstudio/eva-schema"
+import type { Claim, SessionID } from "@missingstudio/eva-schema"
 import type { Domains } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Scope, Stream } from "effect"
 import { BUILD, BUILT_IN_IDS, entriesOf, readsOf, uncarriedOf } from "./plugins.js"
@@ -175,22 +175,29 @@ export const runPrint = Effect.fn("cli.runPrint")(function* (
   const write = options.write ?? ((text: string) => void process.stdout.write(text))
   const session = options.session ?? (yield* client.api.create(options.location ?? process.cwd()))
 
-  let claim: Claim = { result: "failed", summary: "the Run closed without a claim" }
-  // The runtime owns the Run, the cancel on interrupt included. Text is
-  // written as it is said, the close carries the claim, and the record it
-  // gives back is what the cost is read from.
-  const transcript = yield* client.run(session, { kind: "prompt", text: prompt }, (one) => {
-    // A pipe's connection is the process, and the local filler it runs on
-    // never drops, so nothing here is ever refolded. The union is total, so
-    // the compiler says when that stops being true.
-    if (one.kind !== "payload") return
-    const { payload } = one
-    if (payload.kind === "text" && payload.content.type === "text") {
-      write(payload.content.text)
-    }
-    if (payload.kind === "finished") claim = payload.claim
-  })
+  // The runtime owns the Run, the cancel on interrupt included. The stream is
+  // only what the reader sees as it is said; what the Run answered and what
+  // it spent are both read off what the runtime gives back.
+  const { transcript, answer } = yield* client.run(
+    session,
+    { kind: "prompt", text: prompt },
+    (one) => {
+      // A pipe's connection is the process, and the local filler it runs on
+      // never drops, so nothing here is ever refolded. The union is total, so
+      // the compiler says when that stops being true.
+      if (one.kind !== "payload") return
 
+      const { payload } = one
+      if (payload.kind === "text" && payload.content.type === "text") {
+        write(payload.content.text)
+      }
+    },
+  )
+
+  const claim: Claim = answer.claim ?? {
+    result: "failed",
+    summary: "the Run closed without a claim",
+  }
   return { claim, session, costLine: costLine(transcript.cost()) } satisfies PrintResult
 })
 
@@ -210,39 +217,31 @@ export interface HarnessInput {
 }
 
 /**
- * One Prompt through the Harness the verb named, and the answer read back
- * from the record. A Workflow is many Runs and each one reports its text, so
- * the surface filters: the last Run's text is the answer, and the Runs
- * before it are in the Trace, where they belong.
+ * One Prompt through the Harness the verb named, and the answer the runtime
+ * gives back. A Workflow is many Runs and each one reports its text, so the
+ * Answer is the last one's and the Runs before it stay in the Trace, where
+ * they belong.
  *
- * The record rather than the live stream, because the stream never says
- * which `finished` is the last one — `submit` returning is what says the
- * Workflow is over, and by then everything is committed.
+ * It runs the same protocol the Console and the print path run. A Workflow
+ * says no live stream a reader wants, so nothing is done with the signals —
+ * but the Session is reached through the Client here as everywhere else,
+ * rather than by reading the kernel's own slots behind it.
  */
 export const runHarness = Effect.fn("cli.runHarness")(function* (
-  kernel: Kernel,
   client: Client,
   input: HarnessInput,
 ) {
-  const { api } = client
-  const session = yield* api.create(input.location)
-
-  // Being asked to stop is a cancel, so the Run still closes and the
-  // partial work is kept. A Workflow says no live stream a reader wants,
-  // so this submits rather than running the protocol; the record answers.
-  yield* Effect.onInterrupt(
-    api.submit(session, { kind: "prompt", text: input.text, harness: input.harness }),
-    () => api.cancel(session, "user"),
+  const session = yield* client.api.create(input.location)
+  const { answer } = yield* client.run(
+    session,
+    { kind: "prompt", text: input.text, harness: input.harness },
+    () => {},
   )
-
-  const sink = yield* kernel.slot.traceSink.peek
-  const events = sink === undefined ? [] : [...(yield* Stream.runCollect(sink.replay(session)))]
-  const answered = answerFold(events)
 
   // A build with no Trace has no record to answer from, and says so.
   return {
-    claim: answered.claim ?? { result: "failed", summary: "the Workflow left no record" },
-    text: answered.text,
+    claim: answer.claim ?? { result: "failed", summary: "the Workflow left no record" },
+    text: answer.text,
   } satisfies HarnessResult
 })
 

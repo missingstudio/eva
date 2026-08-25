@@ -121,6 +121,45 @@ describe("a conversation over several Runs", () => {
   })
 })
 
+/**
+ * The print path and the harness path ask the same question — what did this
+ * Run produce — and the record answers both. Where there is no record, the
+ * protocol falls back to what the stream said the Run closed with, which is
+ * the one thing a build with no Trace can still be sure of.
+ */
+describe("what a Run answered", () => {
+  it("is the record's Claim, not the stream scraped a second time", async () => {
+    const provider = scripted([{ payloads: [text("answered it"), usage(1, 1)] }]).plugin
+
+    const printed = await started(provider, (client) =>
+      runPrint(client, "ask", { write: () => {} }),
+    )
+
+    expect(printed.claim.result).toBe("done")
+  })
+
+  it("falls back to what the stream said when the build carries no Trace", async () => {
+    const provider = scripted([{ payloads: [text("hello")] }]).plugin
+
+    const printed = await withKernel([provider], (kernel, scope) =>
+      Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), (api) =>
+        Effect.flatMap(Effect.flatMap(localTransport(api.session), makeClient), (client) => {
+          let written = ""
+          return Effect.map(
+            runPrint(client, "hi", { write: (piece) => void (written += piece) }),
+            (out) => ({ ...out, written }),
+          )
+        }),
+      ),
+    )
+
+    // Nothing was recorded, so nothing folds — and the Run still answered.
+    expect(printed.written).toBe("hello")
+    expect(printed.claim.result).toBe("done")
+    expect(printed.costLine).toBe("cost unreported")
+  })
+})
+
 describe("cancelling mid-stream", () => {
   it("keeps the partial work and closes the Run cancelled, leaving a foldable trace", async () => {
     const found = await started(

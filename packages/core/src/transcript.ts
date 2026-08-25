@@ -1,7 +1,9 @@
 import {
+  answerFold,
   costFold,
   headerFold,
   transcriptFold,
+  type Answer,
   type CostSummary,
   type Cursor,
   type Event,
@@ -39,6 +41,17 @@ export interface Transcript {
   readonly at: Cursor
   readonly messages: () => readonly TranscriptMessage[]
   readonly cost: () => CostSummary
+  /**
+   * What the Run that closed last produced: its Claim, and its text. A
+   * Workflow is many Runs, so the earlier ones stay on the record and this
+   * is the last one's.
+   *
+   * It sits beside `messages` and `cost` because it is the same thing they
+   * are — a fold over the Trace. A caller that folded it for itself read the
+   * Trace a second way, and two ways to ask what a Run answered is two
+   * answers the moment either moves.
+   */
+  readonly answer: () => Answer
 }
 
 const clone = <A>(value: A): A => structuredClone(value)
@@ -57,6 +70,7 @@ export const foldTranscript = (
   const own = events.filter((event) => event.session === session)
   const messages = transcriptFold(own)
   const cost = costFold(own, priceOf)
+  const answer = answerFold(own)
   // A reduce rather than a spread into Math.max: a long trace overflows the
   // stack, and a long trace is the case that matters. The events are not
   // assumed to be ordered, so the last one is not the highest.
@@ -66,6 +80,7 @@ export const foldTranscript = (
     at: { session, seq },
     messages: () => clone(messages),
     cost: () => clone(cost),
+    answer: () => clone(answer),
   }
 }
 

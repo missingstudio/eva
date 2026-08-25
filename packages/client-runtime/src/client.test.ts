@@ -1,7 +1,7 @@
 import { Effect, SubscriptionRef } from "effect"
 import { describe, expect, it } from "vitest"
 import { makeClient } from "./client.js"
-import { CLOSE, fakeApi, given, PROMPT, SESSION, spoken, text } from "./fake-api.js"
+import { CLAIM, CLOSE, fakeApi, given, PROMPT, SESSION, spoken, text } from "./fake-api.js"
 import type { RunSignal } from "./run.js"
 import { localTransport } from "./transport.js"
 
@@ -22,7 +22,7 @@ describe("the handle a surface holds", () => {
 
   it("runs the protocol, and the record it gives back is the Run's own", async () => {
     const seen: RunSignal[] = []
-    const transcript = await Effect.runPromise(
+    const outcome = await Effect.runPromise(
       Effect.gen(function* () {
         const fake = yield* fakeApi([text("par"), text("tial")])
         const client = yield* makeClient(yield* localTransport(fake.api))
@@ -39,7 +39,8 @@ describe("the handle a surface holds", () => {
       { kind: "payload", payload: text("tial") },
       { kind: "payload", payload: CLOSE },
     ])
-    expect(spoken(transcript)).toBe("partial")
-    expect(transcript.at).toEqual({ session: SESSION, seq: 3 })
+    expect(spoken(outcome.transcript)).toBe("partial")
+    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 3 })
+    expect(outcome.answer).toEqual({ claim: CLAIM, text: "partial" })
   })
 })

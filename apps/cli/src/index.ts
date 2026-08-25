@@ -91,7 +91,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       const api = yield* makeSessionAPI(started.kernel, started.model, scope)
       const client = yield* makeClient(yield* localTransport(api.session))
       const answered = yield* withSignals(
-        runHarness(started.kernel, client, {
+        runHarness(client, {
           harness: invocation.harness,
           text: invocation.input,
           location: settled.location.directory,

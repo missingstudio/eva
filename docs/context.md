@@ -201,7 +201,8 @@ word for it)
 What a Harness produced, as a fold over the Trace: the Claim the Run that
 closed last carries, and that Run's text. A Workflow is many Runs, so the
 earlier ones stay on the Trace and the Answer is the last one's. Nothing
-stores one.
+stores one — it is read off the record, beside the Messages and the Cost, and
+a caller that folds the Trace for itself is reading it a second way.
 _Avoid_: Result (a Claim is what a Run returns), Output (that is what a
 Candidate became), reply
 

@@ -22,6 +22,7 @@ import {
   eventID,
   runID,
   sessionID,
+  type Claim,
   type Cursor,
   type Event,
   type Payload,
@@ -39,7 +40,10 @@ export const text = (value: string): Payload => ({
   content: { type: "text", text: value },
 })
 
-export const CLOSE: Payload = { kind: "finished", claim: { result: "done", summary: "ok" } }
+// What the Run closes with, and the payload that carries it. Named apart so
+// a suite can assert the Answer against the same Claim the stream said.
+export const CLAIM: Claim = { result: "done", summary: "ok" }
+export const CLOSE: Payload = { kind: "finished", claim: CLAIM }
 
 // What `submit` does after the Run has said its payloads: close it, return
 // without a close, wait to be let go, or stay open until the caller

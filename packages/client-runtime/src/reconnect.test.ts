@@ -81,8 +81,8 @@ describe("a dropped connection", () => {
         // The close commits after the resumed watch, so it arrives on the
         // stream rather than in the record.
         yield* fake.release
-        const record = yield* Fiber.join(running)
-        return { record, watched: given(fake, "watch") }
+        const { transcript } = yield* Fiber.join(running)
+        return { record: transcript, watched: given(fake, "watch") }
       }),
     )
 
@@ -126,7 +126,7 @@ describe("a dropped connection", () => {
         yield* until("two repaints", () => foldsIn(seen) === 2)
         yield* stateAt(client.state, "ready")
         yield* fake.release
-        return yield* Fiber.join(running)
+        return (yield* Fiber.join(running)).transcript
       }),
     )
 

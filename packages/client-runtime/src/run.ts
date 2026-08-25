@@ -1,5 +1,5 @@
 import type { ResumeTooFarBehind, SubmitInput, Transcript } from "@missingstudio/eva-core"
-import type { Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
+import type { Answer, Claim, Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
 import { Effect, Fiber, Stream, SubscriptionRef } from "effect"
 import { healthAt, type Transport } from "./transport.js"
 
@@ -38,6 +38,21 @@ export type RunSignal =
    * see chunks where it saw words, and by position nothing is missing.
    */
   | { readonly kind: "folded"; readonly transcript: Transcript }
+
+/**
+ * What one Run gives back: the record that replaced its stream, and what it
+ * answered.
+ *
+ * `answer` is the record's own fold, except where the record holds no Claim
+ * and the stream said one — a build with no Trace has nothing to fold, and
+ * the Run still answered. The fallback is the one-Run case it is written
+ * for: a Workflow with no Trace cannot answer at all, whatever is filled in
+ * here.
+ */
+export interface RunOutcome {
+  readonly transcript: Transcript
+  readonly answer: Answer
+}
 
 /**
  * What one Run runs over: the pipe it calls through, where the runtime says
@@ -120,15 +135,18 @@ const refolded = (over: RunOver): Stream.Stream<RunSignal> =>
  * carries the Claim. A drop while it is open costs the caller one repaint:
  * the record arrives as a fold, and the stream goes on from the fold's own
  * position. What a surface does with them is the surface's: the protocol
- * carries signals and gives back the record.
+ * carries signals and gives back the record and what it answered.
  */
 export const runPrompt = Effect.fn("eva.client.run")(function* (
   over: RunOver,
   input: SubmitInput,
   each: (signal: RunSignal) => void,
   options: RunOptions = {},
-): Effect.fn.Return<Transcript> {
+): Effect.fn.Return<RunOutcome> {
   const { api } = over.transport
+  // What the stream said the Run closed with. It is read only where the
+  // record holds no Claim, so nothing that has a Trace ever reaches it.
+  let claimed: Claim | undefined
   // The watcher is forked before `submit`, so a Run that says its first word
   // at once is heard.
   const watching = yield* Effect.forkChild(
@@ -137,7 +155,11 @@ export const runPrompt = Effect.fn("eva.client.run")(function* (
         live(over),
         (one) => one.kind === "payload" && one.payload.kind === "finished",
       ),
-      (one) => Effect.sync(() => each(one)),
+      (one) =>
+        Effect.sync(() => {
+          if (one.kind === "payload" && one.payload.kind === "finished") claimed = one.payload.claim
+          each(one)
+        }),
     ),
   )
   // Being asked to stop is a cancel, so the Run still closes and the partial
@@ -151,5 +173,11 @@ export const runPrompt = Effect.fn("eva.client.run")(function* (
   yield* Fiber.interrupt(watching)
   // The fold replaces the stream. Its `at` is the position a reconnect
   // resumes from.
-  return yield* Effect.scoped(api.attach(over.session))
+  const transcript = yield* Effect.scoped(api.attach(over.session))
+  const folded = transcript.answer()
+  return {
+    transcript,
+    answer:
+      folded.claim === undefined && claimed !== undefined ? { ...folded, claim: claimed } : folded,
+  } satisfies RunOutcome
 })
