@@ -1,3 +1,4 @@
+import type { ClientState } from "@missingstudio/eva-client-runtime"
 import type { SessionHeader } from "@missingstudio/eva-core"
 import {
   spendOf,
@@ -35,6 +36,55 @@ export type Folded =
 export interface Reading {
   readonly folded: Folded
   readonly said: string
+}
+
+/**
+ * What the page has of the pipe: where the runtime says it is, and whether it
+ * has ever said it was gone. The state is the Client's own — a surface reads
+ * it to say so and acts on nothing else about the pipe — and `dropped` is this
+ * page's, because "the pipe is back" says nothing to a reader who was never
+ * told it had gone.
+ */
+export interface Pipe {
+  readonly at: ClientState
+  readonly dropped: boolean
+}
+
+/**
+ * What the page says about the pipe, and nothing while there is nothing to
+ * say. A page frozen on a dead pipe reads as a Session that stopped, so the
+ * words are about the pipe and never about the Run: the Session goes on
+ * without this page, and the page catches up by Cursor when the pipe is back.
+ *
+ * `synchronizing` cannot arrive here. It is a Run refolding and this page
+ * drives no Run — W1 takes no input of any kind. It is said anyway, because
+ * the three are a closed set and an arm left off is a page that says nothing
+ * on the day the write half lands.
+ */
+export const noticeOf = (pipe: Pipe): string | undefined => {
+  switch (pipe.at) {
+    case "ready":
+      return pipe.dropped ? "The pipe is back." : undefined
+    case "synchronizing":
+      return "Catching up with the record…"
+    case "disconnected":
+      return "The pipe is down. The Session goes on, and this page catches up when it is back."
+  }
+}
+
+/**
+ * What the pipe is, said where a reader is already looking. It is drawn above
+ * the transcript and not beside it: a reader who cannot tell a dead pipe from
+ * a Session that stopped reads the wrong thing off a page that is otherwise
+ * correct.
+ */
+export const Wire = ({ pipe }: { readonly pipe: Pipe }) => {
+  const said = noticeOf(pipe)
+  return said === undefined ? null : (
+    <p className="pipe" role="status">
+      {said}
+    </p>
+  )
 }
 
 /**
@@ -127,8 +177,8 @@ export const Live = ({ said }: { readonly said: string }) =>
   )
 
 /**
- * One Session, read: which Session it is, then what was said in it, then what
- * the open Run is saying, then what it cost.
+ * One Session, read: which Session it is, what the pipe is, then what was said
+ * in it, then what the open Run is saying, then what it cost.
  *
  * Nothing here takes input. No prompt, no permission answer, no model
  * switch: those are W2's, and they wait for the permission gate.
@@ -137,13 +187,16 @@ export const Session = ({
   session,
   header,
   reading,
+  pipe,
 }: {
   readonly session: string
   readonly header: SessionHeader | undefined
   readonly reading: Reading
+  readonly pipe: Pipe
 }) => (
   <main>
     <Named session={session} header={header} />
+    <Wire pipe={pipe} />
     {reading.folded.kind === "folding" ? (
       <p className="note">Reading the transcript…</p>
     ) : (

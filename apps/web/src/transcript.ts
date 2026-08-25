@@ -1,11 +1,11 @@
 import type { Client } from "@missingstudio/eva-client-runtime"
-import type { ResumeTooFarBehind, SessionHeader } from "@missingstudio/eva-core"
+import type { SessionHeader } from "@missingstudio/eva-core"
 import type { Payload, SessionID } from "@missingstudio/eva-schema"
 import { blocksOf } from "@missingstudio/eva-session-view"
-import { Effect, Fiber, Stream } from "effect"
+import { Effect, Fiber, Stream, SubscriptionRef } from "effect"
 import { useEffect, useState } from "react"
 import { client } from "./eva.js"
-import type { Folded, Reading } from "./session.js"
+import type { Folded, Pipe, Reading } from "./session.js"
 import { useSessions } from "./sessions.js"
 
 /**
@@ -37,17 +37,24 @@ export const tailOf = (said: string, payload: Payload): string =>
  * one the fold ended at — and nothing already folded arrives twice, for the
  * same reason.
  *
- * A Run that closes is folded again, and the fold replaces the tail. That is
- * the only reason this loops. A watch that ends any other way ends the follow:
- * converging after a drop and after a reload is 007's, and so is answering a
- * refusal — which this can only meet by having been overtaken between a fold
- * and the watch that resumed from it.
+ * So a watch that ends is answered by folding again, whichever of the three
+ * ways it ended: the Run closed and the record holds what the tail held; the
+ * pipe went; or the Cursor was refused, because the head moved past the replay
+ * bound between the fold and the watch that resumed from it. A refusal is a
+ * fact about one subscription and not an event in the Session, so what answers
+ * it is a fresh fold and never a gap.
+ *
+ * Nothing here waits for the pipe. `attach` is the wait: a call made while the
+ * pipe is down is slower and never differently typed, which is the seam's own
+ * rule — so this asks again and the ask is held until it can be answered. What
+ * a surface reads about the pipe is the Client's `state`, and it reads it to
+ * say so and acts on nothing else.
  */
 export const follow = (
   one: Client,
   session: SessionID,
   each: (reading: (was: Reading) => Reading) => void,
-): Effect.Effect<void, ResumeTooFarBehind> =>
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     const record = yield* Effect.scoped(one.api.attach(session))
     const folded: Folded = {
@@ -59,17 +66,20 @@ export const follow = (
     // The fold replaces the tail, so the tail goes with it.
     each(() => ({ folded, said: "" }))
 
-    let closed = false
-    yield* Stream.runForEach(
-      Stream.takeUntil(one.api.watch(session, record.at), (payload) => payload.kind === "finished"),
-      (payload) =>
-        Effect.sync(() => {
-          if (payload.kind === "finished") closed = true
-          each((was) => ({ ...was, said: tailOf(was.said, payload) }))
-        }),
+    // A refused Cursor ends this watch and says nothing to the page. What
+    // answers it is the fold below, as it answers every other ending.
+    const watching = Stream.catchTag(
+      one.api.watch(session, record.at),
+      "ResumeTooFarBehind",
+      () => Stream.empty,
     )
 
-    if (closed) return yield* Effect.suspend(() => follow(one, session, each))
+    yield* Stream.runForEach(
+      Stream.takeUntil(watching, (payload) => payload.kind === "finished"),
+      (payload) => Effect.sync(() => each((was) => ({ ...was, said: tailOf(was.said, payload) }))),
+    )
+
+    return yield* Effect.suspend(() => follow(one, session, each))
   })
 
 /**
@@ -91,15 +101,9 @@ export const useTranscript = (session: SessionID): Reading => {
 
     void client().then((one) => {
       if (!drawing) return
-      /**
-       * A refused Cursor ends the follow and leaves the fold on the screen.
-       * Answering one by folding fresh is 007's, and a page that showed a
-       * stack trace instead would be reporting the seam's own contract as a
-       * fault.
-       */
-      const following = Effect.runFork(
-        Effect.catchTag(follow(one, session, setReading), "ResumeTooFarBehind", () => Effect.void),
-      )
+      // Nothing is caught here. A refused Cursor and a pipe that went are both
+      // answered inside the follow, by folding fresh.
+      const following = Effect.runFork(follow(one, session, setReading))
       stop = () => void Effect.runFork(Fiber.interrupt(following))
     })
 
@@ -110,4 +114,41 @@ export const useTranscript = (session: SessionID): Reading => {
   }, [session])
 
   return reading
+}
+
+/**
+ * Where the runtime is, read to be said. `client-runtime` maps the health of
+ * the pipe onto the three values a surface acts on, and this page acts on the
+ * one thing it can: it says so.
+ *
+ * Whether the pipe has ever gone is kept here rather than in the Client. "The
+ * pipe is back" is a thing to say only to a reader who was told it had gone,
+ * and that is a fact about this page and not about the runtime.
+ */
+export const usePipe = (): Pipe => {
+  const [pipe, setPipe] = useState<Pipe>({ at: "ready", dropped: false })
+
+  useEffect(() => {
+    let drawing = true
+    let stop: (() => void) | undefined
+
+    void client().then((one) => {
+      if (!drawing) return
+      const watching = Effect.runFork(
+        Stream.runForEach(SubscriptionRef.changes(one.state), (at) =>
+          Effect.sync(() =>
+            setPipe((was) => ({ at, dropped: was.dropped || at === "disconnected" })),
+          ),
+        ),
+      )
+      stop = () => void Effect.runFork(Fiber.interrupt(watching))
+    })
+
+    return () => {
+      drawing = false
+      stop?.()
+    }
+  }, [])
+
+  return pipe
 }

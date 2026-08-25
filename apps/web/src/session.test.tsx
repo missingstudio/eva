@@ -11,7 +11,17 @@ import { blocksOf } from "@missingstudio/eva-session-view"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 import { Page } from "./page.js"
-import { Cost, Live, Named, Session, type Folded, type Reading } from "./session.js"
+import {
+  Cost,
+  Live,
+  Named,
+  noticeOf,
+  Session,
+  Wire,
+  type Folded,
+  type Pipe,
+  type Reading,
+} from "./session.js"
 
 const SESSION = sessionID("ses_one")
 
@@ -49,6 +59,9 @@ const folding: Reading = { folded: { kind: "folding" }, said: "" }
 
 const reading = (said = ""): Reading => ({ folded: read(), said })
 
+// A pipe that has never gone, which is the one state with nothing to say.
+const READY: Pipe = { at: "ready", dropped: false }
+
 const EMPTY_COST: CostSummary = {
   inputTokens: null,
   outputTokens: null,
@@ -70,7 +83,7 @@ describe("which Session this is", () => {
   it("renders whole before the fold has arrived", () => {
     const named = renderToStaticMarkup(<Named session={SESSION} header={HEADER} />)
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} reading={folding} />,
+      <Session session={SESSION} header={HEADER} reading={folding} pipe={READY} />,
     )
 
     expect(drawn).toContain(named)
@@ -81,7 +94,7 @@ describe("which Session this is", () => {
   // say and arrives with the listing, so the id is what stands in for it.
   it("names the Session by its id before the listing has answered", () => {
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={undefined} reading={folding} />,
+      <Session session={SESSION} header={undefined} reading={folding} pipe={READY} />,
     )
 
     expect(drawn).toContain(SESSION)
@@ -90,7 +103,7 @@ describe("which Session this is", () => {
 
   it("names the title and when it last moved, once the listing has answered", () => {
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} reading={folding} />,
+      <Session session={SESSION} header={HEADER} reading={folding} pipe={READY} />,
     )
 
     expect(drawn).toContain("read the trace back over HTTP")
@@ -101,7 +114,7 @@ describe("which Session this is", () => {
 describe("what was said in it", () => {
   it("draws the Blocks the fold gave back", () => {
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} reading={reading()} />,
+      <Session session={SESSION} header={HEADER} reading={reading()} pipe={READY} />,
     )
 
     expect(drawn).toContain("change it")
@@ -118,7 +131,7 @@ describe("what was said in it", () => {
 describe("the live tail", () => {
   it("renders after the committed fold", () => {
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} reading={reading("half a wo")} />,
+      <Session session={SESSION} header={HEADER} reading={reading("half a wo")} pipe={READY} />,
     )
 
     expect(drawn).toContain("half a wo")
@@ -129,7 +142,7 @@ describe("the live tail", () => {
   // in the record yet.
   it("stands between what was folded and what it cost", () => {
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} reading={reading("half a wo")} />,
+      <Session session={SESSION} header={HEADER} reading={reading("half a wo")} pipe={READY} />,
     )
 
     expect(drawn.indexOf("half a wo")).toBeLessThan(drawn.indexOf("tokens in"))
@@ -146,6 +159,62 @@ describe("the live tail", () => {
 
   it("draws what the open Run has streamed, and nothing around it", () => {
     expect(renderToStaticMarkup(<Live said="a partial" />)).toContain("a partial")
+  })
+})
+
+/**
+ * A page frozen on a dead pipe reads as a Session that stopped, so the page
+ * says which of the two it is. What it reads for that is the Client's `state`
+ * and nothing else about the pipe.
+ */
+describe("what the page says about the pipe", () => {
+  it("says the pipe is down while it is down", () => {
+    expect(noticeOf({ at: "disconnected", dropped: true })).toContain("The pipe is down")
+  })
+
+  // And says the Session is not the thing that stopped. The record goes on
+  // without this page and the page catches up by Cursor.
+  it("says the Session goes on while the pipe does not", () => {
+    expect(noticeOf({ at: "disconnected", dropped: true })).toContain("The Session goes on")
+  })
+
+  it("says the pipe is back once it is", () => {
+    expect(noticeOf({ at: "ready", dropped: true })).toBe("The pipe is back.")
+  })
+
+  /**
+   * And says nothing to a reader who was never told it had gone. "The pipe is
+   * back" is a fact about a page that lost it, not about a page that has been
+   * reading all along.
+   */
+  it("says nothing about a pipe that has never gone", () => {
+    expect(noticeOf(READY)).toBeUndefined()
+    expect(renderToStaticMarkup(<Wire pipe={READY} />)).toBe("")
+  })
+
+  /**
+   * `synchronizing` cannot arrive on this page: it is a Run refolding and this
+   * page drives no Run. The arm is drawn all the same, because the three are a
+   * closed set and one left off is a page that says nothing on the day the
+   * write half lands.
+   */
+  it("says it is catching up, if a Run ever reaches this side", () => {
+    expect(noticeOf({ at: "synchronizing", dropped: true })).toContain("Catching up")
+  })
+
+  // Above the transcript, because a reader looking at the words is who has to
+  // know the words have stopped arriving.
+  it("stands above what was said in the Session", () => {
+    const drawn = renderToStaticMarkup(
+      <Session
+        session={SESSION}
+        header={HEADER}
+        reading={reading()}
+        pipe={{ at: "disconnected", dropped: true }}
+      />,
+    )
+
+    expect(drawn.indexOf("The pipe is down")).toBeLessThan(drawn.indexOf("change it"))
   })
 })
 
@@ -204,7 +273,9 @@ describe("what the page offers", () => {
     "no %s, on the Session or the listing",
     (control) => {
       expect(
-        renderToStaticMarkup(<Session session={SESSION} header={HEADER} reading={reading()} />),
+        renderToStaticMarkup(
+          <Session session={SESSION} header={HEADER} reading={reading()} pipe={READY} />,
+        ),
       ).not.toContain(control)
       expect(renderToStaticMarkup(<Page />)).not.toContain(control)
     },

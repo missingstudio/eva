@@ -9,21 +9,29 @@ import {
 import { Page } from "./page.js"
 import { SESSION_ROUTE } from "./paths.js"
 import { Session } from "./session.js"
-import { useHeader, useTranscript } from "./transcript.js"
+import { useHeader, usePipe, useTranscript } from "./transcript.js"
 
 const Shell = () => <Outlet />
 
 /**
  * The one Session the route names, read. The views take what they draw as
  * props, so this is the only place on the page where a read and a drawing
- * meet — and the Header and the record are two reads, because the Header is
- * drawn before the fold has arrived.
+ * meet — and the Header, the record and the pipe are three reads, because the
+ * Header is drawn before the fold has arrived and the pipe is drawn whatever
+ * the fold is doing.
  */
 const Read = () => {
   const params = useParams({ from: SESSION_ROUTE })
   const session = sessionID(params.session)
 
-  return <Session session={session} header={useHeader(session)} reading={useTranscript(session)} />
+  return (
+    <Session
+      session={session}
+      header={useHeader(session)}
+      reading={useTranscript(session)}
+      pipe={usePipe()}
+    />
+  )
 }
 
 const root = createRootRoute({ component: Shell })
