@@ -361,12 +361,19 @@ does not help itself.
 _Avoid_: Host interface, callbacks
 
 **Transport**:
-How a Harness is reached: direct calls in this process, or the Agent Client
-Protocol over stdio JSON-RPC. A Transport carries the harness contract unchanged
-and decides nothing about the calls it makes. Only the harness seam has one — a
-Surface reaches the Session API directly or through the `eva.api` Surface, and
-neither is a Transport.
+Where a contract is answered from: this process, or a wire. A Transport carries
+the contract unchanged and decides nothing about the calls it makes. Two seams
+have one. The harness seam reaches a Harness by direct calls or by the Agent
+Client Protocol over stdio JSON-RPC. The client runtime reaches the Session API
+through a Transport that also says whether the pipe is there, so the runtime
+never learns which side of a socket it is on.
 _Avoid_: Connection, channel, protocol (a protocol is what a Transport speaks)
+
+**Transport health**:
+The one fact the client runtime reads about its Transport: `ready` or
+`disconnected`. It is about the pipe, never about the runtime — catching up
+after a drop is the runtime's own phase and is not a health value.
+_Avoid_: Online, connection state, status
 
 **Prompt**:
 What a person asks Eva, and what a Harness is handed to answer it. It is the one

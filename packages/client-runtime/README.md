@@ -67,16 +67,49 @@ The four steps, and why each one is there:
 4. **Fold.** `attach` gives the record. Its `at` is the position a reconnect
    resumes from.
 
+### The transport
+
+Where the `SessionAPI` lives is not the runtime's business. A `Transport` is
+the whole contract plus the one fact the runtime reads about the pipe:
+
+```ts
+import { localTransport } from "@missingstudio/eva-client-runtime"
+
+const transport = yield * localTransport(api)
+const record = yield * runPrompt(transport.api, session, input, each)
+```
+
+`health` is `ready` or `disconnected`. A drop says what it has to say where it
+can be acted on: `health` changes, and every open `watch` ends. It says nothing
+through an error channel — `SessionAPI` has none — so a call made while the
+pipe is down waits until it is ready. The call is slower, never differently
+typed, and a consumer that only calls methods needs no new handling.
+
+`localTransport` is the in-process filler: the API untouched, and a `health`
+that is born `ready` and never leaves it. `droppableTransport` is the same
+filler that can be told to lose its pipe, and it ships here rather than in a
+test file because it is the seam's own proof:
+
+```ts
+const transport = yield * droppableTransport(api)
+yield * transport.drop // every open watch ends; new calls are held
+yield * transport.restore // the held calls run
+```
+
 ## What it does not do
 
-It draws nothing and imports nothing that draws. It knows no transport, and it
-caches nothing: the record is folded on demand, because a cached read model is
-a domain of its own and gets added when a consumer needs it.
+It draws nothing and imports nothing that draws. It speaks no wire: the seam is
+the shape a wire plugs into, not an HTTP client. It does not retry, back off, or
+probe — a backoff ladder is tuned to a wire that flaps, and it arrives with the
+filler that has one. It caches nothing: the record is folded on demand, because
+a cached read model is a domain of its own and gets added when a consumer needs
+it.
 
 ## Development
 
-The protocol's rules live in [run.test.ts](src/run.test.ts), against a fake
-`SessionAPI`. Run the suite from the repository root:
+The protocol's rules live in [run.test.ts](src/run.test.ts) and the seam's in
+[transport.test.ts](src/transport.test.ts), both against the fake `SessionAPI`
+in [fake-api.ts](src/fake-api.ts). Run the suite from the repository root:
 
 ```bash
 bun run test

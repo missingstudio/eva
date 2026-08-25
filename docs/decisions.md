@@ -440,8 +440,9 @@ and `done`.
 
 **There is no transport layer on the surface seam.** A remote surface is a
 plugin that speaks HTTP to `eva.api`, calling the same `SessionAPI` methods.
-_Rejected:_ the Go tree's direct/remote pair. `Transport` is kept for the
-harness seam, where a harness genuinely is reached two ways.
+_Rejected:_ the Go tree's direct/remote pair. _Corrected:_ this entry once said
+`Transport` was the harness seam's alone. The client runtime has one too, on the
+caller's side of the same `SessionAPI` — never on the seam the kernel answers.
 
 **The order a surface calls the Session API in is a protocol, and it has one
 home.** The terminal and the print path each wrote it, and disagreed: one
@@ -457,6 +458,25 @@ serves a terminal, a web page and a phone. It takes one domain at a time, when
 a real consumer needs one; today that is the Run. _Rejected:_ a cached read
 model per domain up front — nothing reads one yet, and the record folds on
 demand.
+
+**Where the Session API lives is one interface, filled three times.** The local
+filler is in this process, the second is a read-only HTTP reader, the third is
+the whole wire. The local filler proves the shape and the second proves the
+shape was right; if it does not survive its second filler, that is cheaper
+learned at the second than at the third. `droppableTransport` ships beside it
+rather than in a test file: it is the seam's own proof, and the exit test runs
+on it from another package. _Rejected:_ extracting the client runtime with no
+seam — the reconnect machinery is already built and no consumer passes a cursor,
+so the package would own connection lifecycle without ever losing a connection.
+
+**A transport says two things about the pipe, and says nothing through an error
+channel.** `ready` or `disconnected`, and a drop ends every open watch.
+`SessionAPI` has no error channel and the seam keeps it that way, so a call made
+while the pipe is down waits: slower, never differently typed. A consumer that
+must react to a drop reads `health`; one that only calls methods needs no new
+handling. _Rejected:_ the field's six phases on this seam — they belong to a
+filler whose wire can flap, and the three values a consumer acts on are the
+runtime's, above the pipe.
 
 **Remote-ready is three constraints on the two surface contracts, not a
 feature.** Everything in them serializes, local facts stay out, and
