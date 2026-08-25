@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "devDependencies": {
+    "@missingstudio/eva-api": "workspace:*",
     "@missingstudio/eva-auth": "workspace:*",
     "@missingstudio/eva-boot": "workspace:*",
     "@missingstudio/eva-catalog-models": "workspace:*",
@@ -26,6 +27,7 @@
     "@missingstudio/eva-tui-core": "workspace:*",
     "@missingstudio/eva-tui-surface": "workspace:*",
     "@missingstudio/eva-validator": "workspace:*",
+    "@missingstudio/eva-web": "workspace:*",
     "@missingstudio/eva-workflow": "workspace:*",
     "@types/node": "catalog:",
     "effect": "catalog:",
