@@ -465,7 +465,10 @@ _Avoid_: Token, key, secret
 
 **Console**:
 The interactive interface a person types into — the `eva.tui` surface ships one.
-It is not a Session; it holds one while it runs.
+It is not a Session; it holds one while it runs. Two folds decide everything it
+does: one says what the screen shows, the other says what the loop does next —
+which Run is open, which lines wait behind it, and which close closes which Run.
+The Surface performs what they decide and holds neither.
 _Avoid_: REPL, chat
 
 **Live area**:

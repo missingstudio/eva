@@ -32,6 +32,7 @@ import {
 import { branchOf, shortPath } from "./banner.js"
 import { apply, backStep, frameOf, initial, type ConsoleEvent, type Place } from "./console.js"
 import { edit, pasted, type LineAction, type LineCommand } from "./line.js"
+import { idle, stepped, type LoopAction, type LoopStep } from "./loop.js"
 import {
   commandRows,
   completed,
@@ -482,32 +483,82 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     // many lines it takes to say it.
     if (notes.length > 0) on({ kind: "said", text: notes.join("\n") })
 
-    // The one open Run, and the lines typed while it ran.
-    let open: { readonly id: number; readonly fiber: Fiber.Fiber<void> } | undefined
-    let pending: string[] = []
-    let runs = 0
+    /**
+     * Where the loop stands, and the fibers behind the numbers it holds.
+     * `loop.ts` owns every rule about them; this owns the fibers, because a
+     * fiber is not something a fold can hold.
+     */
+    let standing = idle
+    const fibers = new Map<number, Fiber.Fiber<void>>()
 
-    // A line does what it says: a command runs here; anything else opens a
-    // Run, forked so the queue stays read while it is open.
-    const handle = Effect.fn("eva.tui.line")(function* (line: string) {
+    // A line does what it says. Which it is, is the command Domain's answer,
+    // and what follows from that answer is the fold's.
+    const handle = Effect.fn("eva.tui.line")(function* (line: string): Effect.fn.Return<void> {
       const before = state.session
-      const handled = yield* runCommand(line)
-      if (!handled) {
-        runs += 1
-        const id = runs
-        const fiber = yield* Effect.forkChild(
-          Effect.ensuring(
-            runPrompt(line),
-            Effect.sync(() => Queue.offerUnsafe(keys, { kind: "settled", run: id })),
-          ),
-        )
-        open = { id, fiber }
-      } else if (state.session !== before) {
-        // A command that opened another Session is followed there: what the
-        // screen shows is the fold of the Session now open, which for a new
-        // one is nothing — that is what clearing looks like.
-        yield* refresh()
+      const ran = yield* runCommand(line)
+      yield* walk({ kind: "handled", line, ran, moved: state.session !== before })
+    })
+
+    // One action, performed. Nothing here decides anything.
+    const perform = Effect.fn("eva.tui.act")(function* (
+      action: LoopAction,
+    ): Effect.fn.Return<void> {
+      switch (action.kind) {
+        case "answer":
+          return yield* answer(action.line)
+        case "handle":
+          return yield* handle(action.line)
+        case "open": {
+          const { run } = action
+          const fiber = yield* Effect.forkChild(
+            Effect.ensuring(
+              runPrompt(action.line),
+              Effect.sync(() => Queue.offerUnsafe(keys, { kind: "settled", run })),
+            ),
+          )
+          fibers.set(run, fiber)
+          return
+        }
+        case "refresh":
+          return yield* refresh()
+        case "interrupt": {
+          const fiber = fibers.get(action.run)
+          fibers.delete(action.run)
+          if (fiber !== undefined) yield* Fiber.interrupt(fiber)
+          return
+        }
+        case "settle": {
+          const fiber = fibers.get(action.run)
+          fibers.delete(action.run)
+          if (fiber === undefined) return
+          // A Run that died says so; one that was interrupted was cancelled,
+          // and the cancel already spoke.
+          const outcome = yield* Fiber.await(fiber)
+          if (Exit.isFailure(outcome) && !Cause.hasInterruptsOnly(outcome.cause)) {
+            const squashed: unknown = Cause.squash(outcome.cause)
+            on({
+              kind: "said",
+              text: `the Run failed: ${squashed instanceof Error ? squashed.message : String(squashed)}`,
+            })
+          }
+          return
+        }
+        case "cancelled": {
+          yield* deps.client.api.cancel(state.session, "user")
+          on({ kind: "cancelled" })
+          return yield* refresh(true)
+        }
+        case "stop":
+          return
       }
+    })
+
+    // One step, and everything it asked for, in the order it asked.
+    const walk = Effect.fn("eva.tui.step")(function* (step: LoopStep): Effect.fn.Return<boolean> {
+      const next = stepped(standing, step)
+      standing = next.state
+      for (const action of next.actions) yield* perform(action)
+      return next.actions.some((action) => action.kind === "stop")
     })
 
     /**
@@ -582,73 +633,36 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
       const run = line.trimEnd()
       on({ kind: "submitted", line: run })
       on({ kind: "typed", buffer: "", cursor: 0 })
-      yield* handle(run)
+      // Through the fold like any other line, so a row taken while a Run is
+      // open waits its turn rather than opening a second one over it.
+      yield* walk({ kind: "line", line: run, asking: state.asking })
     })
 
+    // The panel's three touch nothing the fold holds, so they are answered
+    // here. Everything that moves a Run goes through it.
     for (;;) {
-      const action = yield* Queue.take(keys)
-      if (action.kind === "palette") {
+      const signal = yield* Queue.take(keys)
+      if (signal.kind === "palette") {
         yield* openPalette()
         continue
       }
-      if (action.kind === "completing") {
+      if (signal.kind === "completing") {
         yield* completing()
         continue
       }
-      if (action.kind === "took") {
-        yield* take(action.how)
+      if (signal.kind === "took") {
+        yield* take(signal.how)
         continue
       }
-      if (action.kind === "settled") {
-        if (open === undefined || action.run !== open.id) continue
-        // A Run that died says so; one that was interrupted was cancelled,
-        // and the cancel already spoke.
-        const outcome = yield* Fiber.await(open.fiber)
-        open = undefined
-
-        if (Exit.isFailure(outcome) && !Cause.hasInterruptsOnly(outcome.cause)) {
-          const squashed: unknown = Cause.squash(outcome.cause)
-          on({
-            kind: "said",
-            text: `the Run failed: ${squashed instanceof Error ? squashed.message : String(squashed)}`,
-          })
-        }
-
-        const next = pending.shift()
-        if (next !== undefined) yield* handle(next)
-        continue
-      }
-      if (action.kind === "quit") {
-        if (open !== undefined) yield* Fiber.interrupt(open.fiber)
-        return
-      }
-      if (action.kind === "cancel") {
-        // Cancel acts on the open Run, and stop means stop: the lines that
-        // were waiting behind it are dropped with it.
-        if (open !== undefined) {
-          yield* Fiber.interrupt(open.fiber)
-          open = undefined
-          pending = []
-        }
-
-        yield* deps.client.api.cancel(state.session, "user")
-        on({ kind: "cancelled" })
-
-        yield* refresh(true)
-        continue
-      }
-      if (state.asking) {
-        yield* answer(action.line)
-        continue
-      }
-
-      if (open !== undefined) {
-        // A line typed during a Run waits its turn rather than racing it.
-        pending.push(action.line)
-        continue
-      }
-
-      yield* handle(action.line)
+      const step: LoopStep =
+        signal.kind === "settled"
+          ? { kind: "settled", run: signal.run }
+          : signal.kind === "quit"
+            ? { kind: "quit" }
+            : signal.kind === "cancel"
+              ? { kind: "cancel" }
+              : { kind: "line", line: signal.line, asking: state.asking }
+      if (yield* walk(step)) return
     }
   })
 

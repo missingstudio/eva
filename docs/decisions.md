@@ -557,6 +557,23 @@ its mode to `ready` on every fold, because until now a fold only ever arrived
 at close. It reads the Run's own spinner instead: a Run says when it is over,
 and a dropped connection is not it.
 
+**The loop's rules are a fold, as the screen's are.** The Console fold has
+always said what the screen shows; the loop's own state — the open Run, the
+lines typed behind it, the armed cancel, which close closes which Run — was
+mutable locals inside `makeSurface`, reachable only through a real renderer, a
+real Client and a real event loop. Its suite slept for them: 91 timed waits
+and two five-second pollers, 56 tests in 6.25 seconds, against 38 tests in
+seven milliseconds for the fold beside it. `loop.ts` takes what happened and
+answers with what to do; the surface does it and decides nothing. Sixteen
+rules moved and now cost five milliseconds.
+
+**Everything that moves a Run goes through the fold, the panel included.** A
+row taken from the command palette used to reach `handle` directly. With a Run
+already open that forked a second one over it and dropped the fiber holding
+the first, so nothing could interrupt it and its close named a Run the loop
+was no longer holding. A row is a line like any other, and one door for lines
+is what makes that unwriteable rather than merely fixed.
+
 **A Surface shows where the runtime is, and decides nothing about it.** The
 Console holds `connection` and the status line says it, most urgent first: a
 pipe that is gone outranks a question, which cannot be answered down it, and

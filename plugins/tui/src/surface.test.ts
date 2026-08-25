@@ -1279,6 +1279,42 @@ describe("an open Run", () => {
     expect(stopped).toBe(true)
   })
 
+  /**
+   * A row taken from the panel is a line like any other, so it goes through
+   * the same fold. It did not, once: taking a row while a Run was open
+   * forked a second Run over the first and lost the fiber holding it, so
+   * nothing could interrupt it and its close named a Run the loop was no
+   * longer holding.
+   */
+  it("holds a row taken from the palette until the open Run closes", async () => {
+    const ran: string[] = []
+    const rows: readonly CommandInfo[] = [
+      { id: "deploy", description: "x", run: () => Effect.sync(() => void ran.push("deploy")) },
+    ]
+
+    const found = await withSurface(rows, async (fake, spy) => {
+      const running = spy.hold()
+      fake.press("first")
+      await settle()
+
+      fake.key({ key: "k", ctrl: true })
+      await settle()
+      fake.key({ key: "return" })
+      await settle()
+
+      const during = [...ran]
+      running.release()
+      await settle()
+      return { during, after: [...ran], submitted: spy.submitted }
+    })
+
+    // The row waited behind the open Run rather than running over it.
+    expect(found.during).toEqual([])
+    expect(found.after).toEqual(["deploy"])
+    // And no second Run was opened on top of the first.
+    expect(found.submitted).toEqual([{ kind: "prompt", text: "first" }])
+  })
+
   // A line typed during a Run waits its turn rather than racing it.
   it("runs a line typed during a Run after the Run closes", async () => {
     const submitted = await withSurface([], async (fake, spy) => {
