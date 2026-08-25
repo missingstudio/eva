@@ -1,5 +1,6 @@
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { buildLine } from "./build.js"
+import { sessionHref } from "./paths.js"
 import { useSessions } from "./sessions.js"
 
 /**
@@ -7,10 +8,16 @@ import { useSessions } from "./sessions.js"
  * that has heard nothing has none — and it is named by its id rather than
  * left off the page, because a Session a person cannot see is one they cannot
  * open.
+ *
+ * A plain anchor, so the listing is provable without a router standing behind
+ * it. `eva.web` answers a path with no extension with the page, so the route
+ * is resolved on the load the anchor makes.
  */
 const Row = ({ session }: { readonly session: SessionHeader }) => (
   <li>
-    <span className="title">{session.title ?? "no title yet"}</span>
+    <a className="title" href={sessionHref(session.id)}>
+      {session.title ?? "no title yet"}
+    </a>
     <code>{session.id}</code>
     {session.updatedAt === undefined ? null : (
       <time dateTime={session.updatedAt}>{session.updatedAt}</time>

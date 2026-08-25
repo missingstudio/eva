@@ -77,3 +77,96 @@ code {
   color: var(--quiet);
   font-size: 0.85rem;
 }
+
+.turns {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+
+.turn {
+  border-left: 2px solid color-mix(in srgb, var(--quiet) 40%, transparent);
+  margin: 0 0 1.25rem;
+  padding: 0 0 0 0.9rem;
+}
+
+.turn.human {
+  border-left-color: var(--ink);
+}
+
+.author {
+  color: var(--quiet);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.words {
+  white-space: pre-wrap;
+}
+
+.reasoning {
+  color: var(--quiet);
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+.call,
+.diff,
+.image,
+.undrawn {
+  border: 1px solid color-mix(in srgb, var(--quiet) 30%, transparent);
+  border-radius: 0.35rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.7rem;
+}
+
+.call {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.call .tool,
+.call .status,
+.diff figcaption,
+.image figcaption {
+  color: var(--quiet);
+  font-size: 0.85rem;
+}
+
+/* A Disposition says how a call ended, so it is the one word that carries
+   weight: denied and failed are not statuses a reader may skim past. */
+.call .disposition {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.image img {
+  display: block;
+  max-width: 100%;
+}
+
+.undrawn {
+  border-style: dashed;
+  color: var(--quiet);
+}
+
+.cost {
+  border-top: 1px solid color-mix(in srgb, var(--quiet) 30%, transparent);
+  display: grid;
+  gap: 0 0.75rem;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  margin: 2rem 0 0;
+  padding: 0.75rem 0 0;
+}
+
+.cost dt {
+  color: var(--quiet);
+  font-size: 0.85rem;
+}
+
+.cost dd {
+  margin: 0;
+}
