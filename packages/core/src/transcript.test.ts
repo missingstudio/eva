@@ -51,6 +51,18 @@ describe("a Transcript", () => {
       foldTranscript(session, own).messages(),
     )
   })
+
+  /**
+   * The record, beside the fold of it. A Surface across a socket is sent
+   * this and folds it on its own side, so what it draws is a fold it can
+   * check rather than one it has to believe.
+   */
+  it("hands back the Trace it read, and only this session's part of it", () => {
+    const own = events.filter((event) => event.session === session)
+    const transcript = foldTranscript(session, events)
+    expect(transcript.events()).toEqual(own)
+    expect(transcript.events()).not.toBe(transcript.events())
+  })
 })
 
 describe("where a fold ends", () => {
