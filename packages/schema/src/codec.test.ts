@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { CodecError, decode, decodeLine, encode, encodeLine } from "./codec.js"
+import {
+  CodecError,
+  decode,
+  decodeLine,
+  decodePayload,
+  decodePayloadLine,
+  encode,
+  encodeLine,
+  encodePayload,
+  encodePayloadLine,
+} from "./codec.js"
 import { SCHEMA_VERSION, type Event } from "./event.js"
 import { eventID, runID, sessionID } from "./id.js"
 import type { Payload } from "./payload.js"
@@ -140,6 +150,59 @@ describe("encode", () => {
     for (const payload of Object.values(samples())) {
       const line = encodeLine(wrap(payload))
       expect(encodeLine(decodeLine(line))).toBe(line)
+    }
+  })
+})
+
+/**
+ * The same codec, one layer in. `watch` hands back payloads and no envelope,
+ * so a stream travels as this shape — and it is the same body table, so a
+ * kind either half can read is a kind both halves can read.
+ */
+describe("a payload with no envelope over it", () => {
+  it("round-trips every sample field for field", () => {
+    for (const payload of Object.values(samples())) {
+      expect(decodePayloadLine(encodePayloadLine(payload))).toEqual(payload)
+    }
+  })
+
+  // The same degradation the envelope carries: a reader that knows less than
+  // the writer says so, and holds what arrived rather than dropping it.
+  it("preserves an unrecognized kind as unknown, and sends it back as it came", () => {
+    const wire = { version: SCHEMA_VERSION, kind: "acp/party_mode", payload: { confetti: true } }
+    const payload = decodePayload(wire)
+
+    expect(payload).toEqual({
+      kind: "unknown",
+      originalKind: "acp/party_mode",
+      raw: { confetti: true },
+    })
+    expect(encodePayload(payload)).toEqual(wire)
+  })
+
+  it("refuses a known kind with a malformed body", () => {
+    expect(() =>
+      decodePayload({ version: SCHEMA_VERSION, kind: "text", payload: { nonsense: true } }),
+    ).toThrow(CodecError)
+  })
+
+  // A body's shape is the schema's, whether or not an envelope is carrying it.
+  it("refuses any version but its own", () => {
+    expect(() => decodePayload({ version: 2, kind: "text", payload: {} })).toThrow(
+      /unsupported schema version 2/,
+    )
+  })
+
+  it("refuses a frame that is not one", () => {
+    expect(() => decodePayloadLine("not json")).toThrow(CodecError)
+    expect(() => decodePayload({ kind: "text" })).toThrow(CodecError)
+  })
+
+  // One codec, at two granularities. A payload read through the envelope and
+  // the same payload read on its own are the same value.
+  it("agrees with the envelope about every sample", () => {
+    for (const payload of Object.values(samples())) {
+      expect(decodePayload(encodePayload(payload))).toEqual(decode(encode(wrap(payload))).payload)
     }
   })
 })
