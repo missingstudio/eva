@@ -9,7 +9,7 @@ export class NoWebSurfaceError extends Error {
   constructor(known: readonly string[]) {
     super(
       known.length === 0
-        ? `no surface is registered, so ${WEB_SURFACE} has nothing to serve`
+        ? "no surface is registered, so nothing serves the page"
         : `no ${WEB_SURFACE} surface is registered; this build has ${known.join(", ")}`,
     )
   }

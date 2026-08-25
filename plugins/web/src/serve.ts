@@ -20,8 +20,9 @@ export interface Bind {
 export interface Serve {
   /**
    * Where the built page is. `eva.web` serves assets it did not build, so
-   * this is a directory and not a bundle, and it is read on each request: a
-   * build that ran after the surface started is served without a restart.
+   * this is a directory and not a bundle, and the tree under it is read on
+   * each request: a build that ran after the surface started is served, and
+   * no restart is needed to see it.
    */
   readonly root: string
   readonly bind: Bind
