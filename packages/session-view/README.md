@@ -14,7 +14,8 @@ maps Blocks to its own primitives and decides nothing else.
 `unknown` is the degradation rule the harness seam already uses, pointed at
 renderers. A Surface may render less than another; it may never know more. So
 a content kind no other member covers folds to `unknown` and says what it was,
-rather than falling out of the transcript.
+rather than falling out of the transcript. A payload kind the schema does not
+define folds there too, from the transcript fold that kept it.
 
 This package holds no renderer and registers into nothing: it imports the
 record contracts and nothing that draws. The glossary in
