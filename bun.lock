@@ -85,6 +85,19 @@
         "typescript": "catalog:",
       },
     },
+    "packages/client-runtime": {
+      "name": "@missingstudio/eva-client-runtime",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/conformance": {
       "name": "@missingstudio/eva-conformance",
       "version": "0.0.0",
@@ -604,6 +617,8 @@
     "@missingstudio/eva-catalog-models": ["@missingstudio/eva-catalog-models@workspace:plugins/catalog-models"],
 
     "@missingstudio/eva-catalog-prices": ["@missingstudio/eva-catalog-prices@workspace:plugins/catalog-prices"],
+
+    "@missingstudio/eva-client-runtime": ["@missingstudio/eva-client-runtime@workspace:packages/client-runtime"],
 
     "@missingstudio/eva-commands": ["@missingstudio/eva-commands@workspace:plugins/commands"],
 

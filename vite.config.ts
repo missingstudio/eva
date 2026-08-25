@@ -74,6 +74,14 @@ export default defineConfig({
         ["@missingstudio/eva-schema"],
         "tui-core imports schema only",
       ),
+      // Every non-visual client concern, so a terminal, a web page, and a
+      // phone differ only in platform and pixels. It holds what the server
+      // needs to hear about, and no pixels: no renderer import, ever.
+      layer(
+        ["packages/client-runtime/**"],
+        ["@missingstudio/eva-schema", "@missingstudio/eva-core"],
+        "the client runtime imports schema and core only",
+      ),
       // The kernel and the sdk are siblings, and boot is where they meet:
       // it assembles the extension points the kernel runs and the sdk
       // declares. It knows no plugin, so every app can call it.

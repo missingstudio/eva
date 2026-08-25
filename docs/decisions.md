@@ -443,6 +443,21 @@ plugin that speaks HTTP to `eva.api`, calling the same `SessionAPI` methods.
 _Rejected:_ the Go tree's direct/remote pair. `Transport` is kept for the
 harness seam, where a harness genuinely is reached two ways.
 
+**The order a surface calls the Session API in is a protocol, and it has one
+home.** The terminal and the print path each wrote it, and disagreed: one
+stopped its drain on a bound, the other waited on a close that a watcher which
+subscribed too late never hears. A third surface would have copied one of them,
+and copied whichever race it held. `packages/client-runtime` holds it once —
+subscribe, submit, drain in a bound, fold — and the bounded stop is the
+direction it settles on.
+
+**The client runtime holds what the server needs to hear about, and no
+pixels.** It imports the contracts and nothing that draws, so the same package
+serves a terminal, a web page and a phone. It takes one domain at a time, when
+a real consumer needs one; today that is the Run. _Rejected:_ a cached read
+model per domain up front — nothing reads one yet, and the record folds on
+demand.
+
 **Remote-ready is three constraints on the two surface contracts, not a
 feature.** Everything in them serializes, local facts stay out, and
 reconnection is by `Cursor`. Hold them from the first surface; retrofitting
