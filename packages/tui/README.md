@@ -68,6 +68,14 @@ paste as the Renderer's own word, so it never reaches the keymap.
 `statusLine`, `workLine`, `caret`, `panelWindow` — so the two renderers
 cannot disagree. `paletteFrom` says how a theme paints the transcript.
 
+What a Run did is not decided here. `toGroups` and `toLines` map the Blocks of
+[`@missingstudio/eva-session-view`](../session-view/README.md) to terminal
+rows and decide nothing else, because a terminal with a fold of its own would
+be a second answer to what a Run did — and a person comparing the screen with
+the page would find the disagreement. A row is a line of text, so the screen
+draws fewer of the Blocks than a page draws: that is a renderer that renders
+less, not one that knows less.
+
 ## API
 
 - `start(options?)` — returns a `ChosenRenderer`: the renderer this runtime
@@ -81,7 +89,9 @@ cannot disagree. `paletteFrom` says how a theme paints the transcript.
 - `paletteFrom(colors)`, `DEFAULT_PALETTE`, `Palette` — how a theme paints
   the transcript.
 - The chrome spellings from `frame.ts`: `bannerRows`, `statusLine`,
-  `workLine`, `caret`, `panelWindow`, `toLines`, and their shapes.
+  `workLine`, `caret`, `panelWindow`, and their shapes.
+- `toGroups(frame)`, `toLines(frame)`, `Group`, `Line` — the Blocks of the
+  session view as the rows this terminal draws.
 
 `makeOpenTuiRenderer` is not exported from the index: it lives behind the
 dynamic import in `renderer.tsx`, which is what keeps the native chunk out of
@@ -93,8 +103,10 @@ Tests live beside the sources: [src/index.test.ts](src/index.test.ts) holds
 the choosing rules, [src/renderer-contract.test.ts](src/renderer-contract.test.ts)
 runs the Renderer contract against both adapters, and
 [src/stream.test.ts](src/stream.test.ts), [src/frame.test.ts](src/frame.test.ts),
-and [src/keys.test.ts](src/keys.test.ts) hold the rest. Run the suite from
-the repository root:
+and [src/keys.test.ts](src/keys.test.ts) hold the rest.
+[src/session-view.test.ts](src/session-view.test.ts) counts the folds that
+decide what a Run did: it is one, and it is not in this package. Run the suite
+from the repository root:
 
 ```bash
 bun run test
