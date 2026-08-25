@@ -11,7 +11,7 @@ import { blocksOf } from "@missingstudio/eva-session-view"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 import { Page } from "./page.js"
-import { Cost, Named, Session, type Folded } from "./session.js"
+import { Cost, Live, Named, Session, type Folded, type Reading } from "./session.js"
 
 const SESSION = sessionID("ses_one")
 
@@ -45,6 +45,10 @@ const read = (): Folded => {
   return { kind: "folded", at: record.at, turns: blocksOf(record), cost: record.cost() }
 }
 
+const folding: Reading = { folded: { kind: "folding" }, said: "" }
+
+const reading = (said = ""): Reading => ({ folded: read(), said })
+
 const EMPTY_COST: CostSummary = {
   inputTokens: null,
   outputTokens: null,
@@ -65,19 +69,19 @@ describe("which Session this is", () => {
    */
   it("renders whole before the fold has arrived", () => {
     const named = renderToStaticMarkup(<Named session={SESSION} header={HEADER} />)
-    const folding = renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} folded={{ kind: "folding" }} />,
+    const drawn = renderToStaticMarkup(
+      <Session session={SESSION} header={HEADER} reading={folding} />,
     )
 
-    expect(folding).toContain(named)
-    expect(folding).toContain("Reading the transcript")
+    expect(drawn).toContain(named)
+    expect(drawn).toContain("Reading the transcript")
   })
 
   // A long Session says which Session it is at once. The title is a Run's to
   // say and arrives with the listing, so the id is what stands in for it.
   it("names the Session by its id before the listing has answered", () => {
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={undefined} folded={{ kind: "folding" }} />,
+      <Session session={SESSION} header={undefined} reading={folding} />,
     )
 
     expect(drawn).toContain(SESSION)
@@ -86,7 +90,7 @@ describe("which Session this is", () => {
 
   it("names the title and when it last moved, once the listing has answered", () => {
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} folded={{ kind: "folding" }} />,
+      <Session session={SESSION} header={HEADER} reading={folding} />,
     )
 
     expect(drawn).toContain("read the trace back over HTTP")
@@ -97,12 +101,51 @@ describe("which Session this is", () => {
 describe("what was said in it", () => {
   it("draws the Blocks the fold gave back", () => {
     const drawn = renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} folded={read()} />,
+      <Session session={SESSION} header={HEADER} reading={reading()} />,
     )
 
     expect(drawn).toContain("change it")
     expect(drawn).toContain("one.ts")
     expect(drawn).toContain("2 hunks")
+  })
+})
+
+/**
+ * The stream and the record are two sources and the page never confuses them,
+ * which is the rule `Frame` keeps for the terminal. So the tail stands after
+ * the fold, on its own, and it is gone the moment the fold has it.
+ */
+describe("the live tail", () => {
+  it("renders after the committed fold", () => {
+    const drawn = renderToStaticMarkup(
+      <Session session={SESSION} header={HEADER} reading={reading("half a wo")} />,
+    )
+
+    expect(drawn).toContain("half a wo")
+    expect(drawn.indexOf("half a wo")).toBeGreaterThan(drawn.indexOf("change it"))
+  })
+
+  // And before the cost, because the cost is the record's and the tail is not
+  // in the record yet.
+  it("stands between what was folded and what it cost", () => {
+    const drawn = renderToStaticMarkup(
+      <Session session={SESSION} header={HEADER} reading={reading("half a wo")} />,
+    )
+
+    expect(drawn.indexOf("half a wo")).toBeLessThan(drawn.indexOf("tokens in"))
+  })
+
+  /**
+   * A Run that has said nothing and a Run that is not open are the same thing
+   * to a reader, and both are nothing. An empty tail that drew a box would
+   * read as a Run waiting on something.
+   */
+  it("draws nothing at all when the open Run has said nothing", () => {
+    expect(renderToStaticMarkup(<Live said="" />)).toBe("")
+  })
+
+  it("draws what the open Run has streamed, and nothing around it", () => {
+    expect(renderToStaticMarkup(<Live said="a partial" />)).toContain("a partial")
   })
 })
 
@@ -161,7 +204,7 @@ describe("what the page offers", () => {
     "no %s, on the Session or the listing",
     (control) => {
       expect(
-        renderToStaticMarkup(<Session session={SESSION} header={HEADER} folded={read()} />),
+        renderToStaticMarkup(<Session session={SESSION} header={HEADER} reading={reading()} />),
       ).not.toContain(control)
       expect(renderToStaticMarkup(<Page />)).not.toContain(control)
     },
