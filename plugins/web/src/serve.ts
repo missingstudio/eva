@@ -4,18 +4,9 @@ import type { AddressInfo } from "node:net"
 import type { Frontend } from "@missingstudio/eva-sdk"
 import { Effect, Scope } from "effect"
 import { assetFor, hasPage, mediaType, unbuilt } from "./assets.js"
+import { refusal, type Bind } from "./bind.js"
 
 export const WEB_SURFACE = "eva.web"
-
-// A local page binds to loopback. The port is the one the roadmap's own
-// demo block prints, so what a reader typed is what the demo showed.
-export const DEFAULT_HOST = "127.0.0.1"
-export const DEFAULT_PORT = 7777
-
-export interface Bind {
-  readonly host: string
-  readonly port: number
-}
 
 export interface Serve {
   /**
@@ -90,8 +81,24 @@ const frontendOf = (done: Effect.Effect<void>): Frontend => ({
  */
 export const serveWeb = Effect.fn(WEB_SURFACE)(function* (options: Serve) {
   const scope = yield* Effect.scope
-  const server = createServer(answer(options.root))
   const say = options.write ?? (() => undefined)
+
+  /**
+   * Refused before a server exists, so this plugin has no path that serves a
+   * non-local bind. `apps/cli` refuses the same bind before it boots and that
+   * is where the non-zero exit comes from; here is the one place a socket is
+   * opened, so it is where the rule holds for every other caller.
+   *
+   * The refusal is said and nothing is served. A warning above a running
+   * server is an unauthenticated server with a note on it.
+   */
+  const refused = refusal(options.bind.host)
+  if (refused !== undefined) {
+    say(`${refused}\n`)
+    return frontendOf(Effect.void)
+  }
+
+  const server = createServer(answer(options.root))
 
   const bound = yield* Effect.callback<AddressInfo | Error>((resume) => {
     server.once("error", (cause) => resume(Effect.succeed(cause)))

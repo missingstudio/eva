@@ -1,0 +1,55 @@
+import { isIPv4 } from "node:net"
+
+// A local page binds to loopback. The port is the one the roadmap's own
+// demo block prints, so what a reader typed is what the demo showed.
+export const DEFAULT_HOST = "127.0.0.1"
+export const DEFAULT_PORT = 7777
+
+export interface Bind {
+  readonly host: string
+  readonly port: number
+}
+
+// The names that mean this machine and nothing else. `localhost` is here
+// because a person types it, and `::1` because it is the IPv6 loopback.
+const LOOPBACK: ReadonlySet<string> = new Set(["localhost", "::1"])
+
+// The prefix that writes an IPv4 address in the other family's spelling.
+const MAPPED = "::ffff:"
+
+/**
+ * Whether a bind reaches this machine only.
+ *
+ * The whole of 127.0.0.0/8 is loopback and not its first address alone, so an
+ * alias like 127.0.0.2 is this machine as much as 127.0.0.1 is. A spelling
+ * this does not know is treated as remote: a refusal that names the reason
+ * costs a person one flag, and a page served to a network costs more.
+ *
+ * `0.0.0.0` and `::` are the addresses this exists for. They are every
+ * interface the machine has, and an empty host is the same bind by omission —
+ * `listen` reads it as none given.
+ */
+export const isLocal = (host: string): boolean => {
+  const asked = host.trim().toLowerCase()
+  const address = asked.startsWith(MAPPED) ? asked.slice(MAPPED.length) : asked
+  return LOOPBACK.has(address) || (isIPv4(address) && address.startsWith("127."))
+}
+
+const REFUSED = "refused: a non-local bind needs a token, and tokens arrive at 9b"
+
+/**
+ * Why this bind is refused, or nothing when it is local. A remote page needs a
+ * token and stage 9b is what issues one, so until 9b exists a non-local bind
+ * is refused rather than served unauthenticated. The message names the stage,
+ * because a door that opens later is not a defect.
+ *
+ * The posture is not an argument: `hosted` is a tenancy and not a token, so it
+ * opens no door in W1 either.
+ *
+ * The rule is this plugin's and the exit code is the app's. `SurfaceInfo.start`
+ * has `never` in its error channel, so a refusal cannot come out of the row —
+ * `apps/cli` calls this before it boots, and `serveWeb` calls it before it
+ * creates a server, so no path serves a bind this refuses.
+ */
+export const refusal = (host: string = DEFAULT_HOST): string | undefined =>
+  isLocal(host) ? undefined : REFUSED
