@@ -76,12 +76,20 @@ process — sits in its own `describe` below the shared one.
 | `sink-contract.test.ts`      | Every TraceSink against one contract                                                       |
 | `swap.test.ts`               | A Slot hot-swaps mid-Run; a missing capability degrades rather than fails                  |
 | `tui.test.ts`                | The shipped bindings against the surface, the shipped theme against the renderer's palette |
+| `session-view.test.tsx`      | The terminal's mapping and the page's, over one fold of one Trace                          |
 
 The two suites that gate Stage 1's exit live in
 `workflow-validator.test.ts`: a refused Candidate repairs exactly once, with
 both verdicts in the Trace and the repair Instruction naming every Fault; and
 a build without `eva.validator` reports `unchecked` and a `degraded` record
 rather than inventing a validity rate.
+
+`session-view.test.tsx` holds two renderers rather than two plugins, and the
+rule is the same one: the terminal is a package and the page is an app, so
+neither can reach the other. The two draw different amounts on purpose, so
+they are compared over the record facts each drawing names — the page names
+every fact of every Block, and whatever the terminal names is a fact the same
+Block holds and the page names too.
 
 ## What it does not do
 
@@ -97,8 +105,8 @@ adapters to one contract is the job that needs several plugins at once.
 
 ## Development
 
-The tests are the package: the eight suites in [src/](src/). Run them from
-the repository root:
+The tests are the package: the suites in [src/](src/). Run them from the
+repository root:
 
 ```bash
 bun run test
