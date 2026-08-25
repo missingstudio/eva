@@ -211,6 +211,18 @@
         "typescript": "catalog:",
       },
     },
+    "packages/session-view": {
+      "name": "@missingstudio/eva-session-view",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/testkit": {
       "name": "@missingstudio/eva-testkit",
       "version": "0.0.0",
@@ -230,6 +242,7 @@
       "name": "@missingstudio/eva-tui",
       "version": "0.0.0",
       "dependencies": {
+        "@missingstudio/eva-session-view": "workspace:*",
         "@missingstudio/eva-tui-core": "workspace:*",
         "@opentui/core": "0.5.3",
         "@opentui/react": "0.5.3",
@@ -656,6 +669,8 @@
     "@missingstudio/eva-sdk": ["@missingstudio/eva-sdk@workspace:packages/sdk"],
 
     "@missingstudio/eva-session-jsonl": ["@missingstudio/eva-session-jsonl@workspace:plugins/session-jsonl"],
+
+    "@missingstudio/eva-session-view": ["@missingstudio/eva-session-view@workspace:packages/session-view"],
 
     "@missingstudio/eva-testkit": ["@missingstudio/eva-testkit@workspace:packages/testkit"],
 

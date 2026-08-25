@@ -1,3 +1,4 @@
+import { blockFold, type Block } from "@missingstudio/eva-session-view"
 import type { Frame, Overlay, OverlayRow } from "@missingstudio/eva-tui-core"
 
 export interface Line {
@@ -172,29 +173,46 @@ export const panelWindow = (overlay: Overlay, limit = PANEL_ROWS): PanelWindow =
 }
 
 /**
+ * One Block as terminal rows. What the Run did is settled before this is
+ * called — the fold in `session-view` settled it — so all this decides is
+ * what a row looks like.
+ *
+ * A row is a line of text, and an image is not one. So the screen draws
+ * fewer of the Blocks than a page draws, which is a renderer that renders
+ * less rather than one that knows less: the Block is still on the fold for
+ * a renderer that can draw it.
+ */
+const rowsOf = (block: Block, author: Group["kind"]): readonly Line[] => {
+  const key = block.key
+  switch (block.kind) {
+    case "words":
+      return [{ key, text: block.text, kind: author }]
+    case "reasoning":
+      return [{ key, text: block.text, kind: "thought" }]
+    case "tool":
+      return [{ key, text: `${block.name} ${block.status}`, kind: "tool" }]
+    // A call that has been answered says how it ended. A status alone reads
+    // as a call that worked, and `denied` is not that.
+    case "result":
+      return [{ key, text: `${block.name} ${block.status} ${block.disposition}`, kind: "tool" }]
+    case "diff":
+      return [{ key, text: `edit ${block.path}`, kind: "tool" }]
+    case "image":
+    case "unknown":
+      return []
+  }
+}
+
+/**
  * The transcript as drawable turns. A message is one author speaking, so the
  * author is carried down rather than recovered from the text.
  */
 export const toGroups = (frame: Frame): readonly Group[] => {
   const out: Group[] = []
-  for (const [index, message] of frame.session.entries()) {
-    const kind = message.author
-    const lines: Line[] = []
-    for (const [at, block] of message.blocks.entries()) {
-      const key = `${index}.${at}`
-      if (block.type === "tool") {
-        lines.push({ key, text: `${block.name} ${block.status}`, kind: "tool" })
-        continue
-      }
-
-      if (block.content.type !== "text") continue
-      lines.push({
-        key,
-        text: block.content.text,
-        kind: block.type === "thought" ? "thought" : kind,
-      })
-    }
-    if (lines.length > 0) out.push({ key: `${index}`, kind, lines, note: "" })
+  for (const turn of blockFold(frame.session)) {
+    const kind = turn.author
+    const lines = turn.blocks.flatMap((block) => rowsOf(block, kind))
+    if (lines.length > 0) out.push({ key: turn.key, kind, lines, note: "" })
   }
 
   // The timing belongs to the turn the Run produced, which is the last one.

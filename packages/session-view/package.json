@@ -1,5 +1,5 @@
 {
-  "name": "@missingstudio/eva-tui",
+  "name": "@missingstudio/eva-session-view",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -18,15 +18,11 @@
     "pack": "vp pack"
   },
   "dependencies": {
-    "@missingstudio/eva-session-view": "workspace:*",
-    "@missingstudio/eva-tui-core": "workspace:*",
-    "@opentui/core": "0.5.3",
-    "@opentui/react": "0.5.3",
-    "react": "19.2.8"
+    "@missingstudio/eva-core": "workspace:*",
+    "@missingstudio/eva-schema": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@types/react": "19.2.18",
     "typescript": "catalog:"
   }
 }

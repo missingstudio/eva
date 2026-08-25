@@ -68,6 +68,35 @@ describe("toLines", () => {
     expect(lines[0]).toMatchObject({ kind: "tool", text: "read completed" })
   })
 
+  // A call that has been answered says how it ended. A Tool Status alone
+  // reads as a call that worked, and `denied` is not that.
+  it("draws an answered call with its disposition", () => {
+    const lines = toLines(
+      frameOf([
+        message("agent", [
+          {
+            type: "tool",
+            id: "t1",
+            name: "write",
+            tool: "edit",
+            status: "failed",
+            disposition: "denied",
+          },
+        ]),
+      ]),
+    )
+    expect(lines[0]).toMatchObject({ kind: "tool", text: "write failed denied" })
+  })
+
+  // A file the Run changed is something the Run did. It used to fall out of
+  // the record fold before the terminal could ever draw it.
+  it("draws an edit as the file it changed", () => {
+    const lines = toLines(
+      frameOf([message("agent", [{ type: "edit", path: "docs/one.md", hunks: 2 }])]),
+    )
+    expect(lines[0]).toMatchObject({ kind: "tool", text: "edit docs/one.md" })
+  })
+
   it("passes over content that is not text", () => {
     const lines = toLines(
       frameOf([

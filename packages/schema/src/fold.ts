@@ -212,6 +212,13 @@ export type TranscriptBlock =
       readonly status: ToolStatus
       readonly disposition?: Disposition
     }
+  /**
+   * A file the Run changed: the path, and how many hunks changed in it. That
+   * is the whole of what the record holds, so that is the whole of what this
+   * carries — the hunk text arrives when the edit tools ship, and this block
+   * does not change shape when it does.
+   */
+  | { readonly type: "edit"; readonly path: string; readonly hunks: number }
 
 export interface TranscriptMessage {
   readonly author: ActorKind
@@ -304,6 +311,12 @@ export const transcriptFold = (events: readonly Event[]): readonly TranscriptMes
         }
         break
       }
+      // A file the Run changed is something the Run did, so the turn says
+      // so. A reader who cannot see it reads a transcript that leaves the
+      // work out.
+      case "edit":
+        agentTail().blocks.push({ type: "edit", path: payload.path, hunks: payload.hunks })
+        break
       default:
         break
     }

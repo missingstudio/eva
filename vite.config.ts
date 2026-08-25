@@ -94,6 +94,14 @@ export default defineConfig({
         ["@missingstudio/eva-schema", "@missingstudio/eva-core"],
         "the client runtime imports schema and core only",
       ),
+      // The one fold that decides what a Run did. It reads the record and
+      // nothing that draws: a fold that named a renderer would be a fold
+      // with a favourite surface.
+      layer(
+        ["packages/session-view/**"],
+        ["@missingstudio/eva-schema", "@missingstudio/eva-core"],
+        "the session view imports schema and core only — never a renderer",
+      ),
       // The kernel and the sdk are siblings, and boot is where they meet:
       // it assembles the extension points the kernel runs and the sdk
       // declares. It knows no plugin, so every app can call it.
@@ -163,10 +171,13 @@ export default defineConfig({
       // The terminal draws the contracts and knows nothing else about Eva.
       // It is the only package that may name OpenTUI, and the plugin layer
       // above has no import for it, so a surface can never pull FFI in.
+      // It names the session view because that is where the one fold over
+      // the record lives; a terminal with a fold of its own would be a
+      // second answer to what a Run did.
       layer(
         ["packages/tui/**"],
-        ["@missingstudio/eva-tui-core"],
-        "the terminal imports tui-core only",
+        ["@missingstudio/eva-tui-core", "@missingstudio/eva-session-view"],
+        "the terminal imports tui-core and the session view only",
       ),
       // apps/* has no import rule on purpose: an app is the composition
       // root, and composing is the one job that needs every layer at once.

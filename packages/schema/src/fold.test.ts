@@ -309,6 +309,14 @@ describe("transcriptFold", () => {
   it("keeps a verdict out of the transcript", () => {
     expect(transcriptFold([make(samples().verdict)])).toEqual([])
   })
+
+  // A file the Run changed is. The record holds a path and a count of hunks,
+  // so that is what the turn carries.
+  it("carries an edit as a block of the agent's turn", () => {
+    const messages = transcriptFold([make(text("changing it")), make(samples().edit)])
+    expect(messages).toHaveLength(1)
+    expect(messages[0]!.blocks[1]).toEqual({ type: "edit", path: "src/index.ts", hunks: 2 })
+  })
 })
 
 const verdict = (
