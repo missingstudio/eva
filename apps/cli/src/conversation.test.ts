@@ -11,7 +11,7 @@ import { providing, scripted, withKernel } from "@missingstudio/eva-testkit"
 import type { Plugin } from "@missingstudio/eva-sdk"
 import { makeSessionAPI } from "@missingstudio/eva-boot"
 import { localTransport, makeClient, type Client } from "@missingstudio/eva-client-runtime"
-import { runPrint } from "./run.js"
+import { runPrint } from "@missingstudio/eva-print"
 
 const SESSION = sessionID("sess_conversation")
 const FAKE_MODEL: ModelRef = { provider: "fake", model: "model" }

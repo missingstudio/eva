@@ -583,6 +583,23 @@ Until this, `Client.state` was read by no shipped code and a drop cost the
 terminal one silent repaint: the words rewrote themselves, coarser, with
 nothing to say why.
 
+**The print surface holds the Run it prints.** `runPrint` sat in the command
+line beside config resolution and signal handling, while the row that declares
+`eva.print` sat in the plugin. A surface's row and what that surface does are
+one thing, and the next non-terminal surface should copy a plugin rather than
+a composition root. The plugin names no terminal, so a pipe still never loads
+the native chunk, and a grep says so.
+
+**`--print` is not `SurfaceInfo.start`, and widening the seam for it is not
+worth it.** `start` hands a surface a Client and nothing else; a print run is
+opened by a flag carrying a Prompt, and it answers with a Claim the command
+line turns into an exit code. Carrying either would change a contract two
+surfaces already keep, on behalf of one that reads its input from argv. The
+row declares what the surface is — `interactive: false`, and so never picked
+to run interactively — and the composition root opens the Run. _Reopen this_
+when a second non-terminal surface wants to be started by the Domain rather
+than by a flag; one is not evidence.
+
 **Remote-ready is three constraints on the two surface contracts, not a
 feature.** Everything in them serializes, local facts stay out, and
 reconnection is by `Cursor`. Hold them from the first surface; retrofitting

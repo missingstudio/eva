@@ -10,8 +10,7 @@ import {
   type Overlays,
   type Resolution,
 } from "@missingstudio/eva-kernel"
-import { costLine } from "@missingstudio/eva-print"
-import type { Claim, SessionID } from "@missingstudio/eva-schema"
+import type { Claim } from "@missingstudio/eva-schema"
 import type { Domains } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Scope, Stream } from "effect"
 import { BUILD, BUILT_IN_IDS, entriesOf, readsOf, uncarriedOf } from "./plugins.js"
@@ -145,60 +144,6 @@ export const start = Effect.fn("cli.start")(function* (
   world: World,
 ) {
   return yield* startFrom(scope, yield* resolveConfig(overlays, world))
-})
-
-export interface PrintResult {
-  readonly claim: Claim
-  readonly session: SessionID
-  readonly costLine: string
-}
-
-/**
- * One Run, printed, over the Session API like every other surface. The
- * stream is only what the reader sees; the claim and the cost come from
- * the record.
- */
-export interface PrintOptions {
-  // Continue an existing Session rather than opening a new one. The prior
-  // Runs are folded back in as history, so the conversation carries.
-  readonly session?: SessionID
-  // The directory the new Session belongs to.
-  readonly location?: string
-  readonly write?: (text: string) => void
-}
-
-export const runPrint = Effect.fn("cli.runPrint")(function* (
-  client: Client,
-  prompt: string,
-  options: PrintOptions = {},
-) {
-  const write = options.write ?? ((text: string) => void process.stdout.write(text))
-  const session = options.session ?? (yield* client.api.create(options.location ?? process.cwd()))
-
-  // The runtime owns the Run, the cancel on interrupt included. The stream is
-  // only what the reader sees as it is said; what the Run answered and what
-  // it spent are both read off what the runtime gives back.
-  const { transcript, answer } = yield* client.run(
-    session,
-    { kind: "prompt", text: prompt },
-    (one) => {
-      // A pipe's connection is the process, and the local filler it runs on
-      // never drops, so nothing here is ever refolded. The union is total, so
-      // the compiler says when that stops being true.
-      if (one.kind !== "payload") return
-
-      const { payload } = one
-      if (payload.kind === "text" && payload.content.type === "text") {
-        write(payload.content.text)
-      }
-    },
-  )
-
-  const claim: Claim = answer.claim ?? {
-    result: "failed",
-    summary: "the Run closed without a claim",
-  }
-  return { claim, session, costLine: costLine(transcript.cost()) } satisfies PrintResult
 })
 
 export interface HarnessResult {

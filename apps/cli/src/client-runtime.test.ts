@@ -61,3 +61,21 @@ describe("what reads the Session API", () => {
     expect(naming("kernel.slot", ["apps/cli/src", ...pluginSources()])).toEqual([])
   })
 })
+
+describe("what the print surface carries", () => {
+  /**
+   * The print path is imported by name, not lazily, so what it names is what
+   * a pipe loads. The terminal is reached by dynamic import for exactly this
+   * reason: its renderer is native code over Bun's FFI.
+   */
+  it("names no terminal, so a pipe never loads the native chunk", () => {
+    expect(naming("eva-tui", ["plugins/print/src"])).toEqual([])
+    expect(naming("opentui", ["plugins/print/src"])).toEqual([])
+  })
+
+  // The body sits beside the row that declares the surface, so the next
+  // non-terminal surface copies a plugin rather than the composition root.
+  it("holds the Run it prints, rather than leaving it in the command line", () => {
+    expect(naming("runPrint", ["apps/cli/src"])).toEqual(["apps/cli/src/index.ts"])
+  })
+})

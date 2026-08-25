@@ -3,6 +3,7 @@ import { Effect } from "effect"
 import { costLine } from "./cost-line.js"
 
 export * from "./cost-line.js"
+export * from "./run.js"
 
 export const PRINT_SURFACE = "eva.print"
 
