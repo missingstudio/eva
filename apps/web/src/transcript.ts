@@ -73,6 +73,31 @@ export const follow = (
   })
 
 /**
+ * Runs one read over the Client for as long as the component is drawn, and
+ * gives back what stops it. A read outlives a page that navigated away, so it
+ * is interrupted rather than left writing into a component nobody draws, and a
+ * Client that settles after the page has gone is dropped.
+ *
+ * A plain function and not a hook, so each caller keeps its own `useEffect`
+ * and its own dependencies.
+ */
+const whileDrawn = (over: (one: Client) => Effect.Effect<unknown>): (() => void) => {
+  let drawing = true
+  let stop: (() => void) | undefined
+
+  void client().then((one) => {
+    if (!drawing) return
+    const running = Effect.runFork(over(one))
+    stop = () => void Effect.runFork(Fiber.interrupt(running))
+  })
+
+  return () => {
+    drawing = false
+    stop?.()
+  }
+}
+
+/**
  * One Session, read and then followed. What the page holds is the committed
  * fold and the tail of the Run that is open, which is what `Frame` holds for
  * the terminal: two sources, never confused, and the fold is the one that
@@ -83,25 +108,9 @@ export const follow = (
 export const useTranscript = (session: SessionID): Reading => {
   const [reading, setReading] = useState<Reading>({ folded: { kind: "folding" }, said: "" })
 
-  useEffect(() => {
-    // The follow outlives a page that navigated away from it, so it is
-    // interrupted rather than left reading into a component nobody is drawing.
-    let drawing = true
-    let stop: (() => void) | undefined
-
-    void client().then((one) => {
-      if (!drawing) return
-      // Nothing is caught here. A refused Cursor and a pipe that went are both
-      // answered inside the follow, by folding fresh.
-      const following = Effect.runFork(follow(one, session, setReading))
-      stop = () => void Effect.runFork(Fiber.interrupt(following))
-    })
-
-    return () => {
-      drawing = false
-      stop?.()
-    }
-  }, [session])
+  // Nothing is caught here. A refused Cursor and a pipe that went are both
+  // answered inside the follow, by folding fresh.
+  useEffect(() => whileDrawn((one) => follow(one, session, setReading)), [session])
 
   return reading
 }
@@ -118,27 +127,17 @@ export const useTranscript = (session: SessionID): Reading => {
 export const usePipe = (): Pipe => {
   const [pipe, setPipe] = useState<Pipe>({ at: "ready", dropped: false })
 
-  useEffect(() => {
-    let drawing = true
-    let stop: (() => void) | undefined
-
-    void client().then((one) => {
-      if (!drawing) return
-      const watching = Effect.runFork(
+  useEffect(
+    () =>
+      whileDrawn((one) =>
         Stream.runForEach(SubscriptionRef.changes(one.state), (at) =>
           Effect.sync(() =>
             setPipe((was) => ({ at, dropped: was.dropped || at === "disconnected" })),
           ),
         ),
-      )
-      stop = () => void Effect.runFork(Fiber.interrupt(watching))
-    })
-
-    return () => {
-      drawing = false
-      stop?.()
-    }
-  }, [])
+      ),
+    [],
+  )
 
   return pipe
 }
