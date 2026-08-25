@@ -17,7 +17,7 @@ const imageSource = (mimeType: string, data: string): string => `data:${mimeType
  * what a reader sees.
  *
  * Every member is drawn, including the one this page has no primitive for.
- * A Surface may render less than another; it may never know less. So a Block
+ * A Surface may render less than another; it may never know more. So a Block
  * nothing here can draw says what it was and that it could not be drawn,
  * rather than leaving a hole a reader would read as nothing having happened.
  */
