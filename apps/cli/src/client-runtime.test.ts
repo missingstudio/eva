@@ -73,16 +73,18 @@ describe("what reads the Session API", () => {
  * fails rather than a habit.
  *
  * A page that went around the Client would have to reach the wire itself, so
- * the wire's own names are what this counts — and `SessionAPI` with them,
- * because a page that named one would be answering the contract rather than
- * calling it. `plugins/tui` holds to the same rule one directory over.
+ * the wire's own names are what this counts — every way a browser opens one,
+ * and `SessionAPI` with them, because a page that named one would be
+ * answering the contract rather than calling it. `plugins/tui` holds to the
+ * same rule one directory over.
  */
 describe("what the page reaches Eva through", () => {
-  it("names no wire and no Session API of its own", () => {
-    expect(naming("fetch(", ["apps/web/src"])).toEqual([])
-    expect(naming("EventSource", ["apps/web/src"])).toEqual([])
-    expect(naming("SessionAPI", ["apps/web/src"])).toEqual([])
-  })
+  it.each(["fetch(", "EventSource", "XMLHttpRequest", "WebSocket", "SessionAPI"])(
+    "names no %s of its own",
+    (word) => {
+      expect(naming(word, ["apps/web/src"])).toEqual([])
+    },
+  )
 
   /**
    * One Client, built at one site, and every other file on the page is handed
