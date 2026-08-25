@@ -192,6 +192,34 @@ void bodiesMatch
 
 const isKnownKind = (kind: string): kind is WireKind => kind in bodies
 
+/**
+ * One kind and its body, read as the union member they are. A kind no member
+ * covers is not a failure: it is what arrived, held whole, so a reader that
+ * knows less than the writer says so rather than dropping it.
+ */
+const bodyIn = (kind: string, body: unknown): Payload => {
+  if (!isKnownKind(kind)) return { kind: "unknown", originalKind: kind, raw: body }
+  const parsed = bodies[kind].safeParse(body)
+  if (!parsed.success) {
+    throw new CodecError(`invalid ${kind} payload: ${parsed.error.message}`)
+  }
+  // The kind and its body are one union member, which no index signature
+  // correlates. `BodiesMatch` above is what proves the two agree.
+  return { kind, ...parsed.data } as Payload
+}
+
+// The kind a payload travels under, and the body beneath it. `unknown` wears
+// the kind it arrived as, because that is the one fact it holds.
+const bodyOut = (payload: Payload): { readonly kind: string; readonly body: unknown } => {
+  const { kind, ...body } = payload
+  return kind === "unknown"
+    ? {
+        kind: (payload as { originalKind: string }).originalKind,
+        body: (payload as { raw: unknown }).raw,
+      }
+    : { kind, body }
+}
+
 export const decode = (value: unknown): Event => {
   const wire = envelope.safeParse(value)
   if (!wire.success) throw new CodecError(`invalid envelope: ${wire.error.message}`)
@@ -203,21 +231,6 @@ export const decode = (value: unknown): Event => {
     throw new CodecError(`unsupported schema version ${record.version}`)
   }
 
-  const body = record.payload
-
-  let payload: Payload
-  if (isKnownKind(record.kind)) {
-    const parsed = bodies[record.kind].safeParse(body)
-    if (!parsed.success) {
-      throw new CodecError(`invalid ${record.kind} payload: ${parsed.error.message}`)
-    }
-    // The kind and its body are one union member, which no index signature
-    // correlates. `BodiesMatch` above is what proves the two agree.
-    payload = { kind: record.kind, ...parsed.data } as Payload
-  } else {
-    payload = { kind: "unknown", originalKind: record.kind, raw: body }
-  }
-
   return {
     id: eventID(record.id),
     seq: record.seq,
@@ -225,7 +238,7 @@ export const decode = (value: unknown): Event => {
     run: runID(record.run),
     session: sessionID(record.session),
     parent: record.parent === null ? null : eventID(record.parent),
-    payload,
+    payload: bodyIn(record.kind, record.payload),
   }
 }
 
@@ -240,21 +253,62 @@ export const decodeLine = (line: string): Event => {
 }
 
 export const encode = (event: Event): Record<string, unknown> => {
-  const { kind, ...body } = event.payload
-  const wireKind =
-    kind === "unknown" ? (event.payload as { originalKind: string }).originalKind : kind
-  const wireBody = kind === "unknown" ? (event.payload as { raw: unknown }).raw : body
+  const { kind, body } = bodyOut(event.payload)
   return {
     id: event.id,
     seq: event.seq,
     at: { wall: event.at.wall },
     version: SCHEMA_VERSION,
-    kind: wireKind,
+    kind,
     run: event.run,
     session: event.session,
     parent: event.parent,
-    payload: wireBody,
+    payload: body,
   }
 }
 
 export const encodeLine = (event: Event): string => JSON.stringify(encode(event))
+
+/**
+ * A Payload with no Event over it. `watch` hands payloads back and drops the
+ * position — a live delta the sink has not numbered has none to drop — so a
+ * wire that carries a stream carries this shape and not the envelope.
+ *
+ * It is the inner half of `encode`/`decode` rather than a second codec: the
+ * same body table answers both, so a kind added for one is added for the
+ * other, and an unknown kind survives both the same way.
+ */
+const flat = z.strictObject({
+  version: z.number().int(),
+  kind: z.string().min(1),
+  payload: z.looseObject({}),
+})
+
+export const encodePayload = (payload: Payload): Record<string, unknown> => {
+  const { kind, body } = bodyOut(payload)
+  return { version: SCHEMA_VERSION, kind, payload: body }
+}
+
+export const decodePayload = (value: unknown): Payload => {
+  const wire = flat.safeParse(value)
+  if (!wire.success) throw new CodecError(`invalid payload frame: ${wire.error.message}`)
+  // The same gate `decode` keeps. A body's shape is the schema's, whether or
+  // not an envelope is carrying it.
+  if (wire.data.version !== SCHEMA_VERSION) {
+    throw new CodecError(`unsupported schema version ${wire.data.version}`)
+  }
+  return bodyIn(wire.data.kind, wire.data.payload)
+}
+
+export const encodePayloadLine = (payload: Payload): string =>
+  JSON.stringify(encodePayload(payload))
+
+export const decodePayloadLine = (line: string): Payload => {
+  let value: unknown
+  try {
+    value = JSON.parse(line)
+  } catch (cause) {
+    throw new CodecError(`invalid JSON: ${(cause as Error).message}`)
+  }
+  return decodePayload(value)
+}
