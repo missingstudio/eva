@@ -11,7 +11,7 @@ import type { CommandInfo, Frontend, KeymapInfo, PickRow } from "@missingstudio/
 import type { Frame, KeyPress, Renderer, ThemeColors } from "@missingstudio/eva-tui-core"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { ARMED } from "./console.js"
+import { ARMED, DISCONNECTED, SYNCHRONIZING } from "./console.js"
 import { makeSurface, TICK } from "./surface.js"
 
 // What a Run closes with. The surface reads the Claim off it; the record
@@ -1403,13 +1403,41 @@ describe("a dropped connection", () => {
     // After it, both are in the record, each exactly once, in position order.
     expect(shown(drawn.repainted)).toBe("first and second")
     expect(drawn.repainted?.live).toBe("")
-    // The repaint is not an ending: the Run says when it is over.
+    // The repaint is not an ending: the Run says when it is over. The status
+    // may still say the runtime is catching up, which is not "ready" either.
     expect(drawn.repainted?.work.running).toBe(true)
-    expect(drawn.repainted?.status.mode).toBe("running")
+    expect([SYNCHRONIZING, "running"]).toContain(drawn.repainted?.status.mode)
 
     // And the close is still the close.
     expect(shown(drawn.closed)).toBe("first and second")
     expect(drawn.closed?.work.running).toBe(false)
+    expect(drawn.closed?.status.mode).toBe("ready")
+  })
+
+  /**
+   * The runtime recovers on its own. The one thing it cannot do is say why
+   * the words stopped moving, and this surface reads `state` to say it.
+   */
+  it("says the pipe is gone, and stops saying so when it is back", async () => {
+    const drawn = await withSurface([], async (fake, spy) => {
+      const running = spy.hold()
+      fake.press("go")
+      await settle()
+
+      await Effect.runPromise(spy.drop)
+      const gone = await drawnWhere(fake, (frame) => frame?.status.mode === DISCONNECTED)
+
+      await Effect.runPromise(spy.restore)
+      const back = await drawnWhere(fake, (frame) => frame?.status.mode !== DISCONNECTED)
+      running.release()
+      await settle()
+      return { gone, back, closed: fake.last() }
+    })
+
+    expect(drawn.gone?.status.mode).toBe(DISCONNECTED)
+    // A Run is still open behind the drop, and the screen still says so.
+    expect(drawn.gone?.work.running).toBe(true)
+    expect(drawn.back?.status.mode).not.toBe(DISCONNECTED)
     expect(drawn.closed?.status.mode).toBe("ready")
   })
 })

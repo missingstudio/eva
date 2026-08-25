@@ -17,7 +17,18 @@ import {
   type Renderer,
   type ThemeColors,
 } from "@missingstudio/eva-tui-core"
-import { Cause, Deferred, Effect, Exit, Fiber, Queue, Schedule, Scope } from "effect"
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Queue,
+  Schedule,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from "effect"
 import { branchOf, shortPath } from "./banner.js"
 import { apply, backStep, frameOf, initial, type ConsoleEvent, type Place } from "./console.js"
 import { edit, pasted, type LineAction, type LineCommand } from "./line.js"
@@ -127,6 +138,21 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     state = apply(state, event)
     deps.renderer.draw(frameOf(state, place))
   }
+
+  /**
+   * Where the runtime is, on the screen. It is the one fact this surface
+   * reads about the pipe: a drop is the runtime's to recover from, and what
+   * a person needs is to be told why the words stopped moving.
+   *
+   * `changes` replays the value the ref holds now, so the first frame says
+   * where the runtime is rather than assuming it is up.
+   */
+  yield* Effect.forkIn(
+    Stream.runForEach(SubscriptionRef.changes(deps.client.state), (one) =>
+      Effect.sync(() => on({ kind: "connection", state: one })),
+    ),
+    scope,
+  )
 
   // The keymap Domain decides what a key means on this surface. A row
   // another surface claimed is not a binding here.

@@ -15,6 +15,7 @@ import {
   type ThemeColors,
   type Work,
 } from "@missingstudio/eva-tui-core"
+import type { ClientState } from "@missingstudio/eva-client-runtime"
 import { refiltered, stepped as moved, type OpenOverlay } from "./overlay.js"
 
 /**
@@ -82,6 +83,13 @@ export interface ConsoleState {
    * Run opens, or the Console follows another Session.
    */
   readonly notes: readonly string[]
+  /**
+   * Where the client runtime is. The Console shows it and decides nothing
+   * about it: a drop is the runtime's to report and the runtime's to recover
+   * from, and what a person needs is to be told that the words on the screen
+   * are not moving because the pipe is gone.
+   */
+  readonly connection: ClientState
 }
 
 /** Where this Console runs, which no Run changes. */
@@ -142,6 +150,9 @@ export type ConsoleEvent =
     }
   // A command opened another Session; the Console follows it there.
   | { readonly kind: "selected"; readonly session: SessionID }
+  // The client runtime moved: the pipe went, or it is catching up, or it is
+  // back. Nothing else about the pipe reaches here.
+  | { readonly kind: "connection"; readonly state: ClientState }
 
 const IDLE: Work = { running: false, elapsed: "", tick: 0, hint: "" }
 
@@ -163,6 +174,7 @@ export const initial = (session: SessionID): ConsoleState => ({
   work: IDLE,
   shown: [],
   notes: [],
+  connection: "ready",
 })
 
 const said = (author: TranscriptMessage["author"], text: string): TranscriptMessage => ({
@@ -201,6 +213,11 @@ export const backStep = (state: ConsoleState): BackStep => {
 
 // What the status line says an armed interrupt is waiting for. The surface
 // chooses the words, so every renderer says the same ones.
+// What the status line says while the pipe is gone, and while the runtime is
+// refolding after it came back. A Run may still be open behind both.
+export const DISCONNECTED = "disconnected"
+export const SYNCHRONIZING = "catching up"
+
 export const ARMED = "esc again to interrupt"
 
 // What the status line says while Eva is waiting on an answer. The left half
@@ -376,12 +393,22 @@ export const apply = (state: ConsoleState, event: ConsoleEvent): ConsoleState =>
       // Another Session is another conversation, so the words this one said
       // do not follow it there.
       return { ...state, session: event.session, notes: [] }
+    case "connection":
+      // Held and shown, and nothing else: the Live area, the fold and the
+      // open Run are all the runtime's to put back, and it does.
+      return { ...state, connection: event.state }
   }
 }
 
 // What a renderer is given of the panel: what is drawn, and nothing that
 // is decided. Where a chosen row goes is the surface's business.
 const drawable = ({ intent: _intent, all: _all, ...overlay }: OpenOverlay): Overlay => overlay
+
+const modeOf = (state: ConsoleState): string => {
+  if (state.connection === "disconnected") return DISCONNECTED
+  if (state.connection === "synchronizing") return SYNCHRONIZING
+  return state.asking ? ASKING : state.mode
+}
 
 export const frameOf = (state: ConsoleState, place: Place): Frame => ({
   banner: { ...place, model: state.model },
@@ -398,7 +425,12 @@ export const frameOf = (state: ConsoleState, place: Place): Frame => ({
     cost: state.cost,
     // One state at a time on the left half, and a question outranks the
     // rest: what the line is for right now is what it says.
-    mode: state.asking ? ASKING : state.mode,
+    /**
+     * One state at a time on the left half, most urgent first. A pipe that
+     * is gone outranks everything: a question cannot be answered down it,
+     * and a Run that looks like it is running is not.
+     */
+    mode: modeOf(state),
   },
   ...(state.overlay === undefined ? {} : { overlay: drawable(state.overlay) }),
   ...(state.theme === undefined ? {} : { theme: state.theme }),

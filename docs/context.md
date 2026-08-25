@@ -388,8 +388,8 @@ _Avoid_: Online, connection state, status
 Where the client runtime is, in the three values a Surface acts on: `ready`,
 `synchronizing`, `disconnected`. It is built above Transport health, which says
 two — `synchronizing` is the runtime refolding after a drop, which the pipe
-cannot know. A wire filler may keep more phases of its own behind the two; what
-a consumer reads is these three.
+cannot know. A Surface shows it and decides nothing about it: recovery is the
+runtime's, and saying why the words stopped moving is the Surface's.
 _Avoid_: Connection state (that is the pipe's), sync status, loading
 
 **Run signal**:

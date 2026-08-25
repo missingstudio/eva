@@ -5,8 +5,10 @@ import {
   ARMED,
   ASKING,
   backStep,
+  DISCONNECTED,
   frameOf,
   initial,
+  SYNCHRONIZING,
   type ConsoleEvent,
   type ConsoleState,
 } from "./console.js"
@@ -456,5 +458,62 @@ describe("the Frame", () => {
   it("follows a selected Session", () => {
     const other = sessionID("sess_other")
     expect(apply(start, { kind: "selected", session: other }).session).toBe(other)
+  })
+})
+
+/**
+ * What a person is told about the pipe. The runtime recovers on its own —
+ * the fold arrives, the stream goes on — and the one thing it cannot do is
+ * say why the words stopped moving.
+ */
+describe("where the runtime is", () => {
+  const modeAfter = (...given: readonly ConsoleEvent[]): string =>
+    frameOf(events(start, ...given), PLACE).status.mode
+
+  it("says nothing about it while the pipe is there", () => {
+    expect(modeAfter()).toBe("ready")
+    expect(modeAfter({ kind: "connection", state: "ready" })).toBe("ready")
+  })
+
+  it("says the pipe is gone", () => {
+    expect(modeAfter({ kind: "connection", state: "disconnected" })).toBe(DISCONNECTED)
+  })
+
+  it("says it is catching up while the runtime refolds", () => {
+    expect(modeAfter({ kind: "connection", state: "synchronizing" })).toBe(SYNCHRONIZING)
+  })
+
+  it("outranks an open Run, which is not running while the pipe is gone", () => {
+    expect(
+      modeAfter(
+        { kind: "opened", line: "ask", at: 0 },
+        { kind: "connection", state: "disconnected" },
+      ),
+    ).toBe(DISCONNECTED)
+  })
+
+  it("outranks a question, which cannot be answered down a pipe that is gone", () => {
+    expect(
+      modeAfter(
+        { kind: "asked", question: "which one?" },
+        { kind: "connection", state: "disconnected" },
+      ),
+    ).toBe(DISCONNECTED)
+  })
+
+  it("says the question again once the pipe is back", () => {
+    expect(
+      modeAfter(
+        { kind: "asked", question: "which one?" },
+        { kind: "connection", state: "disconnected" },
+        { kind: "connection", state: "ready" },
+      ),
+    ).toBe(ASKING)
+  })
+
+  it("changes nothing else: the line, the fold and the Live area are the runtime's to put back", () => {
+    const typed = events(start, { kind: "typed", buffer: "half typed", cursor: 4 })
+    const dropped = apply(typed, { kind: "connection", state: "disconnected" })
+    expect({ ...dropped, connection: typed.connection }).toEqual(typed)
   })
 })

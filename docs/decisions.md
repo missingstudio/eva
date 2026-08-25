@@ -557,6 +557,15 @@ its mode to `ready` on every fold, because until now a fold only ever arrived
 at close. It reads the Run's own spinner instead: a Run says when it is over,
 and a dropped connection is not it.
 
+**A Surface shows where the runtime is, and decides nothing about it.** The
+Console holds `connection` and the status line says it, most urgent first: a
+pipe that is gone outranks a question, which cannot be answered down it, and
+outranks an open Run, which is not running. Nothing else moves — the Live
+area, the fold and the open Run are the runtime's to put back, and it does.
+Until this, `Client.state` was read by no shipped code and a drop cost the
+terminal one silent repaint: the words rewrote themselves, coarser, with
+nothing to say why.
+
 **Remote-ready is three constraints on the two surface contracts, not a
 feature.** Everything in them serializes, local facts stay out, and
 reconnection is by `Cursor`. Hold them from the first surface; retrofitting
