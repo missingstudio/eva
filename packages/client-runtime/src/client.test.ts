@@ -40,7 +40,8 @@ describe("the handle a surface holds", () => {
       { kind: "payload", payload: CLOSE },
     ])
     expect(spoken(outcome.transcript)).toBe("partial")
-    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 3 })
+    // The Run opened with the person's line, said two words, and closed.
+    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 4 })
     expect(outcome.answer).toEqual({ claim: CLAIM, text: "partial" })
   })
 })

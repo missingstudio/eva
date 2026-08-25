@@ -95,7 +95,7 @@ describe("a dropped connection", () => {
       [{ kind: "payload", payload: CLOSE }],
     )
     // The resumed watch names the fold's own position, and nothing else.
-    expect(found.watched).toEqual([[SESSION], [SESSION, { session: SESSION, seq: 3 }]])
+    expect(found.watched).toEqual([[SESSION], [SESSION, { session: SESSION, seq: 4 }]])
   })
 
   it("folds again when the resumed watch refuses, and says nothing of the refusal", async () => {

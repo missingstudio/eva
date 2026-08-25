@@ -1,34 +1,16 @@
 /**
- * The package's fake `SessionAPI`, shared by its suites. `index.ts` does not
- * export it, so it ships nothing; it lives beside the code rather than inside
- * one test file because both the protocol and the seam are tested against the
- * same fake, and two copies of one fake are two fakes the moment either
- * changes.
+ * How this package's suites drive the in-memory filler. The filler itself is
+ * `memory-api.ts` and it ships, because the rule it carries is the seam's;
+ * what is here is only what one Run says and when it closes, which is a
+ * suite's business and nobody else's.
  */
 
-import {
-  foldTranscript,
-  ResumeTooFarBehind,
-  type CancelCause,
-  type FrontendAnswer,
-  type ModelRef,
-  type RequestID,
-  type SessionAPI,
-  type SessionHeader,
-  type SubmitInput,
-  type Transcript,
-} from "@missingstudio/eva-core"
-import {
-  eventID,
-  runID,
-  sessionID,
-  type Claim,
-  type Cursor,
-  type Event,
-  type Payload,
-  type SessionID,
-} from "@missingstudio/eva-schema"
-import { Deferred, Effect, PubSub, Stream } from "effect"
+import type { ModelRef, SessionAPI, SubmitInput, Transcript } from "@missingstudio/eva-core"
+import { sessionID, type Claim, type Payload } from "@missingstudio/eva-schema"
+import { Deferred, Effect } from "effect"
+import { memorySessionAPI, type Call, type Method } from "./memory-api.js"
+
+export type { Call, Method } from "./memory-api.js"
 
 export const SESSION = sessionID("sess_client_runtime")
 export const PROMPT: SubmitInput = { kind: "prompt", text: "say something" }
@@ -43,28 +25,13 @@ export const text = (value: string): Payload => ({
 // What the Run closes with, and the payload that carries it. Named apart so
 // a suite can assert the Answer against the same Claim the stream said.
 export const CLAIM: Claim = { result: "done", summary: "ok" }
+
 export const CLOSE: Payload = { kind: "finished", claim: CLAIM }
 
 // What `submit` does after the Run has said its payloads: close it, return
 // without a close, wait to be let go, or stay open until the caller
 // interrupts.
 export type Ending = "closes" | "silent" | "hangs" | "waits"
-
-export type Method =
-  | "create"
-  | "list"
-  | "attach"
-  | "watch"
-  | "submit"
-  | "cancel"
-  | "model.get"
-  | "model.set"
-  | "answer"
-
-export interface Call {
-  readonly method: Method
-  readonly args: readonly unknown[]
-}
 
 export interface Fake {
   readonly api: SessionAPI
@@ -86,108 +53,26 @@ export interface Fake {
 }
 
 /**
- * One session, over a hub. Every payload the Run says is committed to the
- * trace and published to the hub in one step, so the fold after the stream
- * is the record of the same Run and a cursor names a position in both.
+ * One session, over the in-memory filler. Every payload the Run says is
+ * committed and published in one step, so the fold after the stream is the
+ * record of the same Run and a cursor names a position in both — and that is
+ * the filler's doing, not this file's.
  */
 export const fakeApi = Effect.fn("test.api")(function* (
   says: readonly Payload[],
   ending: Ending = "closes",
 ): Effect.fn.Return<Fake> {
-  const hub = yield* PubSub.unbounded<Event>()
-  const committed: Event[] = []
-  const calls: Call[] = []
   const said = yield* Deferred.make<void>()
   const letGo = yield* Deferred.make<void>()
-  let open = 0
-  let refusals = 0
-  let model: ModelRef = MODEL
 
-  const took = (method: Method, ...args: readonly unknown[]) => void calls.push({ method, args })
-
-  const head = (events: readonly Event[]) =>
-    events.reduce((high, event) => (event.seq > high ? event.seq : high), 0)
-
-  const say = (payload: Payload) =>
-    Effect.gen(function* () {
-      const event: Event = {
-        id: eventID(`ev_${committed.length + 1}`),
-        seq: committed.length + 1,
-        at: { wall: "2026-08-25T00:00:00.000Z" },
-        run: runID("run_1"),
-        session: SESSION,
-        parent: null,
-        payload,
-      }
-      committed.push(event)
-      yield* PubSub.publish(hub, event)
-    })
-
-  /**
-   * What a resumed watch says: the committed groups after the cursor, then
-   * the trace as it grows. The subscription is already open, so an event that
-   * commits between it and the read is held by the subscription and dropped
-   * by the position filter — exactly once, whichever side wins.
-   */
-  const behind = (tail: Stream.Stream<Event>, from: Cursor) => {
-    const read = [...committed]
-    const boundary = Math.max(head(read), from.seq)
-    return Stream.concat(
-      Stream.fromIterable(
-        read.filter((event) => event.seq > from.seq).map((event) => event.payload),
-      ),
-      Stream.map(
-        Stream.filter(tail, (event) => event.seq > boundary),
-        (event) => event.payload,
-      ),
-    )
-  }
-
-  const api: SessionAPI = {
-    create: (location: string) =>
-      Effect.sync(() => {
-        took("create", location)
-        return SESSION
-      }),
-    list: Effect.sync(() => {
-      took("list")
-      return [{ id: SESSION }] satisfies readonly SessionHeader[]
-    }),
-    attach: (id: SessionID) =>
-      Effect.sync(() => {
-        took("attach", id)
-        return foldTranscript(SESSION, committed)
-      }),
-    /**
-     * A watch is counted once it has really subscribed — not once it was
-     * asked for — so a test that has to drop a live one can wait for it
-     * rather than guess at it.
-     */
-    watch: ((id: SessionID, from?: Cursor) => {
-      took("watch", ...(from === undefined ? [id] : [id, from]))
-      return Stream.unwrap(
-        Effect.gen(function* () {
-          if (from !== undefined && refusals > 0) {
-            refusals -= 1
-            return Stream.fail(new ResumeTooFarBehind({ from, head: head(committed) }))
-          }
-          const tail = Stream.fromSubscription(yield* PubSub.subscribe(hub))
-          open += 1
-          return Stream.ensuring(
-            from === undefined ? Stream.map(tail, (event) => event.payload) : behind(tail, from),
-            Effect.sync(() => void (open -= 1)),
-          )
-        }),
-      )
-    }) as SessionAPI["watch"],
+  const memory = yield* memorySessionAPI(
     /**
      * The first word waits one turn of the event loop, which is what the real
      * Session API does — it forks the turn — so the watcher forked before
      * `submit` is subscribed when the Run starts to speak.
      */
-    submit: (id: SessionID, input: SubmitInput) =>
+    (_input, say) =>
       Effect.gen(function* () {
-        took("submit", id, input)
         yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 0)))
         for (const payload of says) yield* say(payload)
         yield* Deferred.succeed(said, undefined)
@@ -195,31 +80,17 @@ export const fakeApi = Effect.fn("test.api")(function* (
         if (ending === "waits") yield* Deferred.await(letGo)
         if (ending !== "silent") yield* say(CLOSE)
       }),
-    cancel: (id: SessionID, cause: CancelCause) => Effect.sync(() => took("cancel", id, cause)),
-    model: {
-      get: (id: SessionID) =>
-        Effect.sync(() => {
-          took("model.get", id)
-          return model
-        }),
-      set: (id: SessionID, next: ModelRef) =>
-        Effect.sync(() => {
-          took("model.set", id, next)
-          model = next
-        }),
-    },
-    answer: (request: RequestID, answer: FrontendAnswer) =>
-      Effect.sync(() => took("answer", request, answer)),
-  }
+    { model: MODEL, session: SESSION },
+  )
 
   return {
-    api,
-    calls,
-    open: () => open,
+    api: memory.api,
+    calls: memory.calls,
+    open: memory.open,
     said,
-    say,
+    say: (payload) => memory.say(payload, SESSION),
     release: Effect.asVoid(Deferred.succeed(letGo, undefined)),
-    refuse: (times: number) => void (refusals += times),
+    refuse: memory.refuse,
   }
 })
 
@@ -227,10 +98,15 @@ export const fakeApi = Effect.fn("test.api")(function* (
 export const given = (fake: Fake, method: Method): readonly (readonly unknown[])[] =>
   fake.calls.filter((one) => one.method === method).map((one) => one.args)
 
-// Every word the record kept, in the order a reader sees it.
+/**
+ * Every word the Run said, in the order a reader sees it. The person's own
+ * line is in the record too — a Run opens with it, and the filler says so —
+ * and it is not what a suite about the stream is asking after.
+ */
 export const spoken = (transcript: Transcript): string =>
   transcript
     .messages()
+    .filter((message) => message.author !== "human")
     .flatMap((message) => message.blocks)
     .map((block) =>
       block.type === "content" && block.content.type === "text" ? block.content.text : "",

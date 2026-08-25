@@ -61,8 +61,9 @@ describe("one Run, over the Session API", () => {
     )
 
     expect(outcome.transcript.session).toBe(SESSION)
-    // Two words and the close: the position a reconnect resumes from.
-    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 3 })
+    // The open, two words and the close: the position a reconnect resumes
+    // from.
+    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 4 })
     expect(spoken(outcome.transcript)).toBe("partial")
     // The Answer is the record's own fold, not the stream scraped a second
     // time: the Claim the Run closed with, and the words that Run said.
@@ -81,7 +82,7 @@ describe("one Run, over the Session API", () => {
     // The drain stopped on the injected bound rather than on the default,
     // and never on the close that was not coming.
     expect(Date.now() - started).toBeLessThan(SETTLE)
-    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 2 })
+    expect(outcome.transcript.at).toEqual({ session: SESSION, seq: 3 })
     // A Run that never closed answered no Claim, and the words it did say
     // are still the record's.
     expect(outcome.answer).toEqual({ text: "" })

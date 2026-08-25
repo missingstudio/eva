@@ -1,3 +1,4 @@
 export * from "./client.js"
+export * from "./memory-api.js"
 export * from "./run.js"
 export * from "./transport.js"

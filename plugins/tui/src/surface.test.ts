@@ -1,26 +1,22 @@
+import type { CancelCause, SubmitInput } from "@missingstudio/eva-core"
 import {
-  foldTranscript,
-  type CancelCause,
-  type ModelRef,
-  type SessionAPI,
-  type SubmitInput,
-} from "@missingstudio/eva-core"
-import { droppableTransport, makeClient, type Client } from "@missingstudio/eva-client-runtime"
-import {
-  eventID,
-  runID,
-  sessionID,
-  type Cursor,
-  type Event,
-  type Payload,
-  type SessionID,
-} from "@missingstudio/eva-schema"
+  droppableTransport,
+  makeClient,
+  memorySessionAPI,
+  type Client,
+  type Method,
+} from "@missingstudio/eva-client-runtime"
+import { sessionID, type Payload, type SessionID } from "@missingstudio/eva-schema"
 import type { CommandInfo, Frontend, KeymapInfo, PickRow } from "@missingstudio/eva-sdk"
 import type { Frame, KeyPress, Renderer, ThemeColors } from "@missingstudio/eva-tui-core"
-import { Effect, PubSub, Stream } from "effect"
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { ARMED } from "./console.js"
 import { makeSurface, TICK } from "./surface.js"
+
+// What a Run closes with. The surface reads the Claim off it; the record
+// keeps it.
+const CLOSE: Payload = { kind: "finished", claim: { result: "done", summary: "ok" } }
 
 interface Fake {
   readonly renderer: Renderer
@@ -96,8 +92,8 @@ interface Spy {
   // The fake, wrapped once. Every surface under test reads through it,
   // which is what makes an API call the surface does not make unreachable.
   readonly client: Client
-  readonly submitted: SubmitInput[]
-  readonly cancelled: CancelCause[]
+  readonly submitted: readonly SubmitInput[]
+  readonly cancelled: readonly CancelCause[]
   readonly publish: (payload: Payload) => Effect.Effect<void>
   // Keeps the next Run open, so a test can look at the surface mid-stream.
   readonly hold: () => { readonly release: () => void }
@@ -109,111 +105,52 @@ interface Spy {
 }
 
 /**
+ * The in-memory filler, driven the way this surface needs it. The contract is
+ * the filler's — the numbering, the cursor watch, the exactly-once rule — and
+ * what is here is only what one Run says and when it closes.
+ *
  * `racing` closes the Run in the same turn the surface submitted it, with no
  * hop between. That is the race the surface must survive: its watcher
  * subscribes after it is forked, so a close said this early is a close it
  * never hears.
  */
 const fakeApi = Effect.fn("test.api")(function* (racing = false): Effect.fn.Return<Spy> {
-  const hub = yield* PubSub.unbounded<Event>()
-  const committed: Event[] = []
-  const submitted: SubmitInput[] = []
-  const cancelled: CancelCause[] = []
-  let model: ModelRef = { provider: "fake", model: "model" }
   let holding = false
-  let open = 0
-  const session = sessionID("sess_tui")
+  let close: () => Effect.Effect<void> = () => Effect.void
 
-  // Every payload is committed and published in one step, so the fold after
-  // the stream is the record of the same Run and a cursor names a position
-  // in both.
-  const say = (payload: Payload) =>
+  const memory = yield* memorySessionAPI((_input, say) =>
     Effect.gen(function* () {
-      const event: Event = {
-        id: eventID(`ev_${committed.length + 1}`),
-        seq: committed.length + 1,
-        at: { wall: "2026-08-25T00:00:00.000Z" },
-        run: runID("run_1"),
-        session,
-        parent: null,
-        payload,
-      }
-      committed.push(event)
-      yield* PubSub.publish(hub, event)
-    })
-
-  const close = () => say({ kind: "finished", claim: { result: "done", summary: "ok" } })
-
-  const behind = (tail: Stream.Stream<Event>, from: Cursor) => {
-    const read = [...committed]
-    const boundary = Math.max(
-      read.reduce((high, event) => (event.seq > high ? event.seq : high), 0),
-      from.seq,
-    )
-    return Stream.concat(
-      Stream.fromIterable(
-        read.filter((event) => event.seq > from.seq).map((event) => event.payload),
-      ),
-      Stream.map(
-        Stream.filter(tail, (event) => event.seq > boundary),
-        (event) => event.payload,
-      ),
-    )
-  }
-
-  const api: SessionAPI = {
-    create: () => Effect.succeed(session),
-    list: Effect.succeed([{ id: session }]),
-    attach: () => Effect.sync(() => foldTranscript(session, committed)),
-    // Subscribe first, read second, and drop what the read already returned:
-    // an event that commits between the two arrives exactly once.
-    watch: ((_id: SessionID, from?: Cursor) =>
-      Stream.unwrap(
-        Effect.gen(function* () {
-          const tail = Stream.fromSubscription(yield* PubSub.subscribe(hub))
-          open += 1
-          return Stream.ensuring(
-            from === undefined ? Stream.map(tail, (event) => event.payload) : behind(tail, from),
-            Effect.sync(() => void (open -= 1)),
-          )
-        }),
-      )) as SessionAPI["watch"],
-    /**
-     * Answers at once unless held, so the loop is back at the prompt when
-     * this returns and a test does not have to guess at timing. The close
-     * waits one turn of the event loop, which is what the real Session API
-     * does — it forks the turn — and `racing` is the same fake with that
-     * turn taken away.
-     */
-    submit: (_id: SessionID, input: SubmitInput) =>
-      Effect.gen(function* () {
-        submitted.push(input)
-        if (holding) return
-        if (!racing) {
-          yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 0)))
-        }
-        yield* close()
-      }),
-    cancel: (_id: SessionID, cause: CancelCause) => Effect.sync(() => void cancelled.push(cause)),
-    model: {
-      get: () => Effect.succeed(model),
-      set: (_id: SessionID, next: ModelRef) => Effect.sync(() => void (model = next)),
-    },
-    answer: () => Effect.void,
-  }
+      close = () => say(CLOSE)
+      // Answers at once unless held, so the loop is back at the prompt when
+      // this returns and a test does not have to guess at timing. The close
+      // waits one turn of the event loop, which is what the real Session API
+      // does — it forks the turn — and `racing` is the same filler with that
+      // turn taken away.
+      if (holding) return
+      if (!racing) yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 0)))
+      yield* say(CLOSE)
+    }),
+  )
 
   // The droppable filler under every surface under test, so the one test
   // that has to lose the pipe reaches the same seam as the rest.
-  const transport = yield* droppableTransport(api)
+  const transport = yield* droppableTransport(memory.api)
+
+  const argsOf = <A>(method: Method): readonly A[] =>
+    memory.calls.filter((one) => one.method === method).map((one) => one.args[1] as A)
 
   return {
     client: yield* makeClient(transport),
-    submitted,
-    cancelled,
-    publish: say,
+    get submitted() {
+      return argsOf<SubmitInput>("submit")
+    },
+    get cancelled() {
+      return argsOf<CancelCause>("cancel")
+    },
+    publish: (payload: Payload) => memory.say(payload),
     drop: transport.drop,
     restore: transport.restore,
-    open: () => open,
+    open: memory.open,
     hold: () => {
       holding = true
       return {

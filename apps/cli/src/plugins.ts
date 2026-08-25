@@ -90,9 +90,7 @@ export const OPTIONAL: readonly Plugin[] = [traceMemory]
  * disagree about which ids this binary has an implementation for.
  */
 export const BUILD: Build = buildOf([...BUILT_IN, ...OPTIONAL])
-
 export const ALL: readonly Plugin[] = BUILD.all
-
 export const BUILT_IN_IDS: readonly string[] = BUILT_IN.map((plugin) => plugin.id)
 
 export const byID = (id: string): Plugin | undefined => BUILD.carries(id)

@@ -535,6 +535,23 @@ because two callers with the same fallback is how the print path and the
 harness path came to disagree in the first place. It is the one-Run case it is
 written for: a Workflow with no Trace cannot answer at all.
 
+**The in-memory Session API is a filler, not a fake in a test file.** The
+cursor watch's rule — subscribe, then read the record, then drop the overlap
+on a strict inequality — was written out three times: the kernel's, one inside
+`client-runtime`, and one inside the terminal's own suite. Two of the three
+were where the reconnect and drop tests took their confidence, and a copy of a
+rule keeps passing after the rule moves. `memorySessionAPI` ships beside
+`droppableTransport` for the reason that one does: the rule it carries is the
+seam's, not one suite's. What a Run says stays the caller's, through one
+`answer` callback, so one filler serves a suite that streams words, one that
+closes early and one that never closes at all.
+
+**One suite holds both fillers of the Session API.** `packages/conformance`
+runs the same twenty assertions against the kernel's filler and the in-memory
+one. It earned its place on the first run: the in-memory filler did not open a
+Run with `started`, so two Runs folded to one Answer and nothing said so. A
+suite that only ever drives one filler cannot find that.
+
 **A fold while a Run is open is a repaint, not an ending.** The Console reset
 its mode to `ready` on every fold, because until now a fold only ever arrived
 at close. It reads the Run's own spinner instead: a Run says when it is over,
