@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url"
+import { API_PLUGIN, makeApi, type Wire } from "@missingstudio/eva-api"
 import { auth } from "@missingstudio/eva-auth"
 import { budget } from "@missingstudio/eva-budget"
 import { catalogModels } from "@missingstudio/eva-catalog-models"
@@ -14,6 +15,7 @@ import { providerOpenAI } from "@missingstudio/eva-provider-openai"
 import { providerRetry } from "@missingstudio/eva-provider-retry"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
 import type { ReviewedEntry } from "@missingstudio/eva-config"
+import type { SessionAPI } from "@missingstudio/eva-core"
 import { KERNEL_KEYS, type PluginConfig } from "@missingstudio/eva-kernel"
 import type { Plugin, Reads } from "@missingstudio/eva-sdk"
 import { sessionJsonl } from "@missingstudio/eva-session-jsonl"
@@ -63,6 +65,15 @@ export const assetRoot = (): string => fileURLToPath(new URL("../../web/dist", i
  */
 export const web = makeWeb({ assets: assetRoot })
 
+/**
+ * The other half of the same port. `eva.api` answers the calls and `eva.web`
+ * binds, and neither may import the other — so the two meet here, as the
+ * terminal and its renderer do. This entry hands its wire nowhere, for the
+ * reason the `eva.web` entry says nothing: `serving` rebuilds both with one
+ * run's own cell.
+ */
+export const api = makeApi({ serve: () => undefined })
+
 // The bind a run asked for. Absent means the surface's own default.
 export interface WebBind {
   readonly host?: string
@@ -70,22 +81,32 @@ export interface WebBind {
 }
 
 /**
- * This build, with `eva.web` bound to what the command line asked for. A
- * surface row is started with a Client and nothing else, so the bind and the
- * writer are closed over when the plugin is made — and the flags are only
- * known once a run has parsed them. The composition root is where a flag and
- * a plugin meet, exactly as it is for `makeTui({ renderer })`.
+ * This build, with the two halves of one port wired to each other and to what
+ * the command line asked for. A surface row is started with a Client and
+ * nothing else, so the bind and the writer are closed over when the plugin is
+ * made — and the flags are only known once a run has parsed them. The
+ * composition root is where a flag and a plugin meet, exactly as it is for
+ * `makeTui({ renderer })`.
+ *
+ * The cell is this run's own. `eva.api` fills it when it loads, so a run that
+ * left it out serves the page and answers no call — a degradation, and not a
+ * crash.
  */
-export const serving = (build: Build, bind: WebBind, write: (text: string) => void): Build =>
-  buildOf([
-    ...build.all.filter((plugin) => plugin.id !== WEB_SURFACE),
+export const serving = (build: Build, bind: WebBind, write: (text: string) => void): Build => {
+  let wire: ((api: SessionAPI) => Wire) | undefined
+
+  return buildOf([
+    ...build.all.filter((plugin) => plugin.id !== WEB_SURFACE && plugin.id !== API_PLUGIN),
+    makeApi({ serve: (one) => void (wire = one) }),
     makeWeb({
       assets: assetRoot,
+      api: (client) => wire?.(client.api),
       write,
       ...(bind.host === undefined ? {} : { host: bind.host }),
       ...(bind.port === undefined ? {} : { port: bind.port }),
     }),
   ])
+}
 
 /**
  * The built-in table, in load order: the trace first because everything
@@ -123,6 +144,9 @@ export const BUILT_IN: readonly Plugin[] = [
   config,
   print,
   tui,
+  // Before `eva.web`, which serves the port it answers on. It registers no
+  // row: a wire is not a Domain, and the plugin id is what a person turns off.
+  api,
   // Last, and after `tui`: `eva.web` says `interactive: false`, so it can
   // never take the interactive branch from the surface a person types into.
   web,

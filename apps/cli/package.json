@@ -27,6 +27,7 @@
     "build": "vp pack"
   },
   "dependencies": {
+    "@missingstudio/eva-api": "workspace:*",
     "@missingstudio/eva-auth": "workspace:*",
     "@missingstudio/eva-boot": "workspace:*",
     "@missingstudio/eva-budget": "workspace:*",

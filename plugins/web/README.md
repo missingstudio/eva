@@ -103,9 +103,10 @@ surface, which is what `eva` with no verb picks.
 
 - **It does not build the page.** The artifact is `apps/web`'s, and the asset
   root is a path the composition root injects.
-- **It does not reach the Session API.** The page reaches Eva over the wire
-  `eva.api` serves. The `Client` this row is handed is unused until W2, when
-  the surface itself starts to ask.
+- **It does not answer the Session API.** The page reaches Eva over the wire
+  [`eva.api`](../api/README.md) serves, and this row only carries it: the
+  `Client` the row is started with is what the wire answers from, and the
+  surface itself starts to ask at W2.
 - **It does not carry the page into the release binary.** The asset root
   resolves inside the workspace. Getting `apps/web/dist` beside a compiled
   binary is `scripts/release/build.ts`'s concern and it is the next thing.
@@ -122,7 +123,13 @@ surface, which is what `eva` with no verb picks.
   app prints it and exits non-zero.
 - `isLocal(host)` — whether a bind reaches this machine only.
 - `serveWeb(options)` — binds, serves, and returns the `Frontend` that holds
-  until the Scope closes. A refused bind creates no server.
+  until the Scope closes. A refused bind creates no server. `options.api` is
+  offered every request first, and before the built page is looked for: a call
+  is answered from the record, and a build nobody ran says nothing about
+  whether Eva can answer it.
+- `Answering` — something that may answer a request before the assets do, and
+  says whether it did. It is how one port carries the page and the calls the
+  page makes.
 - `assetFor(root, url)` — the file a request is answered with, with the deep
   link falling back to the page and nothing above the root ever returned.
 - `mediaType(path)`, `hasPage(root)`, `unbuilt(root)`, `urlOf(address)`.
