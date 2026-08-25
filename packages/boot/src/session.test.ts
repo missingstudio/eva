@@ -516,21 +516,36 @@ describe("a watch with a cursor", () => {
     ).toBe("ResumeTooFarBehind")
   })
 
-  // Stage 0's rule, one level up: a build without the trace plugin degrades
-  // rather than failing, and it says so where the watcher is looking.
-  it("says degraded and stays live when no sink is present", async () => {
+  /**
+   * A build with no trace has committed nothing, so a cursor watch carries
+   * nothing. Not a caveat about the build, and not the live hub either: a
+   * caller numbers this form from the Cursor it asked with, so one payload
+   * with no position makes every position after it wrong.
+   */
+  it("carries nothing a Cursor can place when no sink is present", async () => {
     const seen = await wired({}, (wiring, scope) =>
       Effect.gen(function* () {
         const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope)
-        const session = sessionID("sess_bare")
+        const session = yield* api.session.create(".")
         const taking = yield* Effect.forkChild(
           Stream.runCollect(api.session.watch(session, { session, seq: 0 }).pipe(Stream.take(1))),
         )
-        const joined = yield* Effect.timeoutOption(Fiber.join(taking), 2000)
+        yield* Effect.yieldNow
+        yield* api.session.submit(session, { kind: "prompt", text: "hello" })
+        const joined = yield* Effect.timeoutOption(Fiber.join(taking), 250)
         return Option.map(joined, (chunk) => [...chunk])
       }).pipe(Effect.orDie),
     )
-    expect(seen).toEqual(Option.some([{ kind: "degraded", missing: ["TraceSink"] }]))
+    expect(seen).toEqual(Option.none())
+  })
+
+  // And the build is not silent about itself. The live form carries what the
+  // Run said, degradation included, because nothing there claims a position.
+  it("still says what the Run said, on the form that claims no position", async () => {
+    const seen = await wired({ recorder: false }, (wiring, scope) =>
+      watched(wiring, scope, { kind: "prompt", text: "hello" }),
+    )
+    expect(seen.map((one) => one.kind)).toContain("degraded")
   })
 })
 
