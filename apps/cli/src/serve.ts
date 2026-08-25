@@ -1,7 +1,7 @@
 import { makeSessionAPI } from "@missingstudio/eva-boot"
 import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 import { WEB_SURFACE } from "@missingstudio/eva-web"
-import { Effect, Exit, Scope } from "effect"
+import { Cause, Effect, Exit, Scope } from "effect"
 import type { Started } from "./run.js"
 
 export class NoWebSurfaceError extends Error {
@@ -38,3 +38,20 @@ export const runServe = Effect.fn("cli.serve")(function* (started: Started) {
   yield* Effect.ensuring(frontend.done, Scope.close(scope, Exit.void))
   return chosen.id
 })
+
+/**
+ * What a serve that ended exits with, and what it says on the way out.
+ *
+ * Ctrl-C is the only way to stop this surface — the page holds until the
+ * process does — so an interrupt is how a serve ends, and a person who typed
+ * it is told nothing. What is left is a build with no `eva.web` row: a door
+ * this build does not have, and it names the doors it does.
+ */
+export const served = (
+  outcome: Exit.Exit<unknown, unknown>,
+  err: (text: string) => void,
+): number => {
+  if (Exit.isSuccess(outcome) || Cause.hasInterruptsOnly(outcome.cause)) return 0
+  err(`${Cause.squash(outcome.cause) as Error}\n`)
+  return 1
+}
