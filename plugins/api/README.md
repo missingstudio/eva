@@ -47,11 +47,12 @@ curl http://127.0.0.1:7777/api/sessions
 [{"id":"ses_019a","title":"read the trace back over HTTP"}]
 ```
 
-| Method      | Route                         | What                                |
-| ----------- | ----------------------------- | ----------------------------------- |
-| `list`      | `GET /api/sessions`           | every Session, each with its Header |
-| `attach`    | `GET /api/sessions/:id`       | that Session's record, as events    |
-| `model.get` | `GET /api/sessions/:id/model` | the model that Session is kept at   |
+| Method      | Route                         | What                                     |
+| ----------- | ----------------------------- | ---------------------------------------- |
+| `list`      | `GET /api/sessions`           | every Session, each with its Header      |
+| `attach`    | `GET /api/sessions/:id`       | that Session's record, as events         |
+| `watch`     | `GET /api/sessions/:id/watch` | what commits after a Cursor, as a stream |
+| `model.get` | `GET /api/sessions/:id/model` | the model that Session is kept at        |
 
 What travels is the contract's own shapes, with no envelope around them and no
 rendering in them. A path under `/api` that no route carries is answered 404
@@ -59,10 +60,10 @@ here rather than left to fall through, because the page's own server answers an
 unknown path with the page — and a call answered with HTML reads as a broken
 parse instead of as a miss.
 
-`watch` arrives with the page code that follows a Session live, and `submit`,
-`cancel`, `answer` and `model.set` are stage 2's, against the permission gate
-that stage builds anyway. `create` is in neither half: a page that takes no
-input opens no Session.
+Those four are the whole read half. `submit`, `cancel`, `answer` and
+`model.set` are stage 2's, against the permission gate that stage builds
+anyway. `create` is in neither half: a page that takes no input opens no
+Session.
 
 ## `attach` sends the record, not a fold of it
 
@@ -79,6 +80,50 @@ because it read the same events.
 
 The far side holds no Catalog, so its fold prices nothing. A page shows the
 cost a Provider reported, and never an estimate worked out from no rates.
+
+## `watch` is one way, so it is SSE
+
+`watch` is the one method that answers frames rather than a body, and SSE
+already has a name for "the last position I saw" — so the Cursor travels as
+`Last-Event-ID`, which is the Cursor with a standard name. The Session is in
+the path, so the header carries the position and nothing else.
+
+```
+GET /api/sessions/ses_019a/watch
+Last-Event-ID: 12
+
+id: 13
+data: {"version":1,"kind":"text","payload":{"block":0,"content":{"type":"text","text":"a "}}}
+
+id: 14
+data: {"version":1,"kind":"text","payload":{"block":0,"content":{"type":"text","text":"word"}}}
+```
+
+A payload travels with no Event over it, because that is what `watch` hands
+back: the sink numbers an Event, and a live delta has no number to carry. The
+codec is still `packages/schema`'s, one layer in — the same body table, so a
+kind either half can read is a kind both halves can read, and a kind this side
+does not know arrives as `unknown` and the stream carries on.
+
+**Where the position comes from, and where it is absent.** With a Cursor the
+contract guarantees the committed payloads after it, in trace order, exactly
+once — so the nth frame sits at `from.seq + n`, and that is exact rather than a
+guess. With no Cursor there is nothing to count from: that form carries the
+live stream, which is payloads the sink has not numbered, and its frames carry
+**no `id:` at all**. It reads like an off-by-one until you see why — a frame
+with an invented position is a position a page would resume from, and it would
+resume past events it never saw.
+
+**A refused Cursor is a status, before the stream opens.** `watch` with a
+Cursor further behind than the replay bound is answered `409 Conflict` with the
+Cursor asked for and the head it was measured against, and the far side rebuilds
+`ResumeTooFarBehind` from it. It is never a frame inside a stream: the refusal
+is decided with nothing said yet, and a stream that had already said `200`
+could not take it back.
+
+The response closing is what stops a stream. An open stream nobody is reading
+is a `node:http` server that never closes, so the reader going interrupts the
+drain — a `server.close()` that had to wait for a stream would be a hang.
 
 ## The two entry points
 
@@ -130,11 +175,16 @@ that hung instead would be a page that waits on a stream nobody opened.
   Session API. It says whether it answered, so the server that owns the socket
   can serve the page with what falls past it.
 - `routeFor(method, path)` — the route table, as a pure function.
+- `watchFor(method, path, from)` — the same, for the one method that answers a
+  stream. It is matched first, because a `Route` answers a body.
 - `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `sessionPath(session)`,
-  `modelPath(session)` — the id and the paths, rooted so no address is built
-  into the page.
+  `modelPath(session)`, `watchPath(session)` — the id and the paths, rooted so
+  no address is built into the page.
 - `headerIn`, `headersIn`, `modelIn`, `eventsIn` — what a body has to be to be
   an answer. `eventsOut` is the record on its way out.
+- `CURSOR`, `cursorIn(value)`, `Frame`, `frameOut(frame)`, `framesIn(text)`,
+  `payloadIn(frame)`, `refusalOut(refused)`, `refusalIn(from, body)` — the
+  stream's own shapes, read by both halves for the reason the paths are.
 - `httpTransport(options)` — from `@missingstudio/eva-api/client`.
 
 ## Development
