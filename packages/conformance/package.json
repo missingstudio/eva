@@ -18,6 +18,7 @@
     "@missingstudio/eva-schema": "workspace:*",
     "@missingstudio/eva-sdk": "workspace:*",
     "@missingstudio/eva-session-jsonl": "workspace:*",
+    "@missingstudio/eva-session-view": "workspace:*",
     "@missingstudio/eva-testkit": "workspace:*",
     "@missingstudio/eva-themes": "workspace:*",
     "@missingstudio/eva-trace": "workspace:*",
@@ -28,9 +29,14 @@
     "@missingstudio/eva-tui-surface": "workspace:*",
     "@missingstudio/eva-validator": "workspace:*",
     "@missingstudio/eva-web": "workspace:*",
+    "@missingstudio/eva-web-app": "workspace:*",
     "@missingstudio/eva-workflow": "workspace:*",
     "@types/node": "catalog:",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
     "effect": "catalog:",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "typescript": "catalog:"
   }
 }
