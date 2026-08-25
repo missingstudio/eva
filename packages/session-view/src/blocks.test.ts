@@ -163,6 +163,21 @@ describe("the fold to Blocks", () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 
+  // A payload kind the schema does not define reaches this fold as its own
+  // block. It is the same fact as a content type nothing names: the record
+  // holds one, and no renderer here can draw it.
+  it("folds a payload kind nothing names to unknown", () => {
+    const blocks: TranscriptMessage["blocks"] = [
+      { type: "unknown", originalKind: "acp/party_mode", raw: { confetti: true } },
+    ]
+    expect(blockFold([agent(blocks)])[0]?.blocks[0]).toEqual({
+      kind: "unknown",
+      key: "0.0",
+      originalKind: "acp/party_mode",
+      raw: { confetti: true },
+    })
+  })
+
   it("folds an empty record to nothing", () => {
     expect(blockFold([])).toEqual([])
   })

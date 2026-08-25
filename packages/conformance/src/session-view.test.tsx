@@ -56,8 +56,9 @@ const said = (block: number, content: ContentBlock): Payload => ({ kind: "text",
 /**
  * One Run that did the things a Run does: it said something, it thought on
  * the way to it, it called a tool and the call was refused, it left another
- * call open, it changed a file, it produced an image, and it produced
- * something neither renderer names.
+ * call open, it changed a file, it produced an image, and it produced two
+ * things neither renderer names: a content type the schema does not define,
+ * and a payload kind it does not define either.
  */
 const TRACE: readonly Event[] = [
   event({ kind: "started", intent: "read the trace back" }),
@@ -86,6 +87,7 @@ const TRACE: readonly Event[] = [
   event({ kind: "edit", path: "docs/summary.md", hunks: 3 }),
   event(said(2, { type: "image", data: "aGk=", mimeType: "image/png" })),
   event(said(3, { type: "audio", data: "aGk=", mimeType: "audio/wav" })),
+  event({ kind: "unknown", originalKind: "acp/party_mode", raw: { confetti: true } }),
 ]
 
 /**
@@ -150,6 +152,7 @@ describe("one fold, two renderers", () => {
       "diff",
       "image",
       "unknown",
+      "unknown",
     ])
   })
 })
@@ -182,24 +185,30 @@ describe("what the two renderings agree the Run did", () => {
   it("draws no row for the Blocks the terminal has none for, and the page draws them", () => {
     const undrawn = blocks.filter((block) => rowsFor(block) === "")
 
-    expect(undrawn.map((block) => block.kind)).toEqual(["image", "unknown"])
+    expect(undrawn.map((block) => block.kind)).toEqual(["image", "unknown", "unknown"])
     for (const block of undrawn) expect(namedIn(cardFor(block), block)).toEqual(factsOf(block))
   })
 
   /**
    * The degradation rule, at the one place the two renderers can be held
-   * against it. Neither has a primitive for this Block; the terminal draws
+   * against it. Neither has a primitive for these Blocks; the terminal draws
    * nothing and the page says what it could not draw, so the record is on
    * one screen and missing from the other rather than lost from both.
+   *
+   * Both origins are here: a content type the schema does not define, and a
+   * payload kind it does not define. The second only reaches a renderer
+   * because the transcript fold keeps it, so this is where a fold that
+   * dropped it would show.
    */
   it("says on the page what neither renderer can draw, rather than dropping it", () => {
-    const found = blocks.find((block) => block.kind === "unknown")
-    expect(found).toBeDefined()
-    if (found === undefined) return
+    const found = blocks.filter((block) => block.kind === "unknown")
+    expect(found.map((block) => block.originalKind)).toEqual(["audio", "acp/party_mode"])
 
-    expect(rowsFor(found)).toBe("")
-    expect(cardFor(found)).toContain("cannot draw")
-    expect(cardFor(found)).toContain("audio")
+    for (const block of found) {
+      expect(rowsFor(block)).toBe("")
+      expect(cardFor(block)).toContain("cannot draw")
+      expect(cardFor(block)).toContain(block.originalKind)
+    }
   })
 
   // A reader moving between the two screens reads one transcript, so the
