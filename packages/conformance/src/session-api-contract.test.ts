@@ -9,7 +9,7 @@ import {
   type ModelRef,
   type SessionAPI,
 } from "@missingstudio/eva-core"
-import type { Payload } from "@missingstudio/eva-schema"
+import type { Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
 import { scripted, withKernel } from "@missingstudio/eva-testkit"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
@@ -106,8 +106,8 @@ const memoryFiller: Filler = {
  * back over the socket. Every clause then passes unchanged, which is the
  * strongest thing that can be said about a seam surviving its second filler.
  *
- * `list`, `attach` and `model.get` are what `eva.api` carries at W1, and
- * `watch` crosses over as the route that answers it lands.
+ * `list`, `attach`, `watch` and `model.get` are the whole read half, and all
+ * four cross the socket here. The write half stays direct: it is stage 2's.
  *
  * It is served where a person's Eva serves it: behind `eva.web`'s own server,
  * on one port, from the handler the composition root hands over. A wire that
@@ -137,11 +137,38 @@ const httpFiller: Filler = {
             origin: said.join("").split(" ")[0] ?? "",
           })
 
+          /**
+           * A socket is not a function call. The far side subscribes when the
+           * request reaches it, and every clause here forks a watch and writes
+           * on the next turn of the event loop — which outruns a round trip
+           * that the local fillers do not have to make.
+           *
+           * So a write waits for the watches this side asked for to be open on
+           * the far side. It is the one thing the wire needs that a filler in
+           * this process gets for nothing, and it weakens no clause: what it
+           * waits for is the subscription the clause itself opened.
+           */
+          let asked = 0
+          const attached: Effect.Effect<void> = Effect.suspend(() =>
+            memory.open() >= asked ? Effect.void : Effect.flatMap(Effect.sleep(1), () => attached),
+          )
+
           const over: SessionAPI = {
             ...memory.api,
             list: transport.api.list,
             attach: transport.api.attach,
             model: { get: transport.api.model.get, set: memory.api.model.set },
+            // Cast because the two forms differ in their error channel and
+            // the implementation is one function, as it is where the API is
+            // built.
+            watch: ((session: SessionID, from?: Cursor) => {
+              asked += 1
+              return from === undefined
+                ? transport.api.watch(session)
+                : transport.api.watch(session, from)
+            }) as SessionAPI["watch"],
+            submit: (session, input) =>
+              Effect.flatMap(attached, () => memory.api.submit(session, input)),
           }
           return yield* body(over)
         }),
