@@ -39,7 +39,7 @@ disagree about it, and every Block it gives back is drawn:
 | `unknown`   | what it was, and that this page could not draw it     |
 
 A Block the page cannot draw is drawn as one it could not draw. A Surface may
-render less than another; it may never know less — so nothing is dropped, and
+render less than another; it may never know more — so nothing is dropped, and
 a reader never finds a hole where the record holds something.
 
 The diff comes from the record's own fields, and the cost line from the

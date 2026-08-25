@@ -82,7 +82,7 @@ describe("one Block, in page primitives", () => {
 
   /**
    * The degradation rule, pointed at this renderer. A Surface may render less
-   * than another; it may never know less. So a Block with no primitive here
+   * than another; it may never know more. So a Block with no primitive here
    * says what it was and that it could not be drawn, rather than leaving a
    * hole a reader would take for nothing having happened.
    */
