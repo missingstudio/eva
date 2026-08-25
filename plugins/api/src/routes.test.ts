@@ -2,10 +2,11 @@ import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
 import { memorySessionAPI, type MemorySession } from "@missingstudio/eva-client-runtime"
 import type { ModelRef } from "@missingstudio/eva-core"
+import { SCHEMA_VERSION } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { apiWire, routeFor } from "./routes.js"
-import { API_ROOT, modelPath, SESSIONS } from "./wire.js"
+import { API_ROOT, modelPath, sessionPath, SESSIONS } from "./wire.js"
 
 const MODEL: ModelRef = { provider: "wire", model: "one" }
 
@@ -48,6 +49,46 @@ describe("the read half, over a socket", () => {
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8")
     expect(await response.json()).toEqual([{ id: memory.session, title: "the first ask" }])
+
+    await served.close()
+  })
+
+  /**
+   * The record, and not a fold of it. A page that was sent messages would
+   * have to believe them; a page that is sent the Trace folds it and can be
+   * held against the same events by anyone reading the wire.
+   */
+  it("answers one Session with the record, as the events the Trace holds", async () => {
+    const memory = await held()
+    await Effect.runPromise(memory.say({ kind: "edit", path: "one.ts", hunks: 2 }))
+    const served = await standing(memory)
+
+    const response = await fetch(`${served.origin}${sessionPath(memory.session)}`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual([
+      {
+        id: expect.any(String),
+        seq: 1,
+        at: { wall: expect.any(String) },
+        version: SCHEMA_VERSION,
+        kind: "edit",
+        run: expect.any(String),
+        session: memory.session,
+        parent: null,
+        payload: { path: "one.ts", hunks: 2 },
+      },
+    ])
+
+    await served.close()
+  })
+
+  it("answers a Session nobody opened with an empty record, rather than a miss", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const response = await fetch(`${served.origin}${sessionPath("sess_nobody_opened")}`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual([])
 
     await served.close()
   })
@@ -115,10 +156,10 @@ describe("the read half, over a socket", () => {
  * carries is read here and the socket is only what carries it.
  */
 describe("the route table", () => {
-  it("carries the listing and one Session's model, and nothing else", () => {
+  it("carries the listing, one Session's record, and its model, and nothing else", () => {
     expect(routeFor("GET", SESSIONS)).toBeTypeOf("function")
+    expect(routeFor("GET", sessionPath("ses_1"))).toBeTypeOf("function")
     expect(routeFor("GET", modelPath("ses_1"))).toBeTypeOf("function")
-    expect(routeFor("GET", `${SESSIONS}/ses_1`)).toBeUndefined()
     expect(routeFor("GET", `${SESSIONS}/ses_1/events`)).toBeUndefined()
   })
 

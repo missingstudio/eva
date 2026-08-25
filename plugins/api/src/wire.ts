@@ -1,5 +1,5 @@
 import type { ModelRef, SessionHeader } from "@missingstudio/eva-core"
-import { sessionID } from "@missingstudio/eva-schema"
+import { decode, encode, sessionID, type Event } from "@missingstudio/eva-schema"
 
 export const API_PLUGIN = "eva.api"
 
@@ -11,8 +11,9 @@ export const API_PLUGIN = "eva.api"
 export const API_ROOT = "/api"
 export const SESSIONS = `${API_ROOT}/sessions`
 
-export const modelPath = (session: string): string =>
-  `${SESSIONS}/${encodeURIComponent(session)}/model`
+export const sessionPath = (session: string): string => `${SESSIONS}/${encodeURIComponent(session)}`
+
+export const modelPath = (session: string): string => `${sessionPath(session)}/model`
 
 /**
  * What travels: the contract's own shapes, with nothing wrapped around them.
@@ -70,4 +71,35 @@ export const modelIn = (value: unknown): ModelRef | undefined => {
   const provider = stringAt(row, "provider")
   const model = stringAt(row, "model")
   return provider === undefined || model === undefined ? undefined : { provider, model }
+}
+
+/**
+ * A Transcript is three closures and a Cursor, so what travels is not a
+ * Transcript: it is the record the Transcript folded, and the far side folds
+ * it again. A projection sent instead would be the only answer a page had,
+ * and a wrong one would read as the truth.
+ *
+ * `packages/schema` already carries this codec in both directions, at the
+ * granularity of one Event, so there is no second one here. The Cursor is
+ * not sent either: the fold on the far side ends where this one does,
+ * because it read the same events.
+ */
+export const eventsOut = (events: readonly Event[]): readonly Record<string, unknown>[] =>
+  events.map(encode)
+
+export const eventsIn = (value: unknown): readonly Event[] | undefined => {
+  if (!Array.isArray(value)) return undefined
+  const listed: readonly unknown[] = value
+
+  const record: Event[] = []
+  for (const one of listed) {
+    try {
+      record.push(decode(one))
+    } catch {
+      // One record this cannot read makes the whole fold unreadable. A
+      // transcript with a hole in it is worse than a call that asks again.
+      return undefined
+    }
+  }
+  return record
 }

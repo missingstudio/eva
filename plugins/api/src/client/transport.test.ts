@@ -10,7 +10,7 @@ import { sessionID } from "@missingstudio/eva-schema"
 import { Effect, Exit, Fiber, Stream, SubscriptionRef } from "effect"
 import { describe, expect, it } from "vitest"
 import { apiWire } from "../routes.js"
-import { modelPath, SESSIONS } from "../wire.js"
+import { modelPath, sessionPath, SESSIONS } from "../wire.js"
 import { httpTransport, type Request } from "./transport.js"
 
 const MODEL: ModelRef = { provider: "wire", model: "one" }
@@ -85,6 +85,39 @@ describe("the wire, read as a Transport", () => {
     )
 
     expect(found).toEqual(MODEL)
+    await served.close()
+  })
+
+  /**
+   * The fold happens on this side, from the record the wire sent. So the
+   * Cursor is not read off the wire either: this fold ends where the far
+   * side's ended, because both read the same events.
+   */
+  it("folds a Session from the record, and ends where the record ends", async () => {
+    const memory = await held()
+    await Effect.runPromise(memory.say({ kind: "started", intent: "change it" }))
+    await Effect.runPromise(memory.say({ kind: "edit", path: "one.ts", hunks: 2 }))
+    const served = await standing(memory)
+
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const transport = yield* httpTransport({ origin: served.origin })
+        const record = yield* Effect.scoped(transport.api.attach(memory.session))
+        return { at: record.at, messages: record.messages(), cost: record.cost() }
+      }),
+    )
+
+    expect(found.at).toEqual({ session: memory.session, seq: 2 })
+    expect(found.messages).toEqual([
+      {
+        author: "human",
+        blocks: [{ type: "content", block: 0, content: { type: "text", text: "change it" } }],
+      },
+      { author: "agent", blocks: [{ type: "edit", path: "one.ts", hunks: 2 }] },
+    ])
+    // Nothing on this side holds a Catalog, so nothing here prices anything.
+    expect(found.cost.estimatedCostTicks).toBeNull()
+
     await served.close()
   })
 
@@ -199,24 +232,21 @@ describe("what the wire does not carry yet", () => {
     expect(String(failed)).toContain("NotOnTheWire")
   })
 
-  // 005 takes `attach` and 006 takes `watch`, each with the page code that
-  // calls it.
-  it("says the same of the read methods no caller has arrived for", async () => {
+  // 006 takes `watch`, with the page code that follows a Session live.
+  it("says the same of the read method no caller has arrived for", async () => {
     const found = await Effect.runPromise(
       Effect.flatMap(transport, (one) =>
-        Effect.all([
-          Effect.exit(Effect.scoped(one.api.attach(sessionID("ses_1")))),
-          Effect.exit(Stream.runDrain(one.api.watch(sessionID("ses_1")))),
-        ]),
+        Effect.exit(Stream.runDrain(one.api.watch(sessionID("ses_1")))),
       ),
     )
 
-    for (const one of found) expect(String(one)).toContain("NotOnTheWire")
+    expect(String(found)).toContain("NotOnTheWire")
   })
 })
 
 describe("the paths the two halves agree on", () => {
-  it("names one Session's model under the listing it came from", () => {
+  it("names one Session under the listing it came from, and its model under it", () => {
+    expect(sessionPath("ses_1")).toBe(`${SESSIONS}/ses_1`)
     expect(modelPath("ses_1")).toBe(`${SESSIONS}/ses_1/model`)
   })
 

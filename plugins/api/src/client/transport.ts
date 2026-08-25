@@ -1,7 +1,7 @@
 import type { Transport, TransportHealth } from "@missingstudio/eva-client-runtime"
-import type { SessionAPI } from "@missingstudio/eva-core"
+import { foldTranscript, type SessionAPI } from "@missingstudio/eva-core"
 import { Effect, Schedule, Stream, SubscriptionRef } from "effect"
-import { headersIn, modelIn, modelPath, SESSIONS } from "../wire.js"
+import { eventsIn, headersIn, modelIn, modelPath, sessionPath, SESSIONS } from "../wire.js"
 
 // How long a call that could not reach the far side waits before it asks
 // again, in milliseconds.
@@ -25,8 +25,8 @@ export interface HttpOptions {
 /**
  * What the wire does not carry yet. `SessionAPI` is one interface and a filler
  * answers all of it, so a method the read half has not reached is a defect
- * where it is called — not a hang, and not a shape nobody can read. 005 takes
- * `attach`, 006 takes `watch`, and the write half is stage 2's.
+ * where it is called — not a hang, and not a shape nobody can read. 006 takes
+ * `watch`, and the write half is stage 2's.
  */
 export class NotOnTheWire extends Error {
   override readonly name = "NotOnTheWire"
@@ -111,7 +111,19 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
         set: () => missing("model.set"),
       },
       create: () => missing("create"),
-      attach: () => missing("attach"),
+      /**
+       * The record arrives and the fold happens here. So the Cursor is not
+       * read off the wire either — this fold ends where the far side's ended,
+       * because both read the same events.
+       *
+       * No price lookup: a rate is not a fact about the Session and this side
+       * holds no Catalog, so what a caller is shown is the reported cost and
+       * never an estimate worked out from nothing.
+       */
+      attach: (session) =>
+        Effect.map(call(sessionPath(session), eventsIn), (record) =>
+          foldTranscript(session, record),
+        ),
       // Cast because the two forms differ in their error channel and the
       // implementation is one function, as it is where the API is built.
       watch: (() => Stream.die(new NotOnTheWire("watch"))) as SessionAPI["watch"],
