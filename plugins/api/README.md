@@ -50,6 +50,7 @@ curl http://127.0.0.1:7777/api/sessions
 | Method      | Route                         | What                                |
 | ----------- | ----------------------------- | ----------------------------------- |
 | `list`      | `GET /api/sessions`           | every Session, each with its Header |
+| `attach`    | `GET /api/sessions/:id`       | that Session's record, as events    |
 | `model.get` | `GET /api/sessions/:id/model` | the model that Session is kept at   |
 
 What travels is the contract's own shapes, with no envelope around them and no
@@ -58,10 +59,26 @@ here rather than left to fall through, because the page's own server answers an
 unknown path with the page — and a call answered with HTML reads as a broken
 parse instead of as a miss.
 
-`attach` and `watch` arrive with the page code that calls them, and `submit`,
+`watch` arrives with the page code that follows a Session live, and `submit`,
 `cancel`, `answer` and `model.set` are stage 2's, against the permission gate
 that stage builds anyway. `create` is in neither half: a page that takes no
 input opens no Session.
+
+## `attach` sends the record, not a fold of it
+
+A Transcript is three closures and a Cursor, so a Transcript is not what
+travels. What travels is the Trace the Transcript folded — this Session's own
+events, through the codec `packages/schema` already carries in both directions
+— and the far side folds it again with `foldTranscript`.
+
+That is not a convenience. A projection sent instead would be the only answer
+a page had, so a wrong one would read as the truth; a page that folds the
+record can be held against the same events by anybody reading the wire. It is
+also why no Cursor is sent: the fold on the far side ends where this one does,
+because it read the same events.
+
+The far side holds no Catalog, so its fold prices nothing. A page shows the
+cost a Provider reported, and never an estimate worked out from no rates.
 
 ## The two entry points
 
@@ -113,9 +130,11 @@ that hung instead would be a page that waits on a stream nobody opened.
   Session API. It says whether it answered, so the server that owns the socket
   can serve the page with what falls past it.
 - `routeFor(method, path)` — the route table, as a pure function.
-- `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `modelPath(session)` — the id and the
-  paths, rooted so no address is built into the page.
-- `headerIn`, `headersIn`, `modelIn` — what a body has to be to be an answer.
+- `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `sessionPath(session)`,
+  `modelPath(session)` — the id and the paths, rooted so no address is built
+  into the page.
+- `headerIn`, `headersIn`, `modelIn`, `eventsIn` — what a body has to be to be
+  an answer. `eventsOut` is the record on its way out.
 - `httpTransport(options)` — from `@missingstudio/eva-api/client`.
 
 ## Development

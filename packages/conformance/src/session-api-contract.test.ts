@@ -101,13 +101,13 @@ const memoryFiller: Filler = {
 
 /**
  * The wire in front of the in-memory one. No clause of this suite is read-half
- * only — every one of them writes — so a filler that answers four of nine
+ * only — every one of them writes — so a filler that answers a part of nine
  * methods is stood up by writing through the API the wire reads and reading
  * back over the socket. Every clause then passes unchanged, which is the
  * strongest thing that can be said about a seam surviving its second filler.
  *
- * `list` and `model.get` are what `eva.api` carries at W1, and each of the
- * other reads crosses over as the route that answers it lands.
+ * `list`, `attach` and `model.get` are what `eva.api` carries at W1, and
+ * `watch` crosses over as the route that answers it lands.
  *
  * It is served where a person's Eva serves it: behind `eva.web`'s own server,
  * on one port, from the handler the composition root hands over. A wire that
@@ -140,6 +140,7 @@ const httpFiller: Filler = {
           const over: SessionAPI = {
             ...memory.api,
             list: transport.api.list,
+            attach: transport.api.attach,
             model: { get: transport.api.model.get, set: memory.api.model.set },
           }
           return yield* body(over)

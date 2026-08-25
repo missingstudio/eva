@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 import type { SessionAPI } from "@missingstudio/eva-core"
 import { sessionID } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
-import { API_ROOT, SESSIONS } from "./wire.js"
+import { API_ROOT, eventsOut, SESSIONS } from "./wire.js"
 
 /**
  * Something that may answer a request, and says whether it did. The socket
@@ -21,6 +21,7 @@ export interface Answer {
 
 export type Route = (api: SessionAPI) => Effect.Effect<Answer>
 
+const SESSION = new RegExp(`^${SESSIONS}/([^/]+)$`)
 const MODEL = new RegExp(`^${SESSIONS}/([^/]+)/model$`)
 
 // A segment is a name, and a name that is not valid percent-encoding names
@@ -33,11 +34,17 @@ const nameOf = (segment: string): string | undefined => {
   }
 }
 
+// Which Session a path names, or nothing when the path is not that shape.
+const askedFor = (shape: RegExp, path: string): string | undefined => {
+  const named = shape.exec(path)?.[1]
+  return named === undefined ? undefined : nameOf(named)
+}
+
 /**
- * The read half `eva.api` carries, and no more of it. `attach` arrives with
- * the page that folds a Transcript and `watch` with the page that follows
- * one, so no part of the wire is built ahead of a caller. The write half is
- * stage 2's, against the permission gate that stage builds anyway.
+ * The read half `eva.api` carries, and no more of it. `watch` arrives with
+ * the page that follows a Session live, so no part of the wire is built
+ * ahead of a caller. The write half is stage 2's, against the permission
+ * gate that stage builds anyway.
  *
  * `create` is in neither half: a page that takes no input opens no Session.
  */
@@ -48,8 +55,25 @@ export const routeFor = (method: string, path: string): Route | undefined => {
     return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: rows }))
   }
 
-  const named = MODEL.exec(path)?.[1]
-  const session = named === undefined ? undefined : nameOf(named)
+  const attaching = askedFor(SESSION, path)
+  if (attaching !== undefined) {
+    const asked = sessionID(attaching)
+    /**
+     * Scoped here, and everything the answer needs read inside it. `attach`
+     * is the one read that asks for a Scope, and a socket callback is not an
+     * Effect — so the request that opened the Scope is what closes it, and
+     * nothing outlives the answer it was opened for.
+     */
+    return (api) =>
+      Effect.scoped(
+        Effect.map(api.attach(asked), (record) => ({
+          status: 200,
+          body: eventsOut(record.events()),
+        })),
+      )
+  }
+
+  const session = askedFor(MODEL, path)
   if (session !== undefined) {
     const asked = sessionID(session)
     return (api) => Effect.map(api.model.get(asked), (found) => ({ status: 200, body: found }))
@@ -98,11 +122,9 @@ export const apiWire =
     }
 
     const route = routeFor(request.method ?? "GET", asked)
-    /**
-     * Forked, because a socket callback is not an Effect. The two methods
-     * this wire carries need no Scope, so nothing outlives the request that
-     * asked for it; `attach` needs one and that is 005's to arrange.
-     */
+    // Forked, because a socket callback is not an Effect. A route that needs
+    // a Scope closes its own, so nothing here outlives the request that
+    // asked for it.
     Effect.runFork(
       Effect.map(route === undefined ? Effect.succeed(MISS) : route(api), (answer) => {
         response.writeHead(answer.status, HEAD)
