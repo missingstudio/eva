@@ -139,6 +139,11 @@ const blockOf = (key: string, block: TranscriptBlock): Block => {
           }
     case "edit":
       return { kind: "diff", key, path: block.path, hunks: block.hunks }
+    // A payload kind the schema does not define, and a content type it does
+    // not define, are the same fact to a renderer: the record holds one and
+    // nothing here can draw it.
+    case "unknown":
+      return { kind: "unknown", key, originalKind: block.originalKind, raw: block.raw }
   }
 }
 

@@ -219,6 +219,14 @@ export type TranscriptBlock =
    * does not change shape when it does.
    */
   | { readonly type: "edit"; readonly path: string; readonly hunks: number }
+  /**
+   * A payload kind the schema does not define. It is still something the Run
+   * said, so the fold keeps it: `originalKind` is what it was and `raw` is
+   * what it said. A renderer draws that it could not draw it, which is a
+   * renderer that renders less; dropping it here would be every Surface
+   * knowing less, and nothing later would say there had been one.
+   */
+  | { readonly type: "unknown"; readonly originalKind: string; readonly raw: unknown }
 
 export interface TranscriptMessage {
   readonly author: ActorKind
@@ -233,7 +241,8 @@ interface MutableMessage {
 /**
  * Folds one session's events, in trace order, into messages. Payload kinds
  * that are not conversation content (usage, retry, mode, and the rest) do
- * not appear in the transcript.
+ * not appear in the transcript. A kind the schema does not define is not one
+ * of those: nothing here can say it was not content, so it is kept.
  *
  * A reader sees continuous prose, so this coalesces both chunk kinds first
  * rather than merging blocks as it goes. The Fold Keys guard then covers
@@ -316,6 +325,15 @@ export const transcriptFold = (events: readonly Event[]): readonly TranscriptMes
       // work out.
       case "edit":
         agentTail().blocks.push({ type: "edit", path: payload.path, hunks: payload.hunks })
+        break
+      // The codec parks a wire kind it does not recognise here. It survives
+      // the fold as what it was, so a Surface can say the record holds one.
+      case "unknown":
+        agentTail().blocks.push({
+          type: "unknown",
+          originalKind: payload.originalKind,
+          raw: payload.raw,
+        })
         break
       default:
         break

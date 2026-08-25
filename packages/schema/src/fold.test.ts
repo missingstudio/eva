@@ -317,6 +317,28 @@ describe("transcriptFold", () => {
     expect(messages).toHaveLength(1)
     expect(messages[0]!.blocks[1]).toEqual({ type: "edit", path: "src/index.ts", hunks: 2 })
   })
+
+  /**
+   * A kind the schema does not define is not one this fold may call "not
+   * content". The codec parks a wire kind it does not recognise there, so a
+   * refold has to give it back: a Surface that folds the record again would
+   * otherwise lose it, and nothing later would say there had been one.
+   */
+  it("keeps a kind it does not know, as the kind it was", () => {
+    const messages = transcriptFold([make(text("before")), make(samples().unknown)])
+    expect(messages[0]!.blocks[1]).toEqual({
+      type: "unknown",
+      originalKind: "acp/party_mode",
+      raw: { confetti: true },
+    })
+  })
+
+  // And what follows it still arrives. One kind nothing names is not a hole
+  // in the rest of the turn.
+  it("carries on past it", () => {
+    const messages = transcriptFold([make(samples().unknown), make(text("after"))])
+    expect(messages[0]!.blocks.map((one) => one.type)).toEqual(["unknown", "content"])
+  })
 })
 
 const verdict = (
