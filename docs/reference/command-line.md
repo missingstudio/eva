@@ -71,6 +71,18 @@ start a surface nobody chose. The verb starts the `eva.web` row **by id** —
 plugin through the build, because a surface row is started with a Client and
 nothing else, so the bind is closed over when the plugin is made.
 
+A local page binds to loopback, and a non-local `--host` is **refused** before
+anything boots: a remote page needs a token, and stage 9b is what issues one.
+The refusal names the reason and the stage, opens no port, and exits non-zero.
+The rule is `eva.web`'s and the exit code is the app's — `SurfaceInfo.start`
+has `never` in its error channel, so a refused bind cannot come out of a
+surface row.
+
+```
+eva serve --web --host 0.0.0.0
+  ← refused: a non-local bind needs a token, and tokens arrive at 9b
+```
+
 A positional argument is safe under `eva run` and it is not safe at the root:
 the verb is already named, so the positional cannot swallow a misspelled one.
 The rule below about the bare prompt still holds where it was made.

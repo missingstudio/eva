@@ -6,6 +6,7 @@ import {
   realpathSync,
   writeFileSync,
 } from "node:fs"
+import { connect, createServer, type AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
@@ -52,6 +53,30 @@ const ran = async (
   const code = await Effect.runPromise(main(world, given.build))
   return { code, out: out.join(""), err: err.join(""), outs: out }
 }
+
+/**
+ * A port nothing holds, taken from the kernel and given straight back, and
+ * whether anything came to hold it. A refused bind opens nothing, and a raw
+ * connect is how that is proven rather than assumed.
+ */
+const freePort = (): Promise<number> =>
+  new Promise((settle) => {
+    const probe = createServer()
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as AddressInfo
+      probe.close(() => settle(port))
+    })
+  })
+
+const listening = (port: number): Promise<boolean> =>
+  new Promise((settle) => {
+    const socket = connect({ host: "127.0.0.1", port })
+    socket.once("connect", () => {
+      socket.destroy()
+      settle(true)
+    })
+    socket.once("error", () => settle(false))
+  })
 
 const answer = (value: string): Payload => ({
   kind: "text",
@@ -605,5 +630,55 @@ steps:
 
     expect(found.code).toBe(0)
     expect(found.outs).toEqual(["## v1.0\n- the login gate landed"])
+  })
+})
+
+/**
+ * A local page binds to loopback. A non-local bind needs a token and stage 9b
+ * is what issues one, so until 9b exists it is refused rather than served
+ * unauthenticated — and a refusal is a supported outcome that says why.
+ */
+describe("a bind that needs a token", () => {
+  // The whole criterion in one run: the reason and the stage are said, the
+  // exit code is non-zero, nothing was printed as though it had served, and
+  // the port it named is still free. A server on 0.0.0.0 answers on loopback,
+  // so a loopback connect would have reached one had anything bound.
+  it("refuses a non-local --host, opens no port, and exits non-zero", async () => {
+    const port = await freePort()
+    const found = await ran(
+      ["serve", "--web", "--host", "0.0.0.0", "--port", String(port)],
+      scratch(),
+    )
+
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("a non-local bind needs a token")
+    expect(found.err).toContain("9b")
+    expect(found.out).toBe("")
+    expect(await listening(port)).toBe(false)
+  })
+
+  // The posture is a tenancy and not a token, so `hosted` opens no door in W1
+  // either. What each posture permits arrives with the token at 9b.
+  it("refuses it under the hosted posture too", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", "posture: hosted\n")
+
+    const found = await ran(["serve", "--web", "--host", "192.168.1.10"], directory)
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("tokens arrive at 9b")
+    expect(found.out).toBe("")
+  })
+
+  // A loopback bind is not refused, so the refusal above is about the host and
+  // not about the verb. This build has no `eva.web` row, so it stops at the
+  // missing door instead of binding and holding the test open.
+  it("refuses no loopback bind", async () => {
+    const found = await ran(
+      ["serve", "--web", "--host", "127.0.0.2", "--without-plugin", "eva.web"],
+      scratch(),
+    )
+
+    expect(found.err).not.toContain("9b")
+    expect(found.err).toContain("no eva.web surface is registered")
   })
 })
