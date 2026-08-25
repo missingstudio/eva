@@ -182,7 +182,7 @@ that hung instead would be a page that waits on a stream nobody opened.
   no address is built into the page.
 - `headerIn`, `headersIn`, `modelIn`, `eventsIn` — what a body has to be to be
   an answer. `eventsOut` is the record on its way out.
-- `CURSOR`, `cursorIn(value)`, `Frame`, `frameOut(frame)`, `framesIn(text)`,
+- `CURSOR`, `cursorIn(value)`, `StreamFrame`, `frameOut(frame)`, `framesIn(text)`,
   `payloadIn(frame)`, `refusalOut(refused)`, `refusalIn(from, body)` — the
   stream's own shapes, read by both halves for the reason the paths are.
 - `httpTransport(options)` — from `@missingstudio/eva-api/client`.

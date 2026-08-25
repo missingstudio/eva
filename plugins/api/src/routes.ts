@@ -6,13 +6,13 @@ import {
   API_ROOT,
   cursorIn,
   CURSOR,
+  CURSOR_REFUSED,
   eventsOut,
   EVENT_STREAM,
   frameOut,
   refusalOut,
-  REFUSED,
   SESSIONS,
-  type Frame,
+  type StreamFrame,
 } from "./wire.js"
 
 /**
@@ -20,8 +20,12 @@ import {
  * belongs to `eva.web` and this is what it offers a request to first: a
  * plugin may not import a plugin, so the composition root takes the half
  * that answers and hands it to the half that binds.
+ *
+ * `plugins/web` declares the same type under the same name, because a plugin
+ * may not import a plugin. Two copies of one agreement are unavoidable here;
+ * two names for it would not be, and a reader would take them for two things.
  */
-export type Wire = (request: IncomingMessage, response: ServerResponse) => boolean
+export type Answering = (request: IncomingMessage, response: ServerResponse) => boolean
 
 // What one request is answered with. A route is a description and not a
 // write, so the table is a pure function and the socket is thin around it.
@@ -99,7 +103,7 @@ export const routeFor = (method: string, path: string): Route | undefined => {
  * nothing is subscribed to until something runs it, so this table is a pure
  * function too and the socket stays thin around it.
  */
-export type Watching = (api: SessionAPI) => Stream.Stream<Frame, ResumeTooFarBehind>
+export type Watching = (api: SessionAPI) => Stream.Stream<StreamFrame, ResumeTooFarBehind>
 
 /**
  * The one method that is one way. It has its own table because a `Route`
@@ -177,7 +181,7 @@ const STREAM = {
  */
 const streamed = (
   response: ServerResponse,
-  frames: Stream.Stream<Frame, ResumeTooFarBehind>,
+  frames: Stream.Stream<StreamFrame, ResumeTooFarBehind>,
 ): Effect.Effect<void> => {
   const written = Stream.runForEach(frames, (frame) =>
     Effect.sync(() => {
@@ -192,7 +196,7 @@ const streamed = (
       // already sent means the far side changed its mind, and the only honest
       // answer left is to stop talking.
       if (response.headersSent) return
-      response.writeHead(REFUSED, HEAD)
+      response.writeHead(CURSOR_REFUSED, HEAD)
       response.write(`${JSON.stringify(refusalOut(found))}\n`)
     }),
   )
@@ -242,7 +246,7 @@ const pathOf = (url: string): string | undefined => {
  * this wire holds: it calls the Session API as any other caller does.
  */
 export const apiWire =
-  (api: SessionAPI): Wire =>
+  (api: SessionAPI): Answering =>
   (request, response) => {
     const asked = pathOf(request.url ?? "/")
     if (asked === undefined || !(asked === API_ROOT || asked.startsWith(`${API_ROOT}/`))) {

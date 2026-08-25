@@ -35,7 +35,7 @@ export const isLocal = (host: string): boolean => {
   return LOOPBACK.has(address) || (isIPv4(address) && address.startsWith("127."))
 }
 
-const REFUSED = "refused: a non-local bind needs a token, and tokens arrive at 9b"
+const BIND_REFUSED = "refused: a non-local bind needs a token, and tokens arrive at 9b"
 
 /**
  * Why this bind is refused, or nothing when it is local. A remote page needs a
@@ -52,4 +52,4 @@ const REFUSED = "refused: a non-local bind needs a token, and tokens arrive at 9
  * creates a server, so no path serves a bind this refuses.
  */
 export const refusal = (host: string = DEFAULT_HOST): string | undefined =>
-  isLocal(host) ? undefined : REFUSED
+  isLocal(host) ? undefined : BIND_REFUSED
