@@ -111,6 +111,16 @@ code {
   white-space: pre-wrap;
 }
 
+/* What the pipe is. Marked rather than quiet like a note: a reader who misses
+   it reads a dead pipe as a Session that stopped. */
+.pipe {
+  background: color-mix(in srgb, var(--quiet) 14%, transparent);
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  margin: 0.75rem 0 0;
+  padding: 0.4rem 0.6rem;
+}
+
 /* The stream, and not the record: marked apart so a reader can tell which
    words are still being said. The fold writes over it when the Run closes. */
 .live {
