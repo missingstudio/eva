@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url"
-import { API_PLUGIN, makeApi, type Wire } from "@missingstudio/eva-api"
+import { API_PLUGIN, makeApi, type Answering } from "@missingstudio/eva-api"
 import { auth } from "@missingstudio/eva-auth"
 import { budget } from "@missingstudio/eva-budget"
 import { catalogModels } from "@missingstudio/eva-catalog-models"
@@ -93,7 +93,7 @@ export interface WebBind {
  * crash.
  */
 export const serving = (build: Build, bind: WebBind, write: (text: string) => void): Build => {
-  let wire: ((api: SessionAPI) => Wire) | undefined
+  let wire: ((api: SessionAPI) => Answering) | undefined
 
   return buildOf([
     ...build.all.filter((plugin) => plugin.id !== WEB_SURFACE && plugin.id !== API_PLUGIN),

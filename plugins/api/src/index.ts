@@ -1,7 +1,7 @@
 import type { SessionAPI } from "@missingstudio/eva-core"
 import { define, type Plugin } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-import { apiWire, type Wire } from "./routes.js"
+import { apiWire, type Answering } from "./routes.js"
 import { API_PLUGIN } from "./wire.js"
 
 export * from "./routes.js"
@@ -18,7 +18,7 @@ export interface ApiOptions {
    * not carry `eva.api` hands over nothing: the page is served and its calls
    * are answered by nobody, which is a degradation and not a crash.
    */
-  readonly serve: (wire: (api: SessionAPI) => Wire) => void
+  readonly serve: (wire: (api: SessionAPI) => Answering) => void
 }
 
 /**

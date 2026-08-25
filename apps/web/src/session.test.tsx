@@ -15,9 +15,9 @@ import {
   Cost,
   Live,
   Named,
+  Notice,
   noticeOf,
   Session,
-  Wire,
   type Folded,
   type Pipe,
   type Reading,
@@ -189,7 +189,7 @@ describe("what the page says about the pipe", () => {
    */
   it("says nothing about a pipe that has never gone", () => {
     expect(noticeOf(READY)).toBeUndefined()
-    expect(renderToStaticMarkup(<Wire pipe={READY} />)).toBe("")
+    expect(renderToStaticMarkup(<Notice pipe={READY} />)).toBe("")
   })
 
   /**

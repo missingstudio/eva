@@ -78,7 +78,7 @@ export const noticeOf = (pipe: Pipe): string | undefined => {
  * a Session that stopped reads the wrong thing off a page that is otherwise
  * correct.
  */
-export const Wire = ({ pipe }: { readonly pipe: Pipe }) => {
+export const Notice = ({ pipe }: { readonly pipe: Pipe }) => {
   const said = noticeOf(pipe)
   return said === undefined ? null : (
     <p className="pipe" role="status">
@@ -196,7 +196,7 @@ export const Session = ({
 }) => (
   <main>
     <Named session={session} header={header} />
-    <Wire pipe={pipe} />
+    <Notice pipe={pipe} />
     {reading.folded.kind === "folding" ? (
       <p className="note">Reading the transcript…</p>
     ) : (

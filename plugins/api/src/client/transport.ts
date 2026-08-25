@@ -4,6 +4,7 @@ import type { Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
 import { Effect, Schedule, Scope, Stream, SubscriptionRef } from "effect"
 import {
   CURSOR,
+  CURSOR_REFUSED,
   eventsIn,
   EVENT_STREAM,
   framesIn,
@@ -12,7 +13,6 @@ import {
   modelPath,
   payloadIn,
   refusalIn,
-  REFUSED,
   sessionPath,
   SESSIONS,
   watchPath,
@@ -205,7 +205,7 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
         if (answered._tag === "Failure") return yield* dropped
 
         const response = answered.success
-        if (from !== undefined && response.status === REFUSED) {
+        if (from !== undefined && response.status === CURSOR_REFUSED) {
           const body = yield* Effect.result(
             Effect.tryPromise({
               try: () => response.json() as Promise<unknown>,

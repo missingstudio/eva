@@ -132,13 +132,15 @@ export const eventsIn = (value: unknown): readonly Event[] | undefined => {
 
 /**
  * One frame of the stream: what was said, and where it sits in the record.
+ * `Frame` is the terminal's screen contract, so this one says which frame it
+ * is — the two are not the same thing and never meet.
  *
  * `seq` is absent for a watch that carries no Cursor, and that absence is the
  * point. A frame with a made-up position is a position a page would resume
- * from, and it would resume past what it never saw — see `watchStream` for
- * where the counting happens and why only one form of it can count.
+ * from, and it would resume past what it never saw — see `watchFor` for where
+ * the counting happens and why only one form of it can count.
  */
-export interface Frame {
+export interface StreamFrame {
   readonly seq?: number
   readonly data: string
 }
@@ -146,12 +148,12 @@ export interface Frame {
 // What a stream answers with, and what a refused Cursor answers with. Both
 // halves read them, so both halves hold one spelling of each.
 export const EVENT_STREAM = "text/event-stream"
-export const REFUSED = 409
+export const CURSOR_REFUSED = 409
 
-export const frameOut = (frame: Frame): string =>
+export const frameOut = (frame: StreamFrame): string =>
   `${frame.seq === undefined ? "" : `id: ${frame.seq}\n`}data: ${frame.data}\n\n`
 
-export const payloadIn = (frame: Frame): Payload | undefined => {
+export const payloadIn = (frame: StreamFrame): Payload | undefined => {
   try {
     return decodePayloadLine(frame.data)
   } catch {
@@ -164,7 +166,7 @@ export const payloadIn = (frame: Frame): Payload | undefined => {
 
 // One block between two blank lines, read as a frame. A block with no `data`
 // is a comment or a keep-alive and names no payload, so it is not one.
-const frameIn = (block: string): readonly Frame[] => {
+const frameIn = (block: string): readonly StreamFrame[] => {
   let seq: number | undefined
   const said: string[] = []
 
@@ -184,7 +186,7 @@ const frameIn = (block: string): readonly Frame[] => {
  */
 export const framesIn = (
   text: string,
-): { readonly frames: readonly Frame[]; readonly rest: string } => {
+): { readonly frames: readonly StreamFrame[]; readonly rest: string } => {
   const blocks = text.split("\n\n")
   const rest = blocks.pop() ?? ""
   return { frames: blocks.flatMap(frameIn), rest }

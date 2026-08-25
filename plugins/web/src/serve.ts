@@ -13,6 +13,10 @@ export const WEB_SURFACE = "eva.web"
  * it did. It is how one port carries the page and the calls the page makes: a
  * plugin may not import a plugin, so the composition root hands the half that
  * answers to the half that binds.
+ *
+ * `plugins/api` declares the same type under the same name, for the same
+ * reason. One concept, one name: the copy is forced and the second name would
+ * not be.
  */
 export type Answering = (request: IncomingMessage, response: ServerResponse) => boolean
 
