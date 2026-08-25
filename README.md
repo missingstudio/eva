@@ -25,8 +25,8 @@
 Eva is an open-source, AI-native software factory. It runs coding work end to
 end — from a spec a machine can check, through a harness that does the work, to
 evidence that it was done. Eva ships its own harness and drives the ones you
-already pay for — Claude Code, Codex, OpenCode, DeepSeek Harness — behind one
-contract, with one trace, one verifier, and one bill. It runs on your laptop as
+already pay for behind one contract, with one trace, one verifier, and one
+bill. It runs on your laptop as
 a CLI and as a service you reach from anywhere; those are the same program.
 
 > [!NOTE]

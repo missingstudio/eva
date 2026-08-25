@@ -6,8 +6,8 @@ the harness, the session store, the sandbox, the agent loop, and every user
 interface.
 
 Eva ships its own native harness as a plugin. It also drives the harnesses you
-already pay for — Claude Code, Codex, OpenCode, and DeepSeek Harness — as
-plugins, behind one contract, with one trace, one verifier, and one bill.
+already pay for as plugins, behind one contract, with one trace, one verifier,
+and one bill.
 
 ## Read in this order
 

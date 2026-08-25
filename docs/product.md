@@ -9,7 +9,7 @@ anywhere. Those are the same program.
 
 ## The problem
 
-You have subscriptions to Claude Code, Codex, OpenCode, and more. Each is a good
+You have subscriptions to several coding harnesses. Each is a good
 harness. None can tell you what a change cost, none can check another's work,
 and none can run twenty tasks overnight and show you the evidence in the
 morning. Switching between them means switching tools, losing history, and

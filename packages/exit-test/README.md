@@ -1,8 +1,8 @@
 # @missingstudio/eva-exit-test
 
 The Stage 1 exit test of [Eva](../../README.md), in two halves: a
-deterministic half that gates every push, and a measured number a maintainer
-runs deliberately against the pinned model.
+deterministic half that gates every push and that Stage 1 exits on, and a
+measured number a maintainer may run deliberately against the pinned model.
 
 Eva is built on a plugin kernel: every capability is a plugin, and the exit
 test drives the shipped ones — workflow, prompt, validator, the Anthropic
@@ -135,8 +135,8 @@ The committed cassettes hold synthetic streams, derived from the original
 hand-written pins, not recorded provider output. They stand until a
 maintainer runs `record.ts` against the pinned model, reviews the diff, and
 commits the real streams — the traces and goldens then regenerate from that
-same recording. And the build alone does not exit the stage: Stage 1 exits
-on the first recorded measurement at or above the line.
+same recording. Nothing waits on that: Stage 1 exits on the deterministic
+half, and no measured rate is on the record.
 
 ## Development
 

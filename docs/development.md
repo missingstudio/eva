@@ -254,22 +254,21 @@ This log records state, never design. The roadmap says what a stage builds and
 what its exit test is; this table says where that stage is now and what is
 left. Add a row when a stage starts, and edit the row when its state changes.
 
-| Stage                  | State                        | What is left                            |
-| ---------------------- | ---------------------------- | --------------------------------------- |
-| 0 — Wire               | done                         | nothing                                 |
-| 1 — Workflow           | built, the measurement unrun | three steps, each owned by a maintainer |
-| 2 — Tools and the loop | not started                  | the plans                               |
+| Stage                  | State       | What is left |
+| ---------------------- | ----------- | ------------ |
+| 0 — Wire               | done        | nothing      |
+| 1 — Workflow           | done        | nothing      |
+| 2 — Tools and the loop | not started | the plans    |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
 
-**Stage 1 — Workflow.** Every plugin ships and the deterministic gate passes in
-`verify`. The measured half is unrun, and the stage exits on the first
-recording at or above the line.
-Three steps stay outside the tree, each owned by a maintainer:
-sign off on the pinned model and the five inputs, export `ANTHROPIC_API_KEY`
-for the run, then run `packages/exit-test/scripts/record.ts` once, review the
-diff, and regenerate the goldens.
+**Stage 1 — Workflow.** Done. Every plugin ships and the deterministic gate
+passes in `verify`, and the stage exits on that gate. The measured half is
+built and stays unrun: a maintainer decided against the $12 to $20 a full run
+costs, so no first-pass rate is on the record and the vendored cassettes hold
+synthetic streams. `measure.ts` and `record.ts` stay in the tree for whoever
+wants the number later.
 [../packages/exit-test](../packages/exit-test/README.md) says how both halves
 run and what a full measurement costs.
 

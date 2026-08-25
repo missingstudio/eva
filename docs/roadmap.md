@@ -48,11 +48,13 @@ first that no workflow proves.
 event schema that carries an ACP session with no loss, a trace with a swappable
 sink, one provider, and a terminal.
 
-### Stage 1: Workflow — built, the measurement unrun
+### Stage 1: Workflow — done
 
-Every plugin below ships and the gate below passes. What is left is the
-measured half: the vendored cassettes hold synthetic streams, so the stage
-exits on the first recording against the pinned model at or above the line —
+Every plugin below ships and the gate below passes, and the stage exits on
+that gate. The measurement is built and stays unrun by decision: a full run
+costs about $12 to $20 and 100 minutes, and a maintainer chose not to spend
+it. So no first-pass rate is on the record, and the vendored cassettes still
+hold synthetic streams —
 [packages/exit-test](../packages/exit-test/README.md) is the build of it.
 
 **Builds on stage 0:** the kernel, the schema, and an empty harness domain. A Workflow is that domain's first entry.
@@ -89,7 +91,7 @@ structured artifacts. The code owns the control flow. The model fills the slots.
 
 **Primitive:** structured output with a validation and repair loop.
 
-**Exit test, the gate:** `verdictFold` and `validityOf` over the vendored
+**Exit test:** `verdictFold` and `validityOf` over the vendored
 traces equal the committed golden; every vendored cassette replays through the
 real fixture — the Workflow harness, the Validator, the Repair — and folds to
 that same golden, so trace, cassette and golden stay three projections of one
@@ -99,14 +101,17 @@ slot empty reports `unchecked` and no rate at all; the verdict the measurement
 exits on is one value a test asserts, thresholds and refusal share together;
 and the demo block runs. All six run in `verify`.
 
-**Exit test, the measurement:** five canned Workflows over 100 Runs each give
-≥95% first-pass validity aggregated over the 500 Candidates, with a repair
-yield of ≥90%. A Run that produced no Candidate is counted rather than dropped,
-and past 2% of the Runs no rate is reported at all — a thinned denominator
-would flatter the figure the stage exits on. A maintainer runs it against one
-named model and reads the ratios; no workflow runs it, because a full run costs
-about $12 to $20. Aggregate rather than five thresholds: at a true 97% rate,
-five independent per-Workflow thresholds fail about 31% of runs.
+**The measurement, which the stage does not wait on:** five canned Workflows
+over 100 Runs each report first-pass validity aggregated over the 500
+Candidates and a repair yield, and the runner exits non-zero below 95% and
+90%. A Run that produced no Candidate is counted rather than dropped, and past
+2% of the Runs no rate is reported at all — a thinned denominator would
+flatter the figure. A maintainer runs it against one named model and reads the
+ratios; no workflow runs it, because a full run costs about $12 to $20.
+Aggregate rather than five thresholds: at a true 97% rate, five independent
+per-Workflow thresholds fail about 31% of runs. It is a tool, not a condition:
+nobody has run it, and the number it would print is not what Stage 1 exits
+on.
 
 ### Stage 2: Tools and the loop
 
@@ -301,14 +306,14 @@ it already tried. A stated boundary — "do not push" — held in
 
 **Plugins**
 
-| Plugin                   | Adds                                                              |
-| ------------------------ | ----------------------------------------------------------------- |
-| `eva.workspace`          | slot `Workspace`: local dir, worktree, container, remote VM       |
-| `eva.workspace.worktree` | workspace driver: git worktree per unit                           |
-| `eva.sandbox.local`      | slot `Sandbox`: replaces `eva.sandbox.none` with real containment |
-| `eva.snapshot`           | slot `Snapshot`: cheap checkpoint and restore                     |
-| `eva.net`                | hook `tool.execute.before`: egress allowlist per profile          |
-| `eva.secrets`            | injection at the env boundary, never into context                 |
+| Plugin                   | Adds                                                                  |
+| ------------------------ | --------------------------------------------------------------------- |
+| `eva.workspace`          | slot `Workspace`: local dir, worktree, container, remote VM           |
+| `eva.workspace.worktree` | workspace driver: git worktree per unit                               |
+| `eva.sandbox.local`      | slot `Sandbox`: replaces `eva.sandbox.none` with real containment     |
+| `eva.snapshot`           | slot `Snapshot`: checkpoint and restore; prepared repo-profile images |
+| `eva.net`                | hook `tool.execute.before`: egress allowlist per profile              |
+| `eva.secrets`            | injection at the env boundary, never into context                     |
 
 **Fork at the environment layer.** `Workspace.create(info, env, from?)` — the
 `from` parameter forks a workspace from another. Best-of-N harness racing needs
@@ -316,14 +321,25 @@ N workspaces from **one snapshot**, not N sessions sharing one workspace, so
 this primitive belongs here and not at stage 7. `Workspace.target()` returns
 `{ localDir }` or `{ remoteUrl }` uniformly: one code path, expressed as a type.
 
-Orca ships this as its headline feature — Codex, Claude Code, OpenCode, and Pi
-side by side, each in its own worktree, results compared and the winner merged.
-That is stage 4's fork primitive plus stage 9c's race, and it is the reason the
-two must not be collapsed.
+The field ships this as a headline feature — several harnesses side by side,
+each in its own worktree, results compared and the winner merged. That is
+stage 4's fork primitive plus stage 9c's race, and it is the reason the two
+must not be collapsed.
 
 **Declarative isolation.** `isolation: worktree` on a profile or spec runs the
 unit in its own git worktree, auto-cleaned when it made no changes, with git
-redirects back into the main checkout blocked.
+redirects back into the main checkout blocked. Port allocation across parallel
+worktrees is the Workspace's problem, not the user's: two checkouts of one
+project must not fight over one dev-server port.
+
+**A snapshot is two things.** The first is a checkpoint: pre-run state,
+restored in one command, recorded with the trace position it was taken at, so
+a restore brings back the tree and the conversation together. The second is a
+prepared environment: a repo-profile image with dependencies already
+installed, so the stage 9a backlog pays environment setup once per profile and
+never per task. The field ships exactly this shape — a profile publishes
+versions, a version materializes a snapshot — and the overnight backlog is the
+reason to copy it.
 
 **This stage completes ACP's client half, and it is where containment actually
 comes from.** `FileSystem` becomes `readTextFile` and `writeTextFile`; `Shell`
@@ -333,13 +349,13 @@ exact path a foreign harness may use at stage 9c.
 
 Be precise about what that buys. A harness that calls the client half gets its
 edits recorded; a harness that uses its own file tools does not, and **the
-protocol cannot make it**. OpenCode's ACP agent calls `requestPermission`, and
-from the filesystem half only one display-only `writeTextFile` that renders a
-diff — no reads, no terminals — verified in its source, against v1 (SDK 0.21.0).
+protocol cannot make it**. A leading native ACP agent calls `requestPermission`,
+and from the filesystem half only one display-only `writeTextFile` that renders
+a diff — no reads, no terminals — verified in its source, against v1.
 So the guarantee that a foreign harness cannot escape does **not** come from ACP.
 It comes from `Workspace` and `Sandbox`: a process confined to a worktree is
-confined whether or not it ever asks Eva for a file handle. Multica and Orca
-both reach for the worktree for exactly this reason.
+confined whether or not it ever asks Eva for a file handle. The field's
+orchestrators reach for the worktree for exactly this reason.
 
 That is why this stage matters more than it looks. Containment is a property of
 the boundary built here, and `--race` at stage 9c is only a fair comparison
@@ -365,7 +381,8 @@ disposable environments, and a one-command rollback.
 
 **Exit test:** a deliberately destructive run cannot touch the host, and one
 command restores the pre-run state. A workspace forked with `from` produces a
-byte-identical tree.
+byte-identical tree. A workspace created from a prepared snapshot starts with
+its dependencies already installed and pays no setup.
 
 ### Stage 5: Verifier — the highest-use stage
 
@@ -375,17 +392,24 @@ Every stage after this one adds throughput. This stage adds quality.
 
 **Plugins**
 
-| Plugin            | Adds                                                               |
-| ----------------- | ------------------------------------------------------------------ |
-| `eva.verify`      | **check domain** + slot `Verifier`                                 |
-| `eva.check.build` | check domain: build, typecheck, lint, unit, integration            |
-| `eva.check.lsp`   | check domain: LSP diagnostics — the cheapest oracle for typed code |
-| `eva.remediate`   | hook `run.retry.before`: runs `Spec.remediation` before retry      |
+| Plugin              | Adds                                                                |
+| ------------------- | ------------------------------------------------------------------- |
+| `eva.verify`        | **check domain** + slot `Verifier`                                  |
+| `eva.check.build`   | check domain: build, typecheck, lint, unit, integration             |
+| `eva.check.lsp`     | check domain: LSP diagnostics — the cheapest oracle for typed code  |
+| `eva.check.browser` | check domain: drives a page for UI acceptance; keeps the screenshot |
+| `eva.remediate`     | hook `run.retry.before`: runs `Spec.remediation` before retry       |
 
 **The check domain is why stage 6.5 shrank.** A community check is a plugin that
 writes to the check domain. There is no `RegisterCheck` API to design, because
 the domain already is that API. A check may be a soft model verifier — it is
 marked degraded and it never merges.
+
+**Acceptance criteria may name a page.** A spec that says "the export page
+rate-limits visibly" needs a browser check, not a unit test.
+`eva.check.browser` drives the page — map, click, diff, screenshot — and keeps
+the screenshot as evidence, because stage 10 attaches it to the PR. The field
+already ships an off-the-shelf filler for exactly this check.
 
 **Remediation.** On a failed attempt with retries left, run `Spec.remediation` —
 the compensating cleanup — **before** the next attempt, so a retried job never
@@ -425,12 +449,13 @@ Eva.
 
 **Plugins**
 
-| Plugin                  | Adds                                                     |
-| ----------------------- | -------------------------------------------------------- |
-| `eva.trace.replay`      | command domain: `eva trace show`, the cost fold per step |
-| `eva.trace.redact`      | hook `trace.commit.before`: sink-side redaction          |
-| `eva.memory.project`    | slot `Memory`: learned facts, conventions, gotchas       |
-| `eva.memory.procedural` | memory domain: reusable playbooks                        |
+| Plugin                  | Adds                                                              |
+| ----------------------- | ----------------------------------------------------------------- |
+| `eva.trace.replay`      | command domain: `eva trace show`, the cost fold per step          |
+| `eva.trace.redact`      | hook `trace.commit.before`: sink-side redaction                   |
+| `eva.trace.publish`     | command domain: a finished Run becomes a readable, resumable page |
+| `eva.memory.project`    | slot `Memory`: learned facts, conventions, gotchas                |
+| `eva.memory.procedural` | memory domain: reusable playbooks                                 |
 
 The sink shipped at stage 0. This stage adds replay, the cost/latency/token fold
 per step, and redaction. It invents neither a schema nor a sink. It **makes the
@@ -438,6 +463,12 @@ existing schema a versioned public contract**, because adapters and third-party
 plugins emit into it. That is the point where `schemaVersion` stops being ours
 to change freely. Redaction lands here rather than at stage 0 because there is
 nothing to redact before stage 2 brings tools and stage 4 brings secrets.
+
+**The trace wants to be an artifact.** A finished Run can publish as a page a
+colleague reads — summary, conversation, tool activity, diff — and resumes in
+a session of their own. Nothing leaves the machine except on an explicit
+share, and redaction runs before anything does. The field proves both halves
+are wanted.
 
 **Project memory structure.** A `MEMORY.md` index plus topic files. Only the
 first ~200 lines or 25 KB of the index load at startup; topic files load on
@@ -480,9 +511,9 @@ plugins/host-remote/ out-of-process plugins: the host half and the client half
 ```
 
 **Out-of-process plugins.** A plugin that runs in Eva's process can crash Eva. A
-third-party plugin should not be able to. DeepSeek Harness ships **dual-half
+third-party plugin should not be able to. One surveyed harness ships **dual-half
 packages**: a host half that owns a sandbox lifecycle and an invoke-handler
-table, and a client half that runs on the far side — in its case an in-process
+table, and a client half that runs on the far side — there, an in-process
 `node:vm` sandbox and a browser page, not a separate OS process. Eva borrows the
 split and moves the boundary: the client half runs in its own process, which is
 the part this stage has to prove. The `Plugin` contract does not change — the
@@ -592,6 +623,11 @@ unattended. This is the posture that ties together disallowed tools, disabled
 model invocation, and protected paths: the factory's default is less capability,
 and the mandate is the only thing that grants more.
 
+**A fork or a resume records its lineage.** The new Run carries what it came
+from — the session and the checkpoint — as a fact in the trace. Provenance
+survives any number of branches, and a surface can always answer where a Run
+came from.
+
 **Rewind is honest.** `restore-code`, `restore-conversation`, and
 `restore-both` are independent axes. `summarize-from-here` and
 `summarize-up-to-here` are aimed compaction. Checkpoints do **not** track
@@ -616,7 +652,7 @@ kill, fork, resume, and leave alone.
 **Exit test:** kill the process during a task. `eva resume` continues from the
 last committed step and duplicates no side effects. Fork the killed session at
 step N into two branches with different profiles. Both complete. The traces show
-a shared prefix and divergent suffixes.
+a shared prefix, divergent suffixes, and the checkpoint each branch forked from.
 
 ### Stage 8: Eval harness
 
@@ -705,6 +741,11 @@ risk: medium
 admission, then creates one Job per target — independent failure, independent
 retry, Run state derived from its Jobs.
 
+**Admission is into a prepared workspace.** Where a repo profile names a
+stage 4 snapshot, a Job starts with dependencies already installed. The
+backlog pays environment setup once per profile, never per task — a factory
+that pays it per task loses the overnight race.
+
 **Triggered work** commits a durable admission record **before** task creation,
 then creates-or-recovers the task and links it in one transaction.
 
@@ -757,13 +798,32 @@ duplicate tasks and no orphaned admission records.
 Move `eva.identity` and `eva.attest` forward from stage 14. Enrollment **is**
 mandate issuance. Both modules are small while the only subject is a worker.
 
+**Every control-plane method names the scope it requires.** A token carries
+scopes, not a role, and a client gets exactly the methods its scopes name.
+That is what lets a later device tier be one tier wider instead of a second
+permission system.
+
+**A scoped credential is good; an absent one is better.** Where a provider
+allows it, a broker signs on the worker's behalf and the secret never enters
+the environment at all — the field's strongest stance, adopted whole.
+Injection at the env boundary (stage 4) is the floor, not the goal.
+
+**Fleet truth is decided before the fleet grows.** Workers are authoritative
+for what physically exists on them. The control plane projects; it never
+reconciles the world toward a record — except deletion, where a tombstone is
+the durable intent, swept when the worker returns. Cancellation is best-effort
+across planes: a kill is a request, and the trace records what actually
+stopped. The field wrote these rules as ADRs first; Eva writes its own into
+[decisions.md](decisions.md) when this stage starts.
+
 ```
 eva control up  &&  eva enroll create --tier semi --ttl 10m
   ← one pasteable token
 (any machine, behind NAT)  eva daemon --join https://cp.example.com --token …
   ← worker online in the fleet view; revocable within one heartbeat
 eva top
-  ← live leases, workers, spend — the projection, in a terminal
+  ← needs-attention first, each blocked Run with its reason; then leases,
+    workers, spend — derived from the trace, never self-reported
 ```
 
 **In:** a token. **Out:** a fleet.
@@ -776,27 +836,25 @@ tasks never share a VM.
 
 **Builds on stages 0, 2, 4, and 7 together.** The contract, the permission gate, the client half, and Eva's own implementation of the agent half all already exist. This stage adds implementations, not interfaces.
 
-This is where Eva stops being a harness and starts being a factory. **Your
-Claude Code, Codex, and OpenCode subscriptions become workers in the same fleet,
+This is where Eva stops being a harness and starts being a factory. **The
+harness subscriptions you already pay for become workers in the same fleet,
 under the same spec, the same verifier, the same trace, and the same bill.**
 
 **Plugins**
 
-| Plugin                 | Adds                                                     |
-| ---------------------- | -------------------------------------------------------- |
-| `eva.harness.acp`      | harness domain: **the ACP runtime, for any ACP agent**   |
-| `eva.harness.claude`   | thin extension: launch, auth, capability probe           |
-| `eva.harness.codex`    | thin extension over the Codex App Server                 |
-| `eva.harness.deepseek` | thin extension: launch and auth over its ACP server      |
-| `eva.harness.conform`  | check domain: the adapter conformance suite, run nightly |
-| `eva.serve.acp`        | surface: `eva serve --acp` — Eva **as** an ACP agent     |
-| `eva.race`             | command domain: run one spec on N harnesses, score each  |
+| Plugin                 | Adds                                                            |
+| ---------------------- | --------------------------------------------------------------- |
+| `eva.harness.acp`      | harness domain: **the ACP runtime, for any ACP agent**          |
+| `eva.harness.<vendor>` | thin extension per fleet member: launch, auth, capability probe |
+| `eva.harness.conform`  | check domain: the adapter conformance suite, run nightly        |
+| `eva.serve.acp`        | surface: `eva serve --acp` — Eva **as** an ACP agent            |
+| `eva.race`             | command domain: run one spec on N harnesses, score each         |
 
-**An adapter may be a host plugin too.** OpenCode and DeepSeek Harness have
-plugin ecosystems of their own. An adapter for one of them may expose those as
-host-scoped extension points, so a DeepSeek Harness plugin keeps working under
-Eva. Eva does not flatten another system's extensibility into one opaque row —
-that is the same rule stage 7 applied to Eva's own loop, pointed outward.
+**An adapter may be a host plugin too.** Some fleet members have plugin
+ecosystems of their own. An adapter for one of them may expose those as
+host-scoped extension points, so the foreign harness's plugins keep working
+under Eva. Eva does not flatten another system's extensibility into one opaque
+row — that is the same rule stage 7 applied to Eva's own loop, pointed outward.
 
 #### There is no new contract in this stage
 
@@ -806,36 +864,41 @@ Eva against itself.
 Stage 9c adds no interface. It adds **implementations of an interface that
 exists**, and the operational reality of driving somebody else's process.
 
-**None of the fleet needs a bespoke adapter.** OpenCode ships `opencode acp`
-today, implementing the agent half natively against `@agentclientprotocol/sdk`
-(pinned 0.21.0, checked 2026-08-14). Claude and Codex each have an ACP bridge
-maintained under the protocol's own organisation — one built on the Claude Agent
-SDK, one on the Codex App Server. Gemini CLI, Copilot, Cursor and Pi all present
-as ACP agents too. And DeepSeek Harness ships `@deepseek-ai/dsh-acp` — an
-automation-only ACP server over stdio JSON-RPC, pinned to SDK 0.25.1 — so by our
-own rule — a bespoke adapter dies when its vendor ships ACP — every one of these
-is `eva.harness.acp` plus a launcher entry, and the bespoke-adapter count is
-zero.
+**None of the fleet needs a bespoke adapter.** Every fleet member either
+implements the agent half natively or has an ACP bridge maintained under the
+protocol's own organisation, and the rest of the field presents as ACP agents
+too — the survey's field notes carry the per-vendor evidence, with SDK versions
+and checked dates. So by our own rule — a bespoke adapter dies when its vendor
+ships ACP — every one of these is `eva.harness.acp` plus a launcher entry, and
+the bespoke-adapter count is zero.
 
 **Drive the SDK or the app-server, never the CLI.** A CLI's stdout is a product
 surface that changes without notice; an SDK and an app-server are contracts. The
 maintained bridges target the latter for exactly this reason, and where Eva
 writes its own path it does the same.
 
-**Build `eva.harness.acp` first**, not Claude. It is the cheapest possible
-second harness — the protocol is already in `packages/acp/` from stage 0 — and
-it proves the contract really is the protocol rather than an Eva-flavoured
-variant of it. Build the Claude bridge second, because it has the richest event
-stream and will find whatever the protocol does not cover.
+**Build `eva.harness.acp` first**, not a vendor bridge. It is the cheapest
+possible second harness — the protocol is already in `packages/acp/` from
+stage 0 — and it proves the contract really is the protocol rather than an
+Eva-flavoured variant of it. Build the richest-event-stream bridge second,
+because it will find whatever the protocol does not cover.
 
 **One ACP runtime, plus thin per-vendor extensions.** Not one adapter that
 covers everything — that is the optimistic version and the field disproves it.
-T3 Code runs a first-class ACP runtime and still carries vendor extensions for
-Cursor and xAI — Grok rides the xAI one — with env-gated CLI probes beside
-them. Budget for the same:
+The field's production orchestrators run a first-class ACP runtime and still
+carry vendor extensions beside it, with env-gated CLI probes beside those.
+Budget for the same:
 a shared runtime that does the protocol, and small per-vendor modules for launch
 arguments, auth quirks, and capability probing. The extension is where a vendor
 differs; it is never a second contract.
+
+The anatomy of that extension is settled, because the field wrote it twice
+independently. A launcher entry is a descriptor: an install spec, a credential
+probe, a readiness verdict, a launch template, and a docs URL. A vendor module
+is at most four hooks: spawn arguments, auth probing, permission mapping, and
+transport. The descriptor answers availability and launchability without ever
+starting a session, and an extension that needs more than the descriptor and
+the four hooks is becoming a second contract; stop it there.
 
 **A bespoke adapter's job is to present as ACP.** It translates a CLI's output
 into ACP session updates and answers ACP client calls. It does not define its
@@ -845,8 +908,8 @@ deleted and `eva.harness.acp` takes over with no change above it.
 #### Eva as an agent, not only as a client
 
 `eva serve --acp` exposes `eva.harness.loop` over stdio JSON-RPC as an ACP
-agent. Zed, Orca, Mux, and T3 Code can then drive Eva the same way they drive
-any other agent.
+agent. Any ACP client — an editor, an orchestrator, another Eva — can then
+drive Eva the same way it drives any other agent.
 
 This costs almost nothing — the agent half is already implemented from stage 7,
 and this plugin is a transport — and it changes what Eva is. Adopting the
@@ -855,11 +918,12 @@ the protocol work is loaded, not as a later idea.
 
 #### Capability negotiation, and the honesty rule
 
-No two harnesses support the same things. Multica supports 21 backends and its
-adapter fields carry the scars: reasoning effort is honored by exactly six of
-them and silently ignored by the rest; extra CLI arguments are honored only by
-backends that opt in; some backends need the system prompt inline while others
-read it from `CLAUDE.md`, `AGENTS.md`, or `QWEN.md` on disk.
+No two harnesses support the same things. The survey's widest orchestrator
+supports about twenty backends and its adapter fields carry the scars:
+reasoning effort is honored by a handful of them and silently ignored by the
+rest; extra CLI arguments are honored only by backends that opt in; some
+backends need the system prompt inline while others read it from an
+instructions file on disk, each under its own name.
 
 ACP already has the mechanism: `initialize` negotiates `AgentCapabilities` and
 `ClientCapabilities` in both directions, as optional booleans and capability
@@ -874,13 +938,21 @@ top of it, all supported by stage 0's payload union:
   preserved. We never drop an event.
 - A capability requested and silently not applied emits `degraded` naming it.
 - **An adapter never invents a payload.**
+- Whether a session's context can be **re-seated on a different harness** is
+  itself a declared capability. The fallback — replay the trace into a fresh
+  session — always exists; an adapter that can hand off better says so.
 
 The silent case is the common one, and negotiated capabilities are what turn
 silence into a recorded fact.
 
+`eva harness list` publishes the result as a matrix: per-harness capabilities,
+measured by probes and the conformance suite, each with the date it was
+checked. Measured, never assumed — the field maintains this document by hand;
+Eva generates it.
+
 #### Resume is the hard part
 
-Multica's field notes are unambiguous: resume is where multi-harness breaks.
+The field notes are unambiguous: resume is where multi-harness breaks.
 
 | Fact                                    | What Eva must do                                                             |
 | --------------------------------------- | ---------------------------------------------------------------------------- |
@@ -919,12 +991,13 @@ model. The work in this stage is finding where each harness reports it — some 
 not report it at all, and a `degraded` marker is the correct answer there.
 
 ```
-eva task run EVA-142 --harness claude
-eva task run EVA-142 --race eva,claude,codex
+eva task run EVA-142 --harness <vendor>
+eva task run EVA-142 --race eva,<vendor-a>,<vendor-b>
   ← same spec, same verifier, one workspace forked three ways;
     scored results per harness — the routing table starts accumulating
 eva harness list
-  ← installed harnesses, detected versions, negotiated capabilities
+  ← the capability matrix: installed harnesses, detected versions, measured
+    capabilities, each with a checked date
 eva serve --acp
   ← Eva's own loop, as an ACP agent, for any client that speaks it
 ```
@@ -944,15 +1017,17 @@ eva serve --acp
    harness, it is measured rather than assumed, and a harness that scores low
    still races.
 3. Kill one mid-run. The other two finish, and the trace names what was lost.
-4. Resume a Claude Code session, have the resume rejected, and watch Eva fall
+4. Resume a foreign harness's session, have the resume rejected, and watch Eva fall
    back to a fresh session with a continuity notice and no duplicated side
    effects.
 5. `eva serve --acp` drives Eva's own loop from a second Eva instance running
    `eva.harness.acp`. Eva on both ends of the protocol is the cheapest proof
    that the contract is symmetric and complete.
 
-The conformance suite runs nightly against upstream and fails when a CLI changes
-its output format.
+The conformance suite's fixtures are captured live adapter traces. It replays
+them nightly against upstream and fails when a vendor drifts, before a user
+sees it. Per adapter it emits a written gap report: every claim with a source
+reference and a review date, closed gaps kept in a closed section.
 
 Point 2 is the one that justifies the whole stage. Without it, `--race` is three
 harnesses under three different sets of rules, and the scores mean nothing. Note
@@ -965,14 +1040,15 @@ from the protocol, and the boundary comes from stage 4. Neither alone is enough.
 
 **Plugins**
 
-| Plugin           | Adds                                                       |
-| ---------------- | ---------------------------------------------------------- |
-| `eva.skill`      | skill domain: source format, compiler, per-harness targets |
-| `eva.mcp.client` | tool domain: MCP servers become tools                      |
-| `eva.mcp.server` | surface: verifier, repo map, memory, task graph over MCP   |
+| Plugin           | Adds                                                                   |
+| ---------------- | ---------------------------------------------------------------------- |
+| `eva.skill`      | skill domain: source format, compiler, per-harness targets             |
+| `eva.mcp.client` | tool domain: MCP servers become tools                                  |
+| `eva.mcp.server` | surface: verifier, repo map, memory, task graph, coordination over MCP |
 
-One skill source compiles to each harness's native format: a Claude Code skill,
-a `SKILL.md`, or plain instructions for a harness with no skill concept. The
+One skill source compiles to each harness's native format: a vendor's skill
+package, a `SKILL.md`, or plain instructions for a harness with no skill
+concept. The
 compiler targets are a domain, so a new harness adds a target without touching
 the compiler.
 
@@ -980,10 +1056,15 @@ the compiler.
 map, and memory. That is the inversion that makes stage 9c pay: the foreign
 harness does the work, and Eva supplies the ground truth.
 
+The task graph carries the coordination tools. An agent can wait until another
+agent is genuinely blocked — a synchronization primitive, not a poll of the
+trace — so multi-agent work coordinates without busy-waiting. The blocked
+state it waits on is the one stage 9a made first-class.
+
 ```
 eva skill install migrate-db
   ← compiled per harness: native, SKILL.md, or plain instructions
-eva task run MIG-7 --harness codex
+eva task run MIG-7 --harness <vendor>
   ← the foreign harness follows the skill and uses Eva's verifier and
     repo map over MCP
 ```
@@ -1004,7 +1085,7 @@ Eight agents produce eight branches. A naive factory fails here.
 
 | Plugin             | Adds                                                          |
 | ------------------ | ------------------------------------------------------------- |
-| `eva.integrate`    | branch-per-task, PR with spec and trace link                  |
+| `eva.integrate`    | branch-per-task, PR with spec, trace link, and evidence       |
 | `eva.mergeq`       | slot `MergeQueue`: serialized landing, rebase-and-reverify    |
 | `eva.conflict`     | detect overlapping edits **at schedule time**, not merge time |
 | `eva.review.auto`  | harness domain: second-pass review against the spec           |
@@ -1012,6 +1093,11 @@ Eight agents produce eight branches. A naive factory fails here.
 
 **Never auto-merge changes to CI config, to auth code, or to dependency
 manifests.** This holds whatever the test status is.
+
+**The PR carries evidence a human can read.** The verifier's report is
+attached with its human-legible artifacts — the test output, the screenshot a
+browser check took at stage 5. A reviewer the risk score routes to should
+never have to reconstruct why the work is believed done.
 
 **Be honest about external side effects.** You cannot promise exactly-once for
 writes the agent performs: comments, pushed branches, opened PRs. A retry after
@@ -1043,14 +1129,15 @@ this is about how to spend that bandwidth well.
 
 **Plugins**
 
-| Plugin           | Adds                                                            |
-| ---------------- | --------------------------------------------------------------- |
-| `eva.meter`      | cost per task, per merged change, **per harness**; attribution  |
-| `eva.policy.org` | org rules as code: prod access, spend caps, escalation          |
-| `eva.report`     | throughput, pass rate, human-touch rate, $/merged change, trend |
-| `eva.projector`  | read models; TUI first, then web                                |
-| `eva.web`        | surface: the web interface, served from the binary              |
-| `eva.billing`    | usage events, invoicing, plan limits, hard caps                 |
+| Plugin           | Adds                                                                           |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `eva.meter`      | cost per task, per merged change, **per harness**; attribution                 |
+| `eva.gateway`    | optional filler at the provider seam: meters the harnesses that report no cost |
+| `eva.policy.org` | org rules as code: prod access, spend caps, escalation                         |
+| `eva.report`     | throughput, pass rate, human-touch rate, $/merged change, trend                |
+| `eva.projector`  | read models; TUI first, then web                                               |
+| `eva.web`        | surface: the web interface, served from the binary                             |
+| `eva.billing`    | usage events, invoicing, plan limits, hard caps                                |
 
 **Every metric computes over one declared cohort** — tasks admitted in-window,
 post-filter. A retry never creates a new job, so it cannot inflate throughput.
@@ -1058,6 +1145,12 @@ Success rate excludes cancellations from the denominator.
 
 Per-harness attribution is what makes stage 12's routing possible: you cannot
 learn which harness to use for which task class if you cannot price them apart.
+
+**Provider-reported cost stays the rule, and `degraded` stays the honest
+gap.** For a harness that never reports, the one honest alternative is a
+metering gateway: route its model traffic through `eva.gateway` and meter at
+the gateway, to the tick. It is optional and per-harness — a filler, never a
+requirement.
 
 ```
 eva report --week
@@ -1086,7 +1179,10 @@ what cost, and how much human time did it consume."
 | `eva.learn.tune`    | optional distillation on accepted traces                      |
 
 `eva.learn.route` is the payoff of stages 9c and 11 together. The routing table
-stops being a guess and becomes a measurement.
+stops being a guess and becomes a measurement. It measures at the task
+boundary — outcome, cost, and wall clock per Job — and never attributes below
+what the harness reports: a harness may route models internally, and an
+attribution that pretends to see through it is fiction.
 
 ```
 eva learn mine --since 30d
@@ -1205,31 +1301,6 @@ domain and is listed on the same stage.
 Stage 6.5 adds nothing to this table on purpose. It ships trust, distribution,
 and isolation for a surface that is already complete. That row being empty is
 the whole argument for going plugin-first.
-
-## What we borrowed for multi-harness
-
-| Idea                                                                                   | Source           |
-| -------------------------------------------------------------------------------------- | ---------------- |
-| **The harness contract is ACP, not one we invent**                                     | ACP              |
-| The agent asks the client for filesystem, terminal, and permission                     | ACP              |
-| Bilateral capability negotiation as optional booleans                                  | ACP              |
-| `_meta` and `ext` carry our own concepts without forking the schema                    | ACP              |
-| Four permission options, splitting decision from persistence                           | ACP              |
-| A production ACP implementation in Effect to read                                      | T3 Code          |
-| ACP as a first-class runtime with thin per-vendor extensions                           | T3 Code          |
-| Adapter as a record with many live instances, not a service key                        | T3 Code          |
-| Session-oriented adapter contract, not a one-shot answer                               | T3 Code          |
-| The agent as a live handle with an inbox, not a function                               | DeepSeek Harness |
-| `send(message, next-turn \| next-step)` steering — Eva renames the first to `next-run` | DeepSeek Harness |
-| `whenIdle` and `runMaintenance` for non-Run work                                       | DeepSeek Harness |
-| Resume rejection, and rejection that is undetectable                                   | Multica          |
-| Plural, semantic timeouts                                                              | Multica          |
-| Provider-reported cost in integer units                                                | Multica          |
-| Usage keyed by model, because a Run spans models                                       | Multica          |
-| Per-field capability degradation, never failure                                        | Multica          |
-| Worktree per agent; fan one prompt across N; merge the winner                          | Orca             |
-| Agents as teammates on a board, reporting and blocking                                 | Multica          |
-| "Works with your subscriptions" as the product claim                                   | T3 Code          |
 
 ## References
 
