@@ -304,6 +304,12 @@ root's own suite. `headerFold` and `answerFold` joined them and the golden pins
 five. `SessionHeader` stays in core, because a Session's identity is the
 Session API's to add.
 
+**A fold says where it folded to.** `Transcript` carried no position, so a
+surface that read the record and then subscribed had no cursor to subscribe
+from: it lost whatever committed between the two calls, or replayed from the
+start and duplicated. `foldTranscript` computes `at` from the events it kept,
+so the two implementers inherit it and cannot disagree with the record.
+
 ## The exit test
 
 **Running the fixture in-process has one home.** `runFixture` takes a fixture

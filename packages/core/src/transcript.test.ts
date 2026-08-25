@@ -53,6 +53,41 @@ describe("a Transcript", () => {
   })
 })
 
+describe("where a fold ends", () => {
+  const events = load(files[0]!)
+  const session = events[0]!.session
+  const highest = (id: SessionID, all: readonly Event[]): number =>
+    all
+      .filter((event) => event.session === id)
+      .reduce((high, event) => (event.seq > high ? event.seq : high), 0)
+
+  it("reports the position of the last event it folded", () => {
+    expect(foldTranscript(session, events).at).toEqual({
+      session,
+      seq: highest(session, events),
+    })
+  })
+
+  it("reports seq 0 when it folded nothing, so a watch from there replays all of it", () => {
+    expect(foldTranscript(session, []).at).toEqual({ session, seq: 0 })
+  })
+
+  it("takes the position after the filter, so another session cannot raise it", () => {
+    const other = events.find((event) => event.session !== session)!.session
+    expect(highest(other, events)).not.toBe(highest(session, events))
+    expect(foldTranscript(other, events).at).toEqual({
+      session: other,
+      seq: highest(other, events),
+    })
+  })
+
+  it("folds to the same position whatever order the store hands the events back", () => {
+    expect(foldTranscript(session, [...events].reverse()).at).toEqual(
+      foldTranscript(session, events).at,
+    )
+  })
+})
+
 describe("headerOf", () => {
   it("titles a session from its first intent when nothing said otherwise", () => {
     const events = load(files[0]!)

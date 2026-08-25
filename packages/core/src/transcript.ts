@@ -3,6 +3,7 @@ import {
   headerFold,
   transcriptFold,
   type CostSummary,
+  type Cursor,
   type Event,
   type Header,
   type PriceLookup,
@@ -27,6 +28,15 @@ export interface Session {
  */
 export interface Transcript {
   readonly session: SessionID
+  /**
+   * Where this fold ends. A surface that folds and then watches gives this to
+   * `watch`, so nothing that commits between the two calls is missed and
+   * nothing already folded arrives twice.
+   *
+   * A fold that holds no event is `seq: 0`. The sink numbers a session from 1,
+   * so a watch from 0 replays all of it, which is what an empty record means.
+   */
+  readonly at: Cursor
   readonly messages: () => readonly TranscriptMessage[]
   readonly cost: () => CostSummary
 }
@@ -47,8 +57,13 @@ export const foldTranscript = (
   const own = events.filter((event) => event.session === session)
   const messages = transcriptFold(own)
   const cost = costFold(own, priceOf)
+  // A reduce rather than a spread into Math.max: a long trace overflows the
+  // stack, and a long trace is the case that matters. The events are not
+  // assumed to be ordered, so the last one is not the highest.
+  const seq = own.reduce((high, event) => (event.seq > high ? event.seq : high), 0)
   return {
     session,
+    at: { session, seq },
     messages: () => clone(messages),
     cost: () => clone(cost),
   }
