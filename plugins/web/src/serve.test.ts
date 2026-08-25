@@ -1,9 +1,10 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
-import { connect } from "node:net"
+import { connect, createServer, type AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"
+import type { Bind } from "./bind.js"
 import { serveWeb } from "./serve.js"
 
 const PAGE =
@@ -21,19 +22,35 @@ const built = (): string => {
 
 const empty = (): string => mkdtempSync(join(tmpdir(), "eva-web-unbuilt-"))
 
+const LOOPBACK: Bind = { host: "127.0.0.1", port: 0 }
+
+/**
+ * A port nothing holds, taken from the kernel and given straight back. A
+ * refusal is asked for a real address, so "nothing is listening there" is a
+ * fact about the refusal and not about a port that could never be bound.
+ */
+const freePort = (): Promise<number> =>
+  new Promise((settle) => {
+    const probe = createServer()
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as AddressInfo
+      probe.close(() => settle(port))
+    })
+  })
+
 /**
  * One surface, bound for real on an ephemeral loopback port. The address is
  * read back out of what the surface printed, so "it prints the URL it bound
  * to" and "a browser loads the page there" are one claim and not two.
  */
-const serving = async (root: string, posture = "local") => {
+const serving = async (root: string, posture = "local", bind: Bind = LOOPBACK) => {
   const said: string[] = []
   const scope = await Effect.runPromise(Scope.make())
   const frontend = await Effect.runPromise(
     Effect.provideService(
       serveWeb({
         root,
-        bind: { host: "127.0.0.1", port: 0 },
+        bind,
         posture,
         write: (text) => void said.push(text),
       }),
@@ -224,5 +241,73 @@ describe("a bind that did not happen", () => {
     await Effect.runPromise(frontend.done)
     await Effect.runPromise(Scope.close(scope, Exit.void))
     await first.close()
+  })
+})
+
+/**
+ * A non-local bind needs a token and stage 9b is what issues one, so until 9b
+ * exists this bind is refused. The refusal is the surface's own, because this
+ * is the one place a socket is opened: `apps/cli` refuses the same bind before
+ * it boots, and every other caller of `serveWeb` is refused here.
+ */
+describe("a bind that needs a token", () => {
+  const refused = async (bind: Bind, posture = "local") => serving(built(), posture, bind)
+
+  /**
+   * The proof is a socket that will not connect. A server bound to 0.0.0.0
+   * answers on loopback too, so a loopback connect would have reached one had
+   * the surface bound anything at all.
+   */
+  it("opens no port", async () => {
+    const port = await freePort()
+    const served = await refused({ host: "0.0.0.0", port })
+
+    expect(await reachable(`http://127.0.0.1:${port}`)).toBe(false)
+    await served.close()
+  })
+
+  // Not a warning above a served page: there is no page, and there is no
+  // address. A warning above a running server is an unauthenticated server
+  // with a note on it.
+  it("says why, and says no address", async () => {
+    const served = await refused({ host: "0.0.0.0", port: await freePort() })
+
+    expect(served.printed).toContain("a non-local bind needs a token")
+    expect(served.printed).toContain("9b")
+    expect(served.printed).not.toContain("http://")
+    expect(served.printed).not.toContain("posture")
+    await served.close()
+  })
+
+  // The surface that serves holds until the process stops. This one served
+  // nothing, so it ends at once and the process is free to exit non-zero.
+  it("finishes at once rather than holding the process open", async () => {
+    const served = await refused({ host: "0.0.0.0", port: await freePort() })
+    const ended = await Promise.race([
+      Effect.runPromise(served.frontend.done).then(() => "finished"),
+      new Promise((settle) => setTimeout(() => settle("held"), 50)),
+    ])
+
+    expect(ended).toBe("finished")
+    await served.close()
+  })
+
+  // The posture is a tenancy and not a token. `hosted` opens no door in W1:
+  // what each posture permits arrives with the token at 9b.
+  it("is refused under the hosted posture too", async () => {
+    const port = await freePort()
+    const served = await refused({ host: "0.0.0.0", port }, "hosted")
+
+    expect(served.printed).toContain("tokens arrive at 9b")
+    expect(served.printed).not.toContain("hosted posture")
+    expect(await reachable(`http://127.0.0.1:${port}`)).toBe(false)
+    await served.close()
+  })
+
+  // Every interface is every interface, in either family.
+  it("refuses the IPv6 form of every interface as well", async () => {
+    const served = await refused({ host: "::", port: await freePort() })
+    expect(served.printed).toContain("tokens arrive at 9b")
+    await served.close()
   })
 })

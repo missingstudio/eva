@@ -1,8 +1,10 @@
 import { declare, define, type Plugin } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-import { DEFAULT_HOST, DEFAULT_PORT, serveWeb, WEB_SURFACE } from "./serve.js"
+import { DEFAULT_HOST, DEFAULT_PORT } from "./bind.js"
+import { serveWeb, WEB_SURFACE } from "./serve.js"
 
 export * from "./assets.js"
+export * from "./bind.js"
 export * from "./serve.js"
 
 /**
