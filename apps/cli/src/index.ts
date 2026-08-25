@@ -2,6 +2,7 @@ import { makeSessionAPI, type Build } from "@missingstudio/eva-boot"
 import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
+import { refusal } from "@missingstudio/eva-web"
 import { Cause, Effect, Exit, Scope } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
 import { BUILD, serving } from "./plugins.js"
@@ -123,6 +124,18 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
      * with a Client and nothing else.
      */
     case "serve": {
+      /**
+       * Refused before anything boots, so a bind that needs a token opens no
+       * port. `eva.web` owns the rule — what counts as local, and why stage
+       * 9b changes it — and this owns the exit code, because a surface row
+       * cannot fail: `start` has `never` in its error channel.
+       */
+      const refused = refusal(invocation.host)
+      if (refused !== undefined) {
+        world.err(`${refused}\n`)
+        return 1
+      }
+
       const settled = yield* resolveConfig(invocation.overlays, world)
       report(settled, world)
 
