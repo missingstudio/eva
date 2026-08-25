@@ -15,13 +15,17 @@ and one bill.
    assumes it.
 2. **[reference/architecture.md](reference/architecture.md)** — how Eva is put
    together: the four extension points, the kernel, every module and interface.
-3. **[roadmap.md](roadmap.md)** — what we build, in what order, and the exit test
-   each stage can fail.
+3. **[roadmap.md](roadmap.md)** — every stage, what it proves, and the exit test
+   it can fail.
+4. **[plan.md](plan.md)** — what to build next, what can run beside it, and
+   which directory the work goes in.
 
 Then, as you need them:
 
 | You want to                 | Read                                                         |
 | --------------------------- | ------------------------------------------------------------ |
+| Know what to build next     | [plan.md](plan.md)                                           |
+| Find where a plugin goes    | [plan.md](plan.md)                                           |
 | Make a change here          | [development.md](development.md)                             |
 | Write a plugin              | [reference/writing-plugins.md](reference/writing-plugins.md) |
 | Type a command or a flag    | [reference/command-line.md](reference/command-line.md)       |
@@ -38,7 +42,8 @@ docs/
 ├── context.md         the words Eva uses — read first
 ├── development.md     how a change is made, and where each stage is
 ├── product.md         what Eva is for, and who for
-├── roadmap.md         nineteen stages, each with an exit test it can fail
+├── roadmap.md         every stage, and the exit test it can fail
+├── plan.md            what is next, the dependency order, and every path
 ├── decisions.md       every decision, grouped by what it decided
 └── reference/
     ├── architecture.md    the plugin model, the kernel, every module and interface
@@ -70,7 +75,8 @@ to that document. Two copies of a fact become two different facts.
 | `command-line.md`    | every command and flag, and the parse        |
 | `toolchain.md`       | how to build and test, and CI's jobs         |
 | `ci-cd.md`           | the workflows, the release, the channels     |
-| `roadmap.md`         | what we build, in what order                 |
+| `roadmap.md`         | what each stage is, and what it must prove   |
+| `plan.md`            | what is next, the order, and where code goes |
 | `development.md`     | how a change is made, and each stage's state |
 | `decisions.md`       | what we decided, and what we rejected        |
 | `product.md`         | what Eva is for, and who for                 |

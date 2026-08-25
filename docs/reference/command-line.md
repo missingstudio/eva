@@ -89,14 +89,29 @@ is a valid prompt and goes to the model. §8.3 proves it.
 These names are reserved. Nothing implements them yet, and this table is where
 they land so two stages do not choose two shapes:
 
-| Command                    | Stage                            |
-| -------------------------- | -------------------------------- |
-| `eva serve --acp`          | 9c — Eva as an ACP agent         |
-| `eva auth status`          | already a plugin, no command yet |
-| `eva plugin add <package>` | 6.5 — extension distribution     |
-| `eva trace show <run>`     | 6 — memory and trace             |
-| `eva harness list`         | 9c — harness adapters            |
-| `eva branch <session>@12`  | 6 — memory and trace             |
+| Command                    | Stage                                    |
+| -------------------------- | ---------------------------------------- |
+| `eva serve --acp`          | 9c — Eva as an ACP agent                 |
+| `eva serve --web`          | web W1 — the page that watches           |
+| `eva auth status`          | already a plugin, no command yet         |
+| `eva plugin add <package>` | 6.5 — extension distribution             |
+| `eva trace show <run>`     | 6 — memory and trace                     |
+| `eva trace publish <run>`  | 6 — the published Run                    |
+| `eva harness list`         | 9c — harness adapters                    |
+| `eva branch <session>@12`  | 6 — memory and trace                     |
+| `eva top`                  | 9b — the fleet, needs-attention first    |
+| `eva enroll create`        | mobile M0 — device grants, widened at 9b |
+| `eva api schema`           | terminal C4 — the printable contract     |
+| `eva mergeq status`        | 10 — the merge queue                     |
+| `eva control up`           | S1 — a control plane, either posture     |
+| `eva tenant export`        | S2 — tenancy with an exit door           |
+| `eva billing invoice`      | S4 — one invoice per tenant              |
+| `eva halt`                 | 14 · S5 — drain and freeze               |
+
+`eva serve` takes the posture as a flag rather than as a verb per surface:
+`--acp` and `--web` are two answers to "serve what", and a third surface adds
+a third flag rather than a third verb. What starts a process is a flag, not a
+Command — the same rule [context.md](../context.md) states for the Console.
 
 A command named `plugin` and a flag named `--plugin` coexist. This is verified,
 not assumed.

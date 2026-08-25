@@ -86,4 +86,7 @@ drives them, and its own harness is one entry in the same registry.
 
 ## How it gets built
 
-Nineteen stages, each with an exit test it can fail. [roadmap.md](roadmap.md).
+Nineteen stages build the factory. Twenty more build its surfaces and turn the
+control plane into a service. Every one has an exit test it can fail, and they
+are all in one document, in one order: [roadmap.md](roadmap.md), which opens
+with what to build next.
