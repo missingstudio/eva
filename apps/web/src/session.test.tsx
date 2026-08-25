@@ -10,7 +10,7 @@ import {
 import { blocksOf } from "@missingstudio/eva-session-view"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
-import { Page } from "./page.js"
+import { Listing, Page } from "./page.js"
 import {
   Cost,
   Live,
@@ -267,6 +267,10 @@ describe("the cost line", () => {
  * no model switch. Those are W2's and they wait for the permission gate, so
  * the count of controls on the page is zero and it is a check that fails
  * rather than a habit.
+ *
+ * Each surface is drawn in the state a reader sees it in. `renderToStaticMarkup`
+ * runs no effect, so `Page` draws only the words it says before the listing has
+ * answered — the drawn listing is `Listing`, and it is handed the rows.
  */
 describe("what the page offers", () => {
   it.each(["<input", "<textarea", "<button", "<form", "<select"])(
@@ -278,6 +282,16 @@ describe("what the page offers", () => {
         ),
       ).not.toContain(control)
       expect(renderToStaticMarkup(<Page />)).not.toContain(control)
+      expect(renderToStaticMarkup(<Listing sessions={[HEADER]} />)).not.toContain(control)
     },
   )
+
+  // The rows are on the page this was read from, so a listing that drew
+  // nothing could not pass the clause above by drawing nothing.
+  it("draws the Sessions it was handed", () => {
+    const drawn = renderToStaticMarkup(<Listing sessions={[HEADER]} />)
+
+    expect(drawn).toContain(SESSION)
+    expect(drawn).toContain("read the trace back over HTTP")
+  })
 })
