@@ -40,11 +40,8 @@ describe("what a request is answered with", () => {
     expect(assetFor(root, "/sessions/019a")).toBe(resolve(root, "index.html"))
   })
 
-  /**
-   * A path that names a file and has none is a miss. Answering a script
-   * request with HTML is a failure that reads as a broken bundle and costs a
-   * reader an afternoon.
-   */
+  // A path that names a file and has none is a miss. A script request
+  // answered with HTML reads as a broken bundle, not as a miss.
   it("misses a file that names an extension and is not there", () => {
     expect(assetFor(built(), "/assets/index-gone.js")).toBeUndefined()
   })
