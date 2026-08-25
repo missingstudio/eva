@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url"
 import { auth } from "@missingstudio/eva-auth"
 import { budget } from "@missingstudio/eva-budget"
 import { catalogModels } from "@missingstudio/eva-catalog-models"
@@ -23,6 +24,7 @@ import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { validator } from "@missingstudio/eva-validator"
 import { makeTui } from "@missingstudio/eva-tui-surface"
 import { usage } from "@missingstudio/eva-usage"
+import { makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
 import { workflow } from "@missingstudio/eva-workflow"
 import { VERSION } from "./version.js"
 
@@ -41,6 +43,49 @@ export const tui = makeTui({
   },
   version: VERSION,
 })
+
+/**
+ * Where the built page is: `apps/web/dist`, beside this app. `src` and `dist`
+ * sit at the same depth, so the same lookup answers from source and from the
+ * packed build — as `version.ts` reads the manifest above both.
+ *
+ * A compiled binary carries no tree to look in. Carrying `apps/web/dist` next
+ * to a release is `scripts/release/build.ts`'s concern, and until it is done
+ * the surface says there is no built page rather than serving 404s.
+ */
+export const assetRoot = (): string => fileURLToPath(new URL("../../web/dist", import.meta.url))
+
+/**
+ * The plugin holds the server; the app holds the tree the page was built
+ * into. This table is assembled before a World is read, so the entry here
+ * serves and says nothing — `serving` rebuilds it with one run's own writer
+ * and bind, because a bind is a fact of a run and not of a build.
+ */
+export const web = makeWeb({ assets: assetRoot })
+
+// The bind a run asked for. Absent means the surface's own default.
+export interface WebBind {
+  readonly host?: string
+  readonly port?: number
+}
+
+/**
+ * This build, with `eva.web` bound to what the command line asked for. A
+ * surface row is started with a Client and nothing else, so the bind and the
+ * writer are closed over when the plugin is made — and the flags are only
+ * known once a run has parsed them. The composition root is where a flag and
+ * a plugin meet, exactly as it is for `makeTui({ renderer })`.
+ */
+export const serving = (build: Build, bind: WebBind, write: (text: string) => void): Build =>
+  buildOf([
+    ...build.all.filter((plugin) => plugin.id !== WEB_SURFACE),
+    makeWeb({
+      assets: assetRoot,
+      write,
+      ...(bind.host === undefined ? {} : { host: bind.host }),
+      ...(bind.port === undefined ? {} : { port: bind.port }),
+    }),
+  ])
 
 /**
  * The built-in table, in load order: the trace first because everything
@@ -78,6 +123,9 @@ export const BUILT_IN: readonly Plugin[] = [
   config,
   print,
   tui,
+  // Last, and after `tui`: `eva.web` says `interactive: false`, so it can
+  // never take the interactive branch from the surface a person types into.
+  web,
 ]
 
 // Available by id but not loaded unless config asks for it.

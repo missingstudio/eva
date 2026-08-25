@@ -182,6 +182,54 @@ describe("eva run", () => {
   })
 })
 
+describe("eva serve", () => {
+  it("names the web posture, and leaves the bind to the surface", () => {
+    expect(ran(["serve", "--web"]).invocation).toEqual({ kind: "serve", overlays: {} })
+  })
+
+  it("carries the host and the port the command line named", () => {
+    expect(ran(["serve", "--web", "--host", "127.0.0.1", "--port", "8080"]).invocation).toEqual({
+      kind: "serve",
+      overlays: {},
+      host: "127.0.0.1",
+      port: 8080,
+    })
+  })
+
+  // Port 0 is a real ask: bind anywhere free, and say where it landed.
+  it("reads port 0 as a port and not as nothing", () => {
+    expect(ran(["serve", "--web", "--port", "0"]).invocation).toMatchObject({ port: 0 })
+  })
+
+  it("carries the global flags as overlays", () => {
+    expect(ran(["serve", "--web", "--without-plugin", "eva.tui"]).invocation).toMatchObject({
+      kind: "serve",
+      overlays: { noPlugin: ["eva.tui"] },
+    })
+  })
+
+  /**
+   * `--acp` is the next answer to "serve what", so a posture is named rather
+   * than defaulted: a default would start a surface nobody chose.
+   */
+  it("refuses a serve with no posture, and names the one there is", () => {
+    const found = ran(["serve"])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain("--web")
+  })
+
+  // It used to be Number("eight"), and a NaN port binds a random one.
+  it.each(["eight", "-1", "70000", "80.5"])("refuses %s as a port, naming it", (port) => {
+    const found = ran(["serve", "--web", "--port", port])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain(port)
+  })
+
+  it("names serve for the word that likely meant it", () => {
+    expect(ran(["serv"]).err).toContain("did you mean serve?")
+  })
+})
+
 describe("what the command line says it did not read", () => {
   it("says nothing when every argument was read", () => {
     expect(ran(["config", "show"]).err).toBe("")

@@ -4,12 +4,13 @@ import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
 import { Cause, Effect, Exit, Scope } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
-import { BUILD } from "./plugins.js"
+import { BUILD, serving } from "./plugins.js"
 import { report } from "./report.js"
 import { showConfig } from "./show.js"
 import { runInteractive } from "./interactive.js"
 import { runPrint } from "@missingstudio/eva-print"
 import { resolveConfig, runHarness, startFrom, withSignals } from "./run.js"
+import { runServe } from "./serve.js"
 import { fromProcess, type World } from "./world.js"
 
 export * from "./argv.js"
@@ -18,6 +19,7 @@ export * from "./show.js"
 export * from "./interactive.js"
 export * from "./plugins.js"
 export * from "./run.js"
+export * from "./serve.js"
 export * from "./version.js"
 export * from "./world.js"
 
@@ -111,6 +113,33 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       world.err(
         `${claim.summary}${claim.errorClass === undefined ? "" : ` (${claim.errorClass})`}\n`,
       )
+      return 1
+    }
+
+    /**
+     * The verb names the surface, so the row is started by id rather than by
+     * the rule that picks the first interactive one. The bind and the writer
+     * reach the plugin through the build, because a surface row is started
+     * with a Client and nothing else.
+     */
+    case "serve": {
+      const settled = yield* resolveConfig(invocation.overlays, world)
+      report(settled, world)
+
+      const scope = yield* Scope.make()
+      const started = yield* startFrom(
+        scope,
+        settled,
+        serving(build, invocation, world.out),
+        world.err,
+      )
+      const outcome = yield* Effect.exit(withSignals(runServe(started)))
+      yield* Scope.close(scope, Exit.void)
+      if (Exit.isSuccess(outcome)) return 0
+
+      // A build without `eva.web` is a build missing a door. It says which
+      // surfaces it does have, rather than exiting as though it served.
+      world.err(`${Cause.squash(outcome.cause) as Error}\n`)
       return 1
     }
 
