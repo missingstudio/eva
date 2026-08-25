@@ -51,8 +51,8 @@ const pathOf = (url: string): string | undefined => {
  *
  * A path with no extension belongs to the router, so it is answered with the
  * page and the page routes it. A path that names a file and has none is a
- * miss: answering a script request with HTML is a failure that costs a
- * reader an afternoon.
+ * miss: a script request answered with HTML reads as a broken bundle, which
+ * is a much worse report than a miss.
  */
 export const assetFor = (root: string, url: string): string | undefined => {
   const asked = pathOf(url)

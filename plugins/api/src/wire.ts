@@ -100,15 +100,10 @@ export const modelIn = (value: unknown): ModelRef | undefined => {
 }
 
 /**
- * A Transcript is three closures and a Cursor, so what travels is not a
- * Transcript: it is the record the Transcript folded, and the far side folds
- * it again. A projection sent instead would be the only answer a page had,
- * and a wrong one would read as the truth.
- *
- * `packages/schema` already carries this codec in both directions, at the
- * granularity of one Event, so there is no second one here. The Cursor is
- * not sent either: the fold on the far side ends where this one does,
- * because it read the same events.
+ * What travels is the record the Transcript folded, not the Transcript: the
+ * far side folds it again. A projection sent instead would be the only answer
+ * a page had, and a wrong one would read as the truth. `packages/schema`
+ * carries the codec both ways, so there is no second one here.
  */
 export const eventsOut = (events: readonly Event[]): readonly Record<string, unknown>[] =>
   events.map(encode)

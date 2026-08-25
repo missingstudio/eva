@@ -29,26 +29,17 @@ export const tailOf = (said: string, payload: Payload): string =>
   payload.kind === "text" && payload.content.type === "text" ? said + payload.content.text : said
 
 /**
- * Attach, then watch from the fold's own position.
+ * Attach, then watch from the fold's own position. The watch resumes from the
+ * position the fold ended at, so nothing between the two calls is missed and
+ * nothing already folded arrives twice.
  *
- * Those two calls are the whole of a progressive read: the record as it
- * stands, and then what commits after it, exactly once. Nothing that commits
- * between them is missed, because the position the watch resumes from is the
- * one the fold ended at — and nothing already folded arrives twice, for the
- * same reason.
+ * A watch that ends is answered by folding again, however it ended: the Run
+ * closed, the pipe went, or the Cursor was refused. A refusal is a fact about
+ * one subscription and not an event in the Session, so a fresh fold answers it
+ * and there is no gap.
  *
- * So a watch that ends is answered by folding again, whichever of the three
- * ways it ended: the Run closed and the record holds what the tail held; the
- * pipe went; or the Cursor was refused, because the head moved past the replay
- * bound between the fold and the watch that resumed from it. A refusal is a
- * fact about one subscription and not an event in the Session, so what answers
- * it is a fresh fold and never a gap.
- *
- * Nothing here waits for the pipe. `attach` is the wait: a call made while the
- * pipe is down is slower and never differently typed, which is the seam's own
- * rule — so this asks again and the ask is held until it can be answered. What
- * a surface reads about the pipe is the Client's `state`, and it reads it to
- * say so and acts on nothing else.
+ * Nothing here waits for the pipe. A call made while the pipe is down is
+ * slower and never differently typed, so `attach` is the wait.
  */
 export const follow = (
   one: Client,
@@ -66,8 +57,7 @@ export const follow = (
     // The fold replaces the tail, so the tail goes with it.
     each(() => ({ folded, said: "" }))
 
-    // A refused Cursor ends this watch and says nothing to the page. What
-    // answers it is the fold below, as it answers every other ending.
+    // A refused Cursor ends the watch. The fold below answers it.
     const watching = Stream.catchTag(
       one.api.watch(session, record.at),
       "ResumeTooFarBehind",
