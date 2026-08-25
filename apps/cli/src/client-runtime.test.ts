@@ -67,6 +67,34 @@ describe("what reads the Session API", () => {
   })
 })
 
+/**
+ * The one number that proves W0: the count of Session API calls in `apps/web`
+ * that do not go through `client-runtime`. It is zero, and it is a check that
+ * fails rather than a habit.
+ *
+ * A page that went around the Client would have to reach the wire itself, so
+ * the wire's own names are what this counts — and `SessionAPI` with them,
+ * because a page that named one would be answering the contract rather than
+ * calling it. `plugins/tui` holds to the same rule one directory over.
+ */
+describe("what the page reaches Eva through", () => {
+  it("names no wire and no Session API of its own", () => {
+    expect(naming("fetch(", ["apps/web/src"])).toEqual([])
+    expect(naming("EventSource", ["apps/web/src"])).toEqual([])
+    expect(naming("SessionAPI", ["apps/web/src"])).toEqual([])
+  })
+
+  /**
+   * One Client, built at one site, and every other file on the page is handed
+   * it. `client-runtime` holds what a reconnect costs, so a second Client
+   * would be a second answer to where the runtime is.
+   */
+  it("builds one Client, at one site", () => {
+    expect(naming("eva-api/client", ["apps/web/src"])).toEqual(["apps/web/src/eva.ts"])
+    expect(naming("makeClient", ["apps/web/src"])).toEqual(["apps/web/src/eva.ts"])
+  })
+})
+
 describe("what the print surface carries", () => {
   /**
    * The print path is imported by name, not lazily, so what it names is what

@@ -5,10 +5,13 @@ live, and writes nothing. It is one artifact, and
 [`eva.web`](../../plugins/web/README.md) serves it without building it — the
 posture, single-tenant or multi-tenant, is read when the surface starts.
 
-At W1 the page is the walking skeleton: one route that names the build it is.
-Nothing on it reaches Eva yet, because the wire arrives with the page code
-that calls it. The glossary in [docs/context.md](../../docs/context.md)
-defines **Session**, **Surface**, and **Transcript**.
+At W1 the page lists the Sessions Eva holds, each with its Header. It reaches
+them over the wire [`eva.api`](../../plugins/api/README.md) serves on the same
+port, through the Client `packages/client-runtime` builds — and the count of
+Session API calls that go around that Client is zero, which is a check that
+fails rather than a habit. The glossary in
+[docs/context.md](../../docs/context.md) defines **Session**, **Surface**, and
+**Transcript**.
 
 ## Prerequisites
 
@@ -47,13 +50,15 @@ cd apps/web && bun run dev
 
 ## Layout
 
-| Path             | What                                                  |
-| ---------------- | ----------------------------------------------------- |
-| `src/main.tsx`   | mounts the router into `index.html`                   |
-| `src/routes.tsx` | the route tree, written in code rather than generated |
-| `src/page.tsx`   | the one route: it says which build it is              |
-| `src/build.ts`   | the version and the stamp, injected by the build      |
-| `src/styles.css` | plain local styling until `packages/brand` lands      |
+| Path              | What                                                  |
+| ----------------- | ----------------------------------------------------- |
+| `src/main.tsx`    | mounts the router into `index.html`                   |
+| `src/routes.tsx`  | the route tree, written in code rather than generated |
+| `src/page.tsx`    | the one route: the build, and the listing             |
+| `src/eva.ts`      | the one Client, over the same-origin wire             |
+| `src/sessions.ts` | what the page reads: the Sessions, or not yet         |
+| `src/build.ts`    | the version and the stamp, injected by the build      |
+| `src/styles.css`  | plain local styling until `packages/brand` lands      |
 
 Routes are code-based, so the build needs no route generator and no plugin
 beside the toolchain the repository already has.
@@ -68,8 +73,9 @@ suffix so `plugins/web` keeps the plain `@missingstudio/eva-web`.
 
 Tests live in [src/page.test.tsx](src/page.test.tsx): the page is rendered to
 a string, because what a browser gets is proven against a real socket in
-[plugins/web](../../plugins/web/README.md). Run the suite from the repository
-root:
+[plugins/web](../../plugins/web/README.md) and the wire behind it is proven in
+[packages/conformance](../../packages/conformance). Run the suite from the
+repository root:
 
 ```bash
 bun run test
