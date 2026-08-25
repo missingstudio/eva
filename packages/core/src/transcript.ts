@@ -39,6 +39,14 @@ export interface Transcript {
    * so a watch from 0 replays all of it, which is what an empty record means.
    */
   readonly at: Cursor
+  /**
+   * The Trace this fold read: the Session's own events, in the order they
+   * were given. A fold is not the record, and the difference is what a
+   * socket makes visible — a Surface on the far side is sent the record and
+   * folds it there, so a wrong projection is a thing a reader can see rather
+   * than the only answer they have.
+   */
+  readonly events: () => readonly Event[]
   readonly messages: () => readonly TranscriptMessage[]
   readonly cost: () => CostSummary
   /**
@@ -78,6 +86,7 @@ export const foldTranscript = (
   return {
     session,
     at: { session, seq },
+    events: () => clone(own),
     messages: () => clone(messages),
     cost: () => clone(cost),
     answer: () => clone(answer),
