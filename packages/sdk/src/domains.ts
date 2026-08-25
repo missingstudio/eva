@@ -1,3 +1,4 @@
+import type { Client } from "@missingstudio/eva-client-runtime"
 import {
   modelRef,
   type Domain,
@@ -166,7 +167,7 @@ export interface SurfaceInfo {
   interactive: boolean
   streaming: boolean
   images: boolean
-  start?: (api: SessionAPI) => Effect.Effect<Frontend, never, Scope.Scope>
+  start?: (client: Client) => Effect.Effect<Frontend, never, Scope.Scope>
 }
 
 export interface IntegrationInfo {

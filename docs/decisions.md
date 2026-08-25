@@ -452,6 +452,17 @@ and copied whichever race it held. `packages/client-runtime` holds it once —
 subscribe, submit, drain in a bound, fold — and the bounded stop is the
 direction it settles on.
 
+**A surface is handed one handle, not the contract with a protocol beside it.**
+`SurfaceInfo.start` takes a `Client`: the whole `SessionAPI`, plus the Run
+protocol over it. The composition root builds one where it builds the API, so a
+surface cannot reach a session call the runtime does not carry — the type is
+most of that assertion, and a grep over what ships keeps the rest. `client.api`
+is the same `SessionAPI` shape, so a command that only reads the contract
+changed nothing. The sdk names the client runtime in that one signature, and the
+runtime imports core alone, so the dependency points down. _Rejected:_ handing a
+surface the API and `runPrompt` beside it — two things to pass is two things a
+surface can pass one of.
+
 **The client runtime holds what the server needs to hear about, and no
 pixels.** It imports the contracts and nothing that draws, so the same package
 serves a terminal, a web page and a phone. It takes one domain at a time, when

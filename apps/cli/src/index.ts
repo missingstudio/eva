@@ -1,4 +1,5 @@
 import { makeSessionAPI, type Build } from "@missingstudio/eva-boot"
+import { makeClient } from "@missingstudio/eva-client-runtime"
 import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
 import { Cause, Effect, Exit, Scope } from "effect"
@@ -89,7 +90,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
 
       const api = yield* makeSessionAPI(started.kernel, started.model, scope)
       const answered = yield* withSignals(
-        runHarness(started.kernel, api.session, {
+        runHarness(started.kernel, makeClient(api.session), {
           harness: invocation.harness,
           text: invocation.input,
           location: settled.location.directory,
@@ -134,7 +135,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       // instead of keys.
       const api = yield* makeSessionAPI(started.kernel, started.model, scope)
       const printed = yield* withSignals(
-        runPrint(api.session, invocation.prompt, {
+        runPrint(makeClient(api.session), invocation.prompt, {
           location: settled.location.directory,
           write: world.out,
         }),

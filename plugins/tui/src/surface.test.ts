@@ -5,6 +5,7 @@ import {
   type SessionAPI,
   type SubmitInput,
 } from "@missingstudio/eva-core"
+import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
 import { sessionID, type Payload, type SessionID } from "@missingstudio/eva-schema"
 import type { CommandInfo, Frontend, KeymapInfo, PickRow } from "@missingstudio/eva-sdk"
 import type { Frame, KeyPress, Renderer, ThemeColors } from "@missingstudio/eva-tui-core"
@@ -84,7 +85,9 @@ const fakeRenderer = (draws: Partial<Renderer["draws"]> = {}): Fake => {
 }
 
 interface Spy {
-  readonly api: SessionAPI
+  // The fake, wrapped once. Every surface under test reads through it,
+  // which is what makes an API call the surface does not make unreachable.
+  readonly client: Client
   readonly submitted: SubmitInput[]
   readonly cancelled: CancelCause[]
   readonly publish: (payload: Payload) => Effect.Effect<void>
@@ -139,7 +142,7 @@ const fakeApi = Effect.fn("test.api")(function* (racing = false): Effect.fn.Retu
   }
 
   return {
-    api,
+    client: makeClient(api),
     submitted,
     cancelled,
     publish: (payload) => PubSub.publish(hub, payload).pipe(Effect.asVoid),
@@ -186,7 +189,7 @@ const withSurface = <A>(
         const fake = fakeRenderer(over.draws)
         const spy = yield* fakeApi(over.racing ?? false)
         const frontend = yield* makeSurface({
-          api: spy.api,
+          client: spy.client,
           renderer: fake.renderer,
           commands: Effect.succeed(commands),
           keymap: Effect.succeed(over.keymap ?? KEYMAP),
@@ -1083,7 +1086,7 @@ describe("the surface", () => {
           const fake = fakeRenderer()
           const spy = yield* fakeApi()
           const frontend = yield* makeSurface({
-            api: spy.api,
+            client: spy.client,
             renderer: fake.renderer,
             commands: Effect.succeed([]),
             keymap: Effect.succeed(KEYMAP),
@@ -1111,7 +1114,7 @@ describe("the surface", () => {
           const fake = fakeRenderer()
           const spy = yield* fakeApi()
           const frontend = yield* makeSurface({
-            api: spy.api,
+            client: spy.client,
             renderer: fake.renderer,
             commands: Effect.succeed([]),
             keymap: Effect.succeed([

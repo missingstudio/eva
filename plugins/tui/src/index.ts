@@ -67,12 +67,12 @@ export const makeTui = (options: TuiOptions): Plugin =>
           interactive: true,
           streaming: true,
           images: false,
-          start: (api) =>
+          start: (client) =>
             Effect.gen(function* () {
               const chosen = yield* theme
               const picked = yield* Effect.promise(() => options.renderer(chosen.colors))
               return yield* makeSurface({
-                api,
+                client,
                 renderer: picked.renderer,
                 commands: ctx.command.get,
                 keymap: ctx.keymap.get,

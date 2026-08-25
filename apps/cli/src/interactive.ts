@@ -1,4 +1,5 @@
 import { makeSessionAPI } from "@missingstudio/eva-boot"
+import { makeClient } from "@missingstudio/eva-client-runtime"
 import type { SurfaceInfo } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Scope } from "effect"
 import type { Started } from "./run.js"
@@ -21,7 +22,7 @@ export const pickSurface = (rows: readonly SurfaceInfo[]): SurfaceInfo | undefin
 
 /**
  * Runs the selected surface until it stops. The surface owns the loop; this
- * only chooses one, hands it the Session API, and waits.
+ * only chooses one, hands it the client runtime, and waits.
  */
 export const runInteractive = Effect.fn("cli.interactive")(function* (started: Started) {
   const rows = yield* started.kernel.domains.surface.get
@@ -32,7 +33,8 @@ export const runInteractive = Effect.fn("cli.interactive")(function* (started: S
 
   const scope = yield* Scope.make()
   const api = yield* makeSessionAPI(started.kernel, started.model, scope)
-  const frontend = yield* Effect.provideService(chosen.start(api.session), Scope.Scope, scope)
+  const client = makeClient(api.session)
+  const frontend = yield* Effect.provideService(chosen.start(client), Scope.Scope, scope)
   yield* Effect.ensuring(frontend.done, Scope.close(scope, Exit.void))
   return chosen.id
 })

@@ -1,4 +1,5 @@
-import type { FrontendAnswer, SessionAPI } from "@missingstudio/eva-core"
+import type { Client } from "@missingstudio/eva-client-runtime"
+import type { FrontendAnswer } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import {
   dispatch,
@@ -16,7 +17,7 @@ import {
   type Renderer,
   type ThemeColors,
 } from "@missingstudio/eva-tui-core"
-import { Cause, Deferred, Effect, Exit, Fiber, Queue, Schedule, Scope, Stream } from "effect"
+import { Cause, Deferred, Effect, Exit, Fiber, Queue, Schedule, Scope } from "effect"
 import { branchOf, shortPath } from "./banner.js"
 import { apply, backStep, frameOf, initial, type ConsoleEvent, type Place } from "./console.js"
 import { edit, pasted, type LineAction, type LineCommand } from "./line.js"
@@ -36,7 +37,7 @@ import {
 export const TUI_SURFACE = "eva.tui"
 
 export interface SurfaceDeps {
-  readonly api: SessionAPI
+  readonly client: Client
   readonly renderer: Renderer
   // Read at the point of use, so a plugin loaded later is reachable.
   readonly commands: Effect.Effect<readonly CommandInfo[]>
@@ -60,12 +61,6 @@ export interface SurfaceDeps {
 // How often the spinner turns. Fast enough to read as motion, slow enough
 // that a redraw is not what the terminal spends its time on.
 export const TICK = 100
-
-// How long the Live area may take to drain after the Run it belongs to has
-// closed. It is a stop rather than a wait: everything the stream will say
-// is published by then, so a drain that has not finished by now is a
-// subscription that never started.
-export const SETTLE = 2000
 
 /**
  * A choice a command is waiting on: the rows as the command offered them,
@@ -127,7 +122,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
 
   // The Console is the state; every event is drawn, so the screen is never
   // behind what happened.
-  let state = initial(yield* deps.api.create(deps.directory))
+  let state = initial(yield* deps.client.api.create(deps.directory))
   const on = (event: ConsoleEvent) => {
     state = apply(state, event)
     deps.renderer.draw(frameOf(state, place))
@@ -366,8 +361,8 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
 
   // The record folds; the Console decides what the fold replaces.
   const refresh = Effect.fn("eva.tui.refresh")(function* (holding = false) {
-    const transcript = yield* Effect.scoped(deps.api.attach(state.session))
-    const model = (yield* deps.api.model.get(state.session)).model
+    const transcript = yield* Effect.scoped(deps.client.api.attach(state.session))
+    const model = (yield* deps.client.api.model.get(state.session)).model
     on({
       kind: "folded",
       messages: [...transcript.messages()],
@@ -381,7 +376,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
   // This surface supplies where writing goes and which Session is open.
   const runCommand = Effect.fn("eva.tui.command")(function* (line: string) {
     const outcome = yield* dispatch(yield* deps.commands, line, (parsed) => ({
-      api: deps.api,
+      api: deps.client.api,
       session: state.session,
       ...(parsed.argument === undefined ? {} : { argument: parsed.argument }),
       write: (text: string) => on({ kind: "said", text }),
@@ -427,24 +422,15 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
       ),
     )
 
-    // The Live area is fed by a watcher of its own. It subscribes after it
-    // is forked, so a Run that closes in the same turn is a close it never
-    // hears — and what it never hears it would wait for forever.
-    const watching = yield* Effect.forkChild(
-      Stream.runForEach(
-        Stream.takeUntil(deps.api.watch(state.session), (one) => one.kind === "finished"),
-        (one) => Effect.sync(() => on({ kind: "streamed", payload: one })),
-      ),
+    // The runtime owns the Run, from the input that opens it to the record
+    // that replaces its stream. Every payload it hears feeds the Live area;
+    // the spinner, the close, and the repaint are this surface's own.
+    yield* deps.client.run(
+      state.session,
+      { kind: "prompt", text: line },
+      (payload) => on({ kind: "streamed", payload }),
+      deps.settle === undefined ? {} : { settle: deps.settle },
     )
-    // `submit` is what says the Run is over: it does not return until the
-    // Run has closed. So the stream has already said everything it will
-    // say, and the watcher is only draining what is in hand.
-    yield* deps.api.submit(state.session, { kind: "prompt", text: line })
-    // The watcher is given its turn to finish that drain, and is then
-    // stopped rather than waited on. A watcher that missed the close holds
-    // nothing open, and the fold that follows is the record either way.
-    yield* Effect.timeoutOption(Fiber.await(watching), deps.settle ?? SETTLE)
-    yield* Fiber.interrupt(watching)
     yield* Fiber.interrupt(turning)
     on({ kind: "closed", at: now() })
     // The fold replaces the stream. What stays on screen is the record.
@@ -609,7 +595,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
           pending = []
         }
 
-        yield* deps.api.cancel(state.session, "user")
+        yield* deps.client.api.cancel(state.session, "user")
         on({ kind: "cancelled" })
 
         yield* refresh(true)

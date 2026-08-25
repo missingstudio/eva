@@ -1,5 +1,6 @@
-import { modelRef, type ModelRef, type SessionAPI } from "@missingstudio/eva-core"
+import { modelRef, type ModelRef } from "@missingstudio/eva-core"
 import { boot, type Build, type Kernel } from "@missingstudio/eva-boot"
+import type { Client } from "@missingstudio/eva-client-runtime"
 import { DEFAULT_MODEL } from "@missingstudio/eva-catalog-models"
 import { findings, KEYS, type Finding } from "@missingstudio/eva-config"
 import {
@@ -167,35 +168,24 @@ export interface PrintOptions {
 }
 
 export const runPrint = Effect.fn("cli.runPrint")(function* (
-  api: SessionAPI,
+  client: Client,
   prompt: string,
   options: PrintOptions = {},
 ) {
   const write = options.write ?? ((text: string) => void process.stdout.write(text))
-  const session = options.session ?? (yield* api.create(options.location ?? process.cwd()))
+  const session = options.session ?? (yield* client.api.create(options.location ?? process.cwd()))
 
   let claim: Claim = { result: "failed", summary: "the Run closed without a claim" }
-  const watching = yield* Effect.forkChild(
-    Stream.runForEach(
-      Stream.takeUntil(api.watch(session), (one) => one.kind === "finished"),
-      (payload) =>
-        Effect.sync(() => {
-          if (payload.kind === "text" && payload.content.type === "text") {
-            write(payload.content.text)
-          }
-          if (payload.kind === "finished") claim = payload.claim
-        }),
-    ),
-  )
+  // The runtime owns the Run, the cancel on interrupt included. Text is
+  // written as it is said, the close carries the claim, and the record it
+  // gives back is what the cost is read from.
+  const transcript = yield* client.run(session, { kind: "prompt", text: prompt }, (payload) => {
+    if (payload.kind === "text" && payload.content.type === "text") {
+      write(payload.content.text)
+    }
+    if (payload.kind === "finished") claim = payload.claim
+  })
 
-  // Being asked to stop is a cancel, so the Run still closes and the
-  // partial work is kept.
-  yield* Effect.onInterrupt(api.submit(session, { kind: "prompt", text: prompt }), () =>
-    api.cancel(session, "user"),
-  )
-  yield* Fiber.await(watching)
-
-  const transcript = yield* Effect.scoped(api.attach(session))
   return { claim, session, costLine: costLine(transcript.cost()) } satisfies PrintResult
 })
 
@@ -226,13 +216,15 @@ export interface HarnessInput {
  */
 export const runHarness = Effect.fn("cli.runHarness")(function* (
   kernel: Kernel,
-  api: SessionAPI,
+  client: Client,
   input: HarnessInput,
 ) {
+  const { api } = client
   const session = yield* api.create(input.location)
 
   // Being asked to stop is a cancel, so the Run still closes and the
-  // partial work is kept.
+  // partial work is kept. A Workflow says no live stream a reader wants,
+  // so this submits rather than running the protocol; the record answers.
   yield* Effect.onInterrupt(
     api.submit(session, { kind: "prompt", text: input.text, harness: input.harness }),
     () => api.cancel(session, "user"),

@@ -38,10 +38,22 @@ To use the package from another workspace package, add it as a dependency:
 
 ## Usage
 
-`runPrompt` opens one Run and gives back the record that replaces its stream.
-Every payload the Run says reaches `each`, the close included, and what a
-surface does with them stays with the surface — a spinner, a line of stdout,
-or a repaint:
+A surface holds one `Client`: the whole session contract, plus the protocol.
+The composition root builds it where it builds the API, and hands it on.
+`client.api` is the same `SessionAPI` shape, so a consumer that only reads the
+contract — a command, say — takes the handle and changes nothing of its own:
+
+```ts
+import { makeClient } from "@missingstudio/eva-client-runtime"
+
+const client = makeClient(api)
+const record = yield * client.run(session, { kind: "prompt", text: line }, each)
+```
+
+`runPrompt` is what the handle runs. It opens one Run and gives back the
+record that replaces its stream. Every payload the Run says reaches `each`,
+the close included, and what a surface does with them stays with the
+surface — a spinner, a line of stdout, or a repaint:
 
 ```ts
 import { runPrompt } from "@missingstudio/eva-client-runtime"
@@ -107,8 +119,9 @@ it.
 
 ## Development
 
-The protocol's rules live in [run.test.ts](src/run.test.ts) and the seam's in
-[transport.test.ts](src/transport.test.ts), both against the fake `SessionAPI`
+The protocol's rules live in [run.test.ts](src/run.test.ts), the handle's in
+[client.test.ts](src/client.test.ts) and the seam's in
+[transport.test.ts](src/transport.test.ts), all against the fake `SessionAPI`
 in [fake-api.ts](src/fake-api.ts). Run the suite from the repository root:
 
 ```bash

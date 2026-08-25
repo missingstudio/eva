@@ -360,6 +360,14 @@ questions to the user, file reads and writes, and terminals. A Harness asks; it
 does not help itself.
 _Avoid_: Host interface, callbacks
 
+**Client**:
+The handle a Surface holds: the whole Session API, plus the Run protocol over
+it. The composition root builds one where it builds the API and hands it on, so
+a Surface reaches a Session through the client runtime and no other way. It is
+a handle, never a plugin — a Surface is what a person drives; a Client is what
+a Surface calls through.
+_Avoid_: Session client, connection, Surface (a Surface holds a Client)
+
 **Transport**:
 Where a contract is answered from: this process, or a wire. A Transport carries
 the contract unchanged and decides nothing about the calls it makes. Two seams
@@ -474,10 +482,11 @@ _Avoid_: Message (that is the transcript's), system message, log line
 **Surface**:
 A plugin that ships an interface a person or a program drives Eva through — the
 terminal, `--print`, HTTP, the web page. It registers into the surface Domain,
-calls the Session API for everything it shows, and implements the Frontend
-contract for everything Eva asks of it. It holds no Session of its own.
-_Avoid_: Client, UI, app, Frontend (a Frontend is the contract; the Surface is
-the plugin that implements it)
+calls the Session API through a Client for everything it shows, and implements
+the Frontend contract for everything Eva asks of it. It holds no Session of its
+own.
+_Avoid_: Client (a Client is the handle a Surface holds), UI, app, Frontend (a
+Frontend is the contract; the Surface is the plugin that implements it)
 
 **Session API**:
 What Eva exposes and a Surface calls: create, list, attach, watch, submit,

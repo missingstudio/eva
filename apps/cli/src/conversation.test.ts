@@ -1,12 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import {
-  foldTranscript,
-  providerTurn,
-  type ModelRef,
-  type SessionAPI,
-} from "@missingstudio/eva-core"
+import { foldTranscript, providerTurn, type ModelRef } from "@missingstudio/eva-core"
 import { sessionID, type Event, type Payload } from "@missingstudio/eva-schema"
 import { trace } from "@missingstudio/eva-trace"
 import { makeJsonlSink, traceJsonl } from "@missingstudio/eva-trace-jsonl"
@@ -15,6 +10,7 @@ import { describe, expect, it } from "vitest"
 import { providing, scripted, withKernel } from "@missingstudio/eva-testkit"
 import type { Plugin } from "@missingstudio/eva-sdk"
 import { makeSessionAPI } from "@missingstudio/eva-boot"
+import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
 import { runPrint } from "./run.js"
 
 const SESSION = sessionID("sess_conversation")
@@ -37,11 +33,13 @@ const usage = (input: number, output: number): Payload => ({
 
 const started = <A>(
   provider: Plugin,
-  body: (api: SessionAPI, path: string) => Effect.Effect<A>,
+  body: (client: Client, path: string) => Effect.Effect<A>,
 ): Promise<A> => {
   const path = join(mkdtempSync(join(tmpdir(), "eva-conv-")), "trace.jsonl")
   return withKernel([trace, { plugin: traceJsonl, options: { path } }, provider], (kernel, scope) =>
-    Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), (api) => body(api.session, path)),
+    Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), (api) =>
+      body(makeClient(api.session), path),
+    ),
   )
 }
 
@@ -62,10 +60,10 @@ describe("a conversation over several Runs", () => {
       { payloads: [text("second answer"), usage(20, 6)] },
     ]).plugin
 
-    const found = await started(provider, (api, path) =>
+    const found = await started(provider, (client, path) =>
       Effect.gen(function* () {
-        const first = yield* runPrint(api, "first question", { write: () => {} })
-        yield* runPrint(api, "second question", {
+        const first = yield* runPrint(client, "first question", { write: () => {} })
+        yield* runPrint(client, "second question", {
           session: first.session,
           write: () => {},
         })
@@ -86,8 +84,8 @@ describe("a conversation over several Runs", () => {
       { payloads: [text("st"), text("rea"), text("med"), usage(1, 3)] },
     ]).plugin
 
-    await started(provider, (api) =>
-      runPrint(api, "stream it", { write: (piece) => void chunks.push(piece) }),
+    await started(provider, (client) =>
+      runPrint(client, "stream it", { write: (piece) => void chunks.push(piece) }),
     )
 
     expect(chunks).toEqual(["st", "rea", "med"])
@@ -96,7 +94,9 @@ describe("a conversation over several Runs", () => {
   it("reports the whole session's spend, and says so when cost is unreported", async () => {
     const provider = scripted([{ payloads: [text("hi"), usage(1200, 340)] }]).plugin
 
-    const printed = await started(provider, (api) => runPrint(api, "spend", { write: () => {} }))
+    const printed = await started(provider, (client) =>
+      runPrint(client, "spend", { write: () => {} }),
+    )
 
     expect(printed.costLine).toBe("1.2k in / 340 out · cost unreported")
   })
@@ -112,7 +112,9 @@ describe("a conversation over several Runs", () => {
     }
     const provider = scripted([{ payloads: [text("hi"), usage(10, 4), silent] }]).plugin
 
-    const printed = await started(provider, (api) => runPrint(api, "silent", { write: () => {} }))
+    const printed = await started(provider, (client) =>
+      runPrint(client, "silent", { write: () => {} }),
+    )
     expect(printed.costLine).toBe("cost unreported")
   })
 })
@@ -130,12 +132,12 @@ describe("cancelling mid-stream", () => {
             ),
           ),
       }),
-      (api, path) =>
+      (client, path) =>
         Effect.gen(function* () {
           const streaming = yield* Deferred.make<void>()
           const session = sessionID("sess_cancelled")
           const fiber = yield* Effect.forkChild(
-            runPrint(api, "cancel me", {
+            runPrint(client, "cancel me", {
               session,
               write: () => {
                 Effect.runFork(Deferred.succeed(streaming, undefined))
@@ -160,9 +162,9 @@ describe("cancelling mid-stream", () => {
 describe("the trace a killed process leaves", () => {
   it("still parses, record by record", async () => {
     const provider = scripted([{ payloads: [text("hi"), usage(1, 1)] }]).plugin
-    const lines = await started(provider, (api, path) =>
+    const lines = await started(provider, (client, path) =>
       Effect.gen(function* () {
-        yield* runPrint(api, "record me", { write: () => {} })
+        yield* runPrint(client, "record me", { write: () => {} })
         return path
       }),
     ).then((path) => path)

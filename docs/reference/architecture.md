@@ -866,17 +866,17 @@ earns one; see [decisions.md](../decisions.md).
 
 ### 9.1 The core packages
 
-| Package                             | Holds                                                                                                                                                                  | Imports          |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `@missingstudio/eva-schema`         | the sealed `Payload` union, `Event`, the zod codec, branded IDs, wire types                                                                                            | nothing internal |
-| `@missingstudio/eva-acp`            | the Agent Client Protocol in Effect: schema, JSON-RPC, both halves. Version pinned.                                                                                    | `schema`         |
-| `@missingstudio/eva-core`           | pure domain: `Spec`, `Outcome`, `Claim`, `Session`, `Transcript`, the `SessionAPI`, and every slot contract                                                            | `schema`, `acp`  |
-| `@missingstudio/eva-kernel`         | the plugin runtime, domain machinery including the row Draft, slot table, broadcast bus, config source, location                                                       | `schema`, `core` |
-| `@missingstudio/eva-sdk`            | `PluginContext`, `define`, every domain draft, every hook type, every slot key                                                                                         | `schema`, `core` |
-| `@missingstudio/eva-boot`           | assembles the Kernel: every domain, every slot, every hook, the plugin context, the deps `submit` reads, and the `SessionAPI` a Surface calls                          | `kernel`, `sdk`  |
-| `@missingstudio/eva-client-runtime` | every non-visual client concern a surface would otherwise write itself: the Run protocol a surface calls the Session API with, and the transport seam it calls through | `schema`, `core` |
-| `@missingstudio/eva-tui-core`       | `Keymap`, `ThemeColors`, `Frame`, `Renderer` contracts and the helpers beside them. No rendering code.                                                                 | `schema`         |
-| `@missingstudio/eva-tui`            | the terminal: the OpenTUI React renderer, and a stream renderer for everywhere else                                                                                    | `tui-core`       |
+| Package                             | Holds                                                                                                                                                                   | Imports                            |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `@missingstudio/eva-schema`         | the sealed `Payload` union, `Event`, the zod codec, branded IDs, wire types                                                                                             | nothing internal                   |
+| `@missingstudio/eva-acp`            | the Agent Client Protocol in Effect: schema, JSON-RPC, both halves. Version pinned.                                                                                     | `schema`                           |
+| `@missingstudio/eva-core`           | pure domain: `Spec`, `Outcome`, `Claim`, `Session`, `Transcript`, the `SessionAPI`, and every slot contract                                                             | `schema`, `acp`                    |
+| `@missingstudio/eva-kernel`         | the plugin runtime, domain machinery including the row Draft, slot table, broadcast bus, config source, location                                                        | `schema`, `core`                   |
+| `@missingstudio/eva-sdk`            | `PluginContext`, `define`, every domain draft, every hook type, every slot key                                                                                          | `schema`, `core`, `client-runtime` |
+| `@missingstudio/eva-boot`           | assembles the Kernel: every domain, every slot, every hook, the plugin context, the deps `submit` reads, and the `SessionAPI` a Surface calls                           | `kernel`, `sdk`                    |
+| `@missingstudio/eva-client-runtime` | every non-visual client concern a surface would otherwise write itself: the `Client` a surface holds, the Run protocol it runs, and the transport seam it calls through | `schema`, `core`                   |
+| `@missingstudio/eva-tui-core`       | `Keymap`, `ThemeColors`, `Frame`, `Renderer` contracts and the helpers beside them. No rendering code.                                                                  | `schema`                           |
+| `@missingstudio/eva-tui`            | the terminal: the OpenTUI React renderer, and a stream renderer for everywhere else                                                                                     | `tui-core`                         |
 
 The layer rule:
 
@@ -885,13 +885,14 @@ schema     imports nothing internal
 acp        imports schema
 core       imports schema, acp
 kernel     imports schema, core
-sdk        imports schema, core
+sdk        imports schema, core, client-runtime — the surface row names the Client
 boot       imports schema, core, kernel, sdk — where the kernel and the sdk meet
 tui-core   imports schema
 client-runtime imports schema, core — no renderer, ever
 testkit    imports boot and the contracts below it — test files only
 conformance imports anything, plugins included — test files only, ships nothing
-plugins/*  import schema, core, sdk, tui-core — never kernel, never each other
+plugins/*  import schema, core, sdk, client-runtime, tui-core — never kernel,
+           never each other
            a plugin's *.test.ts may also import testkit, to boot the plugin
 tui        imports tui-core — the only package that may name OpenTUI
 apps/*     import everything — an app is the composition root
@@ -1939,10 +1940,11 @@ export interface SurfaceInfo {
   streaming: boolean
   images: boolean
   /**
-   * Starts the surface against the Session API. The scope owns its lifetime.
-   * A row without it names a surface the build knows of but cannot run.
+   * Starts the surface against the client runtime: the whole Session API,
+   * plus the Run protocol over it. The scope owns its lifetime. A row
+   * without it names a surface the build knows of but cannot run.
    */
-  start?: (api: SessionAPI) => Effect.Effect<Frontend, never, Scope.Scope>
+  start?: (client: Client) => Effect.Effect<Frontend, never, Scope.Scope>
 }
 ```
 

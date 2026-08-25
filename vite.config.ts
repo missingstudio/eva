@@ -65,9 +65,21 @@ export default defineConfig({
         "core imports schema and acp only",
       ),
       layer(
-        ["packages/kernel/**", "packages/sdk/**"],
+        ["packages/kernel/**"],
         ["@missingstudio/eva-schema", "@missingstudio/eva-core"],
-        "kernel and sdk import schema and core only",
+        "the kernel imports schema and core only",
+      ),
+      // The sdk names the client runtime in one signature: a surface row is
+      // started with the handle a surface holds. The runtime imports schema
+      // and core alone, so the dependency points down.
+      layer(
+        ["packages/sdk/**"],
+        [
+          "@missingstudio/eva-schema",
+          "@missingstudio/eva-core",
+          "@missingstudio/eva-client-runtime",
+        ],
+        "the sdk imports schema, core, and the client runtime only",
       ),
       layer(
         ["packages/tui-core/**"],
@@ -127,6 +139,7 @@ export default defineConfig({
           "@missingstudio/eva-schema",
           "@missingstudio/eva-core",
           "@missingstudio/eva-sdk",
+          "@missingstudio/eva-client-runtime",
           "@missingstudio/eva-tui-core",
         ],
         "a plugin imports the contract packages only — never the kernel, never another plugin",
@@ -141,6 +154,7 @@ export default defineConfig({
           "@missingstudio/eva-schema",
           "@missingstudio/eva-core",
           "@missingstudio/eva-sdk",
+          "@missingstudio/eva-client-runtime",
           "@missingstudio/eva-tui-core",
           "@missingstudio/eva-testkit",
         ],
