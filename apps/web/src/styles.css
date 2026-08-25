@@ -53,3 +53,27 @@ p {
 code {
   font-family: ui-monospace, monospace;
 }
+
+.sessions {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+
+.sessions li {
+  border-top: 1px solid color-mix(in srgb, var(--quiet) 30%, transparent);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+}
+
+.title {
+  flex: 1 1 12rem;
+}
+
+.sessions code,
+.sessions time {
+  color: var(--quiet);
+  font-size: 0.85rem;
+}
