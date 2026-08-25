@@ -20,7 +20,13 @@ const event = (session: SessionID, payload: Payload): Event => ({
 // these sessions, so anything it lists came from the sink.
 const seeded = (events: readonly Event[]): TraceSink => ({
   append: (group) => Effect.succeed(group),
+  highWater: Effect.sync(() => {
+    const water = new Map<SessionID, number>()
+    for (const one of events) water.set(one.session, Math.max(water.get(one.session) ?? 0, one.seq))
+    return water
+  }),
   replay: (session) => Stream.fromIterable(events.filter((one) => one.session === session)),
+  follow: () => Effect.succeed(Stream.empty),
   sessions: Effect.succeed([...new Set(events.map((one) => one.session))]),
   close: Effect.void,
 })

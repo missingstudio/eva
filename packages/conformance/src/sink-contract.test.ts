@@ -13,7 +13,7 @@ import {
 } from "@missingstudio/eva-schema"
 import { makeJsonlSink } from "@missingstudio/eva-trace-jsonl"
 import { makeMemorySink } from "@missingstudio/eva-trace-memory"
-import { Effect, Exit, Stream } from "effect"
+import { Effect, Exit, Fiber, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 
 const temp = () => join(mkdtempSync(join(tmpdir(), "eva-sink-")), "trace.jsonl")
@@ -105,6 +105,43 @@ describe.each(sinks)("the %s sink honors the contract", (_name, make) => {
       }),
     )
     expect([...found].sort()).toEqual([SESSION, OTHER].sort())
+  })
+
+  it("says where each session's trace got to", async () => {
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sink = yield* make()
+        yield* sink.append([event(text("a")), event(usage)])
+        yield* sink.append([event(text("b"), OTHER)])
+        const water = yield* sink.highWater
+        return [water.get(SESSION), water.get(OTHER)]
+      }),
+    )
+    expect(found).toEqual([2, 1])
+  })
+
+  /**
+   * The subscription is taken when `follow` resolves, not when the stream
+   * runs. So the event appended before the follow is not delivered, the
+   * other session's event is not delivered, and the one appended after is —
+   * even though nothing drained the stream until the end.
+   */
+  it("follows the record from the moment of subscription, one session only", async () => {
+    const found = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const sink = yield* make()
+          yield* sink.append([event(text("before"))])
+          const tail = yield* sink.follow(SESSION)
+          const taking = yield* Effect.forkChild(Stream.runCollect(tail.pipe(Stream.take(1))))
+          yield* sink.append([event(text("theirs"), OTHER)])
+          yield* sink.append([event(text("mine"))])
+          const first = [...(yield* Fiber.join(taking))]
+          return first.map((one) => [one.session, one.seq, one.payload.kind])
+        }),
+      ),
+    )
+    expect(found).toEqual([[SESSION, 2, "text"]])
   })
 
   it("refuses to append once it is closed", async () => {

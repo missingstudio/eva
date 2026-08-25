@@ -19,8 +19,6 @@ export interface RecorderDeps {
   readonly sink: Effect.Effect<TraceSink | undefined>
   readonly now: () => Timestamp
   readonly nextID: () => string
-  // Published after a group commits, so a surface can follow the record.
-  readonly published?: (events: readonly Event[]) => Effect.Effect<void>
 }
 
 export class RunNotOpenError extends Error {
@@ -63,8 +61,7 @@ export const makeRecorder = (deps: RecorderDeps): Effect.Effect<Recorder> =>
         missing.add("TraceSink")
         return
       }
-      const committed = yield* sink.append(group)
-      if (deps.published !== undefined) yield* deps.published(committed)
+      yield* sink.append(group)
     })
 
     return {

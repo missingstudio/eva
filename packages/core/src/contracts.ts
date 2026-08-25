@@ -8,7 +8,7 @@ import type {
   StopReason,
 } from "@missingstudio/eva-schema"
 import { Data } from "effect"
-import type { Effect, Stream } from "effect"
+import type { Effect, Scope, Stream } from "effect"
 import type { BudgetDecision, BudgetState, Usage } from "./spec.js"
 import type { Session, SessionHeader, Transcript } from "./transcript.js"
 
@@ -16,8 +16,19 @@ import type { Session, SessionHeader, Transcript } from "./transcript.js"
 export interface TraceSink {
   // Commits a group atomically and returns the events with trace positions.
   readonly append: (group: readonly Event[]) => Effect.Effect<readonly Event[]>
+  // Where each session's trace got to. A resume checks its gap against this
+  // before it reads anything.
+  readonly highWater: Effect.Effect<ReadonlyMap<SessionID, number>>
   // Replays a session's events in trace order.
   readonly replay: (session: SessionID) => Stream.Stream<Event>
+  /**
+   * The record from the moment of subscription: every event that commits
+   * after this resolves, in trace order. The subscription is taken when the
+   * effect resolves, not when the stream runs, so a caller can subscribe
+   * first and read second — an event that commits between the two is held
+   * here rather than lost.
+   */
+  readonly follow: (session: SessionID) => Effect.Effect<Stream.Stream<Event>, never, Scope.Scope>
   // Every session the trace holds, so a new process can list what is there.
   readonly sessions: Effect.Effect<readonly SessionID[]>
   readonly close: Effect.Effect<void>

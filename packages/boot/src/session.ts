@@ -1,7 +1,9 @@
 import {
   foldTranscript,
   newSessionID,
+  ResumeTooFarBehind,
   submit,
+  WATCH_REPLAY_BOUND,
   type CancelCause,
   type FrontendAnswer,
   type HarnessHost,
@@ -312,22 +314,56 @@ export const makeSessionAPI = (
       }),
 
       /**
-       * The live stream. With a cursor it first replays what committed after
-       * that position, so a surface that reconnects misses nothing; without
-       * one it shows only what arrives from here.
+       * Without a cursor: the live stream, from here on. With one: the
+       * record. A cursor is a trace position, and positions exist only on
+       * committed events — the live hub carries payloads the sink has not
+       * numbered yet, so it cannot be resumed into. The cursor path
+       * subscribes to the committed stream first and reads the record
+       * second; an event that commits between the two is held by the
+       * subscription, and the position filter drops the copy the read
+       * already returned. Exactly once, whichever side wins.
        */
-      watch: (id: SessionID, from?: Cursor) =>
+      // Cast because the two forms differ in their error channel and the
+      // implementation is one function: the failure lives entirely inside
+      // the `from !== undefined` branch, so the uncursored form cannot
+      // fail and the contract says so.
+      watch: ((id: SessionID, from?: Cursor) =>
         Stream.unwrap(
           Effect.gen(function* () {
             const state = yield* of(id)
-            const tail = Stream.fromPubSub(state.hub)
-            if (from === undefined) return tail
-            const replayed = (yield* events(id))
-              .filter((event) => event.seq > from.seq)
-              .map((event) => event.payload)
-            return Stream.concat(Stream.fromIterable(replayed), tail)
+            if (from === undefined) return Stream.fromPubSub(state.hub)
+
+            const sink = yield* kernel.slot.traceSink.peek
+            if (sink === undefined) {
+              // A build with no trace cannot replay. Say so, then degrade
+              // to the live stream rather than going silent.
+              const missing: Payload = { kind: "degraded", missing: ["TraceSink"] }
+              return Stream.concat(Stream.fromIterable([missing]), Stream.fromPubSub(state.hub))
+            }
+
+            const head = (yield* sink.highWater).get(id) ?? 0
+            if (head - from.seq > WATCH_REPLAY_BOUND) {
+              return Stream.fail(new ResumeTooFarBehind({ from, head }))
+            }
+
+            const tail = yield* sink.follow(id)
+            const committed = [...(yield* Stream.runCollect(sink.replay(id)))]
+            const readHead = committed.reduce(
+              (high, event) => (event.seq > high ? event.seq : high),
+              0,
+            )
+            const boundary = readHead > from.seq ? readHead : from.seq
+            return Stream.concat(
+              Stream.fromIterable(
+                committed.filter((event) => event.seq > from.seq).map((event) => event.payload),
+              ),
+              tail.pipe(
+                Stream.filter((event) => event.seq > boundary),
+                Stream.map((event) => event.payload),
+              ),
+            )
           }),
-        ),
+        )) as SessionAPI["watch"],
 
       /**
        * A prompt opens a Run on its own fiber, so the caller is free while it

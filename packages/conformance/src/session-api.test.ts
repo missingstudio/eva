@@ -1,21 +1,33 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { type ModelRef } from "@missingstudio/eva-core"
-import { scripted, withKernel, type Scripted, type ScriptedTurn } from "@missingstudio/eva-testkit"
-import type { Payload } from "@missingstudio/eva-schema"
+import { providerTurn, type ModelRef, type Provider } from "@missingstudio/eva-core"
+import {
+  FAKE_PROVIDER,
+  providing,
+  scripted,
+  withKernel,
+  type Scripted,
+  type ScriptedTurn,
+} from "@missingstudio/eva-testkit"
+import type { Payload, TranscriptMessage } from "@missingstudio/eva-schema"
+import type { Plugin } from "@missingstudio/eva-sdk"
 import { sessionJsonl } from "@missingstudio/eva-session-jsonl"
 import { trace } from "@missingstudio/eva-trace"
 import { traceJsonl } from "@missingstudio/eva-trace-jsonl"
-import { Effect, Fiber, Stream } from "effect"
+import { Deferred, Effect, Fiber, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 import { makeSessionAPI, type Api } from "@missingstudio/eva-boot"
 
-const text = (value: string): Payload => ({
+// A block change is what makes a Run commit what came before it, so a
+// payload's block is what decides where one Run's record is cut.
+const inBlock = (index: number, value: string): Payload => ({
   kind: "text",
-  block: 0,
+  block: index,
   content: { type: "text", text: value },
 })
+
+const text = (value: string): Payload => inBlock(0, value)
 
 const FAKE_MODEL: ModelRef = { provider: "fake", model: "model" }
 
@@ -26,13 +38,16 @@ const turns = (...answers: readonly (readonly Payload[])[]): readonly ScriptedTu
 
 // A kernel with a real trace and session store behind it, so the API is
 // exercised against the same slots the CLI fills.
-const withApi = <A>(fake: Scripted, body: (api: Api) => Effect.Effect<A>): Promise<A> => {
+const withProvider = <A>(plugin: Plugin, body: (api: Api) => Effect.Effect<A>): Promise<A> => {
   const path = join(mkdtempSync(join(tmpdir(), "eva-api-")), "trace.jsonl")
   return withKernel(
-    [trace, { plugin: traceJsonl, options: { path } }, sessionJsonl, fake.plugin],
+    [trace, { plugin: traceJsonl, options: { path } }, sessionJsonl, plugin],
     (kernel, scope) => Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), body),
   )
 }
+
+const withApi = <A>(fake: Scripted, body: (api: Api) => Effect.Effect<A>): Promise<A> =>
+  withProvider(fake.plugin, body)
 
 describe("create and list", () => {
   it("opens a Session the store then lists", async () => {
@@ -152,7 +167,9 @@ describe("watch", () => {
             Stream.take(api.session.watch(session, { session, seq: 0 }), 3),
           )),
         ]
-      }),
+        // A cursor of 0 on a fresh session is not behind anything, so the
+        // refusal cannot arrive; a defect is the right answer if it does.
+      }).pipe(Effect.orDie),
     )
 
     expect(replayed[0]?.kind).toBe("started")
@@ -173,6 +190,91 @@ describe("watch", () => {
     )
 
     expect(seen[0]?.kind).toBe("started")
+  })
+})
+
+/**
+ * A Provider that stops in the middle of one turn. `reached` fires once the
+ * turn is parked, and nothing more streams until `release`. Each payload is
+ * in its own block, so what came before the park is already committed while
+ * the Run is still open — which is what leaves a fold holding part of a Run.
+ */
+const parked = (reached: Deferred.Deferred<void>, release: Deferred.Deferred<void>): Provider => ({
+  id: FAKE_PROVIDER,
+  available: () => true,
+  turn: () =>
+    providerTurn(
+      Stream.concat(
+        Stream.fromIterable([inBlock(0, "alpha"), inBlock(1, "beta")]),
+        Stream.unwrap(
+          Effect.gen(function* () {
+            yield* Deferred.succeed(reached, undefined)
+            yield* Deferred.await(release)
+            return Stream.fromIterable([inBlock(2, "gamma")])
+          }),
+        ),
+      ),
+      "end_turn",
+    ),
+})
+
+// What the agent said, as the record holds it.
+const recorded = (messages: readonly TranscriptMessage[]): readonly string[] =>
+  messages
+    .filter((one) => one.author === "agent")
+    .flatMap((one) => one.blocks)
+    .flatMap((one) =>
+      one.type === "content" && one.content.type === "text" ? [one.content.text] : [],
+    )
+
+// The same, as a watch delivered it.
+const heard = (payloads: readonly Payload[]): readonly string[] =>
+  payloads.flatMap((one) =>
+    one.kind === "text" && one.content.type === "text" ? [one.content.text] : [],
+  )
+
+describe("a fold and the watch that follows it", () => {
+  /**
+   * The reason `Transcript.at` exists. The Run is parked mid-turn with part
+   * of its record already committed, so the fold takes what is there and the
+   * watch from the fold's own position takes the rest. Every payload lands on
+   * exactly one of the two sides: none missed between them, none repeated
+   * across them.
+   */
+  it("splits one Run between the record and the watch that resumes it", async () => {
+    const reached = Effect.runSync(Deferred.make<void>())
+    const release = Effect.runSync(Deferred.make<void>())
+
+    const found = await withProvider(providing(parked(reached, release)), (api) =>
+      Effect.gen(function* () {
+        const session = yield* api.session.create(process.cwd())
+        const running = yield* Effect.forkChild(
+          api.session.submit(session, { kind: "prompt", text: "go" }),
+        )
+        yield* Deferred.await(reached)
+
+        const transcript = yield* api.session.attach(session)
+        const watching = yield* Effect.forkChild(
+          Stream.runCollect(
+            Stream.takeUntil(
+              api.session.watch(session, transcript.at),
+              (one) => one.kind === "finished",
+            ),
+          ),
+        )
+
+        yield* Deferred.succeed(release, undefined)
+        yield* Fiber.join(running)
+        return {
+          folded: recorded(transcript.messages()),
+          watched: [...(yield* Fiber.join(watching))],
+        }
+      }).pipe(Effect.scoped, Effect.orDie),
+    )
+
+    expect(found.folded).toEqual(["alpha"])
+    expect(heard(found.watched)).toEqual(["beta", "gamma"])
+    expect(found.watched.at(-1)?.kind).toBe("finished")
   })
 })
 

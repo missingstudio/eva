@@ -1,5 +1,5 @@
 import { mergeText, type Event, type SessionID } from "@missingstudio/eva-schema"
-import { Effect, Stream } from "effect"
+import { Effect, PubSub, Stream } from "effect"
 import type { TraceSink } from "./contracts.js"
 
 export class SinkClosedError extends Error {
@@ -53,6 +53,21 @@ export const sequenced = (store: TraceStore): Effect.Effect<TraceSink> =>
     const highWater = new Map(yield* store.highWater)
     let closed = false
 
+    // One hub per followed session, made when the first follower arrives.
+    // A session nobody follows costs nothing, and a hub is never removed —
+    // the sessions one process opens are few, and a follower may return.
+    const followers = new Map<SessionID, PubSub.PubSub<Event>>()
+    const hubOf = (session: SessionID): Effect.Effect<PubSub.PubSub<Event>> =>
+      Effect.suspend(() => {
+        const found = followers.get(session)
+        if (found !== undefined) return Effect.succeed(found)
+        // Unbounded, so a slow follower cannot stall the commit that feeds it.
+        return Effect.map(PubSub.unbounded<Event>(), (hub) => {
+          followers.set(session, hub)
+          return hub
+        })
+      })
+
     return {
       append: (group: readonly Event[]) =>
         Effect.gen(function* () {
@@ -63,7 +78,20 @@ export const sequenced = (store: TraceStore): Effect.Effect<TraceSink> =>
           // Positions are provisional until the write is durable, so the
           // high water moves only after the store says the group landed.
           for (const event of stamped) highWater.set(event.session, event.seq)
+          // Followers hear the record only once it is the record.
+          for (const event of stamped) {
+            const hub = followers.get(event.session)
+            if (hub !== undefined) yield* PubSub.publish(hub, event)
+          }
           return stamped
+        }),
+
+      highWater: Effect.sync(() => new Map(highWater)),
+
+      follow: (session: SessionID) =>
+        Effect.gen(function* () {
+          const subscription = yield* PubSub.subscribe(yield* hubOf(session))
+          return Stream.fromSubscription(subscription)
         }),
 
       replay: store.replay,

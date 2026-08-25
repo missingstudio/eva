@@ -1,21 +1,27 @@
 import {
   providerTurn,
+  sequenced,
+  ResumeTooFarBehind,
+  WATCH_REPLAY_BOUND,
   type Harness,
   type HarnessHost,
   type ModelRef,
   type Provider,
   type Recorder,
   type SubmitInput,
+  type TraceStore,
 } from "@missingstudio/eva-core"
 import {
+  eventID,
   runID,
   sessionID,
   type Claim,
+  type Event,
   type Payload,
   type SessionID,
 } from "@missingstudio/eva-schema"
 import type { HarnessInfo, Plugin } from "@missingstudio/eva-sdk"
-import { Effect, Exit, Fiber, Scope, Stream } from "effect"
+import { Deferred, Effect, Exit, Fiber, Option, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 import { boot, buildOf, type Kernel } from "./boot.js"
 import { harnessHost, makeSessionAPI, runTurn } from "./session.js"
@@ -304,6 +310,227 @@ describe("a Prompt that names a harness", () => {
     expect(seen.summary).toBe("harness acme.named is registered and cannot run")
     expect(seen.payloads).toContainEqual({ kind: "degraded", missing: ["Recorder"] })
     expect(seen.groups).toEqual([])
+  })
+})
+
+// An event as the recorder would stamp it: seq 0, numbered by the sink.
+let stamped = 0
+const committedEvent = (session: SessionID, payload: Payload): Event => ({
+  id: eventID(`evt_w${(stamped += 1)}`),
+  seq: 0,
+  at: { wall: "2026-08-25T00:00:00.000Z" },
+  run: runID("run_w"),
+  session,
+  parent: null,
+  payload,
+})
+
+// What every store in these tests does with what it is handed. Only the
+// read differs, so only the read is written twice.
+const keeping = (events: Event[]) => ({
+  highWater: Effect.sync(() => {
+    const water = new Map<SessionID, number>()
+    for (const one of events) {
+      water.set(one.session, Math.max(water.get(one.session) ?? 0, one.seq))
+    }
+    return water
+  }),
+  write: (group: readonly Event[]) => Effect.sync(() => void events.push(...group)),
+  sessions: Effect.sync(() => [...new Set(events.map((one) => one.session))]),
+  close: Effect.void,
+})
+
+/**
+ * A store whose read can be held open, so a test can commit while a replay
+ * is in flight. `reading` fires when the replay is called; nothing comes
+ * back until `release`. `snapshotAt` decides whether an event committed
+ * during the gate is in the read ("release") or not ("call") — the two
+ * halves of the reconnect race.
+ */
+const gatedStore = (snapshotAt: "call" | "release") =>
+  Effect.gen(function* () {
+    const reading = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    const events: Event[] = []
+    const replays = { count: 0 }
+    const snapshot = (session: SessionID) => events.filter((one) => one.session === session)
+    const store: TraceStore = {
+      ...keeping(events),
+      replay: (session) =>
+        Stream.unwrap(
+          Effect.gen(function* () {
+            replays.count += 1
+            const early = snapshotAt === "call" ? snapshot(session) : undefined
+            yield* Deferred.succeed(reading, undefined)
+            yield* Deferred.await(release)
+            return Stream.fromIterable(early ?? snapshot(session))
+          }),
+        ),
+    }
+    return { store, reading, release, replays }
+  })
+
+const textOf = (payload: Payload): string =>
+  payload.kind === "text" && payload.content.type === "text" ? payload.content.text : payload.kind
+
+describe("a watch with a cursor", () => {
+  /**
+   * The race this plan exists to close. The replay is in flight when an
+   * event commits; the read does not contain it. A watch that subscribes
+   * only after the replay drains never hears it — it is lost between the
+   * two sources. The subscription taken before the read holds it.
+   */
+  it("delivers an event that commits while the replay is being read", async () => {
+    const seen = await wired({}, (wiring, scope) =>
+      Effect.gen(function* () {
+        const gate = yield* gatedStore("call")
+        const sink = yield* sequenced(gate.store)
+        yield* Effect.provideService(
+          wiring.kernel.slot.traceSink.provide("acme.sink", sink),
+          Scope.Scope,
+          scope,
+        )
+        const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope)
+        const session = sessionID("sess_race")
+        yield* sink.append([committedEvent(session, text("before"))])
+
+        const taking = yield* Effect.forkChild(
+          Stream.runCollect(api.session.watch(session, { session, seq: 0 }).pipe(Stream.take(2))),
+        )
+        yield* Deferred.await(gate.reading)
+        yield* sink.append([committedEvent(session, text("during"))])
+        yield* Deferred.succeed(gate.release, undefined)
+
+        const joined = yield* Effect.timeoutOption(Fiber.join(taking), 2000)
+        return Option.map(joined, (chunk) => [...chunk].map(textOf))
+      }).pipe(Effect.orDie),
+    )
+    expect(seen).toEqual(Option.some(["before", "during"]))
+  })
+
+  /**
+   * The other half: the read caught the committed event, and the
+   * subscription buffered it too. The position filter drops the copy the
+   * read already returned — once, not twice, whichever side wins the race.
+   */
+  it("delivers it once when the read already caught it", async () => {
+    const seen = await wired({}, (wiring, scope) =>
+      Effect.gen(function* () {
+        const gate = yield* gatedStore("release")
+        const sink = yield* sequenced(gate.store)
+        yield* Effect.provideService(
+          wiring.kernel.slot.traceSink.provide("acme.sink", sink),
+          Scope.Scope,
+          scope,
+        )
+        const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope)
+        const session = sessionID("sess_dedup")
+        yield* sink.append([committedEvent(session, text("before"))])
+
+        const taking = yield* Effect.forkChild(
+          Stream.runCollect(api.session.watch(session, { session, seq: 0 }).pipe(Stream.take(3))),
+        )
+        yield* Deferred.await(gate.reading)
+        yield* sink.append([committedEvent(session, text("during"))])
+        yield* Deferred.succeed(gate.release, undefined)
+        yield* sink.append([committedEvent(session, text("after"))])
+
+        const joined = yield* Effect.timeoutOption(Fiber.join(taking), 2000)
+        return Option.map(joined, (chunk) => [...chunk].map(textOf))
+      }).pipe(Effect.orDie),
+    )
+    expect(seen).toEqual(Option.some(["before", "during", "after"]))
+  })
+
+  /**
+   * A cursor of 0 cannot tell `>` from `>=`, because a session numbers from
+   * 1 and no event ever sits at 0. This one starts inside the trace, so the
+   * first payload is the one after the cursor and not the cursor's own.
+   */
+  it("replays a cursor inside the bound in order, from the event after it", async () => {
+    const seen = await wired({}, (wiring, scope) =>
+      Effect.gen(function* () {
+        const events: Event[] = []
+        const store: TraceStore = {
+          ...keeping(events),
+          replay: (session) => Stream.fromIterable(events.filter((one) => one.session === session)),
+        }
+        const sink = yield* sequenced(store)
+        yield* Effect.provideService(
+          wiring.kernel.slot.traceSink.provide("acme.sink", sink),
+          Scope.Scope,
+          scope,
+        )
+        const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope)
+        const session = sessionID("sess_mid")
+        for (const word of ["one", "two", "three", "four", "five"]) {
+          yield* sink.append([committedEvent(session, text(word))])
+        }
+
+        const taking = yield* Effect.forkChild(
+          Stream.runCollect(api.session.watch(session, { session, seq: 2 }).pipe(Stream.take(3))),
+        )
+        const joined = yield* Effect.timeoutOption(Fiber.join(taking), 2000)
+        return Option.map(joined, (chunk) => [...chunk].map(textOf))
+      }).pipe(Effect.orDie),
+    )
+    expect(seen).toEqual(Option.some(["three", "four", "five"]))
+  })
+
+  it("refuses a cursor too far behind, and reads nothing to say so", async () => {
+    const seen = await wired({}, (wiring, scope) =>
+      Effect.gen(function* () {
+        const session = sessionID("sess_far")
+        const replays = { count: 0 }
+        const store: TraceStore = {
+          highWater: Effect.sync(() => new Map([[session, WATCH_REPLAY_BOUND + 5]])),
+          write: () => Effect.void,
+          replay: () =>
+            Stream.unwrap(
+              Effect.sync(() => {
+                replays.count += 1
+                return Stream.empty as Stream.Stream<Event>
+              }),
+            ),
+          sessions: Effect.sync(() => [session]),
+          close: Effect.void,
+        }
+        const sink = yield* sequenced(store)
+        yield* Effect.provideService(
+          wiring.kernel.slot.traceSink.provide("acme.sink", sink),
+          Scope.Scope,
+          scope,
+        )
+        const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope)
+        const exit = yield* Effect.exit(
+          Stream.runCollect(api.session.watch(session, { session, seq: 1 })),
+        )
+        return { exit, replays: replays.count }
+      }),
+    )
+    expect(seen.replays).toBe(0)
+    expect(Exit.isFailure(seen.exit)).toBe(true)
+    expect(String(seen.exit)).toContain("ResumeTooFarBehind")
+    expect(
+      new ResumeTooFarBehind({ from: { session: sessionID("s"), seq: 1 }, head: 2 })._tag,
+    ).toBe("ResumeTooFarBehind")
+  })
+
+  // Stage 0's rule, one level up: a build without the trace plugin degrades
+  // rather than failing, and it says so where the watcher is looking.
+  it("says degraded and stays live when no sink is present", async () => {
+    const seen = await wired({}, (wiring, scope) =>
+      Effect.gen(function* () {
+        const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope)
+        const session = sessionID("sess_bare")
+        const taking = yield* Effect.forkChild(
+          Stream.runCollect(api.session.watch(session, { session, seq: 0 }).pipe(Stream.take(1))),
+        )
+        const joined = yield* Effect.timeoutOption(Fiber.join(taking), 2000)
+        return Option.map(joined, (chunk) => [...chunk])
+      }).pipe(Effect.orDie),
+    )
+    expect(seen).toEqual(Option.some([{ kind: "degraded", missing: ["TraceSink"] }]))
   })
 })
 

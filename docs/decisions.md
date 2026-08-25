@@ -310,6 +310,34 @@ from: it lost whatever committed between the two calls, or replayed from the
 start and duplicated. `foldTranscript` computes `at` from the events it kept,
 so the two implementers inherit it and cannot disagree with the record.
 
+**A cursor watch follows the record; an uncursored one stays live.** A cursor
+is a trace position, and positions exist only on committed events — the live
+hub carries payloads before the sink numbers them, and commit merges adjacent
+text, so the two streams are different granularities of one Run and cannot be
+stitched. The cursor form therefore emits what `attach` would fold. Only that
+form can fail, and the type says so: a watch with no cursor is behind nothing,
+so no caller handles a refusal that cannot arrive.
+
+**Subscribe, then read.** The cursor path takes the committed subscription
+before it reads the record, and drops the overlap with one strict inequality on
+the position. Read-first loses every event that commits during the read — a
+race that passes when nothing is streaming and fails exactly when a surface
+reconnects mid-Run. The test swaps the two lines to prove it.
+
+**Following the record belongs to the sink.** `sequenced` is the one path that
+assigns positions, so it is the one place that publishes them, and every sink
+inherits `highWater` and `follow` unchanged. _Rejected:_ `RecorderDeps.published`,
+the dead seam that offered the same thing one layer too high — a recorder is
+per-Run and swappable, and following is per-session and outlives a Run.
+
+**A replay too far behind is refused, not attempted.** Past
+`WATCH_REPLAY_BOUND` the stream fails with `ResumeTooFarBehind` and reads
+nothing; the caller folds fresh and watches from the fold's own cursor.
+Unbounded replay of an append-only log is how a long-lived session exhausts a
+subscriber. _Rejected:_ a payload kind for it — the schema is a versioned public
+contract, and a resume that is too far behind is a fact about one subscription,
+not something that happened in the session.
+
 ## The exit test
 
 **Running the fixture in-process has one home.** `runFixture` takes a fixture
