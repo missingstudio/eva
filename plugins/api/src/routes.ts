@@ -117,6 +117,11 @@ export type Watching = (api: SessionAPI) => Stream.Stream<Frame, ResumeTooFarBeh
  * frames carry **no `id:` at all**. It reads like an off-by-one until you see
  * why: a frame with an invented position is a position a page would resume
  * from, and it would resume past events it never saw.
+ *
+ * The count is exact only while the cursor form keeps its word. One payload
+ * on it that was never committed puts every `id:` after that frame one past
+ * the truth, so a filler that answers a Cursor with a caveat or a live delta
+ * corrupts the wire and not only itself.
  */
 export const watchFor = (
   method: string,

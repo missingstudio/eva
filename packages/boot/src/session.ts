@@ -334,12 +334,16 @@ export const makeSessionAPI = (
             if (from === undefined) return Stream.fromPubSub(state.hub)
 
             const sink = yield* kernel.slot.traceSink.peek
-            if (sink === undefined) {
-              // A build with no trace cannot replay. Say so, then degrade
-              // to the live stream rather than going silent.
-              const missing: Payload = { kind: "degraded", missing: ["TraceSink"] }
-              return Stream.concat(Stream.fromIterable([missing]), Stream.fromPubSub(state.hub))
-            }
+            /**
+             * A build with no trace has committed nothing, so nothing sits
+             * after this position and nothing will. The stream is empty and
+             * stays open rather than degrading to the live hub: a caller
+             * counting positions from the Cursor would number a live payload
+             * that has none, and every position after it would be wrong. What
+             * a build with no trace says about itself, it says on the
+             * uncursored form and in the `degraded` record a Run commits.
+             */
+            if (sink === undefined) return Stream.never
 
             const head = (yield* sink.highWater).get(id) ?? 0
             if (head - from.seq > WATCH_REPLAY_BOUND) {
