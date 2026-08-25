@@ -25,4 +25,5 @@ Thumbs.db
 
 # Eva runtime state
 .eva/
-plans
+plans/
+docs/adr

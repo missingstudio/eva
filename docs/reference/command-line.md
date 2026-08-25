@@ -518,6 +518,5 @@ needs: zero dependencies, MIT, first-party typings, generated help, and
 suggestions for both flags and commands.
 
 **A `-` prefix inside the value, as in `--plugin -eva.tui`.**
-[decisions.md](../decisions.md) rejected that grammar for the config file. It
-would be strange to resurrect it one layer up, where the flags mirror the config
-keys.
+A decision record rejected that grammar for the config file. It would be
+strange to resurrect it one layer up, where the flags mirror the config keys.

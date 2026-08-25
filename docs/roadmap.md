@@ -914,7 +914,7 @@ reconciles the world toward a record — except deletion, where a tombstone is
 the durable intent, swept when the worker returns. Cancellation is best-effort
 across planes: a kill is a request, and the trace records what actually
 stopped. The field wrote these rules as ADRs first; Eva writes its own into
-[decisions.md](decisions.md) when this stage starts.
+`docs/adr/` when this stage starts.
 
 ```
 eva control up  &&  eva enroll create --tier semi --ttl 10m
@@ -1974,7 +1974,7 @@ empty regions in one table are the whole argument for going plugin-first.
 - Architecture: [reference/architecture.md](reference/architecture.md)
 - Writing a plugin: [reference/writing-plugins.md](reference/writing-plugins.md)
 - Toolchain and CI: [reference/toolchain.md](reference/toolchain.md)
-- Decisions: [decisions.md](decisions.md)
+- Decision records: `docs/adr/` — gitignored, local to a checkout
 - Product: [product.md](product.md)
 - Plans in flight: [../plans](../plans) — W1 is the next one written
 - Field evidence for Phase V — twenty-five harnesses read for what they did

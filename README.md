@@ -132,7 +132,6 @@ every resolved key and where it came from.
 | [reference/ci-cd.md](docs/reference/ci-cd.md)                     | How a change is checked and a release ships   |
 | [docs/product.md](docs/product.md)                                | What Eva is for, and who for                  |
 | [docs/roadmap.md](docs/roadmap.md)                                | What we build, in what order                  |
-| [docs/decisions.md](docs/decisions.md)                            | Every decision, and what it rejected          |
 
 ### Contributing
 

@@ -235,13 +235,18 @@ The order above says what is next. `plans/` says how, for the stage that is
 actually being built: a README with the stage's shape, then numbered tickets
 with a priority, an effort, and a dependency.
 
-| Directory                            | Stage | Status                          |
-| ------------------------------------ | ----- | ------------------------------- |
-| [../plans/stage-1](../plans/stage-1) | 1     | done, ten plans                 |
-| [../plans/w0](../plans/w0)           | W0    | done, six plans                 |
-| [../plans/w1](../plans/w1)           | W1    | written, six plans, not started |
+| Directory                  | Stage | Status                          |
+| -------------------------- | ----- | ------------------------------- |
+| [../plans/w1](../plans/w1) | W1    | written, six plans, not started |
 
 A stage gets a `plans/` directory when it is next, not when it is designed —
 decomposing stage 9c today would be planning against a tree four stages of
 change away. The two stages in wave 1 are therefore the two that should have
 one: W1 has it, and stage 2 does not yet.
+
+Stage 1 and W0 each had one, and both are gone. `plans/` is gitignored, so a
+deleted plan has no history to come back from. What those stages concluded
+survives only because it was written where it counts — a stage's exit test in
+[roadmap.md](roadmap.md), a word in [context.md](context.md), a path here.
+That is the rule the directory is for: **a plan is working state, and anything
+that must outlive the work goes somewhere committed before the work ends.**

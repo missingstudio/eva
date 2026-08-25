@@ -862,7 +862,7 @@ carries the `bin`. Every interface that can be reached through that binary —
 `eva.api` over HTTP, `eva.web` — arrives as a plugin registering a surface row
 rather than as a second app. An app never imports another app. A shell that
 cannot be reached through the binary, such as Electron or Expo, is the case that
-earns one; see [decisions.md](../decisions.md).
+earns one; `docs/adr/` carries that decision.
 
 ### 9.1 The core packages
 

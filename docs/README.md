@@ -31,7 +31,7 @@ Then, as you need them:
 | Type a command or a flag    | [reference/command-line.md](reference/command-line.md)       |
 | Build or test the repo      | [reference/toolchain.md](reference/toolchain.md)             |
 | Ship a release, install Eva | [reference/ci-cd.md](reference/ci-cd.md)                     |
-| Know why something is so    | [decisions.md](decisions.md)                                 |
+| Know why something is so    | `adr/` — decision records, local to a checkout               |
 | Know what Eva is for        | [product.md](product.md)                                     |
 
 ## The layout
@@ -44,7 +44,7 @@ docs/
 ├── product.md         what Eva is for, and who for
 ├── roadmap.md         every stage, and the exit test it can fail
 ├── plan.md            what is next, the dependency order, and every path
-├── decisions.md       every decision, grouped by what it decided
+├── adr/               decision records — gitignored, local to a checkout
 └── reference/
     ├── architecture.md    the plugin model, the kernel, every module and interface
     ├── writing-plugins.md the authoring walkthrough
@@ -78,7 +78,7 @@ to that document. Two copies of a fact become two different facts.
 | `roadmap.md`         | what each stage is, and what it must prove   |
 | `plan.md`            | what is next, the order, and where code goes |
 | `development.md`     | how a change is made, and each stage's state |
-| `decisions.md`       | what we decided, and what we rejected        |
+| `adr/`               | what we decided, and what we rejected        |
 | `product.md`         | what Eva is for, and who for                 |
 
 When two documents disagree, one is wrong. Fix it — do not reconcile by copying.
