@@ -10,7 +10,7 @@ import { showConfig } from "./show.js"
 import { runInteractive } from "./interactive.js"
 import { runPrint } from "@missingstudio/eva-print"
 import { resolveConfig, runHarness, startFrom, withSignals } from "./run.js"
-import { runServe } from "./serve.js"
+import { runServe, served } from "./serve.js"
 import { fromProcess, type World } from "./world.js"
 
 export * from "./argv.js"
@@ -135,12 +135,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       )
       const outcome = yield* Effect.exit(withSignals(runServe(started)))
       yield* Scope.close(scope, Exit.void)
-      if (Exit.isSuccess(outcome)) return 0
-
-      // A build without `eva.web` is a build missing a door. It says which
-      // surfaces it does have, rather than exiting as though it served.
-      world.err(`${Cause.squash(outcome.cause) as Error}\n`)
-      return 1
+      return served(outcome, world.err)
     }
 
     case "interactive":
