@@ -23,6 +23,17 @@ describe("the built-in table", () => {
     expect(ids.indexOf("eva.trace")).toBeLessThan(ids.indexOf("eva.trace.jsonl"))
   })
 
+  /**
+   * `eva.web` says `interactive: false`, so it cannot take the interactive
+   * branch from the terminal — but registration order is what `pickSurface`
+   * reads, and a row registered ahead of the terminal that later flipped that
+   * flag would take it in silence.
+   */
+  it("registers the web surface after the terminal", () => {
+    const ids = BUILT_IN.map((plugin) => plugin.id)
+    expect(ids.indexOf("eva.web")).toBeGreaterThan(ids.indexOf("eva.tui"))
+  })
+
   it("names every built-in id from the table itself", () => {
     expect(BUILT_IN_IDS).toEqual(BUILT_IN.map((plugin) => plugin.id))
   })

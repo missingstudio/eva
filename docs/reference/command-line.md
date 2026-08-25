@@ -48,6 +48,7 @@ The three mode flags are commands.
 eva                                 start the interactive surface
 eva --print <prompt>                answer once and exit
 eva run <name> [file]               run a workflow: one input in, the last Run's text out
+eva serve --web                     serve the page that watches a Session
 eva trust                           read this directory's .eva, and record the grant
 eva untrust                         drop the grant for this directory
 eva config show                     print the resolved config, and where each key came from
@@ -60,6 +61,15 @@ positional file, or piped standard input — and two routes at once is a parse
 error with both named. The Run that closed last is the answer: its text goes
 to standard output on a `done` Claim and exits 0, and a failed Claim's summary
 goes to standard error and exits 1.
+
+`eva serve` takes the posture as a flag: `--web` is the page that watches a
+Session, and `--acp` at 9c is the next answer to "serve what". A serve that
+names no posture is refused rather than defaulted, because a default would
+start a surface nobody chose. The verb starts the `eva.web` row **by id** —
+`eva` with no verb takes the first interactive surface, and that row says
+`interactive: false`. `--host` and `--port` ride the invocation and reach the
+plugin through the build, because a surface row is started with a Client and
+nothing else, so the bind is closed over when the plugin is made.
 
 A positional argument is safe under `eva run` and it is not safe at the root:
 the verb is already named, so the positional cannot swallow a misspelled one.
@@ -92,7 +102,6 @@ they land so two stages do not choose two shapes:
 | Command                    | Stage                                    |
 | -------------------------- | ---------------------------------------- |
 | `eva serve --acp`          | 9c — Eva as an ACP agent                 |
-| `eva serve --web`          | web W1 — the page that watches           |
 | `eva auth status`          | already a plugin, no command yet         |
 | `eva plugin add <package>` | 6.5 — extension distribution             |
 | `eva trace show <run>`     | 6 — memory and trace                     |
@@ -178,6 +187,14 @@ export type Invocation =
       // The one input. Empty when nothing named one.
       readonly input: string
       readonly overlays: Overlays
+    }
+  | {
+      readonly kind: "serve"
+      readonly overlays: Overlays
+      // Absent when the command line named none: the surface owns the
+      // default, and a default in two places is two defaults.
+      readonly host?: string
+      readonly port?: number
     }
 ```
 
@@ -279,6 +296,8 @@ switch (invocation.kind) {
   case "trust":
   // …
   case "showConfig":
+  // …
+  case "serve":
   // …
   case "interactive":
   case "print":
@@ -453,11 +472,11 @@ so cannot drift from it.
 
 ## 10. Exit codes
 
-| Code | When                                                                   |
-| ---- | ---------------------------------------------------------------------- |
-| 0    | the help, the version, a grant, `config show`, a Run that ended `done` |
-| 1    | a parse error, a Run that ended any other way, an unreadable config    |
-| 130  | the second Ctrl-C, which `withSignals` owns                            |
+| Code | When                                                                                                          |
+| ---- | ------------------------------------------------------------------------------------------------------------- |
+| 0    | the help, the version, a grant, `config show`, a Run that ended `done`                                        |
+| 1    | a parse error, an unreadable config, a Run that ended any other way, or a serve this build has no surface for |
+| 130  | the second Ctrl-C, which `withSignals` owns                                                                   |
 
 An unread config key does not change the exit code. It is a finding, written to
 stderr, and the run continues.
@@ -469,6 +488,7 @@ stderr, and the run continues.
 | `apps/cli/src/argv.ts`      | the program, `parseArgv`, `showHelp`, `Invocation`, `COMMANDS` |
 | `apps/cli/src/index.ts`     | `main`, one branch per invocation                              |
 | `apps/cli/src/run.ts`       | `resolveConfig` and `start`, both taking `Overlays`            |
+| `apps/cli/src/serve.ts`     | `runServe`, which starts the `eva.web` row by id               |
 | `apps/cli/src/argv.test.ts` | the parse, the messages, and the `--without-plugin` regression |
 | `apps/cli/src/main.test.ts` | every branch of `main`, against a scratch directory            |
 

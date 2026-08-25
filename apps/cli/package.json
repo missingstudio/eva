@@ -55,6 +55,7 @@
     "@missingstudio/eva-tui-surface": "workspace:*",
     "@missingstudio/eva-usage": "workspace:*",
     "@missingstudio/eva-validator": "workspace:*",
+    "@missingstudio/eva-web": "workspace:*",
     "@missingstudio/eva-workflow": "workspace:*",
     "commander": "catalog:",
     "effect": "catalog:"

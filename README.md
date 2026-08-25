@@ -75,15 +75,16 @@ gateway — is named in config instead, and its models join `/model`:
 
 ### Use it
 
-| Command                 | What it does                                            |
-| ----------------------- | ------------------------------------------------------- |
-| `eva`                   | Open the interactive surface                            |
-| `eva -p "<prompt>"`     | Answer once, print to stdout, exit                      |
-| `eva run <name> [file]` | Run a Workflow: one input in, the last Run's text out   |
-| `eva trust`             | Read this directory's `.eva`, and record the grant      |
-| `eva untrust`           | Drop the grant for this directory                       |
-| `eva config show`       | Print the resolved config, and where each key came from |
-| `eva --version`         | What you have                                           |
+| Command                 | What it does                                              |
+| ----------------------- | --------------------------------------------------------- |
+| `eva`                   | Open the interactive surface                              |
+| `eva -p "<prompt>"`     | Answer once, print to stdout, exit                        |
+| `eva run <name> [file]` | Run a Workflow: one input in, the last Run's text out     |
+| `eva serve --web`       | Serve the page that watches a Session, at a loopback bind |
+| `eva trust`             | Read this directory's `.eva`, and record the grant        |
+| `eva untrust`           | Drop the grant for this directory                         |
+| `eva config show`       | Print the resolved config, and where each key came from   |
+| `eva --version`         | What you have                                             |
 
 A **Workflow** is a declared list of Steps — one Instruction and one model
 request each — where the file owns the control flow and the model fills the

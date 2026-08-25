@@ -15,9 +15,11 @@ const REPO = join(new URL(".", import.meta.url).pathname, "..", "..", "..")
  */
 const shipped = (directory: string): readonly string[] =>
   readdirSync(join(REPO, directory), { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+    // `.tsx` as well as `.ts`, because `apps/web` is React: a sweep that saw
+    // only one of the two would pass over most of the page and prove nothing.
+    .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
     .map((entry) => join(entry.parentPath, entry.name))
-    .filter((path) => !path.endsWith(".test.ts"))
+    .filter((path) => !/\.test\.tsx?$/.test(path))
     .map((path) => relative(REPO, path))
     .sort()
 
@@ -41,10 +43,13 @@ describe("what reads the Session API", () => {
     expect(naming("SessionAPI", ["plugins/tui/src"])).toEqual([])
   })
 
-  it("the command line builds one, at its three sites, and hands on the client", () => {
+  // One more site than there were, because `eva serve --web` starts a surface
+  // and a surface is handed a Client.
+  it("the command line builds one, at its four sites, and hands on the client", () => {
     expect(naming("makeSessionAPI", ["plugins/tui/src", "apps/cli/src"])).toEqual([
       "apps/cli/src/index.ts",
       "apps/cli/src/interactive.ts",
+      "apps/cli/src/serve.ts",
     ])
   })
 

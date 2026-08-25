@@ -419,6 +419,62 @@ workflows:
 })
 
 /**
+ * A Surface is a plugin, and a build without one is a build missing a door
+ * rather than a build that fails. This is a stage 0 property, and the web
+ * surface is the stage that most easily breaks it: it is the first Surface
+ * that binds a socket, and the first that the composition root rebuilds.
+ */
+describe("a build without eva.web", () => {
+  const answered = (directory: string, args: readonly string[]) =>
+    ran(["--print", "say hello", ...args], directory, {}, { build: buildWith(["the answer"]) })
+
+  it("runs a Session in the terminal, and says exactly what the whole build says", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", contained(directory))
+    const whole = await answered(directory, [])
+
+    const dropped = scratch()
+    write(dropped, "user.yaml", contained(dropped))
+    const without = await answered(dropped, ["--without-plugin", "eva.web"])
+
+    expect(whole.code).toBe(0)
+    expect(without.code).toBe(0)
+    // Named, so the comparison below cannot pass on two empty runs.
+    expect(without.out).toContain("the answer")
+    expect(without.out).toBe(whole.out)
+    expect(without.err).toBe(whole.err)
+  })
+
+  // `posture` is `eva.web`'s key. Which keys reach something is decided by
+  // the plugins that would load, so dropping the reader makes it reach none.
+  it("says nothing about posture while the plugin is there", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", "posture: hosted\n")
+    expect((await ran(["config", "show"], directory)).err).toBe("")
+  })
+
+  it("names that same key once eva.web is dropped", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", "posture: hosted\n")
+
+    const found = await ran(["config", "show", "--without-plugin", "eva.web"], directory)
+    expect(found.err).toContain(`nothing reads "posture"`)
+  })
+
+  // The door is missing, so the verb says which doors there are. It does not
+  // bind, and it does not exit as though it had served.
+  it("refuses eva serve --web, and names the surfaces it does have", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", contained(directory))
+
+    const found = await ran(["serve", "--web", "--without-plugin", "eva.web"], directory)
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("eva.web")
+    expect(found.err).toContain("eva.tui")
+  })
+})
+
+/**
  * The roadmap's Stage 1 demo block, line by line, against a scratch fixture
  * and a scripted Provider. This is the one test that fails when the verb,
  * the routing, the filter or the Workflow is wrong — which no unit test

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import type { Overlays } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
+import { DEFAULT_HOST, DEFAULT_PORT } from "@missingstudio/eva-web"
 import { Command, CommanderError } from "commander"
 import { VERSION } from "./version.js"
 import type { World } from "./world.js"
@@ -27,9 +28,23 @@ export type Invocation =
       readonly input: string
       readonly overlays: Overlays
     }
+  /**
+   * `eva serve --web`. The posture is a flag rather than a verb per surface,
+   * so `--acp` at 9c adds a flag here and not a second verb — and until a
+   * posture is named there is nothing to serve, so it is refused.
+   *
+   * The bind is absent when the command line named none: the surface owns the
+   * default, and a default in two places is two defaults.
+   */
+  | {
+      readonly kind: "serve"
+      readonly overlays: Overlays
+      readonly host?: string
+      readonly port?: number
+    }
 
 // The verbs, for the suggestion a stray word gets.
-export const COMMANDS: readonly string[] = ["config", "run", "trust", "untrust"]
+export const COMMANDS: readonly string[] = ["config", "run", "serve", "trust", "untrust"]
 
 // A repeatable flag keeps every value. Without this the last one wins.
 const collect = (value: string, previous: readonly string[] = []): readonly string[] => [
@@ -109,6 +124,25 @@ const inputOf = (
   return routes[0]?.read() ?? ""
 }
 
+interface ServeOptions {
+  readonly web?: boolean
+  readonly host?: string
+  readonly port?: string
+}
+
+/**
+ * The port to bind, refused rather than coerced. `--port eight` reads as NaN,
+ * and a NaN port binds a random one — which is a page at an address nobody
+ * asked for.
+ */
+const portOf = (value: string | undefined, command: Command): number | undefined => {
+  if (value === undefined) return undefined
+  const port = Number(value)
+  return Number.isInteger(port) && port >= 0 && port <= 65535
+    ? port
+    : command.error(`eva serve takes a port from 0 to 65535; it got ${value}`)
+}
+
 // The three variables the resolution order reads. Commander knows the flags
 // and the commands; it does not know these.
 const ENVIRONMENT = `
@@ -174,6 +208,25 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
         })
       },
     )
+
+  root
+    .command("serve")
+    .description("serve a surface: --web is the page that watches a Session")
+    .option("--web", "serve the page that watches a Session")
+    .option("--host <host>", `the address to bind, ${DEFAULT_HOST} by default`)
+    .option("--port <port>", `the port to bind, ${DEFAULT_PORT} by default`)
+    .action((options: ServeOptions, command: Command) => {
+      // `--acp` is the next answer to "serve what", so a posture is named
+      // rather than defaulted: a default would start a surface nobody chose.
+      if (options.web !== true) command.error("eva serve takes a posture: --web")
+      const port = portOf(options.port, command)
+      record({
+        kind: "serve",
+        overlays: overlaysOf(command.optsWithGlobals()),
+        ...(options.host === undefined ? {} : { host: options.host }),
+        ...(port === undefined ? {} : { port }),
+      })
+    })
 
   root
     .command("trust")
