@@ -5,8 +5,9 @@ live, and writes nothing. It is one artifact, and
 [`eva.web`](../../plugins/web/README.md) serves it without building it — the
 posture, single-tenant or multi-tenant, is read when the surface starts.
 
-At W1 the page lists the Sessions Eva holds and shows one Session's committed
-transcript. It reaches both over the wire
+At W1 the page lists the Sessions Eva holds, shows one Session's committed
+transcript, and follows the Session that is open. It reaches all of it over
+the wire
 [`eva.api`](../../plugins/api/README.md) serves on the same port, through the
 Client `packages/client-runtime` builds — and the count of Session API calls
 that go around that Client is zero, which is a check that fails rather than a
@@ -46,6 +47,27 @@ Transcript's own cost fold. Nothing on the page prices anything: this side of
 the wire holds no Catalog, so what a reader sees is the cost a Provider
 reported.
 
+## The fold, and the tail behind it
+
+Two calls carry the page. `attach` says where the record ends and `watch` from
+that position says what commits after it, exactly once — so nothing that
+commits between the two calls is missed, and nothing already folded arrives
+twice. That is the whole of what a reload costs, and it is what a Cursor is
+for.
+
+The page holds them apart, as the terminal's `Frame` does: the Turns are the
+fold, and the tail is what the open Run has streamed so far. The tail grows by
+append while a Run is open and it is empty again exactly when the fold has
+replaced it — a Run that closes is folded again, and a reader sees those words
+once, in the tail and then as a Turn.
+
+The tail carries words and nothing else. What is not text is not lost: it is in
+the record already, and the fold that replaces the tail holds it as a Block.
+
+Converging after a reload and after a drop is the next plan's. A refused Cursor
+ends the follow here and leaves the fold on the screen, because this watch only
+ever resumes from a fold it has just taken.
+
 ## Prerequisites
 
 - [Bun](https://bun.sh) 1.3.10 or newer.
@@ -83,20 +105,20 @@ cd apps/web && bun run dev
 
 ## Layout
 
-| Path                | What                                                    |
-| ------------------- | ------------------------------------------------------- |
-| `src/main.tsx`      | mounts the router into `index.html`                     |
-| `src/routes.tsx`    | the route tree, and where a read meets a drawing        |
-| `src/paths.ts`      | the two spellings of one route, in one place            |
-| `src/page.tsx`      | the listing: the build, and the Sessions Eva holds      |
-| `src/session.tsx`   | one Session: which it is, what was said, what it cost   |
-| `src/blocks.tsx`    | one Block, in page primitives                           |
-| `src/eva.ts`        | the one Client, over the same-origin wire               |
-| `src/sessions.ts`   | what the page reads: the Sessions, or not yet           |
-| `src/transcript.ts` | what it reads of one Session: the Header, then the fold |
-| `src/build.ts`      | the version and the stamp, injected by the build        |
-| `src/index.ts`      | the drawing half, for `packages/conformance`            |
-| `src/styles.css`    | plain local styling until `packages/brand` lands        |
+| Path                | What                                                         |
+| ------------------- | ------------------------------------------------------------ |
+| `src/main.tsx`      | mounts the router into `index.html`                          |
+| `src/routes.tsx`    | the route tree, and where a read meets a drawing             |
+| `src/paths.ts`      | the two spellings of one route, in one place                 |
+| `src/page.tsx`      | the listing: the build, and the Sessions Eva holds           |
+| `src/session.tsx`   | one Session: which it is, what was said, what it cost        |
+| `src/blocks.tsx`    | one Block, in page primitives                                |
+| `src/eva.ts`        | the one Client, over the same-origin wire                    |
+| `src/sessions.ts`   | what the page reads: the Sessions, or not yet                |
+| `src/transcript.ts` | what it reads of one Session: the Header, the fold, the tail |
+| `src/build.ts`      | the version and the stamp, injected by the build             |
+| `src/index.ts`      | the drawing half, for `packages/conformance`                 |
+| `src/styles.css`    | plain local styling until `packages/brand` lands             |
 
 Routes are code-based, so the build needs no route generator and no plugin
 beside the toolchain the repository already has. The views take what they draw
@@ -117,9 +139,12 @@ browser gets is proven against a real socket in
 [packages/conformance](../../packages/conformance).
 [src/page.test.tsx](src/page.test.tsx) holds the listing,
 [src/blocks.test.tsx](src/blocks.test.tsx) the Block mapping,
-[src/session.test.tsx](src/session.test.tsx) the Header before the fold and the
-cost line, and [src/fold.test.ts](src/fold.test.ts) the count of folds. Run the
-suite from the repository root:
+[src/session.test.tsx](src/session.test.tsx) the Header before the fold, the
+tail after it and the cost line,
+[src/transcript.test.ts](src/transcript.test.ts) the follow itself — the fold,
+the tail, and the fold that replaces it — and
+[src/fold.test.ts](src/fold.test.ts) the count of folds. Run the suite from the
+repository root:
 
 ```bash
 bun run test

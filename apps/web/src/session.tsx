@@ -25,6 +25,19 @@ export type Folded =
     }
 
 /**
+ * What the page holds of one Session: the committed fold, and the tail of the
+ * Run that is open. Two sources, never confused — the same two the terminal's
+ * `Frame` keeps apart — and the fold is the one that decides what a Run did.
+ *
+ * `said` is what the open Run has streamed so far. It grows by append within
+ * one Run and it is empty again exactly when the fold has replaced it.
+ */
+export interface Reading {
+  readonly folded: Folded
+  readonly said: string
+}
+
+/**
  * An estimate wears `~` and the word, because a figure Eva worked out is
  * never shown as one a Provider gave. The four are a closed set, so this
  * surface formats each of them and decides between none of them.
@@ -101,8 +114,21 @@ export const Named = ({
 )
 
 /**
- * One Session, read: which Session it is, then what was said in it, then
- * what it cost.
+ * What the open Run has streamed so far, after the fold and before the cost.
+ * It is the stream and never the record, so it is drawn apart from the Turns:
+ * a reader can see which words are still being said, and the fold writes over
+ * them when the Run closes.
+ */
+export const Live = ({ said }: { readonly said: string }) =>
+  said === "" ? null : (
+    <p className="live" aria-live="polite">
+      {said}
+    </p>
+  )
+
+/**
+ * One Session, read: which Session it is, then what was said in it, then what
+ * the open Run is saying, then what it cost.
  *
  * Nothing here takes input. No prompt, no permission answer, no model
  * switch: those are W2's, and they wait for the permission gate.
@@ -110,20 +136,21 @@ export const Named = ({
 export const Session = ({
   session,
   header,
-  folded,
+  reading,
 }: {
   readonly session: string
   readonly header: SessionHeader | undefined
-  readonly folded: Folded
+  readonly reading: Reading
 }) => (
   <main>
     <Named session={session} header={header} />
-    {folded.kind === "folding" ? (
+    {reading.folded.kind === "folding" ? (
       <p className="note">Reading the transcript…</p>
     ) : (
       <>
-        <Turns turns={folded.turns} />
-        <Cost cost={folded.cost} ran={folded.at.seq > 0} />
+        <Turns turns={reading.folded.turns} />
+        <Live said={reading.said} />
+        <Cost cost={reading.folded.cost} ran={reading.folded.at.seq > 0} />
       </>
     )}
   </main>

@@ -23,7 +23,7 @@ const Read = () => {
   const params = useParams({ from: SESSION_ROUTE })
   const session = sessionID(params.session)
 
-  return <Session session={session} header={useHeader(session)} folded={useTranscript(session)} />
+  return <Session session={session} header={useHeader(session)} reading={useTranscript(session)} />
 }
 
 const root = createRootRoute({ component: Shell })

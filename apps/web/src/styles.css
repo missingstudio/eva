@@ -111,6 +111,15 @@ code {
   white-space: pre-wrap;
 }
 
+/* The stream, and not the record: marked apart so a reader can tell which
+   words are still being said. The fold writes over it when the Run closes. */
+.live {
+  border-left: 2px solid color-mix(in srgb, var(--quiet) 45%, transparent);
+  margin: 0.5rem 0;
+  padding-left: 0.7rem;
+  white-space: pre-wrap;
+}
+
 .call,
 .diff,
 .image,
