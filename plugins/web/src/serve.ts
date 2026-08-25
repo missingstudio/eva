@@ -8,6 +8,14 @@ import { refusal, type Bind } from "./bind.js"
 
 export const WEB_SURFACE = "eva.web"
 
+/**
+ * Something that may answer a request before the assets do, and says whether
+ * it did. It is how one port carries the page and the calls the page makes: a
+ * plugin may not import a plugin, so the composition root hands the half that
+ * answers to the half that binds.
+ */
+export type Answering = (request: IncomingMessage, response: ServerResponse) => boolean
+
 export interface Serve {
   /**
    * Where the built page is. `eva.web` serves assets it did not build, so
@@ -26,6 +34,8 @@ export interface Serve {
   readonly posture: string
   // Where the bound address is said. A `Frontend` carries none.
   readonly write?: (text: string) => void
+  // What answers the calls the page makes, when this build carries a wire.
+  readonly api?: Answering
 }
 
 const PLAIN = {
@@ -37,10 +47,16 @@ const PLAIN = {
  * Every request, answered from the tree as it stands. Nothing is cached by
  * the reader: the page names the build it came from, and that fact is worth
  * nothing if a browser can show yesterday's bundle.
+ *
+ * The wire is offered the request first, and before the built page is looked
+ * for: a call is answered from the record and a build nobody ran says nothing
+ * about whether Eva can answer it.
  */
 const answer =
-  (root: string) =>
+  (root: string, api?: Answering) =>
   (request: IncomingMessage, response: ServerResponse): void => {
+    if (api?.(request, response) === true) return
+
     if (!hasPage(root)) {
       response.writeHead(503, PLAIN)
       response.end(`${unbuilt(root)}\n`)
@@ -98,7 +114,7 @@ export const serveWeb = Effect.fn(WEB_SURFACE)(function* (options: Serve) {
     return frontendOf(Effect.void)
   }
 
-  const server = createServer(answer(options.root))
+  const server = createServer(answer(options.root, options.api))
 
   const bound = yield* Effect.callback<AddressInfo | Error>((resume) => {
     server.once("error", (cause) => resume(Effect.succeed(cause)))

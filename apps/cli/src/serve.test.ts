@@ -1,3 +1,4 @@
+import { API_PLUGIN } from "@missingstudio/eva-api"
 import { boot, buildOf } from "@missingstudio/eva-boot"
 import type { Frontend, SurfaceInfo } from "@missingstudio/eva-sdk"
 import { WEB_SURFACE } from "@missingstudio/eva-web"
@@ -139,16 +140,24 @@ describe("the build a serve runs on", () => {
     expect(built.carries(WEB_SURFACE)).toBeDefined()
   })
 
+  // Both halves of the one port, because the cell they are wired to is one
+  // run's own.
+  it("carries an eva.api beside it, and only one", () => {
+    const built = serving(table, {}, () => undefined)
+    expect(built.all.filter((plugin) => plugin.id === API_PLUGIN)).toHaveLength(1)
+    expect(built.carries(API_PLUGIN)).not.toBe(table.carries(API_PLUGIN))
+  })
+
   it("replaces the table's entry rather than adding beside it", () => {
     const built = serving(table, {}, () => undefined)
     expect(built.carries(WEB_SURFACE)).not.toBe(table.carries(WEB_SURFACE))
     expect(built.all).toHaveLength(table.all.length)
   })
 
-  it("leaves every other plugin exactly as it was", () => {
+  it("leaves every plugin but those two exactly as it was", () => {
     const built = serving(table, { port: 0 }, () => undefined)
     for (const plugin of table.all) {
-      if (plugin.id === WEB_SURFACE) continue
+      if (plugin.id === WEB_SURFACE || plugin.id === API_PLUGIN) continue
       expect(built.carries(plugin.id)).toBe(plugin)
     }
   })

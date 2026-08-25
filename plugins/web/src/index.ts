@@ -1,7 +1,8 @@
+import type { Client } from "@missingstudio/eva-client-runtime"
 import { declare, define, type Plugin } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { DEFAULT_HOST, DEFAULT_PORT } from "./bind.js"
-import { serveWeb, WEB_SURFACE } from "./serve.js"
+import { serveWeb, WEB_SURFACE, type Answering } from "./serve.js"
 
 export * from "./assets.js"
 export * from "./bind.js"
@@ -28,6 +29,13 @@ export interface WebOptions {
   readonly write?: (text: string) => void
   readonly host?: string
   readonly port?: number
+  /**
+   * What answers the calls the page makes, given the Client this row is
+   * started with. One port carries the page and the wire, and a plugin may
+   * not import a plugin — so the composition root hands over the half that
+   * answers, and nothing when this build carries no wire.
+   */
+  readonly api?: (client: Client) => Answering | undefined
 }
 
 /**
@@ -48,9 +56,9 @@ export const makeWeb = (options: WebOptions): Plugin =>
 
       /**
        * A row is a factory: nothing binds until `start` runs, so a test that
-       * boots this build opens no socket. The Client it is handed goes
-       * unused, because the page reaches Eva over the wire `eva.api` serves
-       * and not through this process — W2 is where the surface itself asks.
+       * boots this build opens no socket. The Client it is handed is what the
+       * wire answers from — the page reaches Eva over that wire and not
+       * through this process, and W2 is where the surface itself asks.
        */
       yield* ctx.surface.transform((draft) => {
         draft.set({
@@ -61,8 +69,9 @@ export const makeWeb = (options: WebOptions): Plugin =>
           // SSE carries the live tail.
           streaming: true,
           images: false,
-          start: () =>
+          start: (client) =>
             Effect.gen(function* () {
+              const wire = options.api?.(client)
               return yield* serveWeb({
                 root: options.assets(),
                 bind: {
@@ -71,6 +80,7 @@ export const makeWeb = (options: WebOptions): Plugin =>
                 },
                 posture: yield* posture,
                 ...(options.write === undefined ? {} : { write: options.write }),
+                ...(wire === undefined ? {} : { api: wire }),
               })
             }),
         })
