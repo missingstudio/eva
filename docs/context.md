@@ -224,8 +224,9 @@ Message back.
 _Avoid_: Entry, line
 
 **Block**:
-One piece of what a Message says: words, reasoning, a tool call, or the result
-that answers a call. The set is closed, as the Event kinds are.
+One piece of what a Message says: words, reasoning, a tool call, the result
+that answers a call, or a file the Run changed. The set is closed, as the Event
+kinds are.
 _Avoid_: Part, segment, content, chunk (a chunk is a piece of one Block
 arriving)
 

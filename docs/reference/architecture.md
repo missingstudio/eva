@@ -844,6 +844,7 @@ eva/
 │   ├── testkit/                  @missingstudio/eva-testkit
 │   ├── conformance/              @missingstudio/eva-conformance — tests only
 │   ├── client-runtime/           @missingstudio/eva-client-runtime
+│   ├── session-view/             @missingstudio/eva-session-view
 │   ├── tui-core/                 @missingstudio/eva-tui-core
 │   └── tui/                      @missingstudio/eva-tui
 │
@@ -875,8 +876,9 @@ earns one; `docs/adr/` carries that decision.
 | `@missingstudio/eva-sdk`            | `PluginContext`, `define`, every domain draft, every hook type, every slot key                                                                                                                 | `schema`, `core`, `client-runtime` |
 | `@missingstudio/eva-boot`           | assembles the Kernel: every domain, every slot, every hook, the plugin context, the deps `submit` reads, and the `SessionAPI` a Surface calls                                                  | `kernel`, `sdk`                    |
 | `@missingstudio/eva-client-runtime` | every non-visual client concern a surface would otherwise write itself: the `Client` a surface holds, the Run protocol it runs, the transport seam it calls through, and the reconnect over it | `schema`, `core`                   |
+| `@missingstudio/eva-session-view`   | the one fold that decides what a Run did: a Transcript to Blocks — words, reasoning, a tool call, the result that answered it, a diff, an image, and `unknown`. No renderer.                   | `schema`, `core`                   |
 | `@missingstudio/eva-tui-core`       | `Keymap`, `ThemeColors`, `Frame`, `Renderer` contracts and the helpers beside them. No rendering code.                                                                                         | `schema`                           |
-| `@missingstudio/eva-tui`            | the terminal: the OpenTUI React renderer, and a stream renderer for everywhere else                                                                                                            | `tui-core`                         |
+| `@missingstudio/eva-tui`            | the terminal: the OpenTUI React renderer, and a stream renderer for everywhere else                                                                                                            | `tui-core`, `session-view`         |
 
 The layer rule:
 
@@ -889,12 +891,14 @@ sdk        imports schema, core, client-runtime — the surface row names the Cl
 boot       imports schema, core, kernel, sdk — where the kernel and the sdk meet
 tui-core   imports schema
 client-runtime imports schema, core — no renderer, ever
+session-view imports schema, core — no renderer, ever
 testkit    imports boot and the contracts below it — test files only
 conformance imports anything, plugins included — test files only, ships nothing
 plugins/*  import schema, core, sdk, client-runtime, tui-core — never kernel,
            never each other
            a plugin's *.test.ts may also import testkit, to boot the plugin
-tui        imports tui-core — the only package that may name OpenTUI
+tui        imports tui-core and session-view — the only package that may name
+           OpenTUI, and it holds no fold over the record
 apps/*     import everything — an app is the composition root
 ```
 
