@@ -122,6 +122,7 @@ describe("the fold", () => {
         kind: "streamed",
         payload: { kind: "text", block: 0, content: { type: "text", text: "streaming" } },
       },
+      { kind: "closed", at: 1 },
       fold({ messages: [message("an answer")] }),
     )
 
@@ -129,6 +130,25 @@ describe("the fold", () => {
     expect(folded.live).toBe("")
     expect(folded.mode).toBe("ready")
     expect(folded.model).toBe("claude")
+  })
+
+  // A dropped connection costs a repaint: the record takes the stream's
+  // place while the Run is still open. The Run says when it is over, and a
+  // fold is not it.
+  it("keeps the Run running when it lands mid-Run", () => {
+    const folded = events(
+      apply(start, { kind: "opened", line: "go", at: 0 }),
+      {
+        kind: "streamed",
+        payload: { kind: "text", block: 0, content: { type: "text", text: "streaming" } },
+      },
+      fold({ messages: [message("an answer")], holding: true }),
+    )
+
+    expect(folded.shown).toEqual([message("an answer")])
+    expect(folded.live).toBe("")
+    expect(folded.mode).toBe("running")
+    expect(folded.work.running).toBe(true)
   })
 
   // A fold that comes back with nothing has lost the record rather than the

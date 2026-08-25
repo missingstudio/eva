@@ -13,7 +13,7 @@ import {
   type Call,
   type Fake,
 } from "./fake-api.js"
-import { runPrompt } from "./run.js"
+import { runPrompt, type ClientState } from "./run.js"
 import { droppableTransport, localTransport } from "./transport.js"
 
 const BOUND = 5
@@ -144,14 +144,21 @@ describe("the transport seam", () => {
   it("carries the protocol: the record through the filler is the record without it", async () => {
     const both = await Effect.runPromise(
       Effect.gen(function* () {
+        const state = yield* SubscriptionRef.make<ClientState>("ready")
+
         const filled = yield* fakeApi([text("par"), text("tial")])
         const transport = yield* localTransport(filled.api)
-        const through = yield* runPrompt(transport.api, SESSION, PROMPT, () => {}, {
+        const through = yield* runPrompt({ transport, state, session: SESSION }, PROMPT, () => {}, {
           settle: BOUND,
         })
 
         const plain = yield* fakeApi([text("par"), text("tial")])
-        const bare = yield* runPrompt(plain.api, SESSION, PROMPT, () => {}, { settle: BOUND })
+        const bare = yield* runPrompt(
+          { transport: yield* localTransport(plain.api), state, session: SESSION },
+          PROMPT,
+          () => {},
+          { settle: BOUND },
+        )
 
         return { through, bare }
       }),

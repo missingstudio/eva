@@ -179,7 +179,12 @@ export const runPrint = Effect.fn("cli.runPrint")(function* (
   // The runtime owns the Run, the cancel on interrupt included. Text is
   // written as it is said, the close carries the claim, and the record it
   // gives back is what the cost is read from.
-  const transcript = yield* client.run(session, { kind: "prompt", text: prompt }, (payload) => {
+  const transcript = yield* client.run(session, { kind: "prompt", text: prompt }, (one) => {
+    // A pipe's connection is the process, and the local filler it runs on
+    // never drops, so nothing here is ever refolded. The union is total, so
+    // the compiler says when that stops being true.
+    if (one.kind !== "payload") return
+    const { payload } = one
     if (payload.kind === "text" && payload.content.type === "text") {
       write(payload.content.text)
     }

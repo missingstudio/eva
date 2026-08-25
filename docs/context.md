@@ -361,11 +361,11 @@ does not help itself.
 _Avoid_: Host interface, callbacks
 
 **Client**:
-The handle a Surface holds: the whole Session API, plus the Run protocol over
-it. The composition root builds one where it builds the API and hands it on, so
-a Surface reaches a Session through the client runtime and no other way. It is
-a handle, never a plugin — a Surface is what a person drives; a Client is what
-a Surface calls through.
+The handle a Surface holds: the whole Session API, the Run protocol over it,
+and the Client state it reads. The composition root builds one where it builds
+the API and hands it on, so a Surface reaches a Session through the client
+runtime and no other way. It is a handle, never a plugin — a Surface is what a
+person drives; a Client is what a Surface calls through.
 _Avoid_: Session client, connection, Surface (a Surface holds a Client)
 
 **Transport**:
@@ -382,6 +382,22 @@ The one fact the client runtime reads about its Transport: `ready` or
 `disconnected`. It is about the pipe, never about the runtime — catching up
 after a drop is the runtime's own phase and is not a health value.
 _Avoid_: Online, connection state, status
+
+**Client state**:
+Where the client runtime is, in the three values a Surface acts on: `ready`,
+`synchronizing`, `disconnected`. It is built above Transport health, which says
+two — `synchronizing` is the runtime refolding after a drop, which the pipe
+cannot know. A wire filler may keep more phases of its own behind the two; what
+a consumer reads is these three.
+_Avoid_: Connection state (that is the pipe's), sync status, loading
+
+**Run signal**:
+What one open Run says to its caller, on one queue: a payload of the live
+stream, or the record that replaced it. A Surface reads both from one place, so
+a repaint after a drop arrives in order with the words around it. Always
+qualified, because the bare word is a stage 13 domain.
+_Avoid_: Signal unqualified, Event (an Event is committed and numbered),
+update, message
 
 **Prompt**:
 What a person asks Eva, and what a Harness is handed to answer it. It is the one

@@ -1,5 +1,5 @@
 import type { Client } from "@missingstudio/eva-client-runtime"
-import type { FrontendAnswer } from "@missingstudio/eva-core"
+import type { FrontendAnswer, Transcript } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import {
   dispatch,
@@ -359,17 +359,21 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     Effect.sync(() => deps.renderer.stop()),
   )
 
+  // The record, as the Console is told it. Where the fold came from and which
+  // model to name are the caller's; the shape is one.
+  const painted = (transcript: Transcript, model: string, holding: boolean): ConsoleEvent => ({
+    kind: "folded",
+    messages: [...transcript.messages()],
+    model,
+    summary: transcript.cost(),
+    holding,
+  })
+
   // The record folds; the Console decides what the fold replaces.
   const refresh = Effect.fn("eva.tui.refresh")(function* (holding = false) {
     const transcript = yield* Effect.scoped(deps.client.api.attach(state.session))
     const model = (yield* deps.client.api.model.get(state.session)).model
-    on({
-      kind: "folded",
-      messages: [...transcript.messages()],
-      model,
-      summary: transcript.cost(),
-      holding,
-    })
+    on(painted(transcript, model, holding))
   })
 
   // Dispatch owns what a line means and what to say when it means nothing.
@@ -424,11 +428,17 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
 
     // The runtime owns the Run, from the input that opens it to the record
     // that replaces its stream. Every payload it hears feeds the Live area;
-    // the spinner, the close, and the repaint are this surface's own.
+    // the spinner and the close are this surface's own.
     yield* deps.client.run(
       state.session,
       { kind: "prompt", text: line },
-      (payload) => on({ kind: "streamed", payload }),
+      (one) => {
+        if (one.kind === "payload") return on({ kind: "streamed", payload: one.payload })
+        // A dropped connection costs one repaint. What the runtime hands over
+        // is the record, so this paints from it rather than folding a second
+        // time, and the model is the one already on the screen.
+        on(painted(one.transcript, state.model, true))
+      },
       deps.settle === undefined ? {} : { settle: deps.settle },
     )
     yield* Fiber.interrupt(turning)

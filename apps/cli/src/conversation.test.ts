@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest"
 import { providing, scripted, withKernel } from "@missingstudio/eva-testkit"
 import type { Plugin } from "@missingstudio/eva-sdk"
 import { makeSessionAPI } from "@missingstudio/eva-boot"
-import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
+import { localTransport, makeClient, type Client } from "@missingstudio/eva-client-runtime"
 import { runPrint } from "./run.js"
 
 const SESSION = sessionID("sess_conversation")
@@ -38,7 +38,9 @@ const started = <A>(
   const path = join(mkdtempSync(join(tmpdir(), "eva-conv-")), "trace.jsonl")
   return withKernel([trace, { plugin: traceJsonl, options: { path } }, provider], (kernel, scope) =>
     Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), (api) =>
-      body(makeClient(api.session), path),
+      Effect.flatMap(Effect.flatMap(localTransport(api.session), makeClient), (client) =>
+        body(client, path),
+      ),
     ),
   )
 }

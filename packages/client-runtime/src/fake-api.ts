@@ -8,6 +8,7 @@
 
 import {
   foldTranscript,
+  ResumeTooFarBehind,
   type CancelCause,
   type FrontendAnswer,
   type ModelRef,
@@ -41,8 +42,9 @@ export const text = (value: string): Payload => ({
 export const CLOSE: Payload = { kind: "finished", claim: { result: "done", summary: "ok" } }
 
 // What `submit` does after the Run has said its payloads: close it, return
-// without a close, or stay open until the caller interrupts.
-export type Ending = "closes" | "silent" | "hangs"
+// without a close, wait to be let go, or stay open until the caller
+// interrupts.
+export type Ending = "closes" | "silent" | "hangs" | "waits"
 
 export type Method =
   | "create"
@@ -69,29 +71,42 @@ export interface Fake {
   readonly open: () => number
   // Resolved once the Run has said everything it says.
   readonly said: Deferred.Deferred<void>
+  // Commits and publishes one more payload, as the Run does. A test that has
+  // to move the Trace while the pipe is down says it through this.
+  readonly say: (payload: Payload) => Effect.Effect<void>
+  // Lets a Run that `waits` close.
+  readonly release: Effect.Effect<void>
+  // The next `times` cursor watches refuse instead of replaying, which is
+  // what a head that moved past the bound looks like to a caller.
+  readonly refuse: (times: number) => void
 }
 
 /**
- * One session, over a hub. Every payload the Run says is published live and
- * committed to the trace, so the fold after the stream is the record of the
- * same Run.
+ * One session, over a hub. Every payload the Run says is committed to the
+ * trace and published to the hub in one step, so the fold after the stream
+ * is the record of the same Run and a cursor names a position in both.
  */
 export const fakeApi = Effect.fn("test.api")(function* (
   says: readonly Payload[],
   ending: Ending = "closes",
 ): Effect.fn.Return<Fake> {
-  const hub = yield* PubSub.unbounded<Payload>()
+  const hub = yield* PubSub.unbounded<Event>()
   const committed: Event[] = []
   const calls: Call[] = []
   const said = yield* Deferred.make<void>()
+  const letGo = yield* Deferred.make<void>()
   let open = 0
+  let refusals = 0
   let model: ModelRef = MODEL
 
   const took = (method: Method, ...args: readonly unknown[]) => void calls.push({ method, args })
 
+  const head = (events: readonly Event[]) =>
+    events.reduce((high, event) => (event.seq > high ? event.seq : high), 0)
+
   const say = (payload: Payload) =>
     Effect.gen(function* () {
-      committed.push({
+      const event: Event = {
         id: eventID(`ev_${committed.length + 1}`),
         seq: committed.length + 1,
         at: { wall: "2026-08-25T00:00:00.000Z" },
@@ -99,9 +114,30 @@ export const fakeApi = Effect.fn("test.api")(function* (
         session: SESSION,
         parent: null,
         payload,
-      })
-      yield* PubSub.publish(hub, payload)
+      }
+      committed.push(event)
+      yield* PubSub.publish(hub, event)
     })
+
+  /**
+   * What a resumed watch says: the committed groups after the cursor, then
+   * the trace as it grows. The subscription is already open, so an event that
+   * commits between it and the read is held by the subscription and dropped
+   * by the position filter — exactly once, whichever side wins.
+   */
+  const behind = (tail: Stream.Stream<Event>, from: Cursor) => {
+    const read = [...committed]
+    const boundary = Math.max(head(read), from.seq)
+    return Stream.concat(
+      Stream.fromIterable(
+        read.filter((event) => event.seq > from.seq).map((event) => event.payload),
+      ),
+      Stream.map(
+        Stream.filter(tail, (event) => event.seq > boundary),
+        (event) => event.payload,
+      ),
+    )
+  }
 
   const api: SessionAPI = {
     create: (location: string) =>
@@ -118,15 +154,23 @@ export const fakeApi = Effect.fn("test.api")(function* (
         took("attach", id)
         return foldTranscript(SESSION, committed)
       }),
-    // The subscription is counted from inside the stream, so a test that has
-    // to drop a live watch can wait for one rather than guess at it.
+    /**
+     * A watch is counted once it has really subscribed — not once it was
+     * asked for — so a test that has to drop a live one can wait for it
+     * rather than guess at it.
+     */
     watch: ((id: SessionID, from?: Cursor) => {
       took("watch", ...(from === undefined ? [id] : [id, from]))
       return Stream.unwrap(
-        Effect.sync(() => {
+        Effect.gen(function* () {
+          if (from !== undefined && refusals > 0) {
+            refusals -= 1
+            return Stream.fail(new ResumeTooFarBehind({ from, head: head(committed) }))
+          }
+          const tail = Stream.fromSubscription(yield* PubSub.subscribe(hub))
           open += 1
           return Stream.ensuring(
-            Stream.fromPubSub(hub),
+            from === undefined ? Stream.map(tail, (event) => event.payload) : behind(tail, from),
             Effect.sync(() => void (open -= 1)),
           )
         }),
@@ -144,7 +188,8 @@ export const fakeApi = Effect.fn("test.api")(function* (
         for (const payload of says) yield* say(payload)
         yield* Deferred.succeed(said, undefined)
         if (ending === "hangs") return yield* Effect.never
-        if (ending === "closes") yield* say(CLOSE)
+        if (ending === "waits") yield* Deferred.await(letGo)
+        if (ending !== "silent") yield* say(CLOSE)
       }),
     cancel: (id: SessionID, cause: CancelCause) => Effect.sync(() => took("cancel", id, cause)),
     model: {
@@ -163,7 +208,15 @@ export const fakeApi = Effect.fn("test.api")(function* (
       Effect.sync(() => took("answer", request, answer)),
   }
 
-  return { api, calls, open: () => open, said }
+  return {
+    api,
+    calls,
+    open: () => open,
+    said,
+    say,
+    release: Effect.asVoid(Deferred.succeed(letGo, undefined)),
+    refuse: (times: number) => void (refusals += times),
+  }
 })
 
 // What one method was given, in the order it was reached.

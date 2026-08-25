@@ -366,7 +366,10 @@ export const apply = (state: ConsoleState, event: ConsoleEvent): ConsoleState =>
         cost: costText(spendOf(event.summary, shown.length > 0)),
         tokens: tokenLine(event.summary.inputTokens, event.summary.outputTokens),
         live: "",
-        mode: "ready",
+        // A fold while a Run is open is a repaint, not an ending: the pipe
+        // dropped and the record took the stream's place. The Run says when
+        // it is over, and it has not.
+        mode: state.work.running ? state.mode : "ready",
       }
     }
     case "selected":

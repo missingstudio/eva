@@ -1,5 +1,5 @@
 import { makeSessionAPI } from "@missingstudio/eva-boot"
-import { makeClient } from "@missingstudio/eva-client-runtime"
+import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 import type { SurfaceInfo } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Scope } from "effect"
 import type { Started } from "./run.js"
@@ -33,7 +33,7 @@ export const runInteractive = Effect.fn("cli.interactive")(function* (started: S
 
   const scope = yield* Scope.make()
   const api = yield* makeSessionAPI(started.kernel, started.model, scope)
-  const client = makeClient(api.session)
+  const client = yield* makeClient(yield* localTransport(api.session))
   const frontend = yield* Effect.provideService(chosen.start(client), Scope.Scope, scope)
   yield* Effect.ensuring(frontend.done, Scope.close(scope, Exit.void))
   return chosen.id

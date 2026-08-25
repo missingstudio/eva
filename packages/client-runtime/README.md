@@ -11,8 +11,8 @@ close that a watcher which subscribed too late never hears. This package holds
 the protocol once. It knows what the server needs to hear about, and no
 pixels — it imports the contracts and nothing that draws.
 
-It starts with one domain, the Run, and takes another when a real consumer
-needs one.
+It starts with two domains — the Run, and the connection it runs over — and
+takes another when a real consumer needs one.
 
 ## Prerequisites
 
@@ -38,29 +38,31 @@ To use the package from another workspace package, add it as a dependency:
 
 ## Usage
 
-A surface holds one `Client`: the whole session contract, plus the protocol.
-The composition root builds it where it builds the API, and hands it on.
-`client.api` is the same `SessionAPI` shape, so a consumer that only reads the
-contract — a command, say — takes the handle and changes nothing of its own:
+A surface holds one `Client`: the whole session contract, plus the protocol
+over it. The composition root builds it where it builds the API, and hands it
+on. `client.api` is the same `SessionAPI` shape, so a consumer that only reads
+the contract — a command, say — takes the handle and changes nothing of its
+own:
 
 ```ts
-import { makeClient } from "@missingstudio/eva-client-runtime"
+import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 
-const client = makeClient(api)
+const client = yield * makeClient(yield * localTransport(api))
 const record = yield * client.run(session, { kind: "prompt", text: line }, each)
 ```
 
-`runPrompt` is what the handle runs. It opens one Run and gives back the
-record that replaces its stream. Every payload the Run says reaches `each`,
-the close included, and what a surface does with them stays with the
-surface — a spinner, a line of stdout, or a repaint:
+`each` is given one queue of `RunSignal`, and there are two of them. A
+`payload` is a word of the live stream. A `folded` is the record taking that
+stream's place — repaint from it, because everything before it arrived through
+it. What a surface does with them stays with the surface — a spinner, a line of
+stdout, or a repaint:
 
 ```ts
-import { runPrompt } from "@missingstudio/eva-client-runtime"
-
-const transcript =
+const record =
   yield *
-  runPrompt(api, session, { kind: "prompt", text: line }, (payload) => {
+  client.run(session, { kind: "prompt", text: line }, (signal) => {
+    if (signal.kind === "folded") return repaint(signal.transcript)
+    const { payload } = signal
     if (payload.kind === "text" && payload.content.type === "text") write(payload.content.text)
   })
 ```
@@ -88,7 +90,7 @@ the whole contract plus the one fact the runtime reads about the pipe:
 import { localTransport } from "@missingstudio/eva-client-runtime"
 
 const transport = yield * localTransport(api)
-const record = yield * runPrompt(transport.api, session, input, each)
+const client = yield * makeClient(transport)
 ```
 
 `health` is `ready` or `disconnected`. A drop says what it has to say where it
@@ -108,20 +110,47 @@ yield * transport.drop // every open watch ends; new calls are held
 yield * transport.restore // the held calls run
 ```
 
+### A dropped connection costs a repaint
+
+`client.state` is the three values a surface acts on: `ready`,
+`synchronizing`, `disconnected`. The transport says two, because a pipe knows
+only whether it is there; catching up is the runtime's own phase.
+
+While a Run is open and the pipe goes, the live watch dies with it and the
+state reads `disconnected`. When the pipe returns, the state reads
+`synchronizing` and the runtime does one sequence:
+
+1. **Fold fresh, with `attach`** — never a remembered live position.
+2. **Say the record replaced the stream.** That is the `folded` signal, and it
+   is the caller's one repaint.
+3. **Watch from the fold's own `at`.** Committed groups after that position,
+   exactly once.
+4. **`ready`.**
+
+A `ResumeTooFarBehind` never reaches the caller: the runtime answers it with
+another fold from the new position, so what arrives is one more repaint. While
+no Run is open there is nothing to synchronize, so `ready` follows
+`disconnected` directly and nothing is folded at anyone.
+
+Why each of those is the answer rather than another one is in
+[decisions.md](../../docs/decisions.md).
+
 ## What it does not do
 
 It draws nothing and imports nothing that draws. It speaks no wire: the seam is
 the shape a wire plugs into, not an HTTP client. It does not retry, back off, or
-probe — a backoff ladder is tuned to a wire that flaps, and it arrives with the
-filler that has one. It caches nothing: the record is folded on demand, because
-a cached read model is a domain of its own and gets added when a consumer needs
-it.
+probe — the local pipe cannot flap and the double drops when told, so a backoff
+ladder and a foreground probe are tuned to nothing here; they arrive with the
+filler that has a wire. It caches nothing: the record is folded on demand,
+because a cached read model is a domain of its own and gets added when a
+consumer needs it.
 
 ## Development
 
 The protocol's rules live in [run.test.ts](src/run.test.ts), the handle's in
-[client.test.ts](src/client.test.ts) and the seam's in
-[transport.test.ts](src/transport.test.ts), all against the fake `SessionAPI`
+[client.test.ts](src/client.test.ts), the seam's in
+[transport.test.ts](src/transport.test.ts) and the reconnect's in
+[reconnect.test.ts](src/reconnect.test.ts), all against the fake `SessionAPI`
 in [fake-api.ts](src/fake-api.ts). Run the suite from the repository root:
 
 ```bash

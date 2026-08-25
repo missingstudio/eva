@@ -489,6 +489,39 @@ handling. _Rejected:_ the field's six phases on this seam — they belong to a
 filler whose wire can flap, and the three values a consumer acts on are the
 runtime's, above the pipe.
 
+**A reconnect folds fresh, and never resumes from a live position.** The live
+stream's payloads carry no positions, because emit precedes commit, so a client
+reading live deltas holds no honest cursor. Its only honest positions are
+folds: on a restore the runtime folds with `attach` and watches from that
+fold's own `at`, which is the gap `Transcript.at` and the cursor watch closed
+between them. _Rejected:_ remembering the last live payload and resuming from
+it, which is a position nothing ever assigned.
+
+**The caller never sees `ResumeTooFarBehind`.** The head can move past the
+replay bound between the fold and the watch, and the answer is the one the
+Session API names: fold fresh again, watch from the new position. Every fold
+restarts the gap at zero and the bound is a thousand commits wide, so the loop
+converges. What the caller pays is one more repaint. _Rejected:_ surfacing the
+refusal, which would make every surface hold the same recovery. _Corrected:_
+plan 006 said the loop stays in `synchronizing` across a refusal. It cannot: a
+refusal is decided on the resumed watch's first pull and nothing is knowable
+before that pull, so the state reads `ready` for it and walks back. Declaring
+`ready` only once the watch has produced would leave a quiet Run
+`synchronizing` for as long as it stayed quiet.
+
+**A Run says payloads and folds on one queue.** `RunSignal` is `payload` or
+`folded`, so a repaint after a drop arrives in order with the words around it
+and a surface needs no second channel to reconcile. The union is total, so the
+print path — whose pipe is the process, and which therefore never refolds —
+still has the compiler tell it when that stops being true. _Rejected:_ a
+separate callback for the fold, which two consumers would have to order by
+hand.
+
+**A fold while a Run is open is a repaint, not an ending.** The Console reset
+its mode to `ready` on every fold, because until now a fold only ever arrived
+at close. It reads the Run's own spinner instead: a Run says when it is over,
+and a dropped connection is not it.
+
 **Remote-ready is three constraints on the two surface contracts, not a
 feature.** Everything in them serializes, local facts stay out, and
 reconnection is by `Cursor`. Hold them from the first surface; retrofitting

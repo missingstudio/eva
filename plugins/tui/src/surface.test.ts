@@ -5,8 +5,16 @@ import {
   type SessionAPI,
   type SubmitInput,
 } from "@missingstudio/eva-core"
-import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
-import { sessionID, type Payload, type SessionID } from "@missingstudio/eva-schema"
+import { droppableTransport, makeClient, type Client } from "@missingstudio/eva-client-runtime"
+import {
+  eventID,
+  runID,
+  sessionID,
+  type Cursor,
+  type Event,
+  type Payload,
+  type SessionID,
+} from "@missingstudio/eva-schema"
 import type { CommandInfo, Frontend, KeymapInfo, PickRow } from "@missingstudio/eva-sdk"
 import type { Frame, KeyPress, Renderer, ThemeColors } from "@missingstudio/eva-tui-core"
 import { Effect, PubSub, Stream } from "effect"
@@ -93,6 +101,11 @@ interface Spy {
   readonly publish: (payload: Payload) => Effect.Effect<void>
   // Keeps the next Run open, so a test can look at the surface mid-stream.
   readonly hold: () => { readonly release: () => void }
+  // The pipe under the surface, lost and found again.
+  readonly drop: Effect.Effect<void>
+  readonly restore: Effect.Effect<void>
+  // How many watch streams have really subscribed.
+  readonly open: () => number
 }
 
 /**
@@ -102,21 +115,69 @@ interface Spy {
  * never hears.
  */
 const fakeApi = Effect.fn("test.api")(function* (racing = false): Effect.fn.Return<Spy> {
-  const hub = yield* PubSub.unbounded<Payload>()
+  const hub = yield* PubSub.unbounded<Event>()
+  const committed: Event[] = []
   const submitted: SubmitInput[] = []
   const cancelled: CancelCause[] = []
   let model: ModelRef = { provider: "fake", model: "model" }
   let holding = false
+  let open = 0
   const session = sessionID("sess_tui")
 
-  const close = () =>
-    PubSub.publish(hub, { kind: "finished", claim: { result: "done", summary: "ok" } })
+  // Every payload is committed and published in one step, so the fold after
+  // the stream is the record of the same Run and a cursor names a position
+  // in both.
+  const say = (payload: Payload) =>
+    Effect.gen(function* () {
+      const event: Event = {
+        id: eventID(`ev_${committed.length + 1}`),
+        seq: committed.length + 1,
+        at: { wall: "2026-08-25T00:00:00.000Z" },
+        run: runID("run_1"),
+        session,
+        parent: null,
+        payload,
+      }
+      committed.push(event)
+      yield* PubSub.publish(hub, event)
+    })
+
+  const close = () => say({ kind: "finished", claim: { result: "done", summary: "ok" } })
+
+  const behind = (tail: Stream.Stream<Event>, from: Cursor) => {
+    const read = [...committed]
+    const boundary = Math.max(
+      read.reduce((high, event) => (event.seq > high ? event.seq : high), 0),
+      from.seq,
+    )
+    return Stream.concat(
+      Stream.fromIterable(
+        read.filter((event) => event.seq > from.seq).map((event) => event.payload),
+      ),
+      Stream.map(
+        Stream.filter(tail, (event) => event.seq > boundary),
+        (event) => event.payload,
+      ),
+    )
+  }
 
   const api: SessionAPI = {
     create: () => Effect.succeed(session),
     list: Effect.succeed([{ id: session }]),
-    attach: () => Effect.succeed(foldTranscript(session, [])),
-    watch: () => Stream.fromPubSub(hub),
+    attach: () => Effect.sync(() => foldTranscript(session, committed)),
+    // Subscribe first, read second, and drop what the read already returned:
+    // an event that commits between the two arrives exactly once.
+    watch: ((_id: SessionID, from?: Cursor) =>
+      Stream.unwrap(
+        Effect.gen(function* () {
+          const tail = Stream.fromSubscription(yield* PubSub.subscribe(hub))
+          open += 1
+          return Stream.ensuring(
+            from === undefined ? Stream.map(tail, (event) => event.payload) : behind(tail, from),
+            Effect.sync(() => void (open -= 1)),
+          )
+        }),
+      )) as SessionAPI["watch"],
     /**
      * Answers at once unless held, so the loop is back at the prompt when
      * this returns and a test does not have to guess at timing. The close
@@ -141,11 +202,18 @@ const fakeApi = Effect.fn("test.api")(function* (racing = false): Effect.fn.Retu
     answer: () => Effect.void,
   }
 
+  // The droppable filler under every surface under test, so the one test
+  // that has to lose the pipe reaches the same seam as the rest.
+  const transport = yield* droppableTransport(api)
+
   return {
-    client: makeClient(api),
+    client: yield* makeClient(transport),
     submitted,
     cancelled,
-    publish: (payload) => PubSub.publish(hub, payload).pipe(Effect.asVoid),
+    publish: say,
+    drop: transport.drop,
+    restore: transport.restore,
+    open: () => open,
     hold: () => {
       holding = true
       return {
@@ -1343,5 +1411,68 @@ describe("an open Run", () => {
     // The spinner stops with the Run, and what it took stays on the turn.
     expect(drawn.after?.work).toEqual({ running: false, elapsed: "", tick: 0, hint: "" })
     expect(drawn.after?.took).toMatch(/^took \d+\.\ds$/)
+  })
+})
+
+/**
+ * W0's exit test: kill the connection mid-Run and the surface reconnects by
+ * trace position, with no line lost and none doubled. The runtime does the
+ * reconnecting; what the surface pays is one repaint.
+ */
+describe("a dropped connection", () => {
+  const said = (value: string): Payload => ({
+    kind: "text",
+    block: 0,
+    content: { type: "text", text: value },
+  })
+
+  // The words the session pane is showing, as a reader sees them.
+  const shown = (frame: Frame | undefined): string =>
+    (frame?.session ?? [])
+      .filter((message) => message.author === "agent")
+      .flatMap((message) => message.blocks)
+      .map((block) =>
+        block.type === "content" && block.content.type === "text" ? block.content.text : "",
+      )
+      .join("")
+
+  it("costs one repaint, and the record shows every line once", async () => {
+    const drawn = await withSurface([], async (fake, spy) => {
+      const running = spy.hold()
+      fake.press("go")
+      await settle()
+      await Effect.runPromise(spy.publish(said("first")))
+      const streaming = await drawnWhere(fake, (frame) => (frame?.live ?? "").includes("first"))
+
+      // The pipe goes with the Run still open, and the Trace moves without
+      // it: what commits now is what a live watch would have missed.
+      await Effect.runPromise(spy.drop)
+      await heldWhere(spy.open, (open) => open === 0)
+      await Effect.runPromise(spy.publish(said(" and second")))
+      await Effect.runPromise(spy.restore)
+
+      // The record replaced the stream: the words are in the session pane
+      // and the live area is empty again.
+      const repainted = await drawnWhere(fake, (frame) => shown(frame).includes(" and second"))
+      running.release()
+      await settle()
+      return { streaming, repainted, closed: fake.last() }
+    })
+
+    // Before the drop the words were live, and nothing was folded at anyone.
+    expect(drawn.streaming?.live).toContain("first")
+    expect(shown(drawn.streaming)).toBe("")
+
+    // After it, both are in the record, each exactly once, in position order.
+    expect(shown(drawn.repainted)).toBe("first and second")
+    expect(drawn.repainted?.live).toBe("")
+    // The repaint is not an ending: the Run says when it is over.
+    expect(drawn.repainted?.work.running).toBe(true)
+    expect(drawn.repainted?.status.mode).toBe("running")
+
+    // And the close is still the close.
+    expect(shown(drawn.closed)).toBe("first and second")
+    expect(drawn.closed?.work.running).toBe(false)
+    expect(drawn.closed?.status.mode).toBe("ready")
   })
 })

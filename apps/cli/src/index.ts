@@ -1,5 +1,5 @@
 import { makeSessionAPI, type Build } from "@missingstudio/eva-boot"
-import { makeClient } from "@missingstudio/eva-client-runtime"
+import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
 import { Cause, Effect, Exit, Scope } from "effect"
@@ -89,8 +89,9 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       }
 
       const api = yield* makeSessionAPI(started.kernel, started.model, scope)
+      const client = yield* makeClient(yield* localTransport(api.session))
       const answered = yield* withSignals(
-        runHarness(started.kernel, makeClient(api.session), {
+        runHarness(started.kernel, client, {
           harness: invocation.harness,
           text: invocation.input,
           location: settled.location.directory,
@@ -134,8 +135,9 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       // The same Session API a Console calls, driven by the command line
       // instead of keys.
       const api = yield* makeSessionAPI(started.kernel, started.model, scope)
+      const client = yield* makeClient(yield* localTransport(api.session))
       const printed = yield* withSignals(
-        runPrint(makeClient(api.session), invocation.prompt, {
+        runPrint(client, invocation.prompt, {
           location: settled.location.directory,
           write: world.out,
         }),

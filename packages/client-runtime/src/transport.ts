@@ -24,6 +24,19 @@ export interface Transport {
 }
 
 /**
+ * The first moment `health` reads `want`. `changes` replays the value the ref
+ * holds now, so a wait for the state the transport is already in ends at
+ * once, and a change that lands before the waiter subscribes is still heard.
+ */
+export const healthAt = (
+  health: SubscriptionRef.SubscriptionRef<TransportHealth>,
+  want: TransportHealth,
+): Effect.Effect<void> =>
+  Effect.asVoid(
+    Stream.runHead(Stream.filter(SubscriptionRef.changes(health), (one) => one === want)),
+  )
+
+/**
  * The in-process API, untouched, behind a `health` that is born `ready` and
  * never leaves it. There is no wire, so there is nothing to lose.
  */
@@ -50,18 +63,10 @@ export const droppableTransport = (api: SessionAPI): Effect.Effect<DroppableTran
   Effect.gen(function* () {
     const health = yield* SubscriptionRef.make<TransportHealth>("ready")
 
-    // The first moment `health` reads `want`. `changes` replays the value the
-    // ref holds now, so a wait for the state the transport is already in ends
-    // at once, and a drop that lands before the waiter subscribes is still
-    // heard.
-    const at = (want: TransportHealth) =>
-      Effect.asVoid(
-        Stream.runHead(Stream.filter(SubscriptionRef.changes(health), (one) => one === want)),
-      )
-
     // The call is built after the wait, so a held call has reached nothing
     // behind the seam yet.
-    const held = <A, E, R>(call: () => Effect.Effect<A, E, R>) => Effect.flatMap(at("ready"), call)
+    const held = <A, E, R>(call: () => Effect.Effect<A, E, R>) =>
+      Effect.flatMap(healthAt(health, "ready"), call)
 
     const wrapped: SessionAPI = {
       create: (location) => held(() => api.create(location)),
@@ -79,7 +84,9 @@ export const droppableTransport = (api: SessionAPI): Effect.Effect<DroppableTran
         const open: Stream.Stream<Payload, ResumeTooFarBehind> =
           from === undefined ? api.watch(session) : api.watch(session, from)
         return Stream.unwrap(
-          Effect.map(at("ready"), () => Stream.interruptWhen(open, at("disconnected"))),
+          Effect.map(healthAt(health, "ready"), () =>
+            Stream.interruptWhen(open, healthAt(health, "disconnected")),
+          ),
         )
       }) as SessionAPI["watch"],
       submit: (session, input) => held(() => api.submit(session, input)),

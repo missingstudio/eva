@@ -1,20 +1,34 @@
 import type { Payload } from "@missingstudio/eva-schema"
-import { Deferred, Effect, Fiber } from "effect"
+import { Deferred, Effect, Fiber, SubscriptionRef } from "effect"
 import { describe, expect, it } from "vitest"
-import { CLOSE, fakeApi, given, PROMPT, SESSION, spoken, text } from "./fake-api.js"
-import { runPrompt, SETTLE } from "./run.js"
+import { CLOSE, fakeApi, given, PROMPT, SESSION, spoken, text, type Fake } from "./fake-api.js"
+import { runPrompt, SETTLE, type ClientState, type RunSignal } from "./run.js"
+import { localTransport } from "./transport.js"
 
 // A drain bound short enough that a suite reaches the stop, and far enough
 // below SETTLE that reaching it proves the injected bound is the one used.
 const BOUND = 5
 
+// What the protocol runs over, and where it says how it is doing. The local
+// filler never drops, so these tests are about the four steps alone.
+const over = Effect.fn("test.over")(function* (fake: Fake) {
+  return {
+    transport: yield* localTransport(fake.api),
+    state: yield* SubscriptionRef.make<ClientState>("ready"),
+    session: SESSION,
+  }
+})
+
+const payloads = (signals: readonly RunSignal[]): readonly Payload[] =>
+  signals.flatMap((one) => (one.kind === "payload" ? [one.payload] : []))
+
 describe("one Run, over the Session API", () => {
   it("hands every payload to `each`, once, in order", async () => {
-    const seen: Payload[] = []
+    const seen: RunSignal[] = []
     await Effect.runPromise(
       Effect.gen(function* () {
         const fake = yield* fakeApi([text("par"), text("tial")])
-        yield* runPrompt(fake.api, SESSION, PROMPT, (one) => void seen.push(one), {
+        yield* runPrompt(yield* over(fake), PROMPT, (one) => void seen.push(one), {
           settle: BOUND,
         })
         expect(given(fake, "submit")).toEqual([[SESSION, PROMPT]])
@@ -23,14 +37,16 @@ describe("one Run, over the Session API", () => {
 
     // The close reaches `each` too: it carries the Claim, which is the one
     // thing a Run says that the stream alone can report.
-    expect(seen).toEqual([text("par"), text("tial"), CLOSE])
+    expect(payloads(seen)).toEqual([text("par"), text("tial"), CLOSE])
+    // Nothing dropped, so nothing was refolded at anyone.
+    expect(seen.filter((one) => one.kind === "folded")).toEqual([])
   })
 
   it("returns the record's own fold, `at` included", async () => {
     const transcript = await Effect.runPromise(
       Effect.gen(function* () {
         const fake = yield* fakeApi([text("par"), text("tial")])
-        return yield* runPrompt(fake.api, SESSION, PROMPT, () => {}, { settle: BOUND })
+        return yield* runPrompt(yield* over(fake), PROMPT, () => {}, { settle: BOUND })
       }),
     )
 
@@ -45,7 +61,7 @@ describe("one Run, over the Session API", () => {
     const transcript = await Effect.runPromise(
       Effect.gen(function* () {
         const fake = yield* fakeApi([text("par"), text("tial")], "silent")
-        return yield* runPrompt(fake.api, SESSION, PROMPT, () => {}, { settle: BOUND })
+        return yield* runPrompt(yield* over(fake), PROMPT, () => {}, { settle: BOUND })
       }),
     )
 
@@ -60,7 +76,7 @@ describe("one Run, over the Session API", () => {
       Effect.gen(function* () {
         const fake = yield* fakeApi([text("par"), text("tial")], "hangs")
         const running = yield* Effect.forkChild(
-          runPrompt(fake.api, SESSION, PROMPT, () => {}, { settle: BOUND }),
+          runPrompt(yield* over(fake), PROMPT, () => {}, { settle: BOUND }),
         )
         yield* Deferred.await(fake.said)
         yield* Fiber.interrupt(running)
