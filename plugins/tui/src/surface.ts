@@ -442,10 +442,25 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     )
   })
 
+  /**
+   * Eva needs a person, and this terminal is one of the two doors to one. The
+   * other is the socket: the gate races them, so an answer from a browser
+   * watching the same Session interrupts this call.
+   *
+   * That interrupt is what retires the prompt. There is nothing to watch the
+   * record for — a question nobody has answered is not on it — and the
+   * interrupt is the fact itself: this door lost, so the line above stops
+   * asking to be answered.
+   */
   const ask = Effect.fn("eva.tui.ask")(function* (request: FrontendRequest) {
     open = request
     on({ kind: "asked", question: request.question })
-    return yield* Queue.take(asked)
+    return yield* Effect.onInterrupt(Queue.take(asked), () =>
+      Effect.sync(() => {
+        open = undefined
+        on({ kind: "answered" })
+      }),
+    )
   })
 
   /**
