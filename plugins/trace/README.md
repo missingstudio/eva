@@ -11,7 +11,7 @@ Eva is built on a plugin kernel: every capability is a plugin. This plugin
 fills the `Recorder` slot that
 [`@missingstudio/eva-core`](../../packages/core/README.md) defines, and it
 reads the `TraceSink` slot that a sink plugin such as
-[`eva.trace.jsonl`](../trace-jsonl/README.md) fills. The glossary in
+[`eva.trace.sqlite`](../trace-sqlite/README.md) fills. The glossary in
 [docs/context.md](../../docs/context.md) defines Trace, Recorder, and Event;
 [architecture.md](../../docs/reference/architecture.md) owns the slot
 mechanics.
@@ -84,7 +84,7 @@ sees a Run close clean that did not. A `commit` with no open Run dies with
 
 `close` is idempotent: nothing else may close a Run, and a second close does
 nothing. The Recorder stamps no trace position — `seq` leaves here as 0, and
-the sink's `sequenced` rule numbers each record.
+the store behind the sink numbers each record as it lands.
 
 ## API
 
@@ -104,7 +104,7 @@ a mid-Run sink swap lands the next commit in the new sink, and a Run with no
 sink still closes, with the `degraded` caveat in the same group as the
 `finished` record.
 [apps/cli/src/plugins.test.ts](../../apps/cli/src/plugins.test.ts) holds that
-`eva.trace` loads before `eva.trace.jsonl`. Run the suite from the repository
+`eva.trace` loads before `eva.trace.sqlite`. Run the suite from the repository
 root:
 
 ```bash

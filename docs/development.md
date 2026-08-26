@@ -140,13 +140,13 @@ plugins:
     options: { repairs: 2 }
   - id: eva.budget
     options: { tokens: 200000, steps: 50 }
-  - id: eva.trace.jsonl
-    options: { path: "~/.eva/eva-repo.jsonl" }
+  - id: eva.trace.sqlite
+    options: { path: "~/.eva/eva-repo.sqlite" }
 ```
 
 `model` is the default for this directory. `repairs` is the ceiling on Repairs
 per Step. The budget stops the next Step when a limit is reached. The trace
-path keeps this repository's evidence apart from the shared trace file.
+path keeps this repository's evidence apart from the shared store.
 
 **4. Write a Template.** A file in `.eva/prompts/` becomes one prompt row,
 keyed by its base name. This is `.eva/prompts/commit-msg.md`:

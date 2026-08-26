@@ -62,6 +62,11 @@ error with both named. The Run that closed last is the answer: its text goes
 to standard output on a `done` Claim and exits 0, and a failed Claim's summary
 goes to standard error and exits 1.
 
+`eva config` is a group, and `show` is the one thing in it. The group typed
+bare answers with its own help on standard output and exits 0, exactly as
+`eva config --help` does: asking what a group holds is a question, and only a
+mistake is written where a failure is read.
+
 `eva serve` takes the posture as a flag: `--web` is the page that watches a
 Session, and `--acp` at 9c is the next answer to "serve what". A serve that
 names no posture is refused rather than defaulted, because a default would
@@ -454,9 +459,10 @@ prompt that starts with a dash is quoted, or given as `--print=<prompt>`. The
 ### 8.8 commander 15 wants a newer Node than the repository declared
 
 `commander@15.0.0` declares `engines.node >= 22.12.0`. The root `package.json`
-declared `>= 22`, and now declares `>= 22.12`. The other choice was
-`commander@14`, which accepts Node 20; moving the floor is the smaller change,
-and the toolchain already runs above it.
+declared `>= 22`, then `>= 22.12`, and now `>= 22.13` — the last step is the
+trace store's, because `node:sqlite` stopped needing a flag there. The other
+choice was `commander@14`, which accepts Node 20; moving the floor is the
+smaller change, and the toolchain already runs above it.
 
 ## 9. The old spellings are gone
 

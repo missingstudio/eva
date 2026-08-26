@@ -54,7 +54,8 @@ runs `4.0.0-beta.83` with a patch, which is a fair signal of how much the line
 still moves.
 
 **`@types/node` is pinned to the 22 line, not the newest.** `engines` accepts
-Node 22.12 as the oldest runtime, so types from a later release would let a
+Node 22.13 as the oldest runtime — the release where `node:sqlite` stopped
+needing a flag — so types from a later release would let a
 package call an API that runtime lacks, and nothing would fail until someone ran
 it there.
 

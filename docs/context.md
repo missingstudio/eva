@@ -186,8 +186,11 @@ and rewind all act on it.
 _Avoid_: Conversation, thread, chat
 
 **Header**:
-What a Session says about itself: what to call it, and when it last moved.
-Nothing stores one — it is a fold over the Trace, as every other projection is.
+What a Session says about itself: what to call it, and when it last moved. It
+is a fold over the Trace, as every other projection is. A store may keep the
+fold's answer beside the log so a listing is a read rather than a replay, and
+then it records which fold rule wrote it — a cache that cannot say that is a
+listing that goes quietly wrong the first time the rule moves.
 _Avoid_: Metadata, summary, title (a title is one field of a Header)
 
 **Run**:
@@ -252,7 +255,10 @@ _Avoid_: Trajectory, log, history, audit trail
 **Recorder**:
 The one path an Event takes to the Trace. It stamps the envelope, commits a
 group, and publishes what it committed. A Unit says what happened; it does not
-decide how that is recorded.
+decide how that is recorded. The one envelope field it does not stamp is the
+trace position: the store allocates that inside the act that makes the group
+durable, because a position handed out before the write is a position a second
+writer can take.
 _Avoid_: Logger, writer, emitter
 
 **Degraded**:

@@ -508,18 +508,18 @@ The slots that exist through roadmap stage 2. Later stages add `RepoMap`,
 `Queue`, `Scheduler`, `Identity`, and `MergeQueue` —
 [roadmap.md](../roadmap.md#the-extension-points-by-stage) has the full table.
 
-| Slot              | Interface                                                      | Default plugin               | Alternatives                  |
-| ----------------- | -------------------------------------------------------------- | ---------------------------- | ----------------------------- |
-| `Recorder`        | the only path events take to the trace                         | `eva.trace`                  | —                             |
-| `TraceSink`       | append-only event store                                        | `eva.trace.jsonl`            | `eva.trace.memory`            |
-| `SessionStore`    | opens, folds, and persists a session                           | `eva.session.jsonl`          | —                             |
-| `Sandbox`         | runs a command under a policy                                  | `eva.sandbox.none` (stage 2) | `eva.sandbox.local` (stage 4) |
-| `FileSystem`      | reads and writes files under a root                            | `eva.fs`                     | —                             |
-| `Shell`           | starts a process and streams its output                        | `eva.shell`                  | —                             |
-| `CredentialStore` | stores and resolves credentials by mode                        | `eva.auth`                   | —                             |
-| `Budget`          | accounts tokens, cost, wall time, and Steps                    | `eva.budget`                 | —                             |
-| `Validator`       | judges a Candidate against a JSON Schema and names every Fault | `eva.validator`              | —                             |
-| `DiffApplier`     | previews a structured edit, then applies it                    | `eva.diff`                   | —                             |
+| Slot              | Interface                                                      | Default plugin               | Alternatives                                                |
+| ----------------- | -------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------- |
+| `Recorder`        | the only path events take to the trace                         | `eva.trace`                  | —                                                           |
+| `TraceSink`       | append-only event store                                        | `eva.trace.sqlite`           | `eva.trace.jsonl`, `eva.trace.postgres`, `eva.trace.memory` |
+| `SessionStore`    | opens, folds, and persists a session                           | `eva.session.jsonl`          | —                                                           |
+| `Sandbox`         | runs a command under a policy                                  | `eva.sandbox.none` (stage 2) | `eva.sandbox.local` (stage 4)                               |
+| `FileSystem`      | reads and writes files under a root                            | `eva.fs`                     | —                                                           |
+| `Shell`           | starts a process and streams its output                        | `eva.shell`                  | —                                                           |
+| `CredentialStore` | stores and resolves credentials by mode                        | `eva.auth`                   | —                                                           |
+| `Budget`          | accounts tokens, cost, wall time, and Steps                    | `eva.budget`                 | —                                                           |
+| `Validator`       | judges a Candidate against a JSON Schema and names every Fault | `eva.validator`              | —                                                           |
+| `DiffApplier`     | previews a structured edit, then applies it                    | `eva.diff`                   | —                                                           |
 
 ### The slot interfaces
 
@@ -618,32 +618,56 @@ export interface Validator {
 ### Writing a sink
 
 `TraceSink` is what a consumer calls, and it is not what a sink author writes.
-The trace position carries a rule — coalesce text chunks, number each record
-one past its session's high water, and move that high water only once the write
-is durable — and every sink owed it. Two of them paid it separately, and a
-suite in the composition root held them to it, which is what an invariant looks
-like when nothing holds it by construction.
-
-A sink author now writes a `TraceStore`: where records live, where each session
-got to, and how they come back.
+A sink author writes a `TraceStore`: where records live, where each session
+got to, and how they come back — and the store owns the allocation. Each
+record is numbered one past its session's high water inside the same act that
+makes it durable, because a store that can allocate in a transaction — SQLite,
+Postgres — is safe against a second writer only when it does, and a caller
+that numbered before the write could not be.
 
 ```ts
 // packages/core/src/sink.ts
 export interface TraceStore {
-  readonly highWater: Effect.Effect<ReadonlyMap<SessionID, number>>
-  /** Writes a stamped group. It returns once the group is durable. */
-  readonly write: (group: readonly Event[]) => Effect.Effect<void>
+  /** Numbers a group and stores it. Returns the stamped group once durable. */
+  readonly append: (group: readonly Event[]) => Effect.Effect<readonly Event[]>
+  readonly highWater: (session: SessionID) => Effect.Effect<number>
   readonly replay: (session: SessionID) => Stream.Stream<Event>
   readonly sessions: Effect.Effect<readonly SessionID[]>
+  /** Headers, when the store can answer without a replay. In no order. */
+  readonly headers?: Effect.Effect<readonly SessionHeader[]>
   readonly close: Effect.Effect<void>
 }
 
-/** Holds the rule, once, for every store. */
-export const sequenced: (store: TraceStore) => Effect.Effect<TraceSink>
+/** A store that keeps stamped records and numbers nothing. */
+export interface StampedStore {
+  /* write, highWater, replay, sessions, headers?, close */
+}
+
+/** The one way a store becomes a sink. Either kind goes in. */
+export const sinkOf: (store: AnyStore) => Effect.Effect<TraceSink>
 ```
 
-`eva.trace.jsonl` is a file and an fsync; `eva.trace.memory` is an array. The
-sequencing is neither one's, and a third sink inherits it.
+A sink author answers one question: can the store number inside the act that
+makes a group durable? A store that can writes `TraceStore`; one that cannot
+writes `StampedStore`. Both go to `sinkOf`, which is the only composition any
+caller — a plugin, a test — ever spells.
+
+Behind it sit two internal seams with their own tests. `sequenced` holds what
+every sink owes and no store repeats: text coalescing above the store,
+followers, close-once, and a folded `headers` for a store that keeps none —
+which is why `TraceSink.headers` is never optional even though the store's
+is. `numbered` is the in-memory allocation a non-transactional store gets:
+one process only, which is the trade `eva.trace.jsonl` and `eva.trace.memory`
+accept and the SQL stores must not.
+
+Two SQL stores share more than the seam. `packages/core/src/rows.ts` holds
+the row-shaped store both of them keep — the column set, the codec both ways,
+the head row, and the allocation arithmetic — so `eva.trace.sqlite` and
+`eva.trace.postgres` differ in one thing only: the primitive that keeps a
+second writer out of the allocation. A row means the same thing in either,
+which is what lets a Trace move between them unchanged.
+
+[trace-storage.md](trace-storage.md) owns the store decision itself.
 
 ## 6. Hooks
 
@@ -928,13 +952,15 @@ many more that later stages add.
 
 **Trace and session**
 
-| Plugin id           | Package             | Contributes                            |
-| ------------------- | ------------------- | -------------------------------------- |
-| `eva.trace`         | `eva-trace`         | fills `Recorder` — the one commit path |
-| `eva.trace.jsonl`   | `eva-trace-jsonl`   | fills `TraceSink` (JSONL)              |
-| `eva.trace.memory`  | `eva-trace-memory`  | fills `TraceSink` (in-memory)          |
-| `eva.session.jsonl` | `eva-session-jsonl` | fills `SessionStore`                   |
-| `eva.compaction`    | `eva-compaction`    | hook `session.compact`                 |
+| Plugin id            | Package              | Contributes                                 |
+| -------------------- | -------------------- | ------------------------------------------- |
+| `eva.trace`          | `eva-trace`          | fills `Recorder` — the one commit path      |
+| `eva.trace.sqlite`   | `eva-trace-sqlite`   | fills `TraceSink` (SQLite, the default)     |
+| `eva.trace.jsonl`    | `eva-trace-jsonl`    | fills `TraceSink` (JSONL, file per Session) |
+| `eva.trace.postgres` | `eva-trace-postgres` | fills `TraceSink` (Postgres, hosted)        |
+| `eva.trace.memory`   | `eva-trace-memory`   | fills `TraceSink` (in-memory)               |
+| `eva.session.jsonl`  | `eva-session-jsonl`  | fills `SessionStore`                        |
+| `eva.compaction`     | `eva-compaction`     | hook `session.compact`                      |
 
 **Configuration and identity**
 
@@ -1054,8 +1080,8 @@ plugins:
   - eva.tool.web
 
   # An object carries options. They arrive as ctx.options.
-  - id: eva.trace.jsonl
-    options: { path: "~/.eva/trace.jsonl" }
+  - id: eva.trace.sqlite
+    options: { path: "~/.eva/trace.sqlite" }
 
   # A package that is not built in. Resolved with bun, then loaded.
   - id: acme.reviewer
