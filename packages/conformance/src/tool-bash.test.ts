@@ -6,13 +6,14 @@ import type {
   Sandbox,
   SandboxCapabilities,
   SandboxPolicy,
+  ToolResult,
 } from "@missingstudio/eva-core"
 import { makeNoSandbox, sandboxNone } from "@missingstudio/eva-sandbox-none"
 import type { ContentBlock, Payload } from "@missingstudio/eva-schema"
 import { define } from "@missingstudio/eva-sdk"
 import { makeShell, shell } from "@missingstudio/eva-shell"
 import { withKernel } from "@missingstudio/eva-testkit"
-import { runCommand, type CommandDeps, type CommandOutcome } from "@missingstudio/eva-tool-bash"
+import { runCommand, type CommandDeps } from "@missingstudio/eva-tool-bash"
 import { Deferred, Effect, Fiber, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 
@@ -43,7 +44,7 @@ const streamedOf = (said: readonly Payload[]): readonly Update[] =>
 const textOf = (content: readonly ContentBlock[]): string =>
   content.map((block) => (block.type === "text" ? block.text : "")).join("\n")
 
-const contentOf = (outcome: CommandOutcome): string => textOf(outcome.content)
+const contentOf = (outcome: ToolResult): string => textOf(outcome.content)
 
 const streamed = (said: readonly Payload[]): string =>
   streamedOf(said)
@@ -72,7 +73,7 @@ const watching = () => {
 }
 
 interface Ran {
-  readonly outcome: CommandOutcome
+  readonly outcome: ToolResult
   readonly said: readonly Payload[]
 }
 

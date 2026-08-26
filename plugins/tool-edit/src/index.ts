@@ -18,6 +18,9 @@ export * from "./tool.js"
 export const toolEdit = define({
   id: "eva.tool.edit",
   effect: Effect.fn("eva.tool.edit")(function* (ctx) {
-    yield* editToolOf(ctx)
+    const made = yield* editToolOf(ctx)
+    yield* ctx.tool.transform((draft) => {
+      draft.set(made.row)
+    })
   }),
 })

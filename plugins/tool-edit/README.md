@@ -139,15 +139,19 @@ untouched — an unrecorded write is a change nobody reading the record can see.
 
 ## API
 
-- `toolEdit` — the plugin definition, id `eva.tool.edit`. It fills no slot.
+- `toolEdit` — the plugin definition, id `eva.tool.edit`. It fills no slot, and
+  it registers one row in the tool domain.
 - `makeEditTool(deps): EditTool` — the tool, over the three slot reads. It is
   the whole capability, and it needs no kernel.
 - `editToolOf(ctx)` — the tool and the row that offers it, built from a
   context's slots.
 - `EDIT_TOOL_INPUT` — the JSON Schema the row carries.
 
-The row reaches no registry yet: the tool domain arrives with the execution
-pipeline, and `editToolOf` is the one place that changes when it does.
+The row is what a model calls, and it answers a `ToolResult`: `ok` with what
+was written, or with what a dry run would write, and `failed` with the reason a
+boundary refused. The undo token is not in that result. An undo is reached
+through the `EditTool` `editToolOf` answers, because reversing a write is not
+one of the calls a model makes.
 
 ## Development
 

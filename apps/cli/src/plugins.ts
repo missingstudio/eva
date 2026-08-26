@@ -26,6 +26,7 @@ import type { Plugin, Reads } from "@missingstudio/eva-sdk"
 import { sessionJsonl } from "@missingstudio/eva-session-jsonl"
 import { themes } from "@missingstudio/eva-themes"
 import { toolBash } from "@missingstudio/eva-tool-bash"
+import { toolEdit } from "@missingstudio/eva-tool-edit"
 import { toolGlob } from "@missingstudio/eva-tool-glob"
 import { toolGrep } from "@missingstudio/eva-tool-grep"
 import { toolRead } from "@missingstudio/eva-tool-read"
@@ -160,10 +161,11 @@ export const BUILT_IN: readonly Plugin[] = [
   // the table still reads in the order the capabilities stack.
   sandboxNone,
   diff,
-  // The tools. Each one registers a row and reads the slot it needs at the
-  // moment of use, so nothing here binds them to the fillers above — and
-  // stage 4's containment arrives behind `toolBash` with no change here.
+  // The tools, together. Load order binds none of them to a filler above —
+  // every one reads its slot at the moment of use — so stage 4's containment
+  // arrives behind `toolBash` with no change here.
   toolRead,
+  toolEdit,
   toolGrep,
   toolGlob,
   toolWeb,

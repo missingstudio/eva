@@ -2,8 +2,14 @@ import type { Kernel } from "@missingstudio/eva-boot"
 import { diff } from "@missingstudio/eva-diff"
 import { type Payload, sessionID } from "@missingstudio/eva-schema"
 import type { Plugin } from "@missingstudio/eva-sdk"
-import { committed, virtualFileSystem, withKernel } from "@missingstudio/eva-testkit"
-import { makeEditTool, type EditTool } from "@missingstudio/eva-tool-edit"
+import {
+  calling,
+  committed,
+  virtualFileSystem,
+  withKernel,
+  type Calling,
+} from "@missingstudio/eva-testkit"
+import { makeEditTool, toolEdit, type EditTool } from "@missingstudio/eva-tool-edit"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { Effect } from "effect"
@@ -349,5 +355,86 @@ describe("a slot nothing fills", () => {
     expect(found.before.kind).toBe("degraded")
     expect(found.after.kind).toBe("applied")
     expect(found.held["a.ts"]).toBe("two\n")
+  })
+})
+
+/**
+ * The plugin's row, over the pipeline that runs it. The tool's own contract
+ * is above, against `makeEditTool`; what is here is that the name a model
+ * writes reaches the write, and that the call leaves the three records.
+ */
+describe("a call the model makes by name", () => {
+  const calls = <A>(
+    seed: Readonly<Record<string, string>>,
+    body: (
+      made: Calling,
+      kernel: Kernel,
+      held: () => Readonly<Record<string, string>>,
+    ) => Effect.Effect<A>,
+  ): Promise<A> => {
+    const virtual = virtualFileSystem(seed)
+
+    return withKernel([...GROUND, virtual.plugin, toolEdit], (kernel) =>
+      Effect.gen(function* () {
+        const recorder = yield* kernel.slot.recorder.get
+        yield* recorder.open(SESSION)
+        return yield* body(
+          calling(kernel, {
+            session: SESSION,
+            // Read at the moment of use, the way every commit path reads it.
+            emit: (payload) =>
+              Effect.flatMap(kernel.slot.recorder.get, (one) => one.commit([payload])),
+          }),
+          kernel,
+          virtual.files,
+        )
+      }),
+    )
+  }
+
+  it("lands the write, and every record of the call, in order", async () => {
+    const found = await calls({ "a.ts": "one\n" }, (made, kernel, held) =>
+      Effect.gen(function* () {
+        const result = yield* made.call("edit", { path: "a.ts", hunks: hunks(["one", "two"]) })
+        const recorded = (yield* committed(kernel)).map((event) => event.payload)
+        return { result, recorded, held: held() }
+      }),
+    )
+
+    expect(found.result.disposition).toBe("ok")
+    expect(found.held["a.ts"]).toBe("two\n")
+    // The `edit` payload lands inside the call, because the tool records the
+    // write and the pipeline records the call.
+    expect(found.recorded.map((payload) => payload.kind)).toEqual([
+      "tool_call",
+      "edit",
+      "tool_update",
+      "tool_result",
+    ])
+    const joined = found.recorded.filter((payload) => "id" in payload)
+    expect(new Set(joined.map((payload) => "id" in payload && payload.id)).size).toBe(1)
+  })
+
+  // A refusal is a result the model reads, so a call that cannot land its
+  // hunk still leaves a full set of records.
+  it("reports a hunk that cannot land as a failed result", async () => {
+    const found = await calls({ "a.ts": "one\n" }, (made, _kernel, held) =>
+      Effect.map(
+        made.call("edit", { path: "a.ts", hunks: hunks(["missing", "two"]) }),
+        (result) => ({ result, held: held() }),
+      ),
+    )
+
+    expect(found.result.disposition).toBe("failed")
+    expect(found.held["a.ts"]).toBe("one\n")
+  })
+
+  it("refuses arguments that name no edit rather than writing", async () => {
+    const found = await calls({ "a.ts": "one\n" }, (made, _kernel, held) =>
+      Effect.map(made.call("edit", { path: "a.ts" }), (result) => ({ result, held: held() })),
+    )
+
+    expect(found.result.disposition).toBe("failed")
+    expect(found.held["a.ts"]).toBe("one\n")
   })
 })

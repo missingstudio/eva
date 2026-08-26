@@ -1,4 +1,5 @@
 import type { ToolResult } from "@missingstudio/eva-core"
+import { CALLING_CONTEXT } from "@missingstudio/eva-testkit"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { WebError, webTool, type Reading } from "./web.js"
@@ -11,7 +12,7 @@ const said = (result: ToolResult): string => {
 const running = (get: Reading, input: unknown) => {
   const execute = webTool({ get }).execute
   if (execute === undefined) throw new Error("the web row carries no implementation")
-  return Effect.runPromise(execute(input))
+  return Effect.runPromise(execute(input, CALLING_CONTEXT))
 }
 
 const answering =

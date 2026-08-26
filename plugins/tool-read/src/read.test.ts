@@ -1,5 +1,5 @@
 import type { FileSystem, ToolResult } from "@missingstudio/eva-core"
-import { virtualFileSystem } from "@missingstudio/eva-testkit"
+import { CALLING_CONTEXT, virtualFileSystem } from "@missingstudio/eva-testkit"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { readTool } from "./read.js"
@@ -12,7 +12,7 @@ const said = (result: ToolResult): string => {
 const running = (files: Effect.Effect<FileSystem | undefined>, input: unknown) => {
   const execute = readTool({ files }).execute
   if (execute === undefined) throw new Error("the read row carries no implementation")
-  return Effect.runPromise(execute(input))
+  return Effect.runPromise(execute(input, CALLING_CONTEXT))
 }
 
 const holding = (seed: Readonly<Record<string, string>>) =>

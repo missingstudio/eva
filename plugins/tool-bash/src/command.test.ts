@@ -10,11 +10,12 @@ import {
   type Sandbox,
   type SandboxControl,
   type SandboxPolicy,
+  type ToolResult,
 } from "@missingstudio/eva-core"
 import type { ContentBlock, Payload } from "@missingstudio/eva-schema"
 import { Deferred, Effect, Fiber, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import { runCommand, type CommandDeps, type CommandOutcome } from "./command.js"
+import { runCommand, type CommandDeps } from "./command.js"
 
 /**
  * The tool's own decisions, over a written Sandbox: what argv and what policy
@@ -67,10 +68,10 @@ const updatesOf = (said: readonly Payload[]): readonly Update[] =>
 const textOf = (content: readonly ContentBlock[]): string =>
   content.map((block) => (block.type === "text" ? block.text : "")).join("\n")
 
-const contentOf = (outcome: CommandOutcome): string => textOf(outcome.content)
+const contentOf = (outcome: ToolResult): string => textOf(outcome.content)
 
 interface Ran {
-  readonly outcome: CommandOutcome
+  readonly outcome: ToolResult
   readonly said: readonly Payload[]
 }
 

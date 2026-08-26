@@ -1,10 +1,18 @@
 import { toolDeps, type Kernel } from "@missingstudio/eva-boot"
-import { executeTool, type ToolResult } from "@missingstudio/eva-core"
+import { executeTool, type ToolContext, type ToolResult } from "@missingstudio/eva-core"
 import { sessionID, type Payload, type SessionID } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 
 // The Session a call is made in when a test names none.
 export const CALLING_SESSION: SessionID = sessionID("sess_tool")
+
+/**
+ * The context a test hands a tool it calls straight, without the pipeline. It
+ * keeps nothing: a tool that writes records while it works is held to them
+ * through `calling`, where the order the records land in is the order a reader
+ * of the Trace finds.
+ */
+export const CALLING_CONTEXT: ToolContext = { id: "call_direct", emit: () => Effect.void }
 
 export interface CallOptions {
   readonly session?: SessionID
