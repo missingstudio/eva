@@ -6,9 +6,9 @@ goes through, and where each stage stands today.
 
 It repeats nothing. [reference/toolchain.md](reference/toolchain.md) owns the
 build, the test runner, and CI's jobs. [../AGENTS.md](../AGENTS.md) owns the
-commit format and the branch names. [roadmap.md](roadmap.md) owns what we
-build and in what order, and the exit test each stage can fail.
-[../plans](../plans) holds one ticket per plan.
+commit format and the branch names. [roadmap.md](roadmap.md) owns what each
+stage is and the exit test it can fail, and [plan.md](plan.md) owns the order
+the stages land in. [../plans](../plans) holds one ticket per plan.
 
 ## Set up once
 
@@ -226,10 +226,10 @@ bun run eva run review packages/kernel/src/mapping.ts
 ```
 
 `bun run eva config show` names every key it resolved and the file each one
-came from. The trace file holds the evidence:
+came from. The trace store holds the evidence:
 
 ```bash
-tail -3 ~/.eva/eva-repo.jsonl
+sqlite3 ~/.eva/eva-repo.sqlite "select kind from event order by at desc, seq desc limit 8"
 ```
 
 Each Step writes `started`, `text`, `usage` and `finished`, and a Step with a
@@ -253,12 +253,18 @@ key reads `auth_failed`, and an endpoint that does not answer reads
 This log records state, never design. The roadmap says what a stage builds and
 what its exit test is; this table says where that stage is now and what is
 left. Add a row when a stage starts, and edit the row when its state changes.
+Factory and surface stages both belong here, and this table is the only place
+in `docs/` that says done — every other document describes the work, and none
+of them tracks it.
 
-| Stage                  | State       | What is left |
-| ---------------------- | ----------- | ------------ |
-| 0 — Wire               | done        | nothing      |
-| 1 — Workflow           | done        | nothing      |
-| 2 — Tools and the loop | not started | the plans    |
+| Stage                      | State       | What is left |
+| -------------------------- | ----------- | ------------ |
+| 0 — Wire                   | done        | nothing      |
+| 1 — Workflow               | done        | nothing      |
+| C0 — Console               | done        | nothing      |
+| W0 — Client runtime        | done        | nothing      |
+| W1 — The wire and the page | done        | nothing      |
+| 2 — Tools and the loop     | not started | the plans    |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
@@ -271,6 +277,11 @@ synthetic streams. `measure.ts` and `record.ts` stay in the tree for whoever
 wants the number later.
 [../packages/exit-test](../packages/exit-test/README.md) says how both halves
 run and what a full measurement costs.
+
+**C0, W0, W1 — the first three surface stages.** Done. C0 shipped with stages
+0 and 1. W0 landed six plans and W1 seven; both plan directories are gone, and
+W1's four paths — `packages/session-view`, the read half of `plugins/api`,
+`plugins/web`, and `apps/web` — all ship.
 
 **Stage 2 — Tools and the loop.** Not started. Execution starts the same way
 Stage 1 did: read the roadmap's stage, then write the stage's plan as one

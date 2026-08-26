@@ -83,6 +83,22 @@ to that document. Two copies of a fact become two different facts.
 
 When two documents disagree, one is wrong. Fix it — do not reconcile by copying.
 
+**State has one owner.** Which stages are done, and what is left on the one
+being built, live in the execution log in [development.md](development.md) and
+nowhere else. Every other document is written to stay true while the work
+moves: the roadmap describes a stage, never its progress; the plan holds the
+order, never the position in it; and no document lists what exists on disk,
+because `ls` answers that without going stale. When something changes, exactly
+one file takes the edit:
+
+| What changed                    | The one edit                              |
+| ------------------------------- | ----------------------------------------- |
+| a stage starts, moves, or lands | its row in development.md's execution log |
+| a stage's design or exit test   | its section in roadmap.md                 |
+| the dependency order            | the wave table in plan.md                 |
+| what a word means               | context.md                                |
+| a directory on disk             | no document — nothing lists the tree      |
+
 **Add a directory when a second document needs it, not before.** This tree had
 four empty directories once. Empty structure invites documents that exist to
 fill it.

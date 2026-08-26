@@ -113,7 +113,7 @@ five surfaces were involved — only five attributed identities.
 
 ## Phase I — Model to agent
 
-### Stage 0: Wire — done
+### Stage 0: Wire
 
 The kernel, the plugin SDK, the ACP-shaped event schema, and a model client with
 a good terminal.
@@ -141,14 +141,14 @@ first that no workflow proves.
 event schema that carries an ACP session with no loss, a trace with a swappable
 sink, one provider, and a terminal.
 
-### Stage 1: Workflow — done
+### Stage 1: Workflow
 
-Every plugin below ships and the gate below passes, and the stage exits on
-that gate. The measurement is built and stays unrun by decision: a full run
-costs about $12 to $20 and 100 minutes, and a maintainer chose not to spend
-it. So no first-pass rate is on the record, and the vendored cassettes still
-hold synthetic streams —
-[packages/exit-test](../packages/exit-test/README.md) is the build of it.
+The stage exits on the deterministic gate below, never on the measurement.
+The measurement exists and stays unrun by decision: a full run costs about
+$12 to $20 and 100 minutes, and a maintainer chose not to spend it — so the
+vendored cassettes hold synthetic streams and no first-pass rate is on the
+record. [packages/exit-test](../packages/exit-test/README.md) is the build
+of both halves.
 
 **Builds on stage 0:** the kernel, the schema, and an empty harness domain. A Workflow is that domain's first entry.
 
@@ -1416,7 +1416,7 @@ and no window. If a factory capability lands in the browser first, the
 terminal becomes the degraded surface and "every interface is a plugin over
 one Session API" stops being load-bearing.
 
-**C0 — the Console. Done.** Stage 0's terminal and stage 1's verbs. Two folds
+**C0 — the Console.** Stage 0's terminal and stage 1's verbs. Two folds
 decide everything it does: one says what the screen shows, the other says what
 the loop does next. The Surface performs what they decide and holds neither.
 
@@ -1521,12 +1521,12 @@ same `apps/web` build; posture is config at serve time, never a build variant.
 `eva.web` serves assets it did not build, so disabling it removes a row from a
 domain and nothing else.
 
-**W0 — the client runtime. Done.** Every non-visual client concern in one
-package, with the terminal and the print path as its two consumers — which is
-what proved the cut. Six plans landed.
+**W0 — the client runtime.** Every non-visual client concern in one package,
+with the terminal and the print path as its two consumers — which is what
+proved the cut.
 
-**W1 — the wire and the page that watches.** Builds on W0 and stage 0's Trace.
-Ships four things: `packages/session-view` (the fold, moved out of
+**W1 — the wire and the page that watches.** Builds on W0 and stage 0's
+Trace. Ships four things: `packages/session-view` (the fold, moved out of
 `packages/tui`, which produces flat `Line { text }` a browser cannot use);
 `plugins/api` with the **read half** of the Session API — `list`, `attach`,
 `watch`, `model.get` — over HTTP and SSE, plus its `Transport` filler;
@@ -1976,7 +1976,8 @@ empty regions in one table are the whole argument for going plugin-first.
 - Toolchain and CI: [reference/toolchain.md](reference/toolchain.md)
 - Decision records: `docs/adr/` — gitignored, local to a checkout
 - Product: [product.md](product.md)
-- Plans in flight: [../plans](../plans) — W1 is the next one written
+- Plans in flight: [../plans](../plans), for the stage being built
+- Where each stage stands: the execution log in [development.md](development.md)
 - Field evidence for Phase V — twenty-five harnesses read for what they did
   about interfaces, and in what order — lives in the survey directory beside
   this repository, not in it. This document owns the plan; that one owns the

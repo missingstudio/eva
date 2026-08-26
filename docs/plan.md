@@ -1,6 +1,6 @@
 # The plan
 
-What to build next, in what order, and where the code goes.
+The build order, what is next inside it, and where the code goes.
 
 [roadmap.md](roadmap.md) owns what each stage **is** — what it builds on, the
 plugins it adds, the demo block it has to satisfy, and the exit test it can
@@ -11,34 +11,14 @@ is what and where.
 The split matters because they change at different rates. A stage's exit test
 is settled the day the stage is designed. Its position in the order moves
 every time a lane finishes early or a prerequisite turns out to be softer than
-it looked — and when it moves, exactly one document changes.
+it looked — and when it moves, exactly one document changes. Where the work
+stands — started, done, what is left — is a third question with a third owner:
+the execution log in [development.md](development.md), the only table in
+`docs/` that says done.
 
 Two id spaces run through both. A **number** is a factory stage. A **letter**
 is a surface or service stage: `C` terminal, `W` web, `D` desktop, `M` mobile,
 `S` managed service.
-
-## What to build next
-
-Three things are unblocked right now, and none of them waits on another:
-
-| Next                           | Why it is next                                                                                     | Owner   |
-| ------------------------------ | -------------------------------------------------------------------------------------------------- | ------- |
-| **Stage 2** tools and the loop | the spine. Every stage from 3 to 14 is behind it, and it is the first stage with agency            | Phase I |
-| **W1** the wire and the page   | the highest-leverage work off the spine: it unblocks the desktop, the phone, and the chat channels | Phase V |
-
-**With one lane, do stage 2 first and W1 next.** The factory is the product,
-and a page that watches a Session that cannot use a tool is a page watching
-very little.
-
-**With two lanes, run both now.** They share no prerequisite, no package, and
-no exit test: stage 2 works in `plugins/tool-*` and the loop, W1 works in
-`packages/session-view`, `plugins/api`, and `apps/web`. The one place they
-meet is `eva.api`, and the split is already drawn — W1 builds its read half,
-stage 2 adds the write half against the gate it builds anyway.
-
-What not to do first: nothing later on the spine (stages 3 through 14 are all
-behind stage 2), and no surface stage past W1 (W2 needs stage 2's gate, D0
-needs W2, M0 needs W1).
 
 ## The whole order, in waves
 
@@ -47,10 +27,12 @@ it waits for; each stage's own "builds on" line in
 [roadmap.md](roadmap.md) is the source, and this table is the fold over all
 of them. A wave is what can be in flight together
 — everything in one wave shares no prerequisite with anything else in it.
+The table is structure, never state: no row here changes when a stage lands,
+because where the work stands is the execution log's to say.
 
 | Wave | In flight together     | Each waits for                          |
 | ---- | ---------------------- | --------------------------------------- |
-| done | 0 · 1 · C0 · W0        | —                                       |
+| 0    | 0 · 1 · C0 · W0        | —                                       |
 | 1    | **2** · **W1**         | 1 · W0                                  |
 | 2    | M0 · chat surfaces     | W1                                      |
 | 3    | 3 · 4 · C1 · W2 · M1   | 2 · 2 · 2 · W1+2 · M0                   |
@@ -71,7 +53,7 @@ Read three things out of it.
 blocking it.
 
 **W1 is the cheapest stage with the widest consequence.** It is in wave 1
-with no prerequisite past work already done, and three later lanes — the
+with no prerequisite past wave 0, and three later lanes — the
 phone, the desktop, the chat channels — exist only behind it. Nothing else off
 the spine unblocks three tracks.
 
@@ -83,6 +65,24 @@ One rule keeps the table honest: **`W3` and `C2` are one piece of work, and
 so are `W4` and `C3`.** They are two renderers over one fold. Building them
 months apart means the fold gets written for whichever came first, and then
 the second renderer either bends to it or grows a fold of its own.
+
+## What to build next
+
+A rule rather than a list, so it cannot go stale. **A stage is unblocked when
+everything it waits for has a done row in the execution log in
+[development.md](development.md).** The wave table above holds what each
+stage waits for; the log holds what is done; the join is the answer — and
+nothing in this document takes an edit when a stage lands, because the log
+takes it alone.
+
+Two standing rules order the unblocked set:
+
+- **The spine outranks the lanes.** An unblocked spine stage blocks more than
+  anything beside it, so one pair of hands builds the earliest unblocked
+  spine stage first.
+- **A lane earns a second pair of hands when it unblocks other lanes.** The
+  wave table shows the fan-out: a stage many later rows wait on is worth
+  starting early, and a stage nothing waits on can wait itself.
 
 ## Where the code goes
 
@@ -117,18 +117,10 @@ graph. The short version: a plugin may import `schema`, `core`, `sdk`,
 `client-runtime`, and `tui-core`, and never `kernel`. A package never imports
 a plugin. An app imports both and is imported by nothing.
 
-**What exists today**, so a stage can tell what it is adding from what it is
-extending:
-
-```
-packages/  acp  boot  brand  client-runtime  conformance  core
-           exit-test  kernel  schema  sdk  testkit  tui  tui-core
-plugins/   auth  budget  catalog-models  catalog-prices  commands  config
-           keymap  print  prompt  provider-anthropic  provider-compatible
-           provider-openai  provider-retry  session-jsonl  themes  trace
-           trace-jsonl  trace-memory  tui  usage  validator  workflow
-apps/      cli
-```
+**No listing of the tree lives here.** `ls packages plugins apps` answers
+what exists in one command, and a copy of that answer goes stale the day a
+directory lands. What a stage adds against what it extends is the tables
+below.
 
 **What the plan adds outside the id rule** — the packages and apps no plugin
 id names, each with the stage that creates it. "What each stage creates" below
@@ -170,10 +162,11 @@ this one says where it **goes**. A stage that adds no plugin is absent.
 | 13 | `plugins/sense/` · `plugins/synthesize/` · `plugins/plan/` |
 | 14 | `plugins/treasury/` · `plugins/mandate/` · `plugins/halt/` · `plugins/support/` |
 
-Stage 0's packages are the ones that exist today, listed above. Stage 1's five
-plugins exist too — `plugins/prompt/`, `plugins/validator/`,
-`plugins/workflow/`, `plugins/provider-openai/`, `plugins/provider-compatible/`
-— so the first row with nothing on disk yet is stage 2's.
+A path may appear under two stages when one creates it and the other extends
+it: W1 creates `plugins/api/` and stage 2 adds its write half, M0 creates
+`plugins/enroll/` and 9b widens its tiers. The surface table below marks a
+creator in bold; a factory row never does, so where both tables name one
+path, the bold row is the creator.
 
 Two rows deserve a note. **6.5** is the only stage whose directories are not
 derived from a plugin id: `plugins/registry/`, `plugins/trust/`, and
@@ -216,8 +209,8 @@ directories, which is the whole argument for the surface tracks being cheap.
 | S4    | `plugins/billing/`                                                                              |
 | S5    | `apps/cli/` · `plugins/halt/`                                                                   |
 
-**Bold** is a path that does not exist yet and is created by that stage.
-Everything else is a path an earlier stage created and this one adds to.
+**Bold** is the path that stage creates. Everything else is a path another
+stage creates and this one adds to.
 
 Read the shape of that table rather than its rows: **four surfaces and a
 service business, and the only genuinely new directories are one package, one
@@ -229,20 +222,16 @@ one Session API" costs when it is true.
 
 The order above says what is next. `plans/` says how, for the stage that is
 actually being built: a README with the stage's shape, then numbered tickets
-with a priority, an effort, and a dependency.
+with a priority, an effort, and a dependency. A stage gets its directory when
+it is next, not when it is designed — decomposing a stage four waves out is
+planning against a tree four stages of change away.
 
-| Directory                  | Stage | Status                          |
-| -------------------------- | ----- | ------------------------------- |
-| [../plans/w1](../plans/w1) | W1    | written, six plans, not started |
-
-A stage gets a `plans/` directory when it is next, not when it is designed —
-decomposing stage 9c today would be planning against a tree four stages of
-change away. The two stages in wave 1 are therefore the two that should have
-one: W1 has it, and stage 2 does not yet.
-
-Stage 1 and W0 each had one, and both are gone. `plans/` is gitignored, so a
-deleted plan has no history to come back from. What those stages concluded
-survives only because it was written where it counts — a stage's exit test in
-[roadmap.md](roadmap.md), a word in [context.md](context.md), a path here.
-That is the rule the directory is for: **a plan is working state, and anything
-that must outlive the work goes somewhere committed before the work ends.**
+`plans/` is gitignored, so which directories a checkout holds is working
+state this document never lists — the execution log in
+[development.md](development.md) says which stage is being built and what is
+left of it. A deleted plan has no history to come back from, and what a
+finished stage's plans concluded survives only where it was written to count:
+an exit test in [roadmap.md](roadmap.md), a word in [context.md](context.md),
+a path here. That is the rule the directory is for: **a plan is working
+state, and anything that must outlive the work goes somewhere committed
+before the work ends.**
