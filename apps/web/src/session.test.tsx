@@ -109,6 +109,29 @@ describe("which Session this is", () => {
     expect(drawn).toContain("read the trace back over HTTP")
     expect(drawn).toContain("2026-08-26T00:00:00.000Z")
   })
+
+  /**
+   * The title is a Run's intent until an `info` gives a better one, and an
+   * intent is a whole prompt. `headerFold` is right to hold all of it and a
+   * heading is the wrong place to draw all of it, so the heading is one line
+   * and the record's own text is on the element behind it.
+   */
+  it("draws a whole prompt as one line, and keeps the whole of it on the page", () => {
+    const prompt = "rebuild the Session page\n\non Tailwind 4, with AI Elements"
+    const drawn = renderToStaticMarkup(
+      <Session
+        session={SESSION}
+        header={{ ...HEADER, title: prompt }}
+        reading={folding}
+        pipe={READY}
+      />,
+    )
+
+    expect(drawn).toContain("<h1")
+    expect(drawn).toContain("rebuild the Session page…")
+    expect(drawn).not.toContain(">rebuild the Session page\n")
+    expect(drawn).toContain('title="rebuild the Session page')
+  })
 })
 
 describe("what was said in it", () => {

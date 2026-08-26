@@ -15,4 +15,5 @@
 export * from "./blocks.js"
 export * from "./paths.js"
 export * from "./session.js"
+export * from "./title.js"
 export { follow } from "./transcript.js"

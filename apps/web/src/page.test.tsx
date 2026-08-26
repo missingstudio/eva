@@ -32,6 +32,19 @@ describe("the listing", () => {
     expect(drawn).toContain("no title yet")
   })
 
+  // A Run's intent is a whole prompt, so a listing that drew every title as
+  // the record holds it would be a listing nobody can scan.
+  it("draws a whole prompt as one row, and keeps the whole of it on the row", () => {
+    const drawn = renderToStaticMarkup(
+      <Listing
+        sessions={[{ id: sessionID("ses_long"), title: "make it read\nlike a transcript" }]}
+      />,
+    )
+
+    expect(drawn).toContain("make it read…")
+    expect(drawn).toContain('title="make it read')
+  })
+
   // An empty listing and a listing that has not arrived are two different
   // things, and a page that drew them the same way would be lying about one.
   it("says Eva holds none, rather than looking like it is still reading", () => {
