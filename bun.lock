@@ -45,6 +45,7 @@
         "@missingstudio/eva-session-jsonl": "workspace:*",
         "@missingstudio/eva-shell": "workspace:*",
         "@missingstudio/eva-themes": "workspace:*",
+        "@missingstudio/eva-tool-bash": "workspace:*",
         "@missingstudio/eva-trace": "workspace:*",
         "@missingstudio/eva-trace-jsonl": "workspace:*",
         "@missingstudio/eva-trace-memory": "workspace:*",
@@ -210,6 +211,7 @@
         "@missingstudio/eva-shell": "workspace:*",
         "@missingstudio/eva-testkit": "workspace:*",
         "@missingstudio/eva-themes": "workspace:*",
+        "@missingstudio/eva-tool-bash": "workspace:*",
         "@missingstudio/eva-tool-edit": "workspace:*",
         "@missingstudio/eva-trace": "workspace:*",
         "@missingstudio/eva-trace-jsonl": "workspace:*",
@@ -691,6 +693,23 @@
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/tool-bash": {
+      "name": "@missingstudio/eva-tool-bash",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-sandbox-none": "workspace:*",
+        "@missingstudio/eva-shell": "workspace:*",
         "@missingstudio/eva-testkit": "workspace:*",
         "@types/node": "catalog:",
         "typescript": "catalog:",
@@ -1194,6 +1213,8 @@
     "@missingstudio/eva-testkit": ["@missingstudio/eva-testkit@workspace:packages/testkit"],
 
     "@missingstudio/eva-themes": ["@missingstudio/eva-themes@workspace:plugins/themes"],
+
+    "@missingstudio/eva-tool-bash": ["@missingstudio/eva-tool-bash@workspace:plugins/tool-bash"],
 
     "@missingstudio/eva-tool-edit": ["@missingstudio/eva-tool-edit@workspace:plugins/tool-edit"],
 
