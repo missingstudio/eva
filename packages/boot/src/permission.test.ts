@@ -109,9 +109,9 @@ describe("a permission request with nobody to answer it", () => {
   })
 
   /**
-   * A surface says what it can do on its own row, and `eva.web` says
-   * `interactive: false`. So the page never gets a permission prompt and the
-   * gate rejects rather than hanging on an answer that cannot arrive.
+   * A surface says what it can do on its own row, and a row that says it takes
+   * no input is never asked: the gate rejects rather than hanging on an answer
+   * that cannot arrive. `eva.print` is one such surface.
    */
   it("is a denial when the surface takes no input", async () => {
     const { outcome } = await asking({
