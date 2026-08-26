@@ -28,15 +28,20 @@ here. [`packages/session-view`](../../packages/session-view/README.md) is the
 one fold that decides what a Run did, so the terminal and the page cannot
 disagree about it, and every Block it gives back is drawn:
 
-| Block       | What the page draws                                   |
-| ----------- | ----------------------------------------------------- |
-| `words`     | the text, as it was said                              |
-| `reasoning` | the same, set apart                                   |
-| `tool`      | a card: the name, the tool kind, the Tool Status      |
-| `result`    | the same card, with the Disposition beside the Status |
-| `diff`      | the path, and how many hunks changed in it            |
-| `image`     | the image, from the bytes the record holds            |
-| `unknown`   | what it was, and that this page could not draw it     |
+| Block       | What the page draws                                   | Component                             |
+| ----------- | ----------------------------------------------------- | ------------------------------------- |
+| `words`     | the text, as markdown                                 | `Message` · `MessageResponse`         |
+| `reasoning` | the same, set apart, behind a disclosure              | `Reasoning`                           |
+| `tool`      | a card: the name, the tool kind, the Tool Status      | `Tool` · `ToolHeader` · `ToolContent` |
+| `result`    | the same card, with the Disposition beside the Status | the same                              |
+| `diff`      | the path, and how many hunks changed in it            | `CommitFile`                          |
+| `image`     | the image, from the bytes the record holds            | `Image`                               |
+| `unknown`   | what it was, and that this page could not draw it     | none fits                             |
+| the cost    | the spend, and the tokens a Provider reported         | `Context`                             |
+
+A Run says markdown — tables, links, fenced code — so the page renders it. A
+page that drew the source would be showing a reader the pipe rather than the
+answer.
 
 A Block the page cannot draw is drawn as one it could not draw. A Surface may
 render less than another; it may never know more — so nothing is dropped, and
@@ -67,6 +72,71 @@ the record already, and the fold that replaces the tail holds it as a Block.
 Converging after a reload and after a drop is the next plan's. A refused Cursor
 ends the follow here and leaves the fold on the screen, because this watch only
 ever resumes from a fold it has just taken.
+
+## The components, and where they came from
+
+`src/components/ai-elements` and `src/components/ui` are vendored, from
+[AI Elements](https://www.npmjs.com/package/ai-elements) and the shadcn/ui
+components it builds on. They are code in this repository, not a dependency,
+which is the point of that registry: a component can be retyped against the
+model the codebase already has.
+
+Each one has been. They ship typed against the Vercel AI SDK's `UIMessage` and
+`ToolUIPart`, and **Eva must not gain a second data model** — nothing in
+`apps/web` imports `ai` or `@ai-sdk/*`. So each file names Eva's own types, and
+the parts of it that draw something Eva's record does not hold are deleted
+rather than left to draw from nothing. The header of each file says what
+changed, so a later `add` can be read against it.
+
+Two rules hold for these files, and only for these files.
+
+- **They keep their upstream form.** `//` for a line and `/** */` for a block
+  is the rule everywhere else in this repository; here the shape upstream wrote
+  is what makes a re-sync readable, so it stays.
+- **Every disclosure takes its id from the Block's key.** Radix generates one
+  from where a component sits in the tree, so the same Block would draw one way
+  alone and another way inside a Turn — and
+  [packages/conformance](../../packages/conformance) holds exactly those two
+  drawings against each other.
+
+To take a new one, or a newer version of one of these:
+
+```bash
+cd apps/web && bunx --bun ai-elements@latest add <name>
+```
+
+The CLI assumes Next.js. Expect to move what it writes out of a literal `@/`
+directory, and to rewrite its `@/…` imports to relative ones: a package that
+imports this page compiles these files under its own tsconfig, where `@/` means
+nothing.
+
+## The brand, mirrored
+
+`packages/brand` is Eva's design system — a measured palette on `--eva-*`
+custom properties, a motion table, and one focus treatment. It lives on the
+`feat/website` branch and has not landed, so `src/tokens.css` holds the part of
+it this page needs, under brand's own names and at brand's own values.
+
+Nothing in it is invented. When brand lands, the whole file is deleted and the
+line that imports it in `src/styles.css` becomes
+
+```css
+@import "@missingstudio/eva-brand/tokens.css";
+```
+
+and nothing downstream changes.
+
+One distinction in it is worth naming, because it is easy to flatten. Brand
+splits the hairline between two static surfaces from the boundary that says
+"this is a control": WCAG SC 1.4.11 asks 3:1 of the second and nothing of the
+first, and the two are measured separately. shadcn/ui spends one `--border` on
+both. `src/shadcn.css` keeps them apart — `--color-border` is the hairline and
+`--color-input` is the control boundary — so a card draws `border-rule` and a
+disclosure draws `border-control`.
+
+The two faces are self-hosted by brand, from `.woff2` files this branch does
+not carry. They are named here with their fallbacks, so the page sets type in
+the right stack the day the `@font-face` rules arrive with it.
 
 ## Prerequisites
 
@@ -113,12 +183,18 @@ cd apps/web && bun run dev
 | `src/page.tsx`      | the listing: the build, and the Sessions Eva holds           |
 | `src/session.tsx`   | one Session: which it is, what was said, what it cost        |
 | `src/blocks.tsx`    | one Block, in page primitives                                |
+| `src/title.ts`      | what to call a Session, in one line                          |
 | `src/eva.ts`        | the one Client, over the same-origin wire                    |
 | `src/sessions.ts`   | what the page reads: the Sessions, or not yet                |
 | `src/transcript.ts` | what it reads of one Session: the Header, the fold, the tail |
 | `src/build.ts`      | the version and the stamp, injected by the build             |
 | `src/index.ts`      | the drawing half, for `packages/conformance`                 |
-| `src/styles.css`    | plain local styling until `packages/brand` lands             |
+| `src/components/`   | the vendored components — see below                          |
+| `src/lib/utils.ts`  | `cn`, which every vendored component calls                   |
+| `src/styles.css`    | the entry: Tailwind, the tokens, the bridge                  |
+| `src/tokens.css`    | Eva's design system, mirrored until `packages/brand` lands   |
+| `src/shadcn.css`    | shadcn/ui's semantic names, pointed at Eva's                 |
+| `components.json`   | where the shadcn CLI writes, for the next `add`              |
 
 Routes are code-based, so the build needs no route generator and no plugin
 beside the toolchain the repository already has. The views take what they draw

@@ -50,6 +50,28 @@ describe("one Block, in page primitives", () => {
 
   // A call that is open says where it is in its life and nothing about how it
   // ended, because it has not.
+  /**
+   * A Run says markdown. It writes tables and links and fenced code, and a
+   * page that drew the source would be showing a reader the pipe rather than
+   * the answer.
+   */
+  it("renders what was said as markdown, rather than as its source", () => {
+    const markup = renderToStaticMarkup(
+      <BlockView
+        block={{
+          kind: "words",
+          key: "0.0",
+          text: "| file | why |\n| --- | --- |\n| one.ts | it changed |\n\nand **so** it did",
+        }}
+      />,
+    )
+
+    expect(markup).toContain("<table")
+    expect(markup).toContain("<td")
+    expect(markup).not.toContain("| --- |")
+    expect(markup).not.toContain("**so**")
+  })
+
   it("draws an open call with its Tool Status", () => {
     const markup = drawn(at("tool"))
     expect(markup).toContain("read")

@@ -1,0 +1,112 @@
+/**
+ * Vendored from `ai-elements@latest add tool`, then retyped against Eva.
+ *
+ * Changed: the header reads Eva's Tool Status and Disposition rather than the
+ * AI SDK's ToolUIPart state, so the two facts a call carries are two badges
+ * and neither stands in for the other. `ToolInput` and `ToolOutput` are
+ * removed: a Block holds no arguments and no output at W1, and a section
+ * drawn from nothing would read as a call that passed none. The panel's id is
+ * required, on the trigger and on the content, because it has to come from the
+ * Block's own key — Radix generates one from where the component sits in the
+ * tree, and the same Block would then draw one way alone and another way in a
+ * Turn. The palette is Eva's brand tokens.
+ */
+import type { Disposition, ToolStatus } from "@missingstudio/eva-schema"
+import {
+  CheckCircleIcon,
+  ChevronDownIcon,
+  CircleIcon,
+  ClockIcon,
+  WrenchIcon,
+  XCircleIcon,
+} from "lucide-react"
+import type { ComponentProps, ReactNode } from "react"
+
+import { cn } from "../../lib/utils.js"
+import { Badge } from "../ui/badge.js"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.js"
+
+export type ToolProps = ComponentProps<typeof Collapsible>
+
+export const Tool = ({ className, ...props }: ToolProps) => (
+  <Collapsible
+    className={cn("group not-prose w-full rounded-md border border-control", className)}
+    {...props}
+  />
+)
+
+const statusIcons: Record<ToolStatus, ReactNode> = {
+  pending: <CircleIcon className="size-4" />,
+  in_progress: <ClockIcon className="size-4 animate-pulse" />,
+  completed: <CheckCircleIcon className="size-4" />,
+  failed: <XCircleIcon className="size-4" />,
+}
+
+// `ok` is the one Disposition that says nothing went wrong. The other six are
+// each a thing a reader may not skim past, so they are marked.
+const dispositionIcons: Record<Disposition, ReactNode> = {
+  ok: <CheckCircleIcon className="size-4" />,
+  denied: <XCircleIcon className="size-4" />,
+  failed: <XCircleIcon className="size-4" />,
+  skipped: <CircleIcon className="size-4" />,
+  cancelled: <CircleIcon className="size-4" />,
+  unknown_tool: <XCircleIcon className="size-4" />,
+  budget_denied: <XCircleIcon className="size-4" />,
+}
+
+export const getStatusBadge = (status: ToolStatus) => (
+  <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
+    {statusIcons[status]}
+    {status}
+  </Badge>
+)
+
+export const getDispositionBadge = (disposition: Disposition) => (
+  <Badge
+    className="gap-1.5 rounded-full text-xs"
+    variant={disposition === "ok" ? "outline" : "warning"}
+  >
+    {dispositionIcons[disposition]}
+    {disposition}
+  </Badge>
+)
+
+export type ToolHeaderProps = ComponentProps<typeof CollapsibleTrigger> & {
+  "aria-controls": string
+  name: string
+  tool: string
+  status: ToolStatus
+  disposition?: Disposition
+}
+
+export const ToolHeader = ({
+  className,
+  name,
+  tool,
+  status,
+  disposition,
+  ...props
+}: ToolHeaderProps) => (
+  <CollapsibleTrigger
+    className={cn("flex w-full items-center justify-between gap-4 p-3", className)}
+    {...props}
+  >
+    <div className="flex flex-wrap items-center gap-2">
+      <WrenchIcon className="size-4 text-muted" />
+      <span className="font-medium text-sm">{name}</span>
+      <Badge variant="outline">{tool}</Badge>
+      {getStatusBadge(status)}
+      {disposition === undefined ? null : getDispositionBadge(disposition)}
+    </div>
+    <ChevronDownIcon className="size-4 shrink-0 text-muted transition-transform group-data-[state=open]:rotate-180" />
+  </CollapsibleTrigger>
+)
+
+export type ToolContentProps = ComponentProps<typeof CollapsibleContent> & { id: string }
+
+export const ToolContent = ({ className, ...props }: ToolContentProps) => (
+  <CollapsibleContent
+    className={cn("space-y-2 border-rule border-t px-3 py-2 text-muted text-xs", className)}
+    {...props}
+  />
+)

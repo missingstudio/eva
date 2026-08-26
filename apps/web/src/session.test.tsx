@@ -265,24 +265,48 @@ describe("the cost line", () => {
 /**
  * The page takes no input of any kind — no prompt box, no permission answer,
  * no model switch. Those are W2's and they wait for the permission gate, so
- * the count of controls on the page is zero and it is a check that fails
- * rather than a habit.
+ * the count of ways to put something into Eva from this page is zero, and it
+ * is a check that fails rather than a habit.
+ *
+ * What is counted is the rule and not a proxy for it. A field is input: an
+ * `<input>`, a `<textarea>`, a `<form>` and a `<select>` are each a way to
+ * type or pick something and send it, and none of them belongs here.
+ *
+ * A `<button>` is not. A transcript folds its reasoning away and opens a tool
+ * call, and both of those are buttons — a disclosure is a view control, it
+ * changes what a reader is looking at, and it says nothing to Eva. Banning the
+ * element banned the wrong thing: it would have stopped a triangle and let a
+ * prompt box through under an `<a>`.
+ *
+ * So the write half of the Session API is what is counted instead. `create`,
+ * `submit`, `cancel`, `answer` and `model.set` are every call that changes
+ * anything, and a page that named one would be a page with something to
+ * press.
  *
  * Each surface is drawn in the state a reader sees it in. `renderToStaticMarkup`
  * runs no effect, so `Page` draws only the words it says before the listing has
  * answered — the drawn listing is `Listing`, and it is handed the rows.
  */
 describe("what the page offers", () => {
-  it.each(["<input", "<textarea", "<button", "<form", "<select"])(
+  const drawings = () => [
+    renderToStaticMarkup(
+      <Session session={SESSION} header={HEADER} reading={reading()} pipe={READY} />,
+    ),
+    renderToStaticMarkup(<Page />),
+    renderToStaticMarkup(<Listing sessions={[HEADER]} />),
+  ]
+
+  it.each(["<input", "<textarea", "<form", "<select"])(
     "no %s, on the Session or the listing",
-    (control) => {
-      expect(
-        renderToStaticMarkup(
-          <Session session={SESSION} header={HEADER} reading={reading()} pipe={READY} />,
-        ),
-      ).not.toContain(control)
-      expect(renderToStaticMarkup(<Page />)).not.toContain(control)
-      expect(renderToStaticMarkup(<Listing sessions={[HEADER]} />)).not.toContain(control)
+    (field) => {
+      for (const drawn of drawings()) expect(drawn).not.toContain(field)
+    },
+  )
+
+  it.each(["create", "submit", "cancel", "answer", "model.set"])(
+    "and no way to %s: nothing on the page writes to a Session",
+    (call) => {
+      for (const drawn of drawings()) expect(drawn).not.toContain(call)
     },
   )
 
