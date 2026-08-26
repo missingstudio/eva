@@ -20,6 +20,7 @@
       },
       "dependencies": {
         "@missingstudio/eva-api": "workspace:*",
+        "@missingstudio/eva-approval": "workspace:*",
         "@missingstudio/eva-auth": "workspace:*",
         "@missingstudio/eva-boot": "workspace:*",
         "@missingstudio/eva-budget": "workspace:*",
@@ -425,6 +426,22 @@
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/approval": {
+      "name": "@missingstudio/eva-approval",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+        "yaml": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
         "@types/node": "catalog:",
         "typescript": "catalog:",
       },
@@ -1251,6 +1268,8 @@
     "@missingstudio/eva-acp": ["@missingstudio/eva-acp@workspace:packages/acp"],
 
     "@missingstudio/eva-api": ["@missingstudio/eva-api@workspace:plugins/api"],
+
+    "@missingstudio/eva-approval": ["@missingstudio/eva-approval@workspace:plugins/approval"],
 
     "@missingstudio/eva-auth": ["@missingstudio/eva-auth@workspace:plugins/auth"],
 

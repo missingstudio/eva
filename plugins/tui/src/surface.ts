@@ -1,5 +1,5 @@
 import type { Client } from "@missingstudio/eva-client-runtime"
-import type { FrontendAnswer, Transcript } from "@missingstudio/eva-core"
+import { optionFor, type FrontendAnswer, type Transcript } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import {
   dispatch,
@@ -426,12 +426,24 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     return outcome.kind !== "prompt"
   })
 
+  // What is open, so the answer to a permission names an option rather than
+  // reaching the gate as a line of prose it cannot read.
+  let open: FrontendRequest | undefined
+
   const answer = Effect.fn("eva.tui.answer")(function* (line: string) {
     on({ kind: "answered" })
-    yield* Queue.offer(asked, { kind: "text", text: line } satisfies FrontendAnswer)
+    const option = open?.kind === "permission" ? optionFor(line) : undefined
+    open = undefined
+    yield* Queue.offer(
+      asked,
+      (option === undefined
+        ? { kind: "text", text: line }
+        : { kind: "permission", optionId: option }) satisfies FrontendAnswer,
+    )
   })
 
   const ask = Effect.fn("eva.tui.ask")(function* (request: FrontendRequest) {
+    open = request
     on({ kind: "asked", question: request.question })
     return yield* Queue.take(asked)
   })
