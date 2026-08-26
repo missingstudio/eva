@@ -232,7 +232,22 @@ export const makeSessionAPI = (
     const request = (id: RequestID): Effect.Effect<FrontendAnswer> => {
       const waiting = Deferred.makeUnsafe<FrontendAnswer>()
       pending.set(id, waiting)
-      return Deferred.await(waiting)
+      /**
+       * The request is open exactly while somebody is waiting on it. A tool
+       * call's `ask` races this door against the surface Eva can call, so the
+       * door that loses is interrupted — and a request left open by the loser
+       * would take a later answer and give it to nobody.
+       *
+       * This is what makes the first answer the only answer: once one has
+       * landed, from either door, the request is no longer open and the second
+       * one is refused as already answered.
+       */
+      return Effect.ensuring(
+        Deferred.await(waiting),
+        Effect.sync(() => {
+          if (pending.get(id) === waiting) pending.delete(id)
+        }),
+      )
     }
 
     // The gate is built here because the request half is minted here. A build
