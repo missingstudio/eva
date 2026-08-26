@@ -9,6 +9,8 @@ import { LOOP_TEMPLATE, LOOP_TEMPLATE_ID } from "./prompt.js"
 
 const SESSION: SessionID = sessionID("sess_loop")
 
+const DONE = { result: "done", summary: "answered" } as const
+
 const CATALOG: CatalogState = {
   providers: new Map(),
   models: new Map(),
@@ -298,17 +300,38 @@ describe("what a Run said about itself", () => {
     expect(watched.reports).toEqual([])
   })
 
-  // Silence is not `end_turn`. A Run that reported no reason ends the Prompt
-  // with what the loop's own shape says: the Step proposed calls, so it goes
-  // on; a Step that proposed none is the answer.
+  /**
+   * Silence is not `end_turn`. A Run that reported no reason ends the Prompt
+   * by the loop's own shape instead: the Step proposed calls, so it goes on,
+   * and a Step that proposes none is the answer.
+   *
+   * The host is built here rather than scripted, because a written script
+   * cannot say "no reason" — `Partial<RunResult>` reads an absent field and an
+   * explicit `undefined` as the same thing, and the default is `end_turn`.
+   */
   it("takes another Step when a Run reported no reason but proposed calls", async () => {
-    const { reason, watched } = await prompting([
-      { text: "working", calls: [called("read", "ok")], stopReason: undefined },
-      answering("done"),
-    ])
+    const answers: readonly RunResult[] = [
+      { claim: DONE, degraded: [], attempts: 1, text: "working", calls: [called("read", "ok")] },
+      { claim: DONE, degraded: [], attempts: 1, text: "done", calls: [] },
+    ]
+    let served = 0
+    const host: HarnessHost = {
+      run: () =>
+        Effect.sync(() => {
+          const one = answers[served]
+          served += 1
+          if (one === undefined) throw new Error(`the script holds ${answers.length} Runs`)
+          return one
+        }),
+      report: () => Effect.void,
+    }
+
+    const reason = await Effect.runPromise(
+      loop(host).prompt(SESSION, { kind: "prompt", text: "go" }),
+    )
 
     expect(reason).toBe("end_turn")
-    expect(watched.calls).toEqual(["run", "run"])
+    expect(served).toBe(2)
   })
 })
 
