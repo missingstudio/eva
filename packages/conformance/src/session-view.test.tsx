@@ -55,16 +55,38 @@ const event = (payload: Payload): Event => {
 const said = (block: number, content: ContentBlock): Payload => ({ kind: "text", block, content })
 
 /**
- * One Run that did the things a Run does: it said something, it thought on
- * the way to it, it called a tool and the call was refused, it left another
- * call open, it changed a file, it produced an image, and it produced two
- * things neither renderer names: a content type the schema does not define,
- * and a payload kind it does not define either.
+ * The source a person pastes into a prompt. It is code and not prose: the
+ * comment lines open with `*`, which is a list marker, and the template
+ * literal is in backticks, which are a code chip. Read as markdown it comes
+ * out as a bulleted paragraph with the backticks eaten and the line breaks
+ * closed up, so it is here to hold a renderer to the words as written.
+ */
+const PASTED = [
+  "/**",
+  " * every leaf path in a mapping, dotted",
+  " */",
+  "const path = prefix === null ? key : `${prefix}.${key}`",
+].join("\n")
+
+// A Run's answer, which is where a fenced block usually is.
+const ANSWERED = ["```json", "[", '  { "file": "merge.ts", "severity": "low" }', "]", "```"].join(
+  "\n",
+)
+
+/**
+ * One Run that did the things a Run does: it was asked in words and then in
+ * pasted source, it thought on the way to an answer, it answered in prose and
+ * in a fenced block, it called a tool and the call was refused, it left
+ * another call open, it changed a file, it produced an image, and it produced
+ * two things neither renderer names: a content type the schema does not
+ * define, and a payload kind it does not define either.
  */
 const TRACE: readonly Event[] = [
   event({ kind: "started", intent: "read the trace back" }),
+  event({ kind: "message", target: "next-run", content: { type: "text", text: PASTED } }),
   event({ kind: "thought", block: 0, content: { type: "text", text: "the sink holds it" } }),
   event(said(1, { type: "text", text: "here is what it holds" })),
+  event(said(4, { type: "text", text: ANSWERED })),
   event({
     kind: "tool_call",
     id: "t1",
@@ -92,6 +114,20 @@ const TRACE: readonly Event[] = [
 ]
 
 /**
+ * The words a Block holds, line by line. A line is the unit because that is
+ * what a reader loses one of: a renderer that closes up the line breaks, or
+ * eats a line's leading characters, has rewritten what was said even though
+ * every word is still somewhere on the page.
+ *
+ * A fence marker is punctuation and not words. The page draws a code block
+ * where the marker was and the terminal draws the marker itself, and both are
+ * right; what neither may drop is the code between them.
+ */
+const FENCE = /^\s*```/
+const linesOf = (text: string): readonly string[] =>
+  text.split("\n").filter((line) => line.trim() !== "" && !FENCE.test(line))
+
+/**
  * What the record says about one Block, as the strings a renderer that draws
  * it would show. Neither renderer may name one that is not here, and the page
  * may not leave one out.
@@ -100,7 +136,7 @@ const factsOf = (block: Block): readonly string[] => {
   switch (block.kind) {
     case "words":
     case "reasoning":
-      return [block.text]
+      return linesOf(block.text)
     case "tool":
       return [block.name, block.status]
     case "result":
@@ -114,8 +150,22 @@ const factsOf = (block: Block): readonly string[] => {
   }
 }
 
+/**
+ * A drawing as a reader reads it. The terminal's rows are already that; the
+ * page's are markup, and a quotation mark a reader sees is `&quot;` in it. So
+ * the entities are read back before the two are compared, and neither
+ * renderer is credited with words it only escaped.
+ */
+const readable = (drawing: string): string =>
+  drawing
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#x27;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&")
+
 const namedIn = (drawing: string, block: Block): readonly string[] =>
-  factsOf(block).filter((fact) => drawing.includes(fact))
+  factsOf(block).filter((fact) => readable(drawing).includes(fact))
 
 const record = foldTranscript(SESSION, TRACE)
 const turns = blocksOf(record)
@@ -158,7 +208,9 @@ describe("one fold, two renderers", () => {
   it("folds this Trace to every member of the union, so both mappings run whole", () => {
     expect(blocks.map((block) => block.kind)).toEqual([
       "words",
+      "words",
       "reasoning",
+      "words",
       "words",
       "result",
       "tool",
@@ -181,13 +233,24 @@ describe("what the two renderings agree the Run did", () => {
   })
 
   /**
+   * A drawing that is on the page and not on the screen is not on the page. A
+   * browser leaves markup under `content-visibility` unlaid out and unread
+   * until a reader happens to scroll onto it, so a Block drawn that way is a
+   * blank box where the record was — and a Run's fenced answer went missing
+   * exactly that way while every other clause here passed.
+   */
+  it.each(blocks)("and draws the $kind Block outright, holding none of it back", (block) => {
+    expect(cardFor(block)).not.toContain("content-visibility")
+  })
+
+  /**
    * The terminal says less. What it says is the same, and that is the whole
    * of the claim being made here.
    */
   it.each(blocks)("the terminal says nothing about the $kind Block the page does not", (block) => {
-    const drawn = [...namedIn(rowsFor(block), block)]
-    expect(factsOf(block)).toEqual(expect.arrayContaining(drawn))
-    expect(namedIn(cardFor(block), block)).toEqual(expect.arrayContaining(drawn))
+    const named = [...namedIn(rowsFor(block), block)]
+    expect(factsOf(block)).toEqual(expect.arrayContaining(named))
+    expect(namedIn(cardFor(block), block)).toEqual(expect.arrayContaining(named))
   })
 
   /**
@@ -227,9 +290,9 @@ describe("what the two renderings agree the Run did", () => {
   // A reader moving between the two screens reads one transcript, so the
   // Blocks the terminal draws come in the order the fold gave them.
   it("draws the Blocks it does draw in the order the fold gave them", () => {
-    const drawn = new Set(rows.map((row) => row.key))
+    const keys = new Set(rows.map((row) => row.key))
     expect(rows.map((row) => row.key)).toEqual(
-      blocks.map((block) => block.key).filter((key) => drawn.has(key)),
+      blocks.map((block) => block.key).filter((key) => keys.has(key)),
     )
   })
 })
