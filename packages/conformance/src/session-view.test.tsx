@@ -3,6 +3,7 @@ import {
   eventID,
   runID,
   sessionID,
+  type ActorKind,
   type ContentBlock,
   type Event,
   type Payload,
@@ -120,6 +121,17 @@ const record = foldTranscript(SESSION, TRACE)
 const turns = blocksOf(record)
 const blocks = turns.flatMap((turn) => turn.blocks)
 
+/**
+ * Who wrote a Block. Both renderers take it from the Turn — the page draws a
+ * person's words as the characters they were pasted in and an agent's as
+ * markdown — so a Block drawn on its own has to be given it back.
+ */
+const authorOf = (block: Block): ActorKind => {
+  const turn = turns.find((one) => one.blocks.includes(block))
+  if (turn === undefined) throw new Error(`no Turn holds ${block.key}`)
+  return turn.author
+}
+
 // The terminal reads the Messages it already holds and the page reads the
 // Transcript it was handed. One fold, two ways into it.
 const rows = toLines({ ...EMPTY, session: record.messages() })
@@ -133,7 +145,8 @@ const rowsFor = (block: Block): string =>
     .map((row) => row.text)
     .join(" ")
 
-const cardFor = (block: Block): string => renderToStaticMarkup(<BlockView block={block} />)
+const cardFor = (block: Block): string =>
+  renderToStaticMarkup(<BlockView author={authorOf(block)} block={block} />)
 
 describe("one fold, two renderers", () => {
   // Two folds would disagree, and a person comparing the screen with the page
