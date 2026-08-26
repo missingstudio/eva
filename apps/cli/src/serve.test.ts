@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { dirname, join } from "node:path"
 import { API_PLUGIN } from "@missingstudio/eva-api"
 import { boot, buildOf } from "@missingstudio/eva-boot"
 import type { Frontend, SurfaceInfo } from "@missingstudio/eva-sdk"
@@ -164,9 +167,32 @@ describe("the build a serve runs on", () => {
 })
 
 describe("where the built page is looked for", () => {
+  // A binary with a page staged beside it, as the release build leaves one.
+  const packed = (page?: string): string => {
+    const dir = mkdtempSync(join(tmpdir(), "eva-packed-"))
+    if (page !== undefined) {
+      mkdirSync(join(dir, "eva-page"), { recursive: true })
+      writeFileSync(join(dir, "eva-page", "index.html"), page)
+    }
+    return join(dir, "eva")
+  }
+
   // The same lookup answers from `src` and from the packed `dist`, because
   // they sit at the same depth under `apps/cli`.
   it("is apps/web/dist, beside this app", () => {
     expect(assetRoot().replaceAll("\\", "/")).toContain("apps/web/dist")
+  })
+
+  // A compiled binary has no workspace over it, so the release stages the page
+  // beside it and the binary's own path is what finds it.
+  it("is eva-page beside the binary, when a release staged one there", () => {
+    const binary = packed("<!doctype html>")
+    expect(assetRoot(binary)).toBe(join(dirname(binary), "eva-page"))
+  })
+
+  // An empty directory beside the binary is not a page, so the notice a person
+  // reads names the build they can run rather than a path nobody staged.
+  it("is apps/web/dist when nothing is staged beside the binary", () => {
+    expect(assetRoot(packed()).replaceAll("\\", "/")).toContain("apps/web/dist")
   })
 })
