@@ -2,8 +2,8 @@
 // Write the npm packages into dist/npm: one package per target holding one
 // binary, and the wrapper that names them all as optionalDependencies. This
 // writes manifests and copies files; publish.ts is what talks to a registry.
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs"
-import { DIST, REPO, TARGETS, binaryOf, nameOf, requireVersion } from "./context.js"
+import { copyFileSync, cpSync, mkdirSync, writeFileSync } from "node:fs"
+import { DIST, PAGE, REPO, TARGETS, binaryOf, nameOf, requireVersion } from "./context.js"
 
 const version = requireVersion()
 const license = "MIT"
@@ -21,6 +21,9 @@ for (const target of TARGETS) {
     `${DIST}/stage/${nameOf(target)}/${binaryOf(target)}`,
     `${dir}/bin/${binaryOf(target)}`,
   )
+  // The page eva serves sits beside the binary, because that is where the
+  // binary looks for it. `files` names `bin`, so it is packed with it.
+  cpSync(`${DIST}/stage/${nameOf(target)}/${PAGE}`, `${dir}/bin/${PAGE}`, { recursive: true })
   copyFileSync("LICENSE", `${dir}/LICENSE`)
   // npm packs a README regardless of the files list, so the page is never bare.
   writeFileSync(

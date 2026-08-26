@@ -25,6 +25,17 @@ export const archiveOf = (t: Target): string =>
 
 export const binaryOf = (t: Target): string => (t.os === "windows" ? "eva.exe" : "eva")
 
+/**
+ * The page `eva.web` serves, beside the binary in every archive and in every
+ * npm package. A compiled binary carries no workspace to look in, so it finds
+ * the page from its own path — and this name is what the release build,
+ * `scripts/install.sh` and `apps/cli/src/plugins.ts` agree on.
+ */
+export const PAGE = "eva-page"
+
+// Where `apps/web` leaves the page the release carries.
+export const BUILT_PAGE = "apps/web/dist"
+
 export const isHost = (t: Target): boolean => {
   const os = process.platform === "win32" ? "windows" : process.platform
   return os === t.os && process.arch === t.arch

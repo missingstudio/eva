@@ -107,9 +107,11 @@ surface, which is what `eva` with no verb picks.
   [`eva.api`](../api/README.md) serves, and this row only carries it: the
   `Client` the row is started with is what the wire answers from, and the
   surface itself starts to ask at W2.
-- **It does not carry the page into the release binary.** The asset root
-  resolves inside the workspace. Getting `apps/web/dist` beside a compiled
-  binary is `scripts/release/build.ts`'s concern and it is the next thing.
+- **It does not find the page.** The asset root is a path, and which path it
+  is belongs to the composition root: `apps/web/dist` in the workspace, and
+  `eva-page` beside the binary in a release. `scripts/release/build.ts` stages
+  the page there, and its smoke test asks the packed binary for the page over
+  a socket rather than trusting that the files were copied.
 
 ## API
 
