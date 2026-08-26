@@ -85,6 +85,19 @@ export interface ToolExecuteBefore {
    * `ask` that reaches the tool still unanswered is a denial.
    */
   decide(decision: ToolDecision): void
+  /**
+   * What happens when nothing decided. A baseline and not a decision: it is
+   * read only when no hook at this boundary decided anything at all, and the
+   * strictest of the baselines wins among themselves.
+   *
+   * A permission mode is what needs it. "Ask before a change" is a baseline —
+   * a rule a person already wrote is standing authority and must not be asked
+   * about again — and at a boundary where the strictest decision wins there is
+   * no way to say "unless" except by one hook reading another's answer, which
+   * is order-dependent, or by reading another plugin's rules, which no plugin
+   * may do. A mandate stays a decision: `decide` is what a mode refuses with.
+   */
+  otherwise(decision: ToolDecision): void
 }
 
 export interface ToolExecuteAfter {

@@ -117,11 +117,13 @@ export const toolDeps = (
   const beforeExecute = Effect.fn("boot.tool.before")(function* (call: ToolCall) {
     const args = cell(call.args)
     const decisions: ToolDecision[] = []
+    const baselines: ToolDecision[] = []
     const failure = yield* kernel.toolHooks.run("tool.execute.before", {
       name: call.name,
       session: call.session,
       args: args.port,
       decide: (decision) => void decisions.push(decision),
+      otherwise: (decision) => void baselines.push(decision),
     })
     if (failure !== undefined)
       decisions.push({
@@ -129,7 +131,12 @@ export const toolDeps = (
         reason: `the ${failure.hook} hook of ${failure.owner} failed`,
       })
 
-    const decision = strictest(decisions)
+    /**
+     * A baseline is read only when nothing decided. So specific standing
+     * authority — a rule a person wrote — is never asked about again, and a
+     * mode that supervises still asks about everything no rule named.
+     */
+    const decision = strictest(decisions) ?? strictest(baselines)
     return {
       args: args.read(),
       ...(decision === undefined ? {} : { decision }),

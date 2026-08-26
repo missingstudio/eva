@@ -229,6 +229,71 @@ describe("tool.execute.before", () => {
     expect(ran.text).toBe("a mandate")
   })
 
+  /**
+   * A baseline is what happens when nothing decided. It is what a permission
+   * mode supervises with: a rule a person already wrote is standing authority
+   * and must not be asked about again, and reading that off another plugin's
+   * decision would make this boundary order-dependent.
+   */
+  it("reads a baseline only when nothing decided", async () => {
+    const supervising = define({
+      id: "acme.mode",
+      effect: Effect.fn("acme.mode")(function* (ctx) {
+        yield* ctx.toolHooks["tool.execute.before"]((event) => {
+          event.otherwise({ kind: "ask", question: "may it?" })
+        })
+      }),
+    })
+    const allow = define({
+      id: "acme.rule",
+      effect: Effect.fn("acme.rule")(function* (ctx) {
+        yield* ctx.toolHooks["tool.execute.before"]((event) => {
+          event.decide({ kind: "allow_once" })
+        })
+      }),
+    })
+
+    const asked = await calling([registering(reading("hello")), supervising])
+    expect(asked.disposition).toBe("denied")
+    expect(asked.text).toBe("nobody answered: may it?")
+
+    // Either order, because a baseline is not a decision and so cannot win a
+    // tie with one.
+    for (const order of [
+      [allow, supervising],
+      [supervising, allow],
+    ]) {
+      const ran = await calling([registering(reading("hello")), ...order])
+      expect(ran.disposition).toBe("ok")
+    }
+  })
+
+  // A mandate is a decision, so it still outranks an allow that would widen it.
+  it("keeps a decision above every baseline", async () => {
+    const mode = define({
+      id: "acme.mode",
+      effect: Effect.fn("acme.mode")(function* (ctx) {
+        yield* ctx.toolHooks["tool.execute.before"]((event) => {
+          event.decide({ kind: "reject_always", reason: "a mandate" })
+        })
+      }),
+    })
+    const allow = define({
+      id: "acme.rule",
+      effect: Effect.fn("acme.rule")(function* (ctx) {
+        yield* ctx.toolHooks["tool.execute.before"]((event) => {
+          event.decide({ kind: "allow_always" })
+          event.otherwise({ kind: "allow_always" })
+        })
+      }),
+    })
+
+    const ran = await calling([registering(reading("hello")), allow, mode])
+
+    expect(ran.disposition).toBe("denied")
+    expect(ran.text).toBe("a mandate")
+  })
+
   it("hands the tool the arguments a hook left", async () => {
     const rewrite = define({
       id: "acme.rewrite",
