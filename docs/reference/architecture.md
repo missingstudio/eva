@@ -622,12 +622,6 @@ export interface Validator {
   readonly check: (schema: unknown, candidate: string) => Effect.Effect<Judged, ValidatorError>
 }
 
-/** The part of a `FileSystem` an applier reads and writes through. */
-export interface DiffFiles {
-  readonly read: (path: string) => Effect.Effect<string>
-  readonly write: (path: string, content: string) => Effect.Effect<void>
-}
-
 /** One replacement in one file. `find` must appear exactly once. */
 export interface Hunk {
   readonly find: string
@@ -669,8 +663,12 @@ export class DiffRefused extends Data.TaggedError("DiffRefused")<{
 }> {}
 
 /**
- * Previews a structured Edit, then applies it. The `DiffFiles` is handed in
- * at each call, so an applier reads no Slot and holds no filling.
+ * Previews a structured Edit, then applies it. The part of a `FileSystem` it
+ * reads and writes through is handed in at each call, so an applier reads no
+ * Slot and holds no filling. A `FileSystemError` stays in the error channel
+ * beside `DiffRefused`: a path outside the root is a real outcome the caller
+ * reports, and an applier that swallowed one would answer for a write it
+ * never made.
  *
  * Atomicity is a property of the Preview and not of the write: every Hunk is
  * placed while the Preview is computed, so a Hunk that cannot land refuses
@@ -680,10 +678,19 @@ export class DiffRefused extends Data.TaggedError("DiffRefused")<{
  * because one write per file is all the contract offers.
  */
 export interface DiffApplier {
-  readonly preview: (files: DiffFiles, edit: Edit) => Effect.Effect<Preview, DiffRefused>
-  readonly apply: (files: DiffFiles, preview: Preview) => Effect.Effect<Applied, DiffRefused>
+  readonly preview: (
+    files: Pick<FileSystem, "read" | "write">,
+    edit: Edit,
+  ) => Effect.Effect<Preview, DiffRefused | FileSystemError>
+  readonly apply: (
+    files: Pick<FileSystem, "read" | "write">,
+    preview: Preview,
+  ) => Effect.Effect<Applied, DiffRefused | FileSystemError>
   /** Reverses one apply, and answers the apply that reverses the reverse. */
-  readonly reverse: (files: DiffFiles, applied: Applied) => Effect.Effect<Applied, DiffRefused>
+  readonly reverse: (
+    files: Pick<FileSystem, "read" | "write">,
+    applied: Applied,
+  ) => Effect.Effect<Applied, DiffRefused | FileSystemError>
 }
 ```
 

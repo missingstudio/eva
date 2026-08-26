@@ -8,9 +8,8 @@ is what makes a write previewed and undoable.
 Eva is built on a plugin kernel: every capability is a plugin. This plugin
 fills the `DiffApplier` slot that
 [`@missingstudio/eva-core`](../../packages/core/README.md) defines. It reads
-and writes through the `DiffFiles` each call hands it — a `FileSystem`
-satisfies that shape — so it carries no filesystem of its own and reads no
-other slot. The glossary in [docs/context.md](../../docs/context.md) defines
+and writes through the `FileSystem` each call hands it, so it carries no files
+of its own and reads no other slot. The glossary in [docs/context.md](../../docs/context.md) defines
 **Preview**, **Hunk**, and **Slot**, and
 [docs/reference/architecture.md](../../docs/reference/architecture.md) §5 holds
 the contract.
@@ -99,9 +98,12 @@ does not move for two writes inside one clock tick — so it would refuse writes
 that are safe and pass writes that are not. The hash is opaque: only the
 applier that produced it reads it.
 
-Every refusal is `DiffRefused`, a typed failure carrying the reason, the path,
-and — for a hunk — which one. Nothing throws, so a tool turns a refusal into a
-result the model can act on.
+Every refusal of the applier's own is `DiffRefused`, a typed failure carrying
+the reason, the path, and — for a hunk — which one. A refusal of the file
+system's stays a `FileSystemError` beside it: a path outside the root, or a
+file that is not there, is the boundary's answer and not a hunk that was never
+looked for. Nothing throws, so a tool turns either into a result the model can
+act on.
 
 ## What it does not do
 
@@ -121,7 +123,8 @@ result the model can act on.
 
 Tests live beside the sources: [src/apply.test.ts](src/apply.test.ts) holds
 the dry run, the atomic apply, the byte-for-byte reverse, and the stale
-refusal, all against an in-memory `DiffFiles` with no disk under it;
+refusal, all against the testkit's virtual `FileSystem` with no disk under
+it;
 [src/index.test.ts](src/index.test.ts) holds the slot fill,
 empty-on-unload, and whole replacement. Run the suite from the repository
 root:

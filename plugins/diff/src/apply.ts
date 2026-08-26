@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import type { Applied, DiffApplier, DiffFiles, Hunk } from "@missingstudio/eva-core"
+import type { Applied, DiffApplier, FileSystem, Hunk } from "@missingstudio/eva-core"
 import { DiffRefused } from "@missingstudio/eva-core"
 import { Effect } from "effect"
 
@@ -80,7 +80,7 @@ const landed = Effect.fn("eva.diff.land")(function* (
  * computed against, and otherwise writes whole.
  */
 const wrote = Effect.fn("eva.diff.write")(function* (
-  files: DiffFiles,
+  files: Pick<FileSystem, "read" | "write">,
   path: string,
   expected: string,
   content: string,

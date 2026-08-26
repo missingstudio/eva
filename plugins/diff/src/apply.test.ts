@@ -1,46 +1,44 @@
-import type { DiffFiles, DiffRefused, Edit } from "@missingstudio/eva-core"
+import type { DiffRefused, Edit, FileSystemError } from "@missingstudio/eva-core"
+import { virtualFileSystem } from "@missingstudio/eva-testkit"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { applier, fingerprint } from "./apply.js"
 
 /**
- * A `FileSystem` with no disk under it, in one place.
- *
- * The stage's shared virtual filler lands with the `FileSystem` slot itself;
- * this double is what that filler replaces, and it is the only one in this
- * package. It counts writes as well as holding content, because "a dry run
+ * The testkit's virtual `FileSystem`, with its writes counted: "a dry run
  * touches nothing" is a claim about calls and not only about bytes.
+ *
+ * The shared filler and not a double of this package's own, so the applier is
+ * held to the same refusals `eva.fs` answers — a path outside the root
+ * included.
  */
-interface MemoryFiles extends DiffFiles {
-  readonly at: (path: string) => string | undefined
-  readonly writes: () => number
-}
-
-const memoryFiles = (seed: Record<string, string>): MemoryFiles => {
-  const held = new Map(Object.entries(seed))
+const countedFiles = (seed: Readonly<Record<string, string>>) => {
+  const virtual = virtualFileSystem(seed)
   let writes = 0
 
   return {
-    read: (path) =>
-      Effect.suspend(() => {
-        const found = held.get(path)
-        return found === undefined
-          ? Effect.die(new Error(`${path} is not there`))
-          : Effect.succeed(found)
-      }),
-    write: (path, content) =>
-      Effect.sync(() => {
+    read: virtual.fs.read,
+    write: (path: string, content: string) =>
+      Effect.gen(function* () {
+        yield* virtual.fs.write(path, content)
         writes += 1
-        held.set(path, content)
       }),
-    at: (path) => held.get(path),
+    at: (path: string) => virtual.files()[path],
     writes: () => writes,
   }
 }
 
-const run = <A>(effect: Effect.Effect<A, DiffRefused>): Promise<A> => Effect.runPromise(effect)
-const refusal = (effect: Effect.Effect<unknown, DiffRefused>): Promise<DiffRefused> =>
+type Fault = DiffRefused | FileSystemError
+
+const run = <A>(effect: Effect.Effect<A, Fault>): Promise<A> => Effect.runPromise(effect)
+const failure = (effect: Effect.Effect<unknown, Fault>): Promise<Fault> =>
   Effect.runPromise(Effect.flip(effect))
+
+const refusal = async (effect: Effect.Effect<unknown, Fault>): Promise<DiffRefused> => {
+  const found = await failure(effect)
+  if (found._tag !== "DiffRefused") throw found
+  return found
+}
 
 const edit = (path: string, ...hunks: readonly [string, string][]): Edit => ({
   path,
@@ -49,7 +47,7 @@ const edit = (path: string, ...hunks: readonly [string, string][]): Edit => ({
 
 describe("a dry run", () => {
   it("produces the exact change and writes nothing", async () => {
-    const files = memoryFiles({ "a.ts": "one\ntwo\nthree\n" })
+    const files = countedFiles({ "a.ts": "one\ntwo\nthree\n" })
 
     const preview = await run(applier.preview(files, edit("a.ts", ["two", "TWO"])))
 
@@ -60,7 +58,7 @@ describe("a dry run", () => {
   })
 
   it("lands every hunk in order, each counted against what the last produced", async () => {
-    const files = memoryFiles({ "a.ts": "alpha beta gamma" })
+    const files = countedFiles({ "a.ts": "alpha beta gamma" })
 
     const preview = await run(
       applier.preview(files, edit("a.ts", ["alpha", "beta"], ["beta beta", "one"])),
@@ -76,7 +74,7 @@ describe("a dry run", () => {
    * so a replacement carrying either would land as text nobody wrote.
    */
   it("lands a replacement holding $& as those two characters", async () => {
-    const files = memoryFiles({ "a.ts": "cost = 1" })
+    const files = countedFiles({ "a.ts": "cost = 1" })
 
     const preview = await run(applier.preview(files, edit("a.ts", ["1", "$& $' $`"])))
 
@@ -86,7 +84,7 @@ describe("a dry run", () => {
 
 describe("an apply", () => {
   it("writes the previewed content once", async () => {
-    const files = memoryFiles({ "a.ts": "one\n" })
+    const files = countedFiles({ "a.ts": "one\n" })
 
     const preview = await run(applier.preview(files, edit("a.ts", ["one", "two"])))
     const applied = await run(applier.apply(files, preview))
@@ -98,7 +96,7 @@ describe("an apply", () => {
   })
 
   it("lands nothing when a later hunk is not there", async () => {
-    const files = memoryFiles({ "a.ts": "one\ntwo\n" })
+    const files = countedFiles({ "a.ts": "one\ntwo\n" })
 
     const refused = await refusal(
       applier.preview(files, edit("a.ts", ["one", "ONE"], ["four", "FOUR"])),
@@ -111,7 +109,7 @@ describe("an apply", () => {
   })
 
   it("lands nothing when a hunk is there more than once", async () => {
-    const files = memoryFiles({ "a.ts": "two two\n" })
+    const files = countedFiles({ "a.ts": "two two\n" })
 
     const refused = await refusal(applier.preview(files, edit("a.ts", ["two", "TWO"])))
 
@@ -122,7 +120,7 @@ describe("an apply", () => {
   })
 
   it("lands nothing when an earlier hunk made a later one ambiguous", async () => {
-    const files = memoryFiles({ "a.ts": "alpha beta\n" })
+    const files = countedFiles({ "a.ts": "alpha beta\n" })
 
     const refused = await refusal(
       applier.preview(files, edit("a.ts", ["alpha", "beta"], ["beta", "gamma"])),
@@ -142,7 +140,7 @@ describe("a reverse", () => {
   const AWKWARD = "\uFEFFone\r\n\tzwei e\u0301 \u{1F600}\nthree"
 
   it("restores the prior content byte for byte", async () => {
-    const files = memoryFiles({ "a.ts": AWKWARD })
+    const files = countedFiles({ "a.ts": AWKWARD })
 
     const preview = await run(applier.preview(files, edit("a.ts", ["zwei", "two"])))
     const applied = await run(applier.apply(files, preview))
@@ -152,7 +150,7 @@ describe("a reverse", () => {
   })
 
   it("answers the apply that reverses the reverse", async () => {
-    const files = memoryFiles({ "a.ts": "one\n" })
+    const files = countedFiles({ "a.ts": "one\n" })
 
     const preview = await run(applier.preview(files, edit("a.ts", ["one", "two"])))
     const applied = await run(applier.apply(files, preview))
@@ -165,7 +163,7 @@ describe("a reverse", () => {
 
 describe("a stale record", () => {
   it("refuses an apply whose file moved under the preview", async () => {
-    const files = memoryFiles({ "a.ts": "one\n" })
+    const files = countedFiles({ "a.ts": "one\n" })
     const preview = await run(applier.preview(files, edit("a.ts", ["one", "two"])))
     await Effect.runPromise(files.write("a.ts", "somebody else\n"))
 
@@ -181,7 +179,7 @@ describe("a stale record", () => {
    * the Preview honest, which is the case a modification time gets wrong.
    */
   it("applies when the file changed and changed back", async () => {
-    const files = memoryFiles({ "a.ts": "one\n" })
+    const files = countedFiles({ "a.ts": "one\n" })
     const preview = await run(applier.preview(files, edit("a.ts", ["one", "two"])))
     await Effect.runPromise(files.write("a.ts", "elsewhere\n"))
     await Effect.runPromise(files.write("a.ts", "one\n"))
@@ -192,7 +190,7 @@ describe("a stale record", () => {
   })
 
   it("refuses a reverse whose file moved after the apply", async () => {
-    const files = memoryFiles({ "a.ts": "one\n" })
+    const files = countedFiles({ "a.ts": "one\n" })
     const preview = await run(applier.preview(files, edit("a.ts", ["one", "two"])))
     const applied = await run(applier.apply(files, preview))
     await Effect.runPromise(files.write("a.ts", "somebody else\n"))
@@ -204,7 +202,7 @@ describe("a stale record", () => {
   })
 
   it("is a typed value rather than a throw", async () => {
-    const files = memoryFiles({ "a.ts": "one\n" })
+    const files = countedFiles({ "a.ts": "one\n" })
     const preview = await run(applier.preview(files, edit("a.ts", ["one", "two"])))
     await Effect.runPromise(files.write("a.ts", "moved\n"))
 
@@ -212,5 +210,30 @@ describe("a stale record", () => {
 
     expect(refused._tag).toBe("DiffRefused")
     expect(refused.message).toContain("a.ts")
+  })
+})
+
+/**
+ * What the applier does not hide. Both are `FileSystemError` and not
+ * `DiffRefused`: the refusal is the file system's, so the caller reports the
+ * boundary that refused rather than a hunk that never was looked for.
+ */
+describe("a path the file system refuses", () => {
+  it("carries the outside_root refusal out of a preview", async () => {
+    const files = countedFiles({ "a.ts": "one\n" })
+
+    const found = await failure(applier.preview(files, edit("../secrets.txt", ["one", "two"])))
+
+    expect(found._tag).toBe("FileSystemError")
+    expect(files.writes()).toBe(0)
+  })
+
+  it("carries the not_found refusal out of a preview", async () => {
+    const files = countedFiles({ "a.ts": "one\n" })
+
+    const found = await failure(applier.preview(files, edit("b.ts", ["one", "two"])))
+
+    expect(found._tag).toBe("FileSystemError")
+    expect(files.writes()).toBe(0)
   })
 })
