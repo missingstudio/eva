@@ -7,6 +7,7 @@ import type {
   Hunk,
   Recorder,
 } from "@missingstudio/eva-core"
+import type { Payload } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 
 /**
@@ -91,8 +92,19 @@ export interface EditDeps {
   readonly recorder: Effect.Effect<Recorder | undefined>
 }
 
+/**
+ * Where an `edit` record goes. `ToolContext.emit` is what the row hands over,
+ * so the record lands in the call's own group and in the order it happened —
+ * the pipeline buffers a call's records until the call ends, and a commit
+ * straight to the Recorder would land ahead of the `tool_call` it belongs to.
+ *
+ * Absent, the Recorder is what commits it. An undo has no call and so no
+ * context.
+ */
+export type Recording = (payload: Payload) => Effect.Effect<void>
+
 export interface EditTool {
-  readonly execute: (input: EditInput) => Effect.Effect<EditOutcome>
+  readonly execute: (input: EditInput, record?: Recording) => Effect.Effect<EditOutcome>
   readonly undo: (token: string) => Effect.Effect<UndoOutcome>
 }
 
@@ -154,7 +166,7 @@ export const makeEditTool = (deps: EditDeps): EditTool => {
   })
 
   return {
-    execute: Effect.fn("eva.tool.edit")(function* (input: EditInput) {
+    execute: Effect.fn("eva.tool.edit")(function* (input: EditInput, record?: Recording) {
       const held = yield* ground
       if (held.kind === "degraded") return held
 
@@ -176,7 +188,8 @@ export const makeEditTool = (deps: EditDeps): EditTool => {
       const written = yield* Effect.result(held.applier.apply(held.files, preview))
       if (written._tag === "Failure") return refusedOf(written.failure)
 
-      yield* held.recorder.commit([{ kind: "edit", path: preview.path, hunks: preview.hunks }])
+      const landed: Payload = { kind: "edit", path: preview.path, hunks: preview.hunks }
+      yield* record === undefined ? held.recorder.commit([landed]) : record(landed)
 
       issued += 1
       const token = String(issued)

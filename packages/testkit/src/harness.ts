@@ -1,5 +1,5 @@
 import { harnessHost, type Kernel } from "@missingstudio/eva-boot"
-import type { Harness, HarnessHost, RunInput, RunResult } from "@missingstudio/eva-core"
+import type { Approving, Harness, HarnessHost, RunInput, RunResult } from "@missingstudio/eva-core"
 import type { Payload, SessionID } from "@missingstudio/eva-schema"
 import { Effect, Scope } from "effect"
 
@@ -7,6 +7,15 @@ export interface OpenedRow {
   readonly harness: Harness
   // Every payload the harness emitted to the surface, in order.
   readonly said: () => readonly Payload[]
+}
+
+export interface RowOptions {
+  /**
+   * How a tool call's `ask` is answered. A suite that names none is a build
+   * with nobody to answer, which is a denial — the same thing a build with no
+   * interactive surface is.
+   */
+  readonly approving?: Approving
 }
 
 /**
@@ -20,6 +29,7 @@ export const openRow = (
   scope: Scope.Scope,
   id: string,
   session: SessionID,
+  options: RowOptions = {},
 ): Effect.Effect<OpenedRow> =>
   Effect.gen(function* () {
     const rows = yield* kernel.domains.harness.get
@@ -28,7 +38,7 @@ export const openRow = (
     const said: Payload[] = []
     const emit = (payload: Payload) => Effect.sync(() => void said.push(payload))
     const harness = yield* Effect.provideService(
-      row.open(harnessHost(kernel, session, emit)),
+      row.open(harnessHost(kernel, session, emit, options.approving)),
       Scope.Scope,
       scope,
     )

@@ -92,8 +92,10 @@ const resultOf = (outcome: EditOutcome): ToolResult => {
 /**
  * The row this plugin offers the tool domain.
  *
- * It reads no `ToolContext`: one write is one act, so the tool says nothing
- * between the `tool_call` and the result the pipeline records.
+ * It says nothing about progress: one write is one act. It does hand the
+ * pipeline's own emit down, because the `edit` record belongs in the call's
+ * group and in the order it happened — a commit straight to the Recorder
+ * lands ahead of the `tool_call` it belongs to.
  *
  * `undo` is not on the row. A row is what a model calls, and an undo is not:
  * it is reached through the `EditTool` `editToolOf` answers, which is what a
@@ -106,13 +108,13 @@ const rowOf = (tool: EditTool): ToolInfo => ({
     "Replace exact text in one file. Every hunk lands or none does, the change can be " +
     "previewed first, and an applied change can be undone.",
   input: EDIT_TOOL_INPUT,
-  execute: (input) =>
+  execute: (input, context) =>
     Effect.gen(function* () {
       const edit = editOf(input)
       if (edit === undefined)
         return toolText("failed", "edit wants a `path` string and one or more `hunks`")
 
-      return resultOf(yield* tool.execute(edit))
+      return resultOf(yield* tool.execute(edit, context.emit))
     }),
 })
 
