@@ -1,4 +1,4 @@
-import type { Credential, Provider, ProviderRequest } from "@missingstudio/eva-core"
+import type { Credential, ProposedCall, Provider, ProviderRequest } from "@missingstudio/eva-core"
 import { ProviderError } from "@missingstudio/eva-core"
 import type { ErrorClass, Payload, StopReason, TranscriptMessage } from "@missingstudio/eva-schema"
 import { Cause, Effect, Queue, Stream } from "effect"
@@ -104,7 +104,13 @@ export const secretOf = (
  */
 export interface TurnEmitter {
   readonly payload: (payload: Payload) => void
-  readonly end: (reason: StopReason | undefined) => void
+  /**
+   * Closes the stream with the reason, and with the calls this response
+   * proposed. Both settle here because both are read after the drain, and a
+   * proposal is not a payload: the pipeline writes one `tool_call` per call
+   * once the deciding boundary has settled its arguments.
+   */
+  readonly end: (reason: StopReason | undefined, calls?: readonly ProposedCall[]) => void
   readonly fail: (cause: unknown) => void
 }
 
@@ -135,9 +141,11 @@ export const streamingProvider = <C>(spec: StreamingSpec<C>): Provider => ({
   available: spec.available,
 
   turn: (request: ProviderRequest) => {
-    // Set when the stream settles. `stopReason` is read after the drain; an
-    // early read answers undefined, which is what an unreported reason means.
+    // Set when the stream settles. Both are read after the drain; an early
+    // read answers an unreported reason and no proposed call, which is what
+    // a turn that has not ended has said so far.
     let reason: StopReason | undefined
+    let proposed: readonly ProposedCall[] = []
     const payloads = Stream.unwrap(
       Effect.map(spec.clientFor(), (client) =>
         Stream.callback<Payload, ProviderError>((queue) =>
@@ -146,10 +154,11 @@ export const streamingProvider = <C>(spec: StreamingSpec<C>): Provider => ({
               let settled = false
               const emit: TurnEmitter = {
                 payload: (payload) => void Queue.offerUnsafe(queue, payload),
-                end: (settledReason) => {
+                end: (settledReason, calls) => {
                   if (settled) return
                   settled = true
                   reason = settledReason
+                  if (calls !== undefined) proposed = calls
                   Queue.endUnsafe(queue)
                 },
                 fail: (cause) => {
@@ -174,6 +183,10 @@ export const streamingProvider = <C>(spec: StreamingSpec<C>): Provider => ({
         ),
       ),
     )
-    return { payloads, stopReason: Effect.sync(() => reason) }
+    return {
+      payloads,
+      stopReason: Effect.sync(() => reason),
+      toolCalls: Effect.sync(() => proposed),
+    }
   },
 })

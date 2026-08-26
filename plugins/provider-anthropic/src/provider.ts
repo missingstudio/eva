@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk"
-import type { Credential, Provider } from "@missingstudio/eva-core"
+import type { Credential, ProposedCall, Provider, ToolDefinition } from "@missingstudio/eva-core"
 import type { ErrorClass, StopReason } from "@missingstudio/eva-schema"
 import {
   chatMessages,
@@ -36,9 +36,12 @@ export const classify = (cause: unknown): ErrorClass =>
         : undefined,
   )
 
-// ACP's five reasons. Anthropic's tool_use and pause_turn cannot arrive at
-// stage 0, which ships no tools, and a stop sequence ends the turn. A message
-// that names no reason reports none: silence is not `end_turn`.
+/**
+ * ACP's five reasons. `tool_use` and `pause_turn` both end the turn and are
+ * `end_turn`: what continues the work is the calls the turn proposed, which
+ * the loop reads off `toolCalls`, and a stop sequence ends the turn too. A
+ * message that names no reason reports none: silence is not `end_turn`.
+ */
 export const toStopReason = (reason: string | null | undefined): StopReason | undefined => {
   if (reason == null) return undefined
   switch (reason) {
@@ -50,6 +53,26 @@ export const toStopReason = (reason: string | null | undefined): StopReason | un
       return "end_turn"
   }
 }
+
+/**
+ * One tool as this wire offers it. The JSON Schema goes over as it is: it is
+ * the model that reads it, so a dialect that edited it would show the model
+ * something the tool does not accept.
+ */
+export const offering = (tool: ToolDefinition): Anthropic.Tool => ({
+  name: tool.name,
+  description: tool.description,
+  input_schema: tool.input as Anthropic.Tool["input_schema"],
+})
+
+/**
+ * The calls the response proposed. `input` is already parsed by the SDK, so
+ * the arguments arrive as the model wrote them and the tool reads its own.
+ */
+export const proposedIn = (content: readonly Anthropic.ContentBlock[]): readonly ProposedCall[] =>
+  content.flatMap((block) =>
+    block.type === "tool_use" ? [{ id: block.id, name: block.name, args: block.input }] : [],
+  )
 
 export interface AnthropicOptions {
   // Absent when no credential resolved. The provider still answers the model
@@ -76,10 +99,13 @@ export const makeAnthropicProvider = (options: AnthropicOptions): Provider =>
     }),
 
     start: (client, request, emit) => {
+      const offered = (request.tools ?? []).map(offering)
+
       const stream = client.messages.stream({
         model: request.model.model,
         max_tokens: options.maxTokens ?? request.maxTokens ?? DEFAULT_MAX_TOKENS,
         ...(request.system === undefined ? {} : { system: request.system }),
+        ...(offered.length === 0 ? {} : { tools: offered }),
         messages: [...chatMessages(request.messages)],
       })
 
@@ -108,6 +134,14 @@ export const makeAnthropicProvider = (options: AnthropicOptions): Provider =>
           return
         }
 
+        /**
+         * The arguments of a proposed call, arriving a fragment at a time.
+         * The proposal carries them whole after the drain, and the pipeline
+         * is what records a call, so a fragment here says nothing the record
+         * does not already hold.
+         */
+        if (delta.type === "input_json_delta") return
+
         // A delta is content the model produced. One the union has no kind
         // for is preserved rather than dropped, so a stage that maps it later
         // reads a Trace that kept it.
@@ -126,7 +160,7 @@ export const makeAnthropicProvider = (options: AnthropicOptions): Provider =>
             cacheWriteTokens: reported(usage.cache_creation_input_tokens),
             cacheReadTokens: reported(usage.cache_read_input_tokens),
           })
-          emit.end(toStopReason(message.stop_reason))
+          emit.end(toStopReason(message.stop_reason), proposedIn(message.content))
         })
         .catch((cause: unknown) => emit.fail(cause))
 

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk"
-import type { Credential, ProviderRequest } from "@missingstudio/eva-core"
+import type { Credential, ProviderRequest, ToolDefinition } from "@missingstudio/eva-core"
 import type { Payload, TranscriptMessage } from "@missingstudio/eva-schema"
 import { Effect, Stream } from "effect"
 import { describe, expect, it } from "vitest"
@@ -84,8 +84,13 @@ describe("availability", () => {
   })
 })
 
-// A fake stream standing for the SDK's: it emits deltas, then settles.
-const fakeClient = (deltas: readonly unknown[], settle: (ok: boolean) => unknown): Anthropic => {
+// A fake stream standing for the SDK's: it emits deltas, then settles. Every
+// body it was started with is kept, so a test reads what went over the wire.
+const fakeClient = (
+  deltas: readonly unknown[],
+  settle: (ok: boolean) => unknown,
+  sent: Record<string, unknown>[] = [],
+): Anthropic => {
   const handlers: ((event: unknown) => void)[] = []
   const stream = {
     on: (_name: string, handler: (event: unknown) => void) => {
@@ -103,11 +108,19 @@ const fakeClient = (deltas: readonly unknown[], settle: (ok: boolean) => unknown
       }),
     abort: () => {},
   }
-  return { messages: { stream: () => stream } } as unknown as Anthropic
+  return {
+    messages: {
+      stream: (body: Record<string, unknown>) => {
+        sent.push(body)
+        return stream
+      },
+    },
+  } as unknown as Anthropic
 }
 
 const message = (over: Record<string, unknown> = {}) => ({
   model: "claude-opus-5",
+  content: [] as unknown[],
   usage: {
     input_tokens: 10,
     output_tokens: 4,
@@ -141,6 +154,101 @@ const reasonAfterDraining = (client: Anthropic) =>
       return yield* turn.stopReason
     }),
   )
+
+// The calls the turn proposed, read the way a Run reads them: after the drain.
+const callsAfterDraining = (client: Anthropic, tools?: readonly ToolDefinition[]) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const turn = makeAnthropicProvider({ credential: key, client }).turn(
+        tools === undefined ? request : { ...request, tools },
+      )
+      yield* Stream.runDrain(turn.payloads)
+      return turn.toolCalls === undefined ? [] : yield* turn.toolCalls
+    }),
+  )
+
+const TOOL: ToolDefinition = {
+  name: "read",
+  description: "reads a file",
+  input: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+}
+
+describe("the tools a request carries", () => {
+  it("goes over the wire with the schema unchanged", async () => {
+    const sent: Record<string, unknown>[] = []
+    await callsAfterDraining(
+      fakeClient([], () => message(), sent),
+      [TOOL],
+    )
+
+    expect(sent[0]?.["tools"]).toEqual([
+      { name: "read", description: "reads a file", input_schema: TOOL.input },
+    ])
+  })
+
+  // A Run with no agency shows the model no tools, and the wire then carries
+  // no key at all rather than an empty list.
+  it("is absent when the Run named none", async () => {
+    const sent: Record<string, unknown>[] = []
+    await callsAfterDraining(fakeClient([], () => message(), sent))
+
+    expect(sent[0]).not.toHaveProperty("tools")
+  })
+})
+
+describe("the calls a response proposed", () => {
+  it("answers each tool_use block as a proposed call", async () => {
+    const proposed = await callsAfterDraining(
+      fakeClient([], () =>
+        message({
+          stop_reason: "tool_use",
+          content: [
+            { type: "text", text: "reading" },
+            { type: "tool_use", id: "toolu_1", name: "read", input: { path: "one.md" } },
+          ],
+        }),
+      ),
+      [TOOL],
+    )
+
+    expect(proposed).toEqual([{ id: "toolu_1", name: "read", args: { path: "one.md" } }])
+  })
+
+  // `tool_use` ends the turn. What continues the work is the calls, and the
+  // loop reads those rather than the reason.
+  it("reports tool_use as end_turn", async () => {
+    const reason = await reasonAfterDraining(
+      fakeClient([], () => message({ stop_reason: "tool_use" })),
+    )
+    expect(reason).toBe("end_turn")
+  })
+
+  it("answers nothing when the response proposed none", async () => {
+    expect(await callsAfterDraining(fakeClient([], () => message()))).toEqual([])
+  })
+
+  /**
+   * The arguments arrive a fragment at a time and the proposal carries them
+   * whole, so a fragment is framing. Recording it would put a payload on the
+   * Trace for every chunk of every call.
+   */
+  it("keeps the argument fragments off the stream", async () => {
+    const found = (await collect(
+      fakeClient(
+        [
+          {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "input_json_delta", partial_json: '{"pa' },
+          },
+        ],
+        () => message(),
+      ),
+    )) as readonly Payload[]
+
+    expect(found.filter((one) => one.kind === "unknown")).toEqual([])
+  })
+})
 
 describe("a turn", () => {
   it("reports a text delta as a text payload on its own block", async () => {
