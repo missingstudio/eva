@@ -2,6 +2,7 @@ import { makeSessionAPI, type Build } from "@missingstudio/eva-boot"
 import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
+import { checkRules, sayFault } from "@missingstudio/eva-tool-policy"
 import { refusal } from "@missingstudio/eva-web"
 import { Effect, Exit, Scope } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
@@ -66,6 +67,30 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       report(settled, world)
       world.out(showConfig(settled))
       return 0
+    }
+
+    /**
+     * Answered from the rule set alone: no kernel, no model, no Session. The
+     * faults are the policy plugin's to find and this branch's to print, so
+     * `eva policy check` in CI and the gate at `tool.execute.before` cannot
+     * disagree about what a malformed rule set is.
+     */
+    case "policyCheck": {
+      const found = checkRules(invocation.source)
+      if (found.faults.length === 0) {
+        const count = found.rules.length
+        world.out(
+          count === 0
+            ? `${invocation.path} sets no policy rules\n`
+            : `${invocation.path} holds ${count} policy rule${count === 1 ? "" : "s"}, and every one is well formed\n`,
+        )
+        return 0
+      }
+      // Nothing reaches standard output: a shell reads an artifact there.
+      for (const fault of found.faults) {
+        world.err(`eva: ${invocation.path}: ${sayFault(fault)}\n`)
+      }
+      return 1
     }
 
     // The verb carries the selection, so a Workflow is never selected by a

@@ -321,6 +321,71 @@ describe("config show", () => {
   })
 })
 
+/**
+ * The exit code and the message, and nothing about the rule language: what a
+ * malformed rule set is belongs to `eva.tool.policy`, which is what makes CI
+ * and the gate agree about it.
+ */
+describe("eva policy check", () => {
+  it("exits nonzero on a malformed rule set, and names the fault", async () => {
+    const directory = scratch()
+    const path = write(directory, "rules.yaml", "policy:\n  rules:\n    - allow: [[]]\n")
+
+    const found = await ran(["policy", "check", path], directory)
+    expect(found.code).toBe(1)
+    expect(found.err).toContain(path)
+    expect(found.err).toContain("policy.rules.0.allow.0")
+    // Nothing on standard output: a shell reads an artifact there.
+    expect(found.out).toBe("")
+  })
+
+  it("names every fault, so a person fixes the file once", async () => {
+    const directory = scratch()
+    const path = write(
+      directory,
+      "rules.yaml",
+      "policy:\n  rules:\n    - deny: []\n    - allow: [[]]\n",
+    )
+
+    const found = await ran(["policy", "check", path], directory)
+    expect(found.code).toBe(1)
+    expect(found.err.trimEnd().split("\n")).toHaveLength(2)
+  })
+
+  it("counts the rules of a rule set it reads whole, and exits 0", async () => {
+    const directory = scratch()
+    const path = write(
+      directory,
+      "rules.yaml",
+      "policy:\n  rules:\n    - allow: [git, [status, diff]]\n    - deny: [git, push]\n",
+    )
+
+    const found = await ran(["policy", "check", path], directory)
+    expect(found.code).toBe(0)
+    expect(found.out).toContain("2 policy rules, and every one is well formed")
+    expect(found.err).toBe("")
+  })
+
+  it("says a config file sets no rules rather than passing in silence", async () => {
+    const directory = scratch()
+    const path = write(directory, "rules.yaml", "model: anthropic/one\n")
+
+    const found = await ran(["policy", "check", path], directory)
+    expect(found.code).toBe(0)
+    expect(found.out).toContain("sets no policy rules")
+  })
+
+  // It answers before anything loads, the way `config show` does.
+  it("answers with every plugin gone", async () => {
+    const directory = scratch()
+    const path = write(directory, "rules.yaml", "policy:\n  rules:\n    - deny: [rm, -rf]\n")
+
+    const found = await ran(["policy", "check", path], directory, {}, { build: buildOf([]) })
+    expect(found.code).toBe(0)
+    expect(found.out).toContain("1 policy rule, and every one is well formed")
+  })
+})
+
 describe("eva run", () => {
   const declared = (directory: string): string => `${contained(directory)}
 prompts:

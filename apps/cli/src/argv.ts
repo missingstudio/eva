@@ -20,6 +20,12 @@ export type Invocation =
   | { readonly kind: "showConfig"; readonly overlays: Overlays }
   | { readonly kind: "trust" }
   | { readonly kind: "untrust" }
+  /**
+   * `eva policy check [file]`. The rule set is read here rather than in the
+   * branch, because a file nobody can read is a parse error and the kernel
+   * never sees it — the same rule `eva run`'s three input routes keep.
+   */
+  | { readonly kind: "policyCheck"; readonly source: string; readonly path: string }
   | {
       readonly kind: "run"
       // The harness row id, with any .yaml or .yml already stripped.
@@ -44,7 +50,15 @@ export type Invocation =
     }
 
 // The verbs, for the suggestion a stray word gets.
-export const COMMANDS: readonly string[] = ["config", "run", "serve", "trust", "untrust"]
+export const COMMANDS: readonly string[] = ["config", "policy", "run", "serve", "trust", "untrust"]
+
+/**
+ * The rule set `eva policy check` reads when nothing names one: the
+ * repository's own profile. It is a config file because that is where a rule
+ * set lives — the `policy` key of any layer a run reads — so CI checks the
+ * file a run would read rather than one written for the check.
+ */
+export const DEFAULT_POLICY_FILE = ".eva/config.yaml"
 
 // A repeatable flag keeps every value. Without this the last one wins.
 const collect = (value: string, previous: readonly string[] = []): readonly string[] => [
@@ -265,6 +279,35 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
     .description("print the resolved config, and where each key came from")
     .action((_options: RootOptions, command: Command) => {
       record({ kind: "showConfig", overlays: overlaysOf(command.optsWithGlobals()) })
+    })
+
+  // A group, for the reason `config` is one, and `check` is the one thing in
+  // it. A plugin cannot add this verb: the command line is parsed before the
+  // kernel boots, so the app declares the verb and the plugin holds the rules.
+  const policy = root
+    .command("policy")
+    .description("the rules that decide a tool call")
+    .helpCommand(true)
+    .action(() => {
+      policy.outputHelp()
+      record({ kind: "answered", code: 0 })
+    })
+
+  policy
+    .command("check")
+    .description("validate a rule set; the fault is named and the exit is nonzero")
+    .argument("[file]", `the config file holding the rules, ${DEFAULT_POLICY_FILE} by default`)
+    .action((file: string | undefined, _options: unknown, command: Command) => {
+      const path = resolve(world.cwd, file ?? DEFAULT_POLICY_FILE)
+      let source: string
+      try {
+        source = readFileSync(path, "utf8")
+      } catch {
+        // `command.error` throws a CommanderError, which `parseArgv` turns
+        // into an answered 1 — the route every parse error takes.
+        return command.error(`eva policy check cannot read ${path}`)
+      }
+      record({ kind: "policyCheck", source, path })
     })
 
   return root

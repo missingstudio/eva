@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { COMMANDS, parseArgv } from "./argv.js"
+import { COMMANDS, DEFAULT_POLICY_FILE, parseArgv } from "./argv.js"
 import { VERSION } from "./version.js"
 import type { World } from "./world.js"
 
@@ -192,6 +192,45 @@ describe("eva run", () => {
     expect(found.invocation).toEqual({ kind: "answered", code: 1 })
     expect(found.err).toContain("name")
     expect(found.err).not.toMatch(/workflow/i)
+  })
+})
+
+describe("eva policy check", () => {
+  const written = (text: string): string => {
+    const path = join(mkdtempSync(join(tmpdir(), "eva-policy-")), "config.yaml")
+    writeFileSync(path, text)
+    return path
+  }
+
+  // The file is read while the command line is parsed, for the reason
+  // `eva run`'s input is: a file nobody can read never reaches the kernel.
+  it("reads the rule set at parse time", () => {
+    const path = written("policy:\n  rules: []\n")
+    expect(ran(["policy", "check", path]).invocation).toEqual({
+      kind: "policyCheck",
+      source: "policy:\n  rules: []\n",
+      path,
+    })
+  })
+
+  it("refuses a rule set it cannot read, and exits 1", () => {
+    const found = ran(["policy", "check", "/nowhere/rules.yaml"])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain("cannot read")
+    expect(found.err).toContain("/nowhere/rules.yaml")
+  })
+
+  it("reads the repository's own profile when nothing names a file", () => {
+    expect(ran(["policy", "check"]).err).toContain(DEFAULT_POLICY_FILE)
+  })
+
+  // Asking a group what it holds is a question, as it is for `eva config`.
+  it("answers the help of the policy group, and exits 0", () => {
+    const bare = ran(["policy"])
+    expect(bare.invocation).toEqual({ kind: "answered", code: 0 })
+    expect(bare.err).toBe("")
+    expect(bare.out).toContain("check")
+    expect(bare.out).toBe(ran(["policy", "--help"]).out)
   })
 })
 

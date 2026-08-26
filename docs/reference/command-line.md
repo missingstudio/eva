@@ -52,6 +52,7 @@ eva serve --web                     serve the page that watches a Session
 eva trust                           read this directory's .eva, and record the grant
 eva untrust                         drop the grant for this directory
 eva config show                     print the resolved config, and where each key came from
+eva policy check [file]             validate a rule set, and name the fault in a malformed one
 ```
 
 `eva run` names a harness row. A trailing `.yaml` or `.yml` is stripped before
@@ -66,6 +67,19 @@ goes to standard error and exits 1.
 bare answers with its own help on standard output and exits 0, exactly as
 `eva config --help` does: asking what a group holds is a question, and only a
 mistake is written where a failure is read.
+
+`eva policy` is a group in the same shape, and `check` is the one thing in it.
+It reads the rules under the `policy` key of a config file — `.eva/config.yaml`
+when nothing names one, because that is the profile a run reads — and writes
+one line per fault to standard error, each naming its place in the document.
+It exits 1 when it found one and 0 when it did not, and nothing reaches
+standard output on a fault, because a shell reads an artifact there. The rule
+set is read while the command line is parsed, so a file nobody can read is a
+parse error and the kernel never sees it.
+
+It answers from the rule set alone: no kernel, no model, no Session. The faults
+are `eva.tool.policy`'s to find and this command's to print, so CI and the gate
+at `tool.execute.before` cannot disagree about what a malformed rule set is.
 
 `eva serve` takes the posture as a flag: `--web` is the page that watches a
 Session, and `--acp` at 9c is the next answer to "serve what". A serve that
@@ -197,6 +211,9 @@ export type Invocation =
   | { readonly kind: "showConfig"; readonly overlays: Overlays }
   | { readonly kind: "trust" }
   | { readonly kind: "untrust" }
+  // The rule set is read here rather than in the branch, because a file
+  // nobody can read is a parse error and the kernel never sees it.
+  | { readonly kind: "policyCheck"; readonly source: string; readonly path: string }
   | {
       readonly kind: "run"
       // The harness row id, with any .yaml or .yml already stripped.
@@ -300,7 +317,8 @@ what the interactive branch prints when no surface plugin is loaded.
 The order of the branches is load-bearing. `trust` answers before any config is
 read, because the grant decides what may be read. `config show` answers after
 resolution but before boot, because a config that names a plugin nobody has must
-still print.
+still print. `policy check` answers before either: the rule set is already in
+the invocation, so it needs no resolution and no boot.
 
 ```ts
 const invocation = parseArgv(world)
@@ -313,6 +331,8 @@ switch (invocation.kind) {
   case "trust":
   // …
   case "showConfig":
+  // …
+  case "policyCheck":
   // …
   case "serve":
   // …
@@ -490,11 +510,11 @@ so cannot drift from it.
 
 ## 10. Exit codes
 
-| Code | When                                                                                                          |
-| ---- | ------------------------------------------------------------------------------------------------------------- |
-| 0    | the help, the version, a grant, `config show`, a Run that ended `done`                                        |
-| 1    | a parse error, an unreadable config, a Run that ended any other way, or a serve this build has no surface for |
-| 130  | the second Ctrl-C, which `withSignals` owns                                                                   |
+| Code | When                                                                                                                                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | the help, the version, a grant, `config show`, a rule set `policy check` read whole, a Run that ended `done`                        |
+| 1    | a parse error, an unreadable config, a malformed rule set, a Run that ended any other way, or a serve this build has no surface for |
+| 130  | the second Ctrl-C, which `withSignals` owns                                                                                         |
 
 An unread config key does not change the exit code. It is a finding, written to
 stderr, and the run continues.
