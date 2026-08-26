@@ -44,6 +44,8 @@
         "@missingstudio/eva-trace": "workspace:*",
         "@missingstudio/eva-trace-jsonl": "workspace:*",
         "@missingstudio/eva-trace-memory": "workspace:*",
+        "@missingstudio/eva-trace-postgres": "workspace:*",
+        "@missingstudio/eva-trace-sqlite": "workspace:*",
         "@missingstudio/eva-tui": "workspace:*",
         "@missingstudio/eva-tui-surface": "workspace:*",
         "@missingstudio/eva-usage": "workspace:*",
@@ -154,6 +156,8 @@
         "@missingstudio/eva-trace": "workspace:*",
         "@missingstudio/eva-trace-jsonl": "workspace:*",
         "@missingstudio/eva-trace-memory": "workspace:*",
+        "@missingstudio/eva-trace-postgres": "workspace:*",
+        "@missingstudio/eva-trace-sqlite": "workspace:*",
         "@missingstudio/eva-tui": "workspace:*",
         "@missingstudio/eva-tui-core": "workspace:*",
         "@missingstudio/eva-tui-surface": "workspace:*",
@@ -165,6 +169,7 @@
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.4",
         "effect": "catalog:",
+        "postgres": "^3.4.5",
         "react": "19.2.8",
         "react-dom": "19.2.8",
         "typescript": "catalog:",
@@ -586,6 +591,36 @@
         "typescript": "catalog:",
       },
     },
+    "plugins/trace-postgres": {
+      "name": "@missingstudio/eva-trace-postgres",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+        "postgres": "^3.4.5",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/trace-sqlite": {
+      "name": "@missingstudio/eva-trace-sqlite",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-schema": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "plugins/tui": {
       "name": "@missingstudio/eva-tui-surface",
       "version": "0.0.0",
@@ -781,6 +816,10 @@
     "@missingstudio/eva-trace-jsonl": ["@missingstudio/eva-trace-jsonl@workspace:plugins/trace-jsonl"],
 
     "@missingstudio/eva-trace-memory": ["@missingstudio/eva-trace-memory@workspace:plugins/trace-memory"],
+
+    "@missingstudio/eva-trace-postgres": ["@missingstudio/eva-trace-postgres@workspace:plugins/trace-postgres"],
+
+    "@missingstudio/eva-trace-sqlite": ["@missingstudio/eva-trace-sqlite@workspace:plugins/trace-sqlite"],
 
     "@missingstudio/eva-tui": ["@missingstudio/eva-tui@workspace:packages/tui"],
 
@@ -1761,6 +1800,8 @@
     "points-on-path": ["points-on-path@0.2.1", "", { "dependencies": { "path-data-parser": "0.1.0", "points-on-curve": "0.2.0" } }, "sha512-25ClnWWuw7JbWZcgqY/gJ4FQWadKxGWk+3kR/7kD0tCaDtPPMj7oHu2ToLaVhfpnHrZzYby2w6tUA0eOIuUg8g=="],
 
     "postcss": ["postcss@8.5.26", "", { "dependencies": { "nanoid": "^3.3.17", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ=="],
+
+    "postgres": ["postgres@3.4.9", "", {}, "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="],
 
     "pretty-format": ["pretty-format@27.5.1", "", { "dependencies": { "ansi-regex": "^5.0.1", "ansi-styles": "^5.0.0", "react-is": "^17.0.1" } }, "sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ=="],
 
