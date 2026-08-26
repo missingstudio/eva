@@ -1,15 +1,15 @@
 # @missingstudio/eva-trace-memory
 
 The in-memory trace sink for [Eva](../../README.md). It holds the trace in an
-array instead of a file: the same contract as
-[`eva.trace.jsonl`](../trace-jsonl/README.md), gone with the process. It
+array instead of a database: the same contract as
+[`eva.trace.sqlite`](../trace-sqlite/README.md), gone with the process. It
 exists for test suites that assert on what a Run committed, and to prove that
 one sink can replace another mid-Run.
 
 Eva is built on a plugin kernel: every capability is a plugin. This plugin
 fills the `TraceSink` slot that
 [`@missingstudio/eva-core`](../../packages/core/README.md) defines — the same
-slot the JSONL sink fills, and exactly one plugin holds a slot at a time. The
+slot the durable sinks fill, and exactly one plugin holds a slot at a time. The
 glossary in [docs/context.md](../../docs/context.md) defines Trace, Event,
 and Session; [architecture.md](../../docs/reference/architecture.md) owns the
 slot mechanics.
@@ -53,18 +53,18 @@ eva --plugin eva.trace.memory
 ```
 
 A config entry loads after the built-in table, so this sink takes the
-`TraceSink` slot from `eva.trace.jsonl`, and the Recorder's next commit lands
+`TraceSink` slot from `eva.trace.sqlite`, and the Recorder's next commit lands
 in memory — no restart needed. In tests, `makeMemorySink()` builds the sink
 directly.
 
-## How it differs from the JSONL sink
+## How it differs from the durable sinks
 
-Its `TraceStore` is an array. Core's `sequenced` wraps it with the same
-numbering rule every sink inherits, so a record here carries the same trace
-position it would carry on disk. But nothing survives the process: the
-high-water map is always empty, a fresh sink starts at nothing, and recovery
+Its store is an array handed to core's `sinkOf`, so a record here carries the
+same trace position it would carry on disk, and a listing here folds the same
+Header a durable store would cache. But
+nothing survives the process: a fresh sink starts at nothing, and recovery
 does not exist here — there is no mark to resume and no torn line to find. A
-build that needs to read yesterday's trace needs the JSONL sink.
+build that needs to read yesterday's trace needs a durable sink.
 
 ## API
 
@@ -83,7 +83,7 @@ build that needs to read yesterday's trace needs the JSONL sink.
 This package has no test file of its own. It is held from
 [packages/conformance](../../packages/conformance):
 [sink-contract.test.ts](../../packages/conformance/src/sink-contract.test.ts)
-runs the one sink suite over this sink and the JSONL sink, and
+runs the one sink suite over this sink and the durable sinks, and
 [swap.test.ts](../../packages/conformance/src/swap.test.ts) loads it over
 `eva.trace.jsonl` mid-Run and holds that the next commit lands here while the
 file keeps what it had. Run the suite from the repository root:
