@@ -53,6 +53,7 @@
     "@missingstudio/eva-session-jsonl": "workspace:*",
     "@missingstudio/eva-shell": "workspace:*",
     "@missingstudio/eva-themes": "workspace:*",
+    "@missingstudio/eva-tool-bash": "workspace:*",
     "@missingstudio/eva-trace": "workspace:*",
     "@missingstudio/eva-trace-jsonl": "workspace:*",
     "@missingstudio/eva-trace-memory": "workspace:*",

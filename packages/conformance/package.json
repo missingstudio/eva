@@ -25,6 +25,7 @@
     "@missingstudio/eva-shell": "workspace:*",
     "@missingstudio/eva-testkit": "workspace:*",
     "@missingstudio/eva-themes": "workspace:*",
+    "@missingstudio/eva-tool-bash": "workspace:*",
     "@missingstudio/eva-tool-edit": "workspace:*",
     "@missingstudio/eva-trace": "workspace:*",
     "@missingstudio/eva-trace-jsonl": "workspace:*",
