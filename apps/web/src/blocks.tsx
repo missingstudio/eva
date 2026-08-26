@@ -1,4 +1,20 @@
 import type { Block, Turn } from "@missingstudio/eva-session-view"
+import {
+  CommitFile,
+  CommitFileChanges,
+  CommitFileIcon,
+  CommitFileInfo,
+  CommitFilePath,
+  CommitFileStatus,
+} from "./components/ai-elements/commit.js"
+import { Image } from "./components/ai-elements/image.js"
+import { Message, MessageContent, MessageResponse } from "./components/ai-elements/message.js"
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "./components/ai-elements/reasoning.js"
+import { Tool, ToolContent, ToolHeader } from "./components/ai-elements/tool.js"
 
 /**
  * How many hunks changed, in words. One is not "1 hunks", and a reader
@@ -6,10 +22,16 @@ import type { Block, Turn } from "@missingstudio/eva-session-view"
  */
 export const hunkText = (hunks: number): string => `${hunks} ${hunks === 1 ? "hunk" : "hunks"}`
 
-// An image travels as bytes, so the page draws the bytes. A `uri` on the
-// record names a file on the machine that made it, which a browser cannot
-// open — it is said beside the image as evidence, not used as a source.
-const imageSource = (mimeType: string, data: string): string => `data:${mimeType};base64,${data}`
+/**
+ * What a Block's disclosure is called, on the panel and on the control that
+ * opens it. It is the Block's own key, which is stable for the life of the
+ * Block and unique across the page — and it is made here rather than left to
+ * the component, because a generated id counts from where a component sits in
+ * the tree: the same Block would draw one way alone and another way inside a
+ * Turn, and the two drawings `packages/conformance` holds against each other
+ * would stop being one drawing.
+ */
+const panelOf = (key: string): string => `panel-${key}`
 
 /**
  * One Block, in page primitives. What the Run did is settled before this is
@@ -23,19 +45,35 @@ const imageSource = (mimeType: string, data: string): string => `data:${mimeType
  */
 export const BlockView = ({ block }: { readonly block: Block }) => {
   switch (block.kind) {
+    // Markdown, rendered. A Run says tables and links, and a page that drew
+    // the source would be showing a reader the pipe rather than the answer.
     case "words":
-      return <p className="words">{block.text}</p>
+      return <MessageResponse>{block.text}</MessageResponse>
+    /**
+     * What was thought on the way, behind a disclosure a reader can close. It
+     * is open to start with, because the record stands whole on this page: a
+     * reader folds it away, and never has to open it to find out it is there.
+     */
     case "reasoning":
-      return <p className="reasoning">{block.text}</p>
+      return (
+        <Reasoning defaultOpen>
+          <ReasoningTrigger aria-controls={panelOf(block.key)}>thinking</ReasoningTrigger>
+          <ReasoningContent id={panelOf(block.key)}>{block.text}</ReasoningContent>
+        </Reasoning>
+      )
     // A call that is open says where it is in its life, and nothing about how
     // it ended, because it has not.
     case "tool":
       return (
-        <div className="call">
-          <code>{block.name}</code>
-          <span className="tool">{block.tool}</span>
-          <span className="status">{block.status}</span>
-        </div>
+        <Tool>
+          <ToolHeader
+            aria-controls={panelOf(block.key)}
+            name={block.name}
+            tool={block.tool}
+            status={block.status}
+          />
+          <ToolContent id={panelOf(block.key)}>call {block.call}</ToolContent>
+        </Tool>
       )
     /**
      * The same call, answered. A Tool Status and a Disposition are both
@@ -45,32 +83,51 @@ export const BlockView = ({ block }: { readonly block: Block }) => {
      */
     case "result":
       return (
-        <div className="call answered">
-          <code>{block.name}</code>
-          <span className="tool">{block.tool}</span>
-          <span className="status">{block.status}</span>
-          <span className="disposition">{block.disposition}</span>
-        </div>
+        <Tool>
+          <ToolHeader
+            aria-controls={panelOf(block.key)}
+            name={block.name}
+            tool={block.tool}
+            status={block.status}
+            disposition={block.disposition}
+          />
+          <ToolContent id={panelOf(block.key)}>call {block.call}</ToolContent>
+        </Tool>
       )
     // The path and the count of hunks, which is the whole of what the record
     // holds. Nothing here is a rendering the far side sent.
     case "diff":
       return (
-        <figure className="diff">
-          <code>{block.path}</code>
-          <figcaption>{hunkText(block.hunks)}</figcaption>
-        </figure>
+        <CommitFile>
+          <CommitFileInfo>
+            <CommitFileStatus status="modified" />
+            <CommitFileIcon />
+            <CommitFilePath>{block.path}</CommitFilePath>
+          </CommitFileInfo>
+          <CommitFileChanges>{hunkText(block.hunks)}</CommitFileChanges>
+        </CommitFile>
       )
+    /**
+     * An image travels as bytes, so the page draws the bytes. A `uri` on the
+     * record names a file on the machine that made it, which a browser cannot
+     * open — it is said beside the image as evidence, not used as a source.
+     */
     case "image":
       return (
-        <figure className="image">
-          <img src={imageSource(block.mimeType, block.data)} alt={`an image, ${block.mimeType}`} />
-          <figcaption>{block.uri ?? block.mimeType}</figcaption>
+        <figure className="my-1">
+          <Image
+            base64={block.data}
+            mediaType={block.mimeType}
+            alt={`an image, ${block.mimeType}`}
+          />
+          <figcaption className="mt-1 text-muted text-xs">
+            {block.uri === undefined ? block.mimeType : `${block.mimeType} · ${block.uri}`}
+          </figcaption>
         </figure>
       )
     case "unknown":
       return (
-        <p className="undrawn">
+        <p className="rounded-md border border-rule border-dashed px-3 py-2 text-muted text-sm">
           this page cannot draw <code>{block.originalKind}</code>, and the record holds one
         </p>
       )
@@ -81,21 +138,29 @@ export const BlockView = ({ block }: { readonly block: Block }) => {
  * One Session, as the fold gives it: a Turn per Message, and the Blocks of
  * what was said in it. The Turns are handed over rather than read, so what
  * the page draws is provable without a socket.
+ *
+ * A Turn is a Message, so it is drawn as one. Who spoke is said in words as
+ * well as in the styling a `Message` carries: a reader who cannot tell the
+ * two apart by colour still has to be able to tell them apart.
  */
 export const Turns = ({ turns }: { readonly turns: readonly Turn[] }) =>
   turns.length === 0 ? (
     // A Session that folds to nothing and one whose fold has not arrived are
     // two different things, and a page that drew them alike would be lying
     // about one of them.
-    <p className="note">This Session has said nothing yet.</p>
+    <p className="text-muted">This Session has said nothing yet.</p>
   ) : (
-    <ol className="turns">
+    <ol className="mt-6 flex list-none flex-col gap-6 p-0">
       {turns.map((turn) => (
-        <li key={turn.key} className={`turn ${turn.author}`}>
-          <p className="author">{turn.author}</p>
-          {turn.blocks.map((block) => (
-            <BlockView key={block.key} block={block} />
-          ))}
+        <li key={turn.key}>
+          <Message from={turn.author}>
+            <p className="text-muted text-xs uppercase tracking-[0.06em]">{turn.author}</p>
+            <MessageContent>
+              {turn.blocks.map((block) => (
+                <BlockView key={block.key} block={block} />
+              ))}
+            </MessageContent>
+          </Message>
         </li>
       ))}
     </ol>

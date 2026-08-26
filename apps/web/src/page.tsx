@@ -14,13 +14,15 @@ import { useSessions } from "./sessions.js"
  * is resolved on the load the anchor makes.
  */
 const Row = ({ session }: { readonly session: SessionHeader }) => (
-  <li>
-    <a className="title" href={sessionHref(session.id)}>
+  <li className="flex flex-wrap items-baseline gap-2 border-rule border-t py-2.5">
+    <a className="flex-[1_1_12rem] truncate" href={sessionHref(session.id)}>
       {session.title ?? "no title yet"}
     </a>
-    <code>{session.id}</code>
+    <code className="text-muted text-sm">{session.id}</code>
     {session.updatedAt === undefined ? null : (
-      <time dateTime={session.updatedAt}>{session.updatedAt}</time>
+      <time className="text-muted text-sm" dateTime={session.updatedAt}>
+        {session.updatedAt}
+      </time>
     )}
   </li>
 )
@@ -31,9 +33,9 @@ const Row = ({ session }: { readonly session: SessionHeader }) => (
  */
 export const Listing = ({ sessions }: { readonly sessions: readonly SessionHeader[] }) =>
   sessions.length === 0 ? (
-    <p className="note">Eva holds no Session yet.</p>
+    <p className="mt-6 text-muted">Eva holds no Session yet.</p>
   ) : (
-    <ul className="sessions">
+    <ul className="mt-6 list-none p-0">
       {sessions.map((one) => (
         <Row key={one.id} session={one} />
       ))}
@@ -48,13 +50,13 @@ export const Page = () => {
   const listing = useSessions()
 
   return (
-    <main>
-      <h1>Eva</h1>
-      <p className="build">
+    <main className="mx-auto max-w-measure px-6 py-16">
+      <h1 className="text-3xl">Eva</h1>
+      <p className="text-muted text-sm">
         the page that watches · build <code>{buildLine()}</code>
       </p>
       {listing.kind === "reading" ? (
-        <p className="note">Reading the Sessions…</p>
+        <p className="mt-6 text-muted">Reading the Sessions…</p>
       ) : (
         <Listing sessions={listing.sessions} />
       )}

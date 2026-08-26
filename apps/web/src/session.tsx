@@ -9,6 +9,14 @@ import {
 } from "@missingstudio/eva-schema"
 import type { Turn } from "@missingstudio/eva-session-view"
 import { Turns } from "./blocks.js"
+import {
+  Context,
+  ContextCacheUsage,
+  ContextContentHeader,
+  ContextInputUsage,
+  ContextOutputUsage,
+  ContextReasoningUsage,
+} from "./components/ai-elements/context.js"
 
 /**
  * What the page has of one Session's record: the fold, or not yet. It is a
@@ -81,7 +89,7 @@ export const noticeOf = (pipe: Pipe): string | undefined => {
 export const Notice = ({ pipe }: { readonly pipe: Pipe }) => {
   const said = noticeOf(pipe)
   return said === undefined ? null : (
-    <p className="pipe" role="status">
+    <p className="mt-3 rounded-md border border-warning bg-card px-3 py-2 text-sm" role="status">
       {said}
     </p>
   )
@@ -115,23 +123,23 @@ const money = (spend: Spend): string => {
   }
 }
 
-const counts = (value: number | null): string => (value === null ? "—" : String(value))
-
 /**
  * What the Session cost, from the Transcript's own cost fold. `ran` is
  * whether it has done anything: a Session that has not spent is not one
  * whose spend nobody reported, and one line for both would tell a reader the
  * Provider is silent when it has simply not been asked.
+ *
+ * The spend is worked out here and handed over already said, because pricing
+ * is not a drawing's job and this side of the wire holds no Catalog anyway.
  */
 export const Cost = ({ cost, ran }: { readonly cost: CostSummary; readonly ran: boolean }) => (
-  <dl className="cost">
-    <dt>spend</dt>
-    <dd>{money(spendOf(cost, ran))}</dd>
-    <dt>tokens in</dt>
-    <dd>{counts(cost.inputTokens)}</dd>
-    <dt>tokens out</dt>
-    <dd>{counts(cost.outputTokens)}</dd>
-  </dl>
+  <Context cost={cost} className="mt-8">
+    <ContextContentHeader>{money(spendOf(cost, ran))}</ContextContentHeader>
+    <ContextInputUsage />
+    <ContextOutputUsage />
+    <ContextReasoningUsage />
+    <ContextCacheUsage />
+  </Context>
 )
 
 /**
@@ -150,14 +158,14 @@ export const Named = ({
   readonly header: SessionHeader | undefined
 }) => (
   <>
-    <h1>{header?.title ?? "no title yet"}</h1>
-    <p className="build">
+    <h1 className="text-3xl">{header?.title ?? "no title yet"}</h1>
+    <p className="text-muted text-sm">
       <code>{session}</code>
       {header?.updatedAt === undefined ? null : (
         <time dateTime={header.updatedAt}> · {header.updatedAt}</time>
       )}
     </p>
-    <p className="build">
+    <p className="text-muted text-sm">
       <a href="/">every Session</a>
     </p>
   </>
@@ -168,10 +176,17 @@ export const Named = ({
  * It is the stream and never the record, so it is drawn apart from the Turns:
  * a reader can see which words are still being said, and the fold writes over
  * them when the Run closes.
+ *
+ * It is drawn on the panel, which is the one surface that stays dark in both
+ * schemes because the program it stands for is. Nothing else on this page is
+ * the program talking while it talks.
  */
 export const Live = ({ said }: { readonly said: string }) =>
   said === "" ? null : (
-    <p className="live" aria-live="polite">
+    <p
+      className="panel-terminal my-2 whitespace-pre-wrap rounded-md px-3 py-2 text-sm"
+      aria-live="polite"
+    >
       {said}
     </p>
   )
@@ -194,11 +209,11 @@ export const Session = ({
   readonly reading: Reading
   readonly pipe: Pipe
 }) => (
-  <main>
+  <main className="mx-auto max-w-measure px-6 py-16">
     <Named session={session} header={header} />
     <Notice pipe={pipe} />
     {reading.folded.kind === "folding" ? (
-      <p className="note">Reading the transcript…</p>
+      <p className="mt-6 text-muted">Reading the transcript…</p>
     ) : (
       <>
         <Turns turns={reading.folded.turns} />
