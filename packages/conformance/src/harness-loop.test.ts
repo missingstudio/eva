@@ -1,5 +1,10 @@
 import type { Kernel } from "@missingstudio/eva-boot"
-import type { Approving, ProposedCall } from "@missingstudio/eva-core"
+import {
+  foldTranscript,
+  toolText,
+  type Approving,
+  type ProposedCall,
+} from "@missingstudio/eva-core"
 import { sessionID, type Event, type Payload } from "@missingstudio/eva-schema"
 import { define } from "@missingstudio/eva-sdk"
 import {
@@ -23,7 +28,7 @@ import { toolPolicy } from "@missingstudio/eva-tool-policy"
 import { toolRead } from "@missingstudio/eva-tool-read"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
-import { Effect } from "effect"
+import { Deferred, Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 
 /**
@@ -453,5 +458,184 @@ describe("an exhausted Budget", () => {
       claim: { result: "failed", summary: "the Budget is exhausted: tokens" },
       stopReason: "max_turn_requests",
     })
+  })
+})
+
+/**
+ * Steering, end to end. A line typed while the loop works lands after the
+ * current response and its tool group complete structurally: the window that
+ * was running commits whole, the windows that never opened are `skipped`, and
+ * the words are on the record of the Step that reads them.
+ *
+ * The boundary is proven with a latch and not a clock. Two calls to a waiting
+ * tool are one window; neither answers until both have arrived, so the steer is
+ * delivered while that window is in flight and the group's next boundary is
+ * the first one it can stop at.
+ */
+describe("a steer while the loop works", () => {
+  const STEER = "also rename the tests"
+
+  interface Latch {
+    readonly full: Deferred.Deferred<void>
+    readonly release: Deferred.Deferred<void>
+  }
+
+  // A tool that waits for its window to fill. It claims a call may run beside
+  // another, so two calls to it are one window.
+  const waiting = (latch: Latch, wanted: number) => {
+    let arrived = 0
+    return define({
+      id: "test.tool.wait",
+      effect: Effect.fn("test.tool.wait")(function* (ctx) {
+        yield* ctx.tool.transform((draft) => {
+          draft.set({
+            id: "wait",
+            description: "waits for the window to fill",
+            kind: "read",
+            input: { type: "object", properties: {} },
+            parallelSafe: () => true,
+            execute: () =>
+              Effect.gen(function* () {
+                arrived += 1
+                if (arrived >= wanted) yield* Deferred.succeed(latch.full, undefined)
+                yield* Deferred.await(latch.release)
+                return toolText("ok", "waited")
+              }),
+          })
+        })
+      }),
+    })
+  }
+
+  /**
+   * One Prompt, with a steer delivered while the first window is running. The
+   * Prompt runs on its own fiber, and the latch is what makes the delivery land
+   * inside the group rather than beside it.
+   */
+  const steering = (script: readonly ScriptedTurn[]) => {
+    const virtual = virtualFileSystem(TREE)
+    const fake = scripted(script)
+    const latch = {
+      full: Deferred.makeUnsafe<void>(),
+      release: Deferred.makeUnsafe<void>(),
+    }
+
+    return withKernel(
+      [
+        trace,
+        traceMemory,
+        virtual.plugin,
+        diff,
+        toolRead,
+        toolEdit,
+        waiting(latch, 2),
+        sched,
+        toolPolicy,
+        approval,
+        fakeCatalog,
+        fake.plugin,
+        harnessLoop,
+      ],
+      (kernel: Kernel, scope) =>
+        Effect.gen(function* () {
+          const opened = yield* openRow(kernel, scope, LOOP_HARNESS_ID, SESSION)
+          const prompting = yield* Effect.forkChild(
+            opened.harness.prompt(SESSION, { kind: "prompt", text: RENAME }),
+          )
+          yield* Deferred.await(latch.full)
+          yield* opened.harness.prompt(SESSION, {
+            kind: "steer",
+            text: STEER,
+            target: "next-step",
+          })
+          yield* Deferred.succeed(latch.release, undefined)
+          const reason = yield* Fiber.join(prompting)
+          return {
+            reason,
+            files: virtual.files(),
+            record: yield* committed(kernel),
+            requests: fake.seen().length,
+            seen: fake.seen(),
+          }
+        }),
+      { config: { approval: { mode: "autonomous" } } },
+    )
+  }
+
+  const SCRIPT: readonly ScriptedTurn[] = [
+    step("Working.", [
+      { id: "call_1", name: "wait", args: {} },
+      { id: "call_2", name: "wait", args: {} },
+      renaming("call_3", "a.ts", ["class UserSvc"]),
+      reading("call_4", "b.ts"),
+    ]),
+    step("I stopped for you."),
+  ]
+
+  it("lets the window in flight finish and skips the calls that never started", async () => {
+    const found = await steering(SCRIPT)
+
+    expect(found.reason).toBe("end_turn")
+    expect(dispositions(found.record)).toEqual(["ok", "ok", "skipped", "skipped"])
+    // The barrier never ran, so the file it would have changed stands.
+    expect(found.files["a.ts"]).toBe(TREE["a.ts"])
+  })
+
+  // The line is on the record, in the Run that reads it — which is the Step
+  // after the one the response and its group belong to.
+  it("records the line in the Step that reads it, after the group that was running", async () => {
+    const found = await steering(SCRIPT)
+
+    const runs = [...new Set(found.record.map((event) => event.run))]
+    const steer = found.record.find((event) => event.payload.kind === "message")
+    expect(steer?.payload).toEqual({
+      kind: "message",
+      content: { type: "text", text: STEER },
+      target: "next-step",
+    })
+    expect(steer?.run).toBe(runs[1])
+    // Every skipped call is on the record of the Run before it.
+    expect(
+      found.record.filter((event) => event.payload.kind === "tool_result").map((one) => one.run),
+    ).toEqual([runs[0], runs[0], runs[0], runs[0]])
+    // The model reads the line too, so the next request carries it.
+    expect(found.seen[1]?.messages.at(-1)).toMatchObject({
+      author: "human",
+      blocks: [{ content: { type: "text", text: STEER } }],
+    })
+  })
+
+  /**
+   * The fold is the test of "nothing is orphaned": a `tool_call` with no result
+   * shows as a call that never ended, and a result whose id has no `tool_call`
+   * is dropped without a word. After a steer there is neither.
+   */
+  it("folds clean: no orphaned call, no dangling result", async () => {
+    const found = await steering(SCRIPT)
+
+    const ids = (kind: "tool_call" | "tool_result") =>
+      found.record.flatMap((event) => (event.payload.kind === kind ? [event.payload.id] : []))
+    expect(ids("tool_call")).toEqual(ids("tool_result"))
+
+    const messages = foldTranscript(SESSION, found.record).messages()
+    const tools = messages.flatMap((message) =>
+      message.blocks.filter((block) => block.type === "tool"),
+    )
+    expect(tools).toHaveLength(4)
+    for (const block of tools) expect(block.disposition).not.toBeUndefined()
+    expect(tools.map((block) => block.disposition)).toEqual(["ok", "ok", "skipped", "skipped"])
+    // The line the person typed is a human Message of its own.
+    expect(
+      messages.filter(
+        (message) =>
+          message.author === "human" &&
+          message.blocks.some(
+            (block) =>
+              block.type === "content" &&
+              block.content.type === "text" &&
+              block.content.text === STEER,
+          ),
+      ),
+    ).toHaveLength(1)
   })
 })

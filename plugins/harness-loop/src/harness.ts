@@ -4,6 +4,7 @@ import type {
   Harness,
   HarnessHost,
   ResumeResult,
+  SteerMessage,
   SubmitInput,
   ToolInfo,
 } from "@missingstudio/eva-core"
@@ -55,6 +56,24 @@ export interface LoopDeps {
  */
 const CAPABILITIES = {}
 
+/**
+ * One line a person typed while the loop was working, and the boundary it is
+ * held for. `next-step` lands in the Prompt that is running; `next-run` is the
+ * whole arc's boundary and waits for the next Prompt.
+ */
+type Steer = Extract<SubmitInput, { readonly kind: "steer" }>
+
+// A steer as the record carries it. The payload kind is the schema's, and it
+// already names the boundary the words were held for.
+const messageOf = (steer: Steer): SteerMessage => ({
+  kind: "message",
+  content: { type: "text", text: steer.text },
+  target: steer.target,
+})
+
+// What the calls a steer left unstarted report.
+const SKIPPED = "a steer arrived and this call did not start"
+
 // A Gap said in one clause, the same words a failed Claim carries.
 const gapWord = (gap: Gap): string =>
   `${gap.kind} ${gap.name}${gap.meant === undefined ? "" : `, did you mean ${gap.meant}`}`
@@ -84,6 +103,37 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
   const minted = new Map<SessionID, string>()
   const running = new Map<SessionID, Fiber.Fiber<StopReason>>()
   const last = new Map<SessionID, StopReason>()
+  /**
+   * Steering that has not landed yet, per Session. The loop holds it because
+   * only the loop knows where its next Step begins: a Session API that held it
+   * would have to know the shape of every Harness. `architecture.md` §12.3a
+   * promises the loop a host-scoped inbox slot, and that is where this moves
+   * once the loop hosts extension points of its own.
+   */
+  const inbox = new Map<SessionID, Steer[]>()
+
+  // The steering held for one boundary, in the order it arrived. What is held
+  // for the other boundary stays in the inbox.
+  const taken = (session: SessionID, target: Steer["target"]): readonly Steer[] => {
+    const held = inbox.get(session) ?? []
+    const mine = held.filter((one) => one.target === target)
+    if (mine.length > 0) {
+      inbox.set(
+        session,
+        held.filter((one) => one.target !== target),
+      )
+    }
+    return mine
+  }
+
+  /**
+   * Why the tool group of the Run in flight must stop, or nothing. A steer
+   * waiting for the next Step is the only reason: the group stops at its next
+   * window boundary, the window that is running commits whole, and the calls
+   * of the windows that never opened are `skipped`.
+   */
+  const stopping = (session: SessionID): string | undefined =>
+    (inbox.get(session) ?? []).some((one) => one.target === "next-step") ? SKIPPED : undefined
 
   const answer = Effect.fn("eva.harness.loop.answer")(function* (
     session: SessionID,
@@ -110,7 +160,18 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
       return yield* close("no model is named and the Catalog holds no default", "end_turn")
     }
 
-    let history: readonly TranscriptMessage[] = [human(intent)]
+    /**
+     * Steering that waited for the whole arc. It arrived before this Prompt,
+     * so it is said before the intent — the order the person said it in.
+     */
+    const opening = taken(session, "next-run")
+    let history: readonly TranscriptMessage[] = [
+      ...opening.map((one) => human(one.text)),
+      human(intent),
+    ]
+    // Steering the next Run records. A Recorder holds one open Run, so the
+    // words land inside a Run and never in a commit of their own.
+    let pending: readonly SteerMessage[] = opening.map(messageOf)
     // Consecutive Steps in which nothing the model proposed could run.
     let malformed = 0
 
@@ -135,6 +196,19 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
         )
       }
 
+      /**
+       * The steering that waited for this Step, which is the structural point
+       * the roadmap's rule names: the response and its tool group are over and
+       * their records are committed. It is read after the ceilings, so a Prompt
+       * that stops here leaves the words in the inbox for the next Prompt
+       * rather than swallowing them.
+       */
+      const arrived = taken(session, "next-step")
+      if (arrived.length > 0) {
+        history = [...history, ...arrived.map((one) => human(one.text))]
+        pending = [...pending, ...arrived.map(messageOf)]
+      }
+
       const filled = instructionOf(yield* deps.prompts, LOOP_TEMPLATE_ID, {})
       if (filled.kind === "refused") {
         const said = filled.gaps.map(gapWord).join("; ")
@@ -150,7 +224,11 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
         system: filled.text,
         // Read per Step, so a mode change is in the next Step's list.
         tools: offeredIn(yield* deps.tools),
+        ...(pending.length === 0 ? {} : { steered: pending }),
+        // Read at every window boundary of this Run's group, never captured.
+        stop: Effect.sync(() => stopping(session)),
       })
+      pending = []
 
       // The Run's own record already says why it failed, so the loop stops
       // there and adds no second story.
@@ -184,14 +262,20 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
     input: SubmitInput,
   ) {
     /**
-     * Steering is not delivered yet, and the current Stop Reason is the whole
-     * answer until it is. The structural point a steer lands on already
-     * exists: the top of the Step loop above, which is reached once the Run
-     * has closed and its tool group has committed. `eva.steer` owns the inbox
-     * that holds a line until then, and `refuseCall` in core is what turns the
-     * calls a steer left unstarted into `skipped` results.
+     * A steer goes into the inbox and the current Stop Reason is the answer,
+     * because the Prompt it lands in is not this call's to wait for. A Workflow
+     * refuses one; the loop accepts it, and that is the difference between a
+     * declared list of Steps and an agent.
+     *
+     * `next-step` lands at the top of the Step loop above, which is reached
+     * once the Run has closed and its tool group has committed. `next-run` is
+     * the whole arc's boundary and waits for the next Prompt. Neither is an
+     * error, and a steer that arrives with no Prompt running waits for one.
      */
-    if (input.kind === "steer") return last.get(session) ?? ("end_turn" as const)
+    if (input.kind === "steer") {
+      inbox.set(session, [...(inbox.get(session) ?? []), input])
+      return last.get(session) ?? ("end_turn" as const)
+    }
 
     const stepping = yield* Effect.forkChild(answer(session, input.text))
     running.set(session, stepping)
