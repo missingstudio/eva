@@ -225,7 +225,7 @@ on.
 | `eva.shell`        | slot `Shell`: starts a process, streams its output               |
 | `eva.sandbox.none` | slot `Sandbox`: the seam exists, with no containment yet         |
 | `eva.harness.loop` | harness domain: Eva's own propose → act → observe loop           |
-| `eva.sched`        | hook `tool.execute.before`: parallel-safety classification       |
+| `eva.sched`        | tool domain: the parallel-safety policy a group is run under     |
 | `eva.steer`        | hook `session.prompt.before`: mid-Run user input                 |
 | `eva.approval`     | agent domain + hook: named permission modes                      |
 | `eva.diff`         | slot `DiffApplier`: dry-run preview, atomic apply                |

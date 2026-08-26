@@ -1172,7 +1172,7 @@ many more that later stages add.
 | `eva.prompt`    | `eva-prompt`    | prompt domain: Templates, includes, Variables       |
 | `eva.validator` | `eva-validator` | fills `Validator`: judges a Candidate, names Faults |
 | `eva.workflow`  | `eva-workflow`  | harness domain: a declared list of Steps, no agency |
-| `eva.sched`     | `eva-sched`     | hook `tool.execute.before`: parallel-safety         |
+| `eva.sched`     | `eva-sched`     | tool transform: the parallel-safety policy          |
 | `eva.steer`     | `eva-steer`     | hook `session.prompt.before`: mid-Run input         |
 | `eva.approval`  | `eva-approval`  | agent domain + hook: named permission modes         |
 | `eva.diff`      | `eva-diff`      | fills `DiffApplier`: dry-run preview, atomic apply  |

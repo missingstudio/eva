@@ -40,6 +40,7 @@
         "@missingstudio/eva-provider-openai": "workspace:*",
         "@missingstudio/eva-provider-retry": "workspace:*",
         "@missingstudio/eva-sandbox-none": "workspace:*",
+        "@missingstudio/eva-sched": "workspace:*",
         "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
         "@missingstudio/eva-session-jsonl": "workspace:*",
@@ -663,6 +664,20 @@
         "typescript": "catalog:",
       },
     },
+    "plugins/sched": {
+      "name": "@missingstudio/eva-sched",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "plugins/session-jsonl": {
       "name": "@missingstudio/eva-session-jsonl",
       "version": "0.0.0",
@@ -1264,6 +1279,8 @@
     "@missingstudio/eva-provider-retry": ["@missingstudio/eva-provider-retry@workspace:plugins/provider-retry"],
 
     "@missingstudio/eva-sandbox-none": ["@missingstudio/eva-sandbox-none@workspace:plugins/sandbox-none"],
+
+    "@missingstudio/eva-sched": ["@missingstudio/eva-sched@workspace:plugins/sched"],
 
     "@missingstudio/eva-schema": ["@missingstudio/eva-schema@workspace:packages/schema"],
 

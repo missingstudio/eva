@@ -48,6 +48,7 @@
     "@missingstudio/eva-provider-openai": "workspace:*",
     "@missingstudio/eva-provider-retry": "workspace:*",
     "@missingstudio/eva-sandbox-none": "workspace:*",
+    "@missingstudio/eva-sched": "workspace:*",
     "@missingstudio/eva-schema": "workspace:*",
     "@missingstudio/eva-sdk": "workspace:*",
     "@missingstudio/eva-session-jsonl": "workspace:*",
