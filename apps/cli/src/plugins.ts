@@ -30,6 +30,7 @@ import { toolBash } from "@missingstudio/eva-tool-bash"
 import { toolEdit } from "@missingstudio/eva-tool-edit"
 import { toolGlob } from "@missingstudio/eva-tool-glob"
 import { toolGrep } from "@missingstudio/eva-tool-grep"
+import { toolPolicy } from "@missingstudio/eva-tool-policy"
 import { toolRead } from "@missingstudio/eva-tool-read"
 import { toolWeb } from "@missingstudio/eva-tool-web"
 import { trace } from "@missingstudio/eva-trace"
@@ -174,6 +175,10 @@ export const BUILT_IN: readonly Plugin[] = [
   // After the tools, because it narrows the rows they registered: a build
   // that forces a tool serial edits a row that is already there.
   sched,
+  // After the tools it gates, which is how the table reads rather than how the
+  // gate works: a hook decides wherever it registered, and the strictest
+  // decision wins whatever the order was.
+  toolPolicy,
   commands,
   themes,
   keymap,
