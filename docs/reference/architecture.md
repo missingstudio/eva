@@ -880,7 +880,7 @@ other row is the plan of the stage beside it.
 | `tool.resolve`            | 2     | when a tool name is looked up         | which tool definition answers           |
 | `tool.execute.before`     | 2     | before a tool runs                    | the arguments; allow, deny, or ask      |
 | `tool.execute.after`      | 2     | after a tool returns                  | the result and its disposition          |
-| `session.prompt.before`   | 2     | before a prompt enters a run          | the prompt text and attachments         |
+| `session.prompt.before`   | 3     | before a prompt enters a run          | the prompt text and attachments         |
 | `session.prompt.after`    | 3     | after a run answers a prompt          | nothing; observation only               |
 | `session.compact`         | 3     | when the transcript needs compaction  | which entries survive                   |
 | `run.retry.before`        | 5     | before a failed attempt is retried    | runs remediation; whether to proceed    |
@@ -1217,7 +1217,6 @@ many more that later stages add.
 | `eva.validator` | `eva-validator` | fills `Validator`: judges a Candidate, names Faults            |
 | `eva.workflow`  | `eva-workflow`  | harness domain: a declared list of Steps, no agency            |
 | `eva.sched`     | `eva-sched`     | tool transform: the parallel-safety policy                     |
-| `eva.steer`     | `eva-steer`     | hook `session.prompt.before`: mid-Run input                    |
 | `eva.approval`  | `eva-approval`  | agent, tool and command domains + hook: named permission modes |
 | `eva.diff`      | `eva-diff`      | fills `DiffApplier`: dry-run preview, atomic apply             |
 

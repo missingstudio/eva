@@ -378,6 +378,15 @@ runtime has not classified parallel-safe is one, so unclassified fails closed.
 _Avoid_: Lock, fence, serial call, Scheduler (a Scheduler admits work to
 workers, which is a different thing)
 
+**Steering**:
+A line a person says while a Unit is working, delivered at the next structural
+boundary. `next-step` is a boundary inside the Prompt that is running: the
+response and its tool group are over, and the calls of the windows that never
+opened are `skipped`. `next-run` is the whole arc's boundary, so it rides the
+next Prompt. A Harness holds the inbox, because only it knows where its next
+Step begins.
+_Avoid_: Interrupt (that stops work in flight), injection, nudge, barge-in
+
 **Agent half**:
 The side of the protocol a Harness implements: create a session, prompt, cancel,
 fork, resume, and report updates.
@@ -576,7 +585,7 @@ is allowed.
 
 | Term                                                | Arrives at |
 | --------------------------------------------------- | ---------- |
-| Loop, Tool, Mode, Approval, Steering, Sandbox       | Stage 2    |
+| Loop, Tool, Mode, Approval, Sandbox                 | Stage 2    |
 | Repomap, Compaction, System Context, Context Source | Stage 3    |
 | Workspace, Snapshot, Isolation                      | Stage 4    |
 | Verifier, Check, Evidence, Remediation              | Stage 5    |

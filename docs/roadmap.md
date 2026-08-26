@@ -226,7 +226,6 @@ on.
 | `eva.sandbox.none` | slot `Sandbox`: the seam exists, with no containment yet         |
 | `eva.harness.loop` | harness domain: Eva's own propose → act → observe loop           |
 | `eva.sched`        | tool domain: the parallel-safety policy a group is run under     |
-| `eva.steer`        | hook `session.prompt.before`: mid-Run user input                 |
 | `eva.approval`     | agent, tool and command domains + hook: named permission modes   |
 | `eva.diff`         | slot `DiffApplier`: dry-run preview, atomic apply                |
 | `eva.api`          | surface: the Session API's write half, over the socket W1 opened |
@@ -263,7 +262,22 @@ same API a terminal does.
 
 **Steering.** Mid-Run user input lands after the current provider response and
 tool group complete structurally. Unstarted calls become skipped results.
-Nothing is orphaned.
+Nothing is orphaned. A steer names which boundary it waits for. `next-step` is a
+boundary inside the Prompt that is running: the tool group stops before it opens
+another window, the window that was running commits whole, and the calls of the
+windows that never opened are `skipped`. `next-run` is the whole arc's boundary,
+so it rides the next Prompt — which is what steering between Runs has always
+done.
+
+**The inbox is the harness's, and there is no `eva.steer` plugin.** A hook at
+`session.prompt.before` fires before a prompt enters a Run. It cannot hold a
+line while a Run is open, it cannot reach a Step boundary, and it cannot stop a
+tool group, so it carries none of the rule above — and a stage may not add an
+extension point it does not itself use. The hook arrives at stage 3 instead,
+where `eva.project` is its first registrant. Only a Harness knows where its next
+Step begins, so `eva.harness.loop` holds the inbox, and the host-scoped `inbox`
+slot [reference/architecture.md](reference/architecture.md) §12.3a promises is
+where it moves when the loop becomes a host of plugins.
 
 **Approval.** Named permission modes — `read-only`, `supervised`, `autonomous`,
 `plan` — with per-tool overrides inside a mode. Modes are **capability
@@ -356,9 +370,10 @@ stage 9 and everything after it.
 | `eva.compaction` | hook `session.compact`                                          |
 | `eva.project`    | transforms from `EVA.md`; path-scoped rules                     |
 
-`eva.project` re-registers `session.prompt.before`, which stage 2 introduced for
-steering. Registering into a hook that already exists is ordinary; this stage
-adds only `session.compact` and `session.prompt.after`.
+`eva.project` is the first registrant of `session.prompt.before`, which stage 2
+planned for steering and did not need: a line typed mid-Run lands at a Step
+boundary, and a hook before the Run cannot reach one. So this stage adds three
+hooks — `session.prompt.before`, `session.compact` and `session.prompt.after`.
 
 **Compaction.** The split point never separates a `tool_call` from its
 `tool_result`, and never drops a standing constraint. The real fix is that
@@ -1936,8 +1951,8 @@ domain and is listed on the same stage.
 | ----- | --------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | catalog, command, theme, keymap, agent, harness, integration, surface | Recorder, TraceSink, SessionStore, CredentialStore, Budget | `model.resolve`, `provider.request.before`, `provider.response.after`, `provider.retry` | `plugin.added`, `plugin.removed`, `plugin.failed`, `config.changed`, `session.started`, `run.opened`, `run.finished`, `slot.filled`, `slot.emptied`, and `<name>.updated` for each domain |
 | 1     | prompt                                                                | Validator                                                  | —                                                                                       | `prompt.updated`                                                                                                                                                                          |
-| 2     | tool                                                                  | Sandbox, FileSystem, Shell, DiffApplier                    | `tool.resolve`, `tool.execute.before`, `tool.execute.after`, `session.prompt.before`    | `tool.updated`                                                                                                                                                                            |
-| 3     | —                                                                     | RepoMap, Retriever                                         | `session.compact`, `session.prompt.after`                                               | —                                                                                                                                                                                         |
+| 2     | tool                                                                  | Sandbox, FileSystem, Shell, DiffApplier                    | `tool.resolve`, `tool.execute.before`, `tool.execute.after`                             | `tool.updated`                                                                                                                                                                            |
+| 3     | —                                                                     | RepoMap, Retriever                                         | `session.prompt.before`, `session.compact`, `session.prompt.after`                      | —                                                                                                                                                                                         |
 | 4     | workspace                                                             | Workspace, Snapshot                                        | —                                                                                       | `workspace.updated`                                                                                                                                                                       |
 | 5     | check                                                                 | Verifier                                                   | `run.retry.before`                                                                      | `check.updated`                                                                                                                                                                           |
 | 6     | memory                                                                | Memory                                                     | `trace.commit.before`                                                                   | `memory.updated`                                                                                                                                                                          |
