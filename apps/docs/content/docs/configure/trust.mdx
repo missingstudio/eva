@@ -1,0 +1,46 @@
+---
+title: Trust and the .eva directory
+description: A repository can ship a .eva directory with a team's Eva setup. Eva reads it only after you run eva trust there, because the grant is yours to give.
+source: README.md
+---
+
+A repository can carry a `.eva` directory holding a team's Eva setup —
+configuration, and later more. **Eva ignores it until you run `eva trust` in
+that directory.**
+
+```bash
+cd some-repository
+eva trust
+```
+
+## Why it is a verb you run
+
+A repository you clone is code someone else wrote. If Eva read a checked-in
+config file automatically, cloning a repository would silently change how your
+tools behave — which model you call, which plugins load, what your runs cost.
+
+So the grant is yours to give. It is a verb you type, not a file a repository
+can ship. Nothing in a repository can grant itself trust.
+
+## Withdraw it
+
+```bash
+eva untrust
+```
+
+The grant is recorded per directory, so untrusting one repository leaves the
+others alone.
+
+## Check what a grant actually did
+
+```bash
+eva config show
+```
+
+Every resolved key is printed beside where it came from, so you can see exactly
+which values the `.eva` directory contributed.
+
+## Exit codes
+
+`eva trust` and `eva untrust` exit 0 when the grant is recorded or dropped.
+See [exit codes](/reference/exit-codes).

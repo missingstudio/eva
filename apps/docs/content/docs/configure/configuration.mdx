@@ -1,0 +1,303 @@
+---
+title: Configuration
+description: Where Eva reads configuration from, how the layers resolve, every key you can set, and how to ask Eva which layer a value actually came from.
+source: docs/reference/architecture.md
+---
+
+Eva reads configuration from several layers and merges them. To find out what
+Eva actually resolved, and where each value came from, ask it:
+
+```bash
+eva config show
+```
+
+That command prints every resolved key beside its origin, and the plugins that
+would load — before the kernel boots, so a config naming a plugin nobody has
+still prints. It is the answer to "why is this setting not taking effect", and
+it is faster than reasoning about precedence.
+
+## The shape
+
+Configuration is YAML, and every key is one of two kinds.
+
+A top-level key sits at the root of the file. Each one belongs to exactly one
+plugin, and a plugin declares the keys it reads. That declaration is what lets
+Eva tell you about a key nothing reads.
+
+A plugin option sits inside that plugin's own entry under `plugins:`, and only
+that plugin takes it.
+
+```yaml title="~/.eva/config.yaml"
+model: anthropic/claude-sonnet-5 # top-level, read by eva.config
+theme: contrast # top-level, read by eva.tui
+
+plugins:
+  - id: eva.provider.anthropic
+    options:
+      maxTokens: 32000 # an option, taken by one plugin
+```
+
+## Where config lives
+
+The layers, lowest precedence first. A later layer overrides an earlier one.
+
+1. Built-in defaults.
+2. `~/.eva` as a resource directory, then `~/.eva/config.yaml`.
+3. `$EVA_CONFIG_DIR` as a resource directory, then its `config.yaml`.
+4. Each trusted project `.eva` directory, then its `config.yaml`, nearest
+   last. A project directory is read only after [`eva trust`](/configure/trust).
+5. Every `--config <path>` overlay, in the order the flags were given.
+6. `EVA_CONFIG_CONTENT`, config carried inline in the environment.
+7. The flags: `--model`, `--plugin`, `--without-plugin`.
+
+Within one directory the resources come first and `config.yaml` second — the
+file is the one place a person goes to override, so it wins over a resource
+the same directory discovered.
+
+The flags are a layer like the files are: they merge as one mapping whose
+origin is the command line, so `eva config show` names the flag the way it
+names a file.
+
+## How the layers merge
+
+A mapping merges key by key. A scalar replaces. A list replaces whole.
+
+So a project file that names one agent changes that agent and leaves the
+others alone, and one field of an agent can be overridden without restating
+the rest.
+
+The `plugins` list is the one exception: the layers concatenate it instead of
+replacing it, because a list that replaced whole would drop every plugin a
+lower layer named. A field of an entry still replaces as a unit — a later
+`options` is the whole options, never a deep merge of two.
+
+Every leaf remembers the file that set it, which is what `eva config show`
+prints beside each key.
+
+## The keys
+
+Every top-level key that exists, the shape it wants, and the plugin that reads
+it. A `name` accepts a bare string or a mapping with an `id`.
+
+| Key         | Shape   | Read by        | Default                   |
+| ----------- | ------- | -------------- | ------------------------- |
+| `model`     | string  | `eva.config`   | `anthropic/claude-opus-5` |
+| `theme`     | name    | `eva.tui`      | `default`                 |
+| `themes`    | mapping | `eva.config`   | —                         |
+| `keymap`    | mapping | `eva.config`   | —                         |
+| `agents`    | mapping | `eva.config`   | —                         |
+| `commands`  | mapping | `eva.config`   | —                         |
+| `prompts`   | mapping | `eva.prompt`   | —                         |
+| `workflows` | mapping | `eva.workflow` | —                         |
+| `posture`   | name    | `eva.web`      | `local`                   |
+| `plugins`   | list    | the kernel     | the built-in plugin table |
+
+Any other key at the root is reported as a key nothing reads. Disabling a
+plugin removes its keys from that sweep — with `--without-plugin eva.tui`,
+`theme` becomes a key that reached nothing, and Eva says so.
+
+## model
+
+The model every session starts with, as `provider/model`.
+
+```yaml
+model: anthropic/claude-sonnet-5
+```
+
+`--model` sets it for one run and `/model` inside a session. See
+[models](/configure/models).
+
+## theme
+
+Which theme the console draws. The selector belongs to the terminal surface;
+the definitions live under `themes`.
+
+```yaml
+theme: contrast
+```
+
+A `theme` that names no known theme keeps the default and says so, rather than
+drawing nothing. See [themes](/use/themes).
+
+## themes
+
+Your own themes, or overrides of the built-in ones. A theme is a name and four
+colors, and the colors merge onto a theme that already exists.
+
+```yaml
+themes:
+  dusk:
+    name: Dusk
+    colors:
+      foreground: "#e8e4d8"
+      muted: "#8a8a7a"
+      accent: "#d8a657"
+      warning: "#e78a4e"
+```
+
+[Themes](/use/themes) has the color keys and the file form.
+
+## keymap
+
+Key bindings, one row per key. A bare string is a binding; a mapping carries a
+binding and the command it fires.
+
+```yaml
+keymap:
+  input.newline: ctrl+j
+```
+
+[Keys and bindings](/use/keys) has the spelling rules and the defaults.
+
+## agents
+
+Agent definitions, keyed by id. Each may carry a `prompt`.
+
+```yaml
+agents:
+  review:
+    prompt: You review changes for correctness, and nothing else.
+```
+
+An agent prompt would rather be a Markdown file than a YAML string —
+`.eva/agents/review.md` is the same row, written as frontmatter and a body.
+
+## commands
+
+Slash commands, keyed by id. Config describes a command; the code that runs it
+comes from a plugin. A described command nothing implements is shown as one
+the build knows of but cannot run, rather than failing silently.
+
+```yaml
+commands:
+  deploy:
+    description: Ship the current branch.
+```
+
+## prompts
+
+Prompt templates, keyed by id. A row needs a non-empty `text`, or it is
+dropped.
+
+```yaml
+prompts:
+  release-notes:
+    text: Write release notes for the changes described below.
+```
+
+`.eva/prompts/release-notes.md` is the same row as a file: the body becomes
+the text.
+
+## workflows
+
+Declared workflows for `eva run`, keyed by name. A workflow is a list of
+Steps, each naming a prompt template; there is no agency in it.
+
+```yaml
+workflows:
+  notes:
+    steps:
+      - id: summarize
+        template: release-notes
+```
+
+`.eva/workflows/notes.yaml` is the same row as a file. A document with
+problems still registers; the run refuses at its first prompt with every
+problem named, so the refusal lands in the trace.
+
+## posture
+
+Whether `eva serve --web` presents itself as single-tenant or hosted: `local`
+or `hosted`. It changes what the page reports, and no byte of what is served.
+The bind address is not config — a non-local `--host` is refused until tokens
+exist.
+
+```yaml
+posture: local
+```
+
+## plugins
+
+Which plugins load, with what options. The one list the layers concatenate.
+
+```yaml
+plugins:
+  - eva.trace.jsonl
+  - id: eva.trace.sqlite
+    disabled: true
+```
+
+[Plugins](/configure/plugins) has the entry shapes, the wildcard, and the
+load order.
+
+## The .eva directory
+
+A config directory holds resources beside its file, because an agent prompt
+wants to be a Markdown file rather than a YAML string. Five directories are
+read, and no others:
+
+```
+.eva/
+├── config.yaml
+├── agents/review.md        frontmatter, then the prompt
+├── commands/deploy.md      the description, from frontmatter or the first line
+├── prompts/release-notes.md
+├── themes/dusk.yaml        a name and its colors
+└── workflows/notes.yaml
+```
+
+Each file becomes a row keyed by its base name and joins the same mapping the
+config file produces — one merge law covers both, and the origin table names
+either source. A directory that is not there holds nothing, which is not an
+error.
+
+A project's `.eva` is read only after you grant it. See
+[trust](/configure/trust).
+
+## Environment variables
+
+| Variable             | What it does                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `EVA_CONFIG`         | replaces the user config path (`~/.eva/config.yaml`), and the trust record beside it |
+| `EVA_CONFIG_DIR`     | read as another `.eva`-shaped directory, resources included                          |
+| `EVA_CONFIG_CONTENT` | inline YAML, layered over every file and under the flags                             |
+| `ANTHROPIC_API_KEY`  | the Anthropic credential — see [providers](/configure/providers)                     |
+| `OPENAI_API_KEY`     | the OpenAI credential — see [providers](/configure/providers)                        |
+
+`EVA_CONFIG` replaces rather than overlays, because a hermetic run given a
+named config must not inherit the machine's file. `--config` is the flag that
+overlays.
+
+## Overlay a file for one run
+
+```bash
+eva --config ./ci.eva.yaml
+```
+
+`--config` is repeatable. Later files overlay earlier ones.
+
+## Unread keys are reported, not ignored
+
+If you write a key nothing reads — a typo, a setting from an older version, a
+key under the wrong plugin — Eva tells you. That is a **Finding**: it is
+written to stderr, it names the origin that set the key and the key you most
+likely meant, and **it does not change the exit code**.
+
+```
+eva: nothing reads "keybindings", did you mean "keymap"? (~/.eva/config.yaml)
+eva: "themes" wants a mapping, so nothing read it, did you mean "theme"? (~/.eva/config.yaml)
+eva: nothing reads "maxTokns" in eva.provider.anthropic's options, did you mean "maxTokens"?
+```
+
+The second line is `themes: dusk` — a mapping key given a bare string. The
+key that would have taken the value as written differs by one letter: `theme`
+selects, `themes` defines.
+
+The sweep runs at both levels: top-level keys against what the loaded plugins
+declare, and each plugin entry's options against what that plugin takes. A key
+written in a shape nothing reads is named the same way, with the shape it
+wanted spelled in words.
+
+Eva reports a finding rather than failing, because a stale key should not stop
+your work. Eva reports it rather than staying quiet, because a setting that
+silently does nothing is worse than one that errors.

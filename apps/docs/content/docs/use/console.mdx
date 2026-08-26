@@ -1,0 +1,60 @@
+---
+title: The console
+description: The Eva console is the interactive surface you type into. It shows a live area while a Run happens, then replaces it with the committed record.
+source: docs/context.md
+---
+
+The console is the interactive interface Eva opens when you run `eva` with no
+arguments. It is a plugin — `eva.tui` — like everything else in Eva.
+
+```bash
+eva
+```
+
+## What it shows
+
+**The live area** shows a Run as it happens, from the stream rather than from
+the record. When the Run closes, the fold over the committed records replaces
+it. What you read afterwards is the record, not the stream.
+
+**Notes** are lines the console says on its own — command output, a notice, a
+question Eva asked. A note is not part of the transcript. It lasts until the
+conversation moves on.
+
+The console holds a Session while it runs. It is not itself a Session.
+
+## Typing
+
+Type a prompt and press <kbd>Enter</kbd> to send it. Type `/` to open the
+command palette; see [commands](/use/commands).
+
+| Key                                 | What it does                      |
+| ----------------------------------- | --------------------------------- |
+| <kbd>Enter</kbd>                    | send the prompt                   |
+| <kbd>Esc</kbd>                      | interrupt the Run                 |
+| <kbd>Esc</kbd> again                | confirm the interrupt             |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd>, twice | leave the console                 |
+| <kbd>Tab</kbd>                      | complete a command in the palette |
+
+[Keys and bindings](/use/keys) covers how a binding is spelled and how to
+change one.
+
+## Pasting
+
+A pasted block arrives whole, at the caret, on both renderers. A newline inside
+a paste is text rather than a key, so pasting several lines does not send the
+prompt.
+
+## Two renderers, one frame
+
+Eva draws the same frame two ways. Under Bun it uses a native renderer. Where
+that renderer cannot load, it draws the same content as a stream of lines. Both
+say the same words — that is a contract the repository tests on every change,
+not a coincidence.
+
+You do not choose between them. Eva picks the one the runtime supports.
+
+## When output is piped
+
+A run whose output is piped writes the conversation and no chrome. This is what
+makes `eva | tee log.txt` produce something worth reading.

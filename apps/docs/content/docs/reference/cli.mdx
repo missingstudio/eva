@@ -1,0 +1,54 @@
+---
+title: CLI reference
+description: Every Eva command and every global flag, with what each one does and what it returns.
+source: docs/reference/command-line.md
+---
+
+## Commands
+
+```
+eva                                 start the interactive console
+eva --print <prompt>                answer once and exit
+eva trust                           read this directory's .eva, and record the grant
+eva untrust                         drop the grant for this directory
+eva config show                     print the resolved config, and where each key came from
+```
+
+| Command           | What it does                                       | Page                                      |
+| ----------------- | -------------------------------------------------- | ----------------------------------------- |
+| `eva`             | open the interactive console                       | [The console](/use/console)               |
+| `eva --print`     | answer once, print to stdout, exit                 | [Print mode](/use/print-mode)             |
+| `eva trust`       | read this directory's `.eva`, and record the grant | [Trust](/configure/trust)                 |
+| `eva untrust`     | drop the grant for this directory                  | [Trust](/configure/trust)                 |
+| `eva config show` | print the resolved config with each key's origin   | [Configuration](/configure/configuration) |
+
+## Global flags
+
+Every flag below is valid on every command, before it or after it.
+
+| Flag                       | Repeatable | What it does               |
+| -------------------------- | ---------- | -------------------------- |
+| `--config <path>`          | yes        | overlay a config file      |
+| `--model <provider/model>` | no         | set the model for this run |
+| `--plugin <id>`            | yes        | load a plugin for this run |
+| `--without-plugin <id>`    | yes        | skip a plugin for this run |
+| `-p, --print <prompt>`     | no         | answer once and exit       |
+| `-v, --version`            | no         | print the version and exit |
+| `-h, --help`               | no         | print the help and exit    |
+
+## Notes on the surface
+
+**The prompt is a flag, not a bare argument.** With a bare argument accepted,
+`eva trsut` would be a valid prompt rather than a misspelling Eva can correct.
+
+**`--without-plugin`, not `--no-plugin`.** A flag named `--no-plugin` is parsed
+by Commander as the negation of `--plugin` and silently joins it, which is the
+opposite of what it reads like.
+
+**`-v` is version, not verbose.**
+
+**`--` does not protect a value.** Quote a prompt that begins with a dash.
+
+## Exit codes
+
+See [exit codes](/reference/exit-codes).

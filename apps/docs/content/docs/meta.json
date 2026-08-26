@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "index",
+    "install",
+    "connect-a-model",
+    "first-run",
+    "concepts",
+    "software-factory",
+    "use",
+    "configure",
+    "extend",
+    "reference",
+    "about"
+  ]
+}

@@ -1,0 +1,138 @@
+---
+title: Plugins
+description: Every capability in Eva is a plugin. Turn one on or off in config or with a flag, give it options, and swap a default — the trace sink included.
+source: apps/cli/src/plugins.ts
+---
+
+Everything that is not the kernel is a plugin — the providers, the trace, the
+session store, the console, the themes. This page is how you turn them on and
+off and hand them options. [How plugins work](/extend/how-plugins-work) is the
+model behind it, and [write a plugin](/extend/write-a-plugin) is the authoring
+guide.
+
+## What the binary carries
+
+The built-in table, in load order. Order is precedence: a later plugin's
+registrations win over an earlier one's, which is why `eva.config` — your
+config — loads near the end.
+
+| Plugin                    | Contributes                                 |
+| ------------------------- | ------------------------------------------- |
+| `eva.trace`               | the one path events take to the trace       |
+| `eva.trace.sqlite`        | the default trace store, one SQLite file    |
+| `eva.session.jsonl`       | the session store, a fold over the trace    |
+| `eva.auth`                | credentials, read from the environment      |
+| `eva.catalog.models`      | the built-in model catalog                  |
+| `eva.catalog.prices`      | vendored prices — no network at boot        |
+| `eva.provider.anthropic`  | the Anthropic provider                      |
+| `eva.provider.openai`     | the OpenAI provider                         |
+| `eva.provider.compatible` | a provider per compatible endpoint you name |
+| `eva.provider.retry`      | backoff for calls that may be retried       |
+| `eva.usage`               | normalizes usage numbers                    |
+| `eva.budget`              | token, time, and step ceilings              |
+| `eva.validator`           | judges output against a JSON Schema         |
+| `eva.commands`            | `/model`, `/cost`, `/clear`, `/help`        |
+| `eva.themes`              | the three built-in themes, and `/theme`     |
+| `eva.keymap`              | the default key bindings                    |
+| `eva.prompt`              | prompt templates                            |
+| `eva.workflow`            | declared workflows, for `eva run`           |
+| `eva.config`              | projects your config into the domains       |
+| `eva.print`               | the `--print` surface                       |
+| `eva.tui`                 | the interactive console                     |
+| `eva.api`                 | the read-only session API                   |
+| `eva.web`                 | the page that watches a session             |
+
+Three more ride in the box without loading: `eva.trace.jsonl`,
+`eva.trace.memory`, and `eva.trace.postgres`. They are alternative trace
+stores, available by id the moment config names one.
+
+## Turn one on
+
+A string enables a plugin with no options.
+
+```yaml
+plugins:
+  - eva.trace.jsonl
+```
+
+## Give one options
+
+An object carries options. A later `options` for the same id is the whole
+options — never a deep merge — because half of two entries is a plugin nobody
+wrote.
+
+```yaml
+plugins:
+  - id: eva.budget
+    options:
+      tokens: 200000
+      minutes: 15
+```
+
+## Turn one off
+
+`disabled` removes a plugin, and it accepts a wildcard matched as a prefix. A
+later entry for the same id sets the fields it names and keeps the rest, so
+turning one back on restates nothing.
+
+```yaml
+plugins:
+  - { id: "eva.provider.*", disabled: true }
+  - { id: eva.provider.anthropic, disabled: false }
+```
+
+`{ id: "*", disabled: true }` boots the bare kernel: it starts, prints a
+version, and exits cleanly. There is a CI job whose only purpose is to prove
+that.
+
+## Swap a default
+
+The trace store is the worked example. Disable the default, name the one you
+want, and every consumer follows — a consumer reads its slot at the moment of
+use, so nothing holds the old store.
+
+```yaml
+plugins:
+  - { id: eva.trace.sqlite, disabled: true }
+  - id: eva.trace.postgres
+    options:
+      schema: eva
+```
+
+`eva.trace.postgres` reads its connection string from `EVA_POSTGRES_URL`,
+because a URL holds a password and the environment is where a deployment puts
+one.
+
+## For one run
+
+Both flags are repeatable, and both are ordinary config: they merge as one
+layer whose origin is the command line.
+
+```bash
+eva --plugin eva.trace.jsonl
+eva --without-plugin eva.themes
+```
+
+## When a plugin fails
+
+A plugin that fails to load rolls back whole — its registrations are removed,
+and no partial state survives. The run continues and says what degraded,
+because a plugin failure should cost you that capability, not your work.
+
+The same holds for a plugin you disable: whatever read its contribution
+reports `degraded` naming what is missing, rather than guessing.
+
+## Plugins from npm
+
+Not yet. A plugin entry may carry a `package`, and the shape is parsed — but
+this build loads only the plugins it carries, and an id it does not carry is
+reported:
+
+```
+eva: no plugin named "acme.reviewer" is in this build
+```
+
+Today a new plugin is a package in the repository's `plugins/` directory and
+a row in the built-in table — [write a plugin](/extend/write-a-plugin) is the
+guide. The distribution channel that resolves a package from npm is on the
+[roadmap](/about/roadmap).

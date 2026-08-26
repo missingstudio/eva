@@ -1,0 +1,29 @@
+---
+title: Exit codes
+description: What each Eva exit code means, why an unread config key never changes one, and how to make a shell pipeline stop when a run fails.
+source: docs/reference/command-line.md
+---
+
+| Code | When                                                                      |
+| ---- | ------------------------------------------------------------------------- |
+| 0    | the help, the version, a grant, `config show`, or a Run that ended `done` |
+| 1    | a parse error, an unreadable config, or a Run that ended any other way    |
+| 130  | the second <kbd>Ctrl</kbd>+<kbd>C</kbd>                                   |
+
+## A finding does not change the exit code
+
+An unread config key is a **Finding**. Eva writes it to stderr and the run
+continues, and the exit code is whatever the run itself earned.
+
+A stale config key should not break a pipeline. A silent one should not go
+unmentioned. Reporting on stderr without touching the exit code is how Eva does
+both.
+
+## Use it in a script
+
+```bash
+eva -p "review the diff" > review.txt || exit 1
+```
+
+`--print` exits non-zero when the answer fails, so a pipeline stops rather than
+carrying an empty answer forward. See [print mode](/use/print-mode).

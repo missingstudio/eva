@@ -1,0 +1,68 @@
+---
+title: Roadmap
+description: What Eva is today, and the stages that take it from a terminal client on a plugin kernel to a software factory. Each stage has an exit test it can fail.
+source: docs/roadmap.md
+---
+
+Eva is built in stages, and **each stage has an exit test it can fail**. A
+stage is not done when it feels done; it is done when a named test stops
+failing.
+
+## Where Eva is today
+
+A terminal client on a plugin kernel. A small core loads plugins, and every
+capability is one — the model, the surface, the trace, the themes. The plugin
+system, the event schema, the session store, and the cost accounting are real
+and shipping.
+
+Everything else on this site describes that. Nothing here describes a stage
+that has not landed.
+
+## Phase I — model to agent
+
+| Stage | What it adds                                                   |
+| ----- | -------------------------------------------------------------- |
+| 0     | Wire. One provider, one surface, one trace. **Done.**          |
+| 1     | Workflow. A pipeline that takes a Spec and returns an Outcome. |
+| 2     | Tools and the loop. The agent that can act, not only answer.   |
+
+## Phase II — agent to harness
+
+| Stage | What it adds                                                    |
+| ----- | --------------------------------------------------------------- |
+| 3     | Context engine. Repomap, compaction, what conditions a request. |
+| 4     | Environment. Workspaces, snapshots, isolation.                  |
+| 5     | Verifier. Criteria Eva checks rather than the agent claims.     |
+| 6     | Memory and trace.                                               |
+| 6.5   | Extension distribution — third parties, trust, isolation.       |
+| 7     | Harness profiles.                                               |
+| 8     | Eval harness.                                                   |
+
+## Phase III — harness to factory
+
+| Stage | What it adds                                                                 |
+| ----- | ---------------------------------------------------------------------------- |
+| 9a    | Work items and a local scheduler.                                            |
+| 9b    | Control plane and enrolment.                                                 |
+| 9c    | **Harness adapters.** Claude Code, Codex, and OpenCode, behind one contract. |
+| 9d    | Skills and MCP.                                                              |
+| 10    | Integration — the merge queue and review routing.                            |
+| 11    | Economics, dashboard, billing.                                               |
+| 12    | Continual learning.                                                          |
+
+## Phase IV — factory to company
+
+| Stage | What it adds                  |
+| ----- | ----------------------------- |
+| 13    | Intent — the demand side.     |
+| 14    | Authority and accountability. |
+
+## The four "ones"
+
+Eva's pitch is one contract, one trace, one verifier, one bill. One trace
+exists today. The verifier arrives at stage 5, the contract over foreign
+harnesses at stage 9c, and per-harness billing at stage 11.
+
+The full plan, with the exit test for every stage, is
+[roadmap.md](https://github.com/missingstudio/eva/blob/main/docs/roadmap.md) in
+the repository.

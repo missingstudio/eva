@@ -1,0 +1,178 @@
+---
+title: Providers
+description: Eva ships Anthropic and OpenAI, and talks to any OpenAI-compatible endpoint you name in config. One API key each, and retries you can tune.
+source: plugins/provider-compatible
+---
+
+A provider is a model behind one contract, and every provider is a plugin.
+Three ship in the binary: Anthropic, OpenAI, and a third that turns any
+OpenAI-compatible endpoint you name — Ollama, llama.cpp, vLLM, LM Studio, a
+hosted compatible — into a provider of its own.
+
+Each provider writes into the **Catalog**, which is the domain holding
+providers, their models, and the default. Adding a provider is adding a
+plugin, not editing a list.
+
+## Anthropic
+
+One key in the environment is the whole setup.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+eva
+```
+
+The plugin is `eva.provider.anthropic`, and model references are
+`anthropic/<model>` — the default model is `anthropic/claude-opus-5`.
+[Models](/configure/models) lists what the catalog ships.
+
+It takes one option:
+
+```yaml
+plugins:
+  - id: eva.provider.anthropic
+    options:
+      maxTokens: 32000
+```
+
+`maxTokens` caps one response. Unset, Eva sends 64,000.
+
+## OpenAI
+
+The same shape, one key over.
+
+```bash
+export OPENAI_API_KEY=sk-...
+eva --model openai/gpt-5.4
+```
+
+The plugin is `eva.provider.openai`. It speaks the Responses API and asks the
+server to store nothing, so a conversation lives in your session record and
+not in the vendor's.
+
+It takes one option, and here `maxTokens` unset sends no cap at all:
+
+```yaml
+plugins:
+  - id: eva.provider.openai
+    options:
+      maxTokens: 32000
+```
+
+## Compatible endpoints
+
+`eva.provider.compatible` speaks Chat Completions to any endpoint you name.
+One entry in its `providers` mapping is one provider in the catalog, and the
+entry's key is the namespace your model references use.
+
+```yaml
+plugins:
+  - id: eva.provider.compatible
+    options:
+      providers:
+        ollama:
+          api: http://localhost:11434/v1
+          models: [qwen3-coder]
+```
+
+```bash
+eva --model ollama/qwen3-coder
+```
+
+The fields an entry takes:
+
+| Field        | Default         | What it does                                                                  |
+| ------------ | --------------- | ----------------------------------------------------------------------------- |
+| `api`        | required        | the base URL a curl would take, version segment included; nothing is appended |
+| `name`       | the entry's key | the display name in the catalog                                               |
+| `credential` | `false`         | `false` sends no Authorization header; `true` asks the credential store       |
+| `models`     | `[]`            | model ids written into the catalog so `/model` can list them                  |
+| `maxTokens`  | none            | per-endpoint response cap; unset sends none                                   |
+| `usage`      | `true`          | ask the server to report token usage; set `false` for one that refuses        |
+
+An entry with no `api` is skipped entirely. A model the `models` list does not
+name still runs when you type its reference — the list only feeds the picker.
+
+An endpoint with a key needs two entries: the endpoint, and the environment
+variable its credential comes from.
+
+```yaml
+plugins:
+  - id: eva.auth
+    options:
+      env:
+        groq: GROQ_API_KEY
+  - id: eva.provider.compatible
+    options:
+      providers:
+        groq:
+          api: https://api.groq.com/openai/v1
+          credential: true
+          models: [llama-3.3-70b]
+```
+
+An entry named `openai` replaces the first-party OpenAI provider, because the
+compatible plugin loads after it and a later registration wins. That is the
+supported way to point OpenAI-shaped traffic somewhere else.
+
+## Credentials
+
+Credentials belong to `eva.auth`, and today a credential is an API key read
+from the environment at the moment a request opens.
+
+| Provider      | Variable                           |
+| ------------- | ---------------------------------- |
+| `anthropic`   | `ANTHROPIC_API_KEY`                |
+| `openai`      | `OPENAI_API_KEY`                   |
+| anything else | named in `eva.auth`'s `env` option |
+
+**Your key never reaches a settings file, a log, or the session record.** Eva
+holds it nowhere else, which is why a session record is safe to share.
+
+A provider with no credential still resolves, so the run closes saying
+authentication failed rather than pretending the model does not exist.
+
+## Base URLs
+
+Eva passes no base URL to the two first-party providers, so the vendor SDKs'
+own environment variables apply: `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL`
+point them at a proxy. A compatible endpoint names its `api` explicitly, so
+`OPENAI_BASE_URL` never leaks into one.
+
+## Retries
+
+A retry is an attempt that spent money and produced nothing, so Eva records
+each one as an event of its own — with its delay — rather than hiding it
+inside the attempt that succeeded. The vendor SDKs' silent retries are turned
+off for the same reason: an attempt missing from the trace is a cost the
+trace cannot explain.
+
+`eva.provider.retry` decides whether a failed call is retried, with
+exponential backoff:
+
+```yaml
+plugins:
+  - id: eva.provider.retry
+    options:
+      maxAttempts: 3
+      baseMs: 500
+      capMs: 30000
+```
+
+Only faults that can pass are retried: rate limits, overload, an unreachable
+host, and server errors. A bad key, a missing model, and a billing problem
+fail at once, because retrying those buys nothing.
+
+## Turn a provider off
+
+A provider is a plugin, so the plugin list is the switch. The wildcard
+disables by prefix, and a later entry turns one back on without restating
+anything.
+
+```yaml
+plugins:
+  - { id: "eva.provider.*", disabled: true }
+  - { id: eva.provider.anthropic, disabled: false }
+```
+
+See [plugins](/configure/plugins) for the entry shapes.

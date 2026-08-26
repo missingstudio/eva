@@ -1,0 +1,76 @@
+---
+title: Models
+description: Set the model for one run with a flag, inside a session with the model command, or permanently with the model key. The Catalog holds what Eva knows.
+source: plugins/catalog-models
+---
+
+A model reference is `provider/model`. Out of the box, Eva starts on
+`anthropic/claude-opus-5`.
+
+## Set the model for one run
+
+```bash
+eva --model anthropic/claude-sonnet-5
+```
+
+The flag works on every command, including `--print`.
+
+## Set it inside a session
+
+```
+/model anthropic/claude-sonnet-5
+```
+
+With no argument, `/model` shows the current model and offers the ones Eva
+knows about.
+
+## Set it permanently
+
+The top-level `model` key in config:
+
+```yaml title="~/.eva/config.yaml"
+model: anthropic/claude-sonnet-5
+```
+
+[Configuration](/configure/configuration) explains where that file goes and
+which layer wins when several set it.
+
+## What the catalog ships
+
+| Reference                    | Context window |
+| ---------------------------- | -------------- |
+| `anthropic/claude-opus-5`    | 1,000,000      |
+| `anthropic/claude-sonnet-5`  | 1,000,000      |
+| `anthropic/claude-opus-4-8`  | 1,000,000      |
+| `anthropic/claude-haiku-4-5` | 200,000        |
+| `openai/gpt-5.6`             | 1,050,000      |
+| `openai/gpt-5.4`             | 1,050,000      |
+| `openai/gpt-5.4-mini`        | 400,000        |
+| `openai/gpt-5.4-nano`        | 400,000        |
+| `openai/gpt-4o-mini`         | 128,000        |
+
+A model behind a [compatible endpoint](/configure/providers#compatible-endpoints)
+joins this list when its entry names it, and runs either way when you type
+its reference.
+
+## The Catalog
+
+The **Catalog** is the Domain holding providers, their models, and the
+default. Provider plugins write to it and nothing owns it, so adding a
+provider is adding a plugin rather than editing a list.
+
+The Catalog also holds **Price** — what a vendor publishes per million
+tokens, vendored into the binary so boot needs no network. Price feeds an
+Estimate and never a Cost; [cost and usage](/use/cost) explains why those
+stay apart.
+
+## Credentials and retries
+
+A model runs behind a provider, and the provider owns both. One API key in
+the environment connects each of the first-party providers, and retries are
+tunable per run. [Providers](/configure/providers) has the whole of it.
+
+## More harnesses
+
+The harnesses you already pay for — driven behind the same contract — arrive
+with the multi-harness stage. [The roadmap](/about/roadmap) says when.

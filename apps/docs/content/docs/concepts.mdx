@@ -1,0 +1,111 @@
+---
+title: Concepts
+description: The words Eva uses for its own machinery — Session, Run, Trace, Plugin, Harness, Cost, and the rest. One concept has one name.
+source: docs/context.md
+---
+
+Eva gives one concept one name, and uses that name everywhere: in the code, in
+the traces, in the config, and on this site. This page is the list.
+
+## The work
+
+**Spec** — A statement of intent whose acceptance criteria a machine can check. A
+description with no machine-checkable criteria is not a Spec.
+
+**Unit** — Anything that takes a Spec and returns an Outcome. A model call, a workflow,
+an agent, a harness, and a factory are all Units at different timescales.
+
+**Outcome** — What a Unit returns: Done, Failed, NeedsHuman, or Exhausted. Escalation to a
+human is an Outcome, not an error.
+
+**Claim** — An assertion of success by whatever did the work. A Claim is never Evidence,
+whatever its source.
+
+**Budget** — What a Run may spend: tokens, money, wall clock, and Steps. Exhausting a
+Budget is an Outcome, not an error, and the partial work is kept.
+
+## Execution
+
+Four systems Eva touches use the word "turn" for two different things, so Eva
+does not use the bare word at all. These three replace it.
+
+**Session** — The durable, resumable transcript. It survives `kill -9`. Resume, branch, and
+rewind all act on it.
+
+**Run** — One execution of a Unit against a Session, from the intent that opens it to
+the Claim that closes it. A Session resumed twice has several Runs.
+
+**Provider Turn** — One exchange with a Provider: a request starts, and a stream is read to its
+end. It is not a unit of record.
+
+**Stop Reason** — Why a Run ended: `end_turn`, `max_tokens`, `max_turn_requests`, `refusal`, or
+`cancelled`. A refusal is a legitimate outcome and a cap is a budget fact.
+Neither is a failure.
+
+## Evidence
+
+**Event** — One typed, versioned, sequence-numbered record of something observable. There
+is exactly one Event schema.
+
+**Trace** — The persisted Event stream of a Run, and the single source of truth. Every
+projection is a fold over it. Anything a Trace cannot rebuild is a bug.
+
+**Degraded** — A marker on a Run, an Event, or a field, saying this data is incomplete,
+estimated, or unreported. Eva keeps Degraded data and marks it. Eva never
+guesses a repair and never drops it in silence.
+
+**Finding** — Something a run did not read, as data rather than a line of text — a key
+nothing declares, or a key written in a shape nothing reads. A Finding stops
+nothing, and is never passed over in silence.
+
+## Money
+
+**Cost** — What a Provider says a request cost, in Ticks — integers of 1e-10 USD.
+Absent means the Provider did not report one, which is not zero.
+
+**Price** — What a vendor publishes for a model, in Ticks per million tokens.
+
+**Estimate** — What a Run's counters come to at Catalog Prices. It is a projection, and it
+moves when a vendor reprices. Eva shows it marked, because an Estimate read as
+a Cost is the mistake the pair exists to prevent.
+
+## The plugin system
+
+**Kernel** — The part of Eva that is not a plugin. It holds the plugin runtime, the four
+extension points, the config source, and location resolution. Nothing else.
+
+**Plugin** — A module that exports an id and an effect, and declares the config keys it
+reads. Everything that is not the Kernel is one.
+
+**Extension point** — One of exactly four ways to extend Eva: a Domain, a Slot, a Hook, or a
+Broadcast. There is no fifth.
+
+**Domain** — Shared state that many plugins build together. The Kernel rebuilds it by
+replaying every registered Transform in order.
+
+**Slot** — A typed key and its contract. Exactly one plugin fills a Slot at a time, and
+a consumer reads it at the moment of use, so replacing the plugin behind it
+takes effect at once.
+
+**Hook** — A callback at a live operation boundary. A Hook may narrow what a Run does,
+never widen it.
+
+**Broadcast** — A typed, process-local notification a plugin subscribes to as a stream. It is
+never written to the Trace.
+
+[How plugins work](/extend/how-plugins-work) puts these together.
+
+## Interfaces
+
+**Console** — The interactive interface a person types into. It is not a Session; it holds
+one while it runs.
+
+**Surface** — A plugin that ships an interface a person or a program drives Eva through —
+the terminal, `--print`, and later HTTP and the web.
+
+**Harness** — Something that takes a Prompt and drives it to a Stop Reason. Eva's native
+loop is one, and so are Claude Code, Codex, and OpenCode. Every one is a
+plugin, and Eva's own holds no privileged position.
+
+**Location** — A directory a Session belongs to, and the scope a request acts in. Eva holds
+many and has no ambient one.

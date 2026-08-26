@@ -1,0 +1,104 @@
+---
+title: Themes
+description: Eva ships three themes and takes custom ones. A theme is a name and four colors, written in config or dropped into a .eva/themes directory.
+source: plugins/themes
+---
+
+Eva ships three themes.
+
+| Id         | Name          | For                                 |
+| ---------- | ------------- | ----------------------------------- |
+| `default`  | Default       | most terminals                      |
+| `contrast` | High contrast | low-contrast displays, bright rooms |
+| `mono`     | Monochrome    | terminals with a restricted palette |
+
+## Switch theme
+
+```
+/theme contrast
+```
+
+Running `/theme` with no argument opens the picker rather than complaining.
+
+## Set one permanently
+
+The selector is the top-level `theme` key:
+
+```yaml title="~/.eva/config.yaml"
+theme: contrast
+```
+
+[Configuration](/configure/configuration) explains where that file goes and
+how Eva decides which layer wins. The key is read by the terminal surface —
+which is why, in a run with the console disabled, Eva reports `theme` as a
+key nothing read.
+
+## Write your own
+
+A theme is a name and exactly four colors. Define one under the top-level
+`themes` mapping and select it:
+
+```yaml title="~/.eva/config.yaml"
+theme: dusk
+
+themes:
+  dusk:
+    name: Dusk
+    colors:
+      foreground: "#e8e4d8"
+      muted: "#8a8a7a"
+      accent: "#d8a657"
+      warning: "#e78a4e"
+```
+
+Or ship it as a file — `.eva/themes/dusk.yaml` is the same row, keyed by its
+base name, so a repository can carry a team's theme:
+
+```yaml title=".eva/themes/dusk.yaml"
+name: Dusk
+colors:
+  foreground: "#e8e4d8"
+  muted: "#8a8a7a"
+  accent: "#d8a657"
+  warning: "#e78a4e"
+```
+
+The four keys, and what each paints:
+
+| Key          | Paints                                                   |
+| ------------ | -------------------------------------------------------- |
+| `foreground` | the words — yours and the agent's                        |
+| `muted`      | thoughts, hints, and secondary text                      |
+| `accent`     | the bar beside your words, the spinner, the selected row |
+| `warning`    | tool calls, and what needs your attention                |
+
+## Change one color of a built-in
+
+Colors merge onto a theme that already exists, so overriding one key leaves
+the other three alone:
+
+```yaml
+themes:
+  default:
+    colors:
+      accent: "#ff79c6"
+```
+
+## A theme with a gap
+
+A row missing one of the four colors is not a theme yet. The console keeps
+drawing the default and says so, rather than painting half a theme. The same
+holds for a `theme` that names no row: the default is drawn, and a notice
+names the theme that was not found.
+
+## Themes are a plugin
+
+`eva.themes` is a plugin like everything else in Eva, so you can turn it off:
+
+```bash
+eva --without-plugin eva.themes
+```
+
+Eva keeps running without it. A plugin that fails or is disabled degrades the
+run rather than stopping it — the repository has a CI job whose only purpose
+is to prove that.

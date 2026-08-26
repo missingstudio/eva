@@ -1,0 +1,77 @@
+---
+title: Install
+description: Install Eva with Homebrew, the install script, npm, or from source, and verify the download you got before you run it.
+source: docs/reference/ci-cd.md
+---
+
+Eva installs from four channels. Pick one. Every channel delivers the same
+prebuilt binary for your platform.
+
+## Homebrew, on macOS
+
+```bash
+brew install --cask missingstudio/tap/eva
+```
+
+It is a cask rather than a formula, because the release publishes a prebuilt
+binary rather than something Homebrew compiles.
+
+## The install script, on macOS and Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh
+```
+
+The script checks the download against the release's signed checksums before it
+installs anything, and it says so either way. Read it first if you prefer.
+
+Pass `--require-signature` to make an unverifiable download a refusal rather
+than a warning:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh -s -- --require-signature
+```
+
+## npm
+
+```bash
+npm i -g @missingstudio/eva
+```
+
+A prebuilt binary for your platform. No runtime is needed.
+
+## From source
+
+Requires Bun 1.3 or newer.
+
+```bash
+git clone git@github.com:missingstudio/eva.git && cd eva && bun install && bun run eva
+```
+
+## Verify what you downloaded
+
+Three artefacts back every release, and they answer different questions.
+
+| Artefact                        | Proves                                     |
+| ------------------------------- | ------------------------------------------ |
+| `checksums.txt`                 | the download is the bytes that were built  |
+| `checksums.txt.sigstore.json`   | the checksums came from Eva's own workflow |
+| a per-archive build attestation | which workflow built it, from which commit |
+
+A checksum alone proves the download is intact, not that it is Eva's — whoever
+serves a bad archive can serve a matching `checksums.txt`. The signature is
+what ties the checksums to this repository.
+
+Verify provenance directly:
+
+```bash
+gh attestation verify eva-darwin-arm64.zip --repo missingstudio/eva
+```
+
+## Check it worked
+
+```bash
+eva --version
+```
+
+Next: [connect a model](/connect-a-model).

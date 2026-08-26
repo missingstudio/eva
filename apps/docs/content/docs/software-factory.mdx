@@ -1,0 +1,134 @@
+---
+title: What is an AI-native software factory?
+description: An AI-native software factory runs coding work from a machine-checkable spec to verified evidence, across every coding agent harness you already pay for.
+---
+
+An AI-native software factory is a system that runs coding work end to end:
+you give it a Spec whose acceptance criteria a machine can check, a Harness
+does the work, and the factory keeps the Evidence that it was done. It is
+defined by four properties — one contract over every harness, one Trace of
+everything they did, one Verifier that decides whether the work passed, and
+one bill that prices it.
+
+The word factory is doing real work in that sentence. A factory is not a
+better machine; it is the thing that coordinates machines, checks their
+output, and accounts for what they consumed. That is the difference between
+running a coding agent and operating a fleet of them.
+
+## Why the category exists
+
+The problem is not that coding agents are bad at coding. It is that a single
+agent cannot tell you anything about its own work that you should believe.
+
+If you already use Claude Code, Codex, and OpenCode, you have three good
+Harnesses and three separate worlds. None of them can check another's work.
+None can tell you what a merged change cost. None can run twenty tasks
+overnight and hand you the evidence in the morning. Switching between them
+means switching tools, losing history, and starting the accounting again.
+
+And each one is tied to the machine you are sitting at. Close the laptop and
+the work stops.
+
+Those are not model problems, and a better model does not fix any of them.
+They are coordination, verification, and accounting problems — which is
+exactly the set of problems a factory exists to solve.
+
+## The four properties
+
+These four are the whole definition. A system missing any of them is a
+harness, an orchestrator, or a dashboard, but not a factory.
+
+**One contract.** Every Harness — the factory's own and every foreign one —
+implements the same interface, so a task runs on any of them without being
+rewritten. No harness holds a privileged position, including the one the
+factory ships.
+
+**One Trace.** Everything every Harness does lands in one Event schema.
+Anything the Trace cannot rebuild is a bug, which makes the Trace the single
+source of truth rather than a log beside it.
+
+**One Verifier.** Acceptance criteria are checked by the factory, not claimed
+by the agent that did the work. A Claim is never Evidence, whatever its
+source.
+
+**One bill.** Cost is attributed per task, per merged change, and per
+Harness. That turns "use this harness for this kind of work" from a
+preference into a measurement.
+
+## How a factory differs from a harness
+
+A **Harness** takes a Prompt and drives it to a Stop Reason. Claude Code is a
+harness. Codex is a harness. Eva's own native loop is a harness, and it sits
+in the same registry as the rest.
+
+A **factory** takes a Spec and returns an Outcome — Done, Failed,
+NeedsHuman, or Exhausted — with the Evidence attached. It selects a Harness,
+gives it a bounded environment to work in, checks the result against criteria
+the Harness did not get to define, and records what the whole thing cost.
+
+The practical test is who decides that work is finished. In a harness, the
+agent decides and reports. In a factory, the Verifier decides and the agent's
+report is just one more Event in the Trace. Every other difference —
+scheduling, isolation, cost attribution, audit — follows from moving that one
+decision out of the agent.
+
+## What a factory is not
+
+**Not a model.** A factory is model-agnostic by construction; the model is a
+replaceable part.
+
+**Not an IDE.** An IDE is where a person writes code. A factory is where work
+runs when no person is watching.
+
+**Not a replacement for your harnesses.** The subscriptions you already pay
+for become the workers. A factory that resells model access instead of
+driving the harnesses you own has kept the licensing problem and dropped the
+coordination benefit.
+
+**Not an agent framework.** A framework is a library for building an agent. A
+factory is an operating system for running agents against real repositories
+with budgets, verification, and an audit trail.
+
+## Where Eva is today
+
+Eva is an open-source implementation of this category, and it is early. Being
+honest about which of the four properties has shipped is part of the
+definition working at all.
+
+| Property     | Status   |
+| ------------ | -------- |
+| One Trace    | Shipping |
+| One Verifier | Stage 5  |
+| One contract | Stage 9c |
+| One bill     | Stage 11 |
+
+What runs today is a terminal client on a plugin kernel: a catalog of
+providers, a
+durable Session that survives `kill -9`, Cost recorded as the Provider
+reported it, and a `.eva` directory a repository earns access to. Eva drives
+its own Harness today; the adapters that put your other harnesses behind the
+same contract land at stage 9c.
+
+The [roadmap](/about/roadmap) states every stage and the exit test it can
+fail. Nothing above is claimed as shipped that the tree cannot demonstrate.
+
+## Related reading
+
+<Cards>
+  <Card title="What is Eva" href="/" description="The product, and the problem it exists for." />
+  <Card
+    title="Concepts"
+    href="/concepts"
+    description="Spec, Run, Trace, Harness, Verifier — one concept, one name."
+  />
+  <Card
+    title="Roadmap"
+    href="/about/roadmap"
+    description="Nineteen stages, each with an exit test it can fail."
+  />
+  <Card
+    title="How plugins work"
+    href="/extend/how-plugins-work"
+    description="The kernel, and the four extension points."
+  />
+</Cards>

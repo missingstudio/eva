@@ -1,0 +1,82 @@
+---
+title: Keys and bindings
+description: How Eva spells a key chord, the six bindings the console ships, and how to add a chord for a command or replace a default binding in config.
+source: plugins/keymap
+---
+
+A **binding** is a key chord written as words joined by `+`, in one canonical
+spelling. There is exactly one way to write any chord, so a config file cannot
+name a key two ways.
+
+## The spelling rules
+
+| Rule           | Correct             | Wrong          |
+| -------------- | ------------------- | -------------- |
+| Modifier order | `ctrl+meta+shift+k` | `shift+ctrl+k` |
+| The enter key  | `enter`             | `return`       |
+| The plus key   | `plus`              | `+`            |
+
+The joiner cannot also be a key, which is why `plus` is spelled out.
+
+A string Eva cannot parse names no key. The console says so — once — rather
+than storing it and failing later.
+
+## Default bindings
+
+The keymap ships six rows, and these are the six commands the console acts
+on.
+
+| Chord                             | Row       | Command           | Does                     |
+| --------------------------------- | --------- | ----------------- | ------------------------ |
+| <kbd>Enter</kbd>                  | `submit`  | `session.submit`  | send the prompt          |
+| <kbd>Shift</kbd>+<kbd>Enter</kbd> | `newline` | `input.newline`   | insert a newline         |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd>      | `cancel`  | `session.cancel`  | interrupt the Run        |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd>      | `quit`    | `app.quit`        | leave the console        |
+| <kbd>Esc</kbd>                    | `back`    | `surface.back`    | close the open panel     |
+| <kbd>Ctrl</kbd>+<kbd>K</kbd>      | `palette` | `surface.palette` | open the command palette |
+
+<kbd>Tab</kbd> completes the selected row inside the palette. It is the panel's own key, not a
+keymap row.
+
+## Add a chord for a command
+
+The keymap is config: the top-level `keymap` mapping, one row per key. A row
+keyed by a command name, with a bare string as its binding, adds a second
+chord — the default stays.
+
+```yaml
+keymap:
+  input.newline: ctrl+j
+```
+
+Now <kbd>Ctrl</kbd>+<kbd>J</kbd> and <kbd>Shift</kbd>+<kbd>Enter</kbd> both
+insert a newline.
+
+<Callout type="warn">
+  `input.newline` is bound to `shift+enter` by default, and most terminals cannot send that chord
+  without the kitty keyboard protocol. If you want a multi-line prompt you can type rather than
+  paste, add a chord your terminal sends, such as `ctrl+j`.
+</Callout>
+
+## Replace a default binding
+
+To change one of the six rows, restate it whole — the binding and the
+command:
+
+```yaml
+keymap:
+  palette:
+    binding: ctrl+p
+    command: surface.palette
+```
+
+Restate `command` whenever you rewrite a default row. A bare string sets the
+row's command to the row's own id — `palette: ctrl+p` would fire a command
+named `palette`, which nothing answers.
+
+## Conflicts
+
+Two rows that bind the same chord collide, and they collide in the chord's
+one spelling — `ctrl+c` and `C+ctrl` are the same key bound twice. The
+console reports the collision and the last row wins, so a mistake costs a
+notice rather than a dead keyboard.

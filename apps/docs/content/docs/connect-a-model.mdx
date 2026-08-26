@@ -1,0 +1,58 @@
+---
+title: Connect a model
+description: One API key in the environment connects Anthropic or OpenAI, and your key never reaches a settings file, a log, or the session record.
+source: README.md
+---
+
+Eva talks to Anthropic and OpenAI, so a key is the whole setup.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+eva
+```
+
+That is it. There is no login step, no config file to edit, and no account.
+For OpenAI models, export `OPENAI_API_KEY` instead and pick one:
+
+```bash
+export OPENAI_API_KEY=sk-...
+eva --model openai/gpt-5.4
+```
+
+A local model behind Ollama, or any OpenAI-compatible endpoint, is one config
+entry away — [providers](/configure/providers) shows it.
+
+## Where your key goes, and where it does not
+
+**Your key never reaches a settings file, a log, or the session record.** Eva
+reads it from the environment at the moment it opens a request and holds it
+nowhere else.
+
+This matters because a session record is a file on your disk that you may
+share, copy into an issue, or hand to another tool. It never contains a
+credential.
+
+## Choose a different model
+
+Set it for one run with a flag:
+
+```bash
+eva --model anthropic/claude-sonnet-5
+```
+
+Or set it inside a session with a command:
+
+```
+/model anthropic/claude-sonnet-5
+```
+
+`/model` with no argument shows the current model and offers the ones Eva
+knows about. See [models](/configure/models).
+
+## What Eva costs
+
+Eva reports what a provider says a request cost, and marks an estimate as an
+estimate. [Cost and usage](/use/cost) explains the difference, and why Eva
+refuses to guess.
+
+Next: [your first run](/first-run).

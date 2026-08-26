@@ -1,0 +1,40 @@
+---
+title: Cost and usage
+description: Eva shows what a provider said a request cost, and marks an estimate as an estimate. It never multiplies tokens by a rate and calls the result a cost.
+source: docs/context.md
+---
+
+Type `/cost` in the console to see what the current Session has spent.
+
+## Cost and Estimate are different things
+
+**Cost is what the Provider said a request cost.** Eva records it in Ticks —
+integers of 1e-10 USD — so no rounding creeps in across thousands of small
+charges.
+
+**An Estimate is what a Run's counters come to at published prices.** It is a
+projection. It moves when a vendor reprices, because it is folded fresh each
+time rather than stored.
+
+Eva shows an Estimate marked as one. An Estimate read as a Cost is exactly the
+mistake that keeping two words apart exists to prevent.
+
+## Absent is not zero
+
+If a Provider does not report a cost, Eva records absent. **Absent is never
+rendered as zero**, and Eva never computes a number from tokens times a rate
+and presents it as a Cost.
+
+A Run that cannot report its cost says so in words. That is a Degraded outcome:
+Eva keeps the data, marks it, and holds it out of any scoring.
+
+## Why integers
+
+A float of dollars accumulates error. At 1e-10 USD per Tick, a Run costing
+three cents is 300,000,000 Ticks, and a million such Runs still add up exactly.
+
+## What is coming
+
+Cost attributed per task, per merged change, and per harness is the "one bill"
+part of Eva's pitch, and it lands with the multi-harness work.
+[The roadmap](/about/roadmap) says when.

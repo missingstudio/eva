@@ -1,0 +1,58 @@
+---
+title: Your first run
+description: Open the Eva console, ask a question, read the answer, and see what it cost. Then do the same thing from a shell pipeline.
+source: README.md
+---
+
+Open the console with no arguments:
+
+```bash
+eva
+```
+
+Type a question and press enter. Eva streams the answer as it arrives.
+
+## See what it cost
+
+Type `/cost`. Eva prints what this session has spent.
+
+Commands that begin with a slash are answered by the console itself. They never
+reach a model, so they cost nothing.
+
+## Answer once and exit
+
+`--print` runs one prompt, writes the answer to stdout, and exits. This is the
+form to use in a script.
+
+```bash
+eva --print "what does this repository do?"
+```
+
+It is `-p` for short. The run exits non-zero when the answer fails, which makes
+it safe in a pipeline:
+
+```bash
+eva -p "summarise the last commit" > summary.txt
+```
+
+## Stop a run
+
+Press <kbd>Esc</kbd> to interrupt a run in progress. Press it again to confirm.
+Press <kbd>Ctrl</kbd>+<kbd>C</kbd> twice to leave the console.
+
+## What you have now
+
+<Cards>
+  <Card
+    title="The console"
+    href="/use/console"
+    description="What the interactive surface shows, and why."
+  />
+  <Card title="Commands" href="/use/commands" description="Every slash command." />
+  <Card
+    title="Print mode"
+    href="/use/print-mode"
+    description="Eva in a pipeline, and its exit codes."
+  />
+  <Card title="Concepts" href="/concepts" description="The words Eva uses for its own machinery." />
+</Cards>

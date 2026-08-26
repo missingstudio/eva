@@ -1,0 +1,54 @@
+---
+title: Print mode
+description: Run one prompt, write the answer to stdout, and exit. Print mode exits non-zero when the answer fails, which makes Eva safe inside a shell pipeline.
+source: docs/reference/command-line.md
+---
+
+Print mode answers one prompt and exits. It is how Eva belongs in a script.
+
+```bash
+eva --print "summarise the last commit"
+```
+
+`-p` is the short form.
+
+## It is safe in a pipeline
+
+**Print mode exits non-zero when the answer fails.** A pipeline that checks
+exit codes therefore stops on a failed run rather than carrying an empty
+answer forward.
+
+```bash
+eva -p "list the risky changes in this diff" > review.txt || exit 1
+```
+
+| Code | When                                                               |
+| ---- | ------------------------------------------------------------------ |
+| 0    | the Run ended `done`                                               |
+| 1    | a parse error, an unreadable config, or a Run that ended otherwise |
+| 130  | the second <kbd>Ctrl</kbd>+<kbd>C</kbd>                            |
+
+[Exit codes](/reference/exit-codes) has the full table, including the codes the
+other commands return.
+
+## The prompt is a flag, not a bare argument
+
+`eva --print "…"` rather than `eva "…"`. The prompt stays behind the flag on
+purpose: with a bare argument accepted, a misspelled verb becomes a valid
+prompt. `eva trsut` would be sent to a model rather than corrected.
+
+## Combine it with the global flags
+
+Every global flag works in print mode.
+
+```bash
+eva -p "explain this error" --model anthropic/claude-sonnet-5
+eva -p "review the diff" --config ./ci.eva.yaml
+eva -p "what changed?" --without-plugin eva.themes
+```
+
+## A finding does not fail the run
+
+An unread config key is a finding. Eva writes it to stderr and the run
+continues, with the exit code unchanged. A finding is data about your setup,
+not a failure of the work.
