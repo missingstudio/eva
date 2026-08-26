@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, readFileSync } from "node:fs"
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -13,9 +13,9 @@ import {
 } from "@missingstudio/eva-schema"
 import { Effect, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import { makeJsonlSink, recover } from "./sink.js"
+import { fileOf, makeJsonlSink } from "./sink.js"
 
-const path = () => join(mkdtempSync(join(tmpdir(), "eva-sink-")), "trace.jsonl")
+const scratch = () => mkdtempSync(join(tmpdir(), "eva-sink-"))
 
 let counter = 0
 const event = (session: SessionID, payload: Payload): Event => ({
@@ -33,57 +33,64 @@ const started = (intent: string): Payload => ({
   intent,
 })
 
-const open = (file: string) => Effect.runPromise(makeJsonlSink(file))
+const open = (dir: string) => Effect.runPromise(makeJsonlSink(dir))
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 10))
 
 describe("the sessions a trace holds", () => {
-  it("names every session on disk, each once", async () => {
-    const file = path()
+  it("names every session on disk, one file each", async () => {
+    const dir = scratch()
     const first = sessionID("sess_first")
     const second = sessionID("sess_second")
 
-    const writer = await open(file)
+    const writer = await open(dir)
     await Effect.runPromise(writer.append([event(first, started("one"))]))
     await Effect.runPromise(writer.append([event(second, started("two"))]))
     await Effect.runPromise(writer.append([event(first, started("one again"))]))
     await Effect.runPromise(writer.close)
 
-    // A second sink over the same file stands for a later process.
-    const reader = await open(file)
+    // A second sink over the same directory stands for a later process.
+    const reader = await open(dir)
     const found = await Effect.runPromise(reader.sessions)
     await Effect.runPromise(reader.close)
 
     expect([...found].sort()).toEqual([first, second].sort())
+    expect(readFileSync(fileOf(dir, first), "utf8").trim().split("\n")).toHaveLength(2)
   })
 
-  it("names none when the file is not there", async () => {
-    const sink = await open(path())
+  it("names none when the directory is fresh", async () => {
+    const sink = await open(scratch())
     expect(await Effect.runPromise(sink.sessions)).toEqual([])
     await Effect.runPromise(sink.close)
   })
 
   // A killed process leaves a half-written line. Everything whole before it
-  // still counts; nothing after it is guessed at.
-  it("stops at a torn trailing line rather than skipping it", async () => {
-    const file = path()
-    const kept = sessionID("sess_kept")
-    const writer = await open(file)
-    await Effect.runPromise(writer.append([event(kept, started("kept"))]))
+  // still counts, and only the torn session pays: the fault a shared file
+  // spread across every session now ends at one file's tail.
+  it("keeps a torn tail inside the one session that tore", async () => {
+    const dir = scratch()
+    const torn = sessionID("sess_torn")
+    const whole = sessionID("sess_whole")
+    const writer = await open(dir)
+    await Effect.runPromise(writer.append([event(torn, started("kept"))]))
+    await Effect.runPromise(writer.append([event(whole, started("untouched"))]))
     await Effect.runPromise(writer.close)
-    appendFileSync(file, '{"id":"evt_torn","session":"sess_lost"')
+    appendFileSync(fileOf(dir, torn), '{"id":"evt_torn","session":"sess_torn"')
 
-    const reader = await open(file)
-    expect(await Effect.runPromise(reader.sessions)).toEqual([kept])
-    expect(reader.recovery.tornTrailingLine).toBe(true)
+    const reader = await open(dir)
+    const next = await Effect.runPromise(reader.append([event(torn, started("resumed"))]))
+    expect(next[0]?.seq).toBe(2)
+    expect(await Effect.runPromise(reader.highWater(whole))).toBe(1)
     await Effect.runPromise(reader.close)
   })
 })
 
 describe("the jsonl sink", () => {
   it("numbers each session from one, independently", async () => {
-    const file = path()
+    const dir = scratch()
     const first = sessionID("sess_a")
     const second = sessionID("sess_b")
-    const sink = await open(file)
+    const sink = await open(dir)
 
     await Effect.runPromise(sink.append([event(first, started("a1"))]))
     await Effect.runPromise(sink.append([event(second, started("b1"))]))
@@ -91,22 +98,21 @@ describe("the jsonl sink", () => {
     await Effect.runPromise(sink.close)
 
     expect(third[0]?.seq).toBe(2)
-    const lines = readFileSync(file, "utf8").trim().split("\n").map(decodeLine)
+    const lines = readFileSync(fileOf(dir, first), "utf8").trim().split("\n").map(decodeLine)
     expect(lines.map((one) => [one.session, one.seq])).toEqual([
       [first, 1],
-      [second, 1],
       [first, 2],
     ])
   })
 
   it("carries on numbering where an earlier process stopped", async () => {
-    const file = path()
+    const dir = scratch()
     const session = sessionID("sess_resumed")
-    const first = await open(file)
+    const first = await open(dir)
     await Effect.runPromise(first.append([event(session, started("one"))]))
     await Effect.runPromise(first.close)
 
-    const second = await open(file)
+    const second = await open(dir)
     const next = await Effect.runPromise(second.append([event(session, started("two"))]))
     await Effect.runPromise(second.close)
 
@@ -114,9 +120,9 @@ describe("the jsonl sink", () => {
   })
 
   it("replays only the session that was asked for", async () => {
-    const file = path()
+    const dir = scratch()
     const wanted = sessionID("sess_wanted")
-    const sink = await open(file)
+    const sink = await open(dir)
     await Effect.runPromise(sink.append([event(wanted, started("wanted"))]))
     await Effect.runPromise(sink.append([event(sessionID("sess_other"), started("other"))]))
 
@@ -125,25 +131,75 @@ describe("the jsonl sink", () => {
 
     expect([...replayed].map((one) => one.session)).toEqual([wanted])
   })
+
+  // A bad line mid-file stops that session's replay at the break. The other
+  // sessions do not share the file, so they lose nothing.
+  it("bounds a corrupt line to the session that holds it", async () => {
+    const dir = scratch()
+    const hurt = sessionID("sess_hurt")
+    const fine = sessionID("sess_fine")
+    const sink = await open(dir)
+    await Effect.runPromise(sink.append([event(hurt, started("kept"))]))
+    await Effect.runPromise(sink.append([event(fine, started("kept too"))]))
+    await Effect.runPromise(sink.close)
+
+    const path = fileOf(dir, hurt)
+    writeFileSync(path, readFileSync(path, "utf8") + "not json at all\n")
+    appendFileSync(path, encodeLine({ ...event(hurt, started("after the break")), seq: 2 }) + "\n")
+
+    const reader = await open(dir)
+    const replayed = await Effect.runPromise(Stream.runCollect(reader.replay(hurt)))
+    expect([...replayed]).toHaveLength(1)
+    expect(await Effect.runPromise(reader.highWater(fine))).toBe(1)
+    await Effect.runPromise(reader.close)
+  })
 })
 
-describe("recover", () => {
-  it("reads the high-water mark per session", () => {
-    const source = [
-      { session: sessionID("sess_a"), seq: 1 },
-      { session: sessionID("sess_b"), seq: 1 },
-      { session: sessionID("sess_a"), seq: 2 },
-    ]
-      .map((one) => encodeLine({ ...event(one.session, started("x")), seq: one.seq }))
-      .join("\n")
+/**
+ * What this store derives a Header from, and nothing about the order — the
+ * listing states that, and the conformance suite holds it over every sink.
+ * The shortcut is the file posture's: the first line's intent, and `mtime`
+ * for when the Session last moved.
+ */
+describe("the jsonl headers", () => {
+  it("titles a session by its opening intent, and dates it by the last append", async () => {
+    const dir = scratch()
+    const older = sessionID("sess_older")
+    const newer = sessionID("sess_newer")
+    const sink = await open(dir)
 
-    const found = recover(source)
-    expect(found.highWater.get(sessionID("sess_a"))).toBe(2)
-    expect(found.highWater.get(sessionID("sess_b"))).toBe(1)
-    expect(found.tornTrailingLine).toBe(false)
+    await Effect.runPromise(sink.append([event(older, started("the first ask"))]))
+    await settle()
+    await Effect.runPromise(sink.append([event(newer, started("the second ask"))]))
+
+    const headers = await Effect.runPromise(sink.headers)
+    await Effect.runPromise(sink.close)
+
+    expect(
+      [...headers].sort((a, b) => a.id.localeCompare(b.id)).map((one) => [one.id, one.title]),
+    ).toEqual([
+      [newer, "the second ask"],
+      [older, "the first ask"],
+    ])
+    expect(headers.every((one) => one.updatedAt !== undefined)).toBe(true)
   })
 
-  it("reads an empty trace as nothing recovered", () => {
-    expect(recover("")).toEqual({ highWater: new Map(), tornTrailingLine: false })
+  it("moves a session's date when it commits again", async () => {
+    const dir = scratch()
+    const first = sessionID("sess_first")
+    const second = sessionID("sess_second")
+    const sink = await open(dir)
+
+    await Effect.runPromise(sink.append([event(first, started("one"))]))
+    await settle()
+    await Effect.runPromise(sink.append([event(second, started("two"))]))
+    await settle()
+    await Effect.runPromise(sink.append([event(first, started("one moves up"))]))
+
+    const headers = await Effect.runPromise(sink.headers)
+    await Effect.runPromise(sink.close)
+
+    const dateOf = (id: SessionID) => headers.find((one) => one.id === id)?.updatedAt ?? ""
+    expect(dateOf(first) > dateOf(second)).toBe(true)
   })
 })

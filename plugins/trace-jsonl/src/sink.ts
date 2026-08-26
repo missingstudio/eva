@@ -1,105 +1,159 @@
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, writeSync } from "node:fs"
-import { dirname } from "node:path"
-import { sequenced, type TraceSink, type TraceStore } from "@missingstudio/eva-core"
-import { decodeLine, encodeLine, type Event, type SessionID } from "@missingstudio/eva-schema"
+import {
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readSync,
+  statSync,
+  writeSync,
+} from "node:fs"
+import { join } from "node:path"
+import {
+  headOfEvents,
+  sinkOf,
+  traceEvents,
+  traceText,
+  SUFFIX,
+  type SessionHeader,
+  type StampedStore,
+  type TraceSink,
+} from "@missingstudio/eva-core"
+import {
+  decodeLine,
+  encodeLine,
+  headerStep,
+  sessionID,
+  type Event,
+  type SessionID,
+} from "@missingstudio/eva-schema"
 import { Effect, Stream } from "effect"
 
-export interface Recovery {
-  readonly highWater: ReadonlyMap<SessionID, number>
-  // A killed process can leave a half-written last line. Recovery keeps
-  // every whole record before it and reports that it found one.
-  readonly tornTrailingLine: boolean
-}
-
-export const recover = (source: string): Recovery => {
-  const highWater = new Map<SessionID, number>()
-  const lines = source.split("\n")
-  const last = lines.length - 1
-  let torn = false
-
-  for (const [index, line] of lines.entries()) {
-    if (line === "") continue
-    try {
-      const event = decodeLine(line)
-      const seen = highWater.get(event.session) ?? 0
-      if (event.seq > seen) highWater.set(event.session, event.seq)
-    } catch {
-      // Anything unreadable before the end means real corruption, not a
-      // torn tail, so recovery stops rather than skipping records.
-      torn = index === last
-      break
-    }
-  }
-  return { highWater, tornTrailingLine: torn }
-}
-
-export const readTrace = (path: string): string => {
-  try {
-    return readFileSync(path, "utf8")
-  } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return ""
-    throw cause
-  }
+export interface JsonlSinkOptions {
+  // Whether `append` fsyncs each session file it wrote before returning.
+  readonly fsync?: boolean
 }
 
 export interface JsonlSink extends TraceSink {
-  readonly path: string
-  readonly recovery: Recovery
+  readonly dir: string
 }
 
-interface JsonlStore extends TraceStore {
-  readonly recovery: Recovery
+export const fileOf = (dir: string, session: SessionID): string => join(dir, `${session}${SUFFIX}`)
+
+// The first whole line of a file, without reading the rest of it. A line
+// past this window is not a line this store wrote.
+const WINDOW = 65536
+
+const firstLine = (path: string): string | undefined => {
+  const handle = openSync(path, "r")
+  try {
+    const buffer = Buffer.alloc(WINDOW)
+    const read = readSync(handle, buffer, 0, buffer.length, 0)
+    const text = buffer.toString("utf8", 0, read)
+    const end = text.indexOf("\n")
+    if (end !== -1) return text.slice(0, end)
+    return text === "" ? undefined : text
+  } finally {
+    closeSync(handle)
+  }
 }
 
-const makeJsonlStore = (path: string): JsonlStore => {
-  mkdirSync(dirname(path), { recursive: true })
-  const recovery = recover(readTrace(path))
-  const handle = openSync(path, "a")
+const makeJsonlStore = (dir: string, fsync: boolean): StampedStore => {
+  mkdirSync(dir, { recursive: true })
 
-  // A torn tail stops the walk rather than skipping past it, so a reader
-  // sees every whole record before the break and nothing after.
-  const walk = (visit: (event: Event) => void): void => {
-    for (const line of readTrace(path).split("\n")) {
-      if (line === "") continue
-      try {
-        visit(decodeLine(line))
-      } catch {
-        break
+  // One append handle per session, opened on first write and kept: a Run
+  // commits into few sessions, and reopening per group costs a syscall.
+  const handles = new Map<SessionID, number>()
+  const handleOf = (session: SessionID): number => {
+    const held = handles.get(session)
+    if (held !== undefined) return held
+    const opened = openSync(fileOf(dir, session), "a")
+    handles.set(session, opened)
+    return opened
+  }
+
+  const list = (): readonly SessionID[] =>
+    readdirSync(dir)
+      .filter((name) => name.endsWith(SUFFIX))
+      .map((name) => sessionID(name.slice(0, -SUFFIX.length)))
+
+  // Every whole record one session's file holds. A killed process leaves a
+  // half-written last line, and the read keeps everything before it. The
+  // filename says whose file it is, and a record filed under another
+  // Session is not read back as this one's.
+  const eventsAt = (session: SessionID): readonly Event[] =>
+    traceEvents(traceText(fileOf(dir, session))).filter((event) => event.session === session)
+
+  /**
+   * The listing shortcut the file posture accepts: the title is the first
+   * line's — the intent a Session opened on — and `updatedAt` is the file's
+   * `mtime`, which is the last append. An `info` that renames a Session
+   * late is missed, and `mtime` does not survive a copy; the README says
+   * both, and the fold path stays right where this is only fast.
+   */
+  const headerAt = (session: SessionID): SessionHeader | undefined => {
+    const path = fileOf(dir, session)
+    try {
+      const updatedAt = new Date(statSync(path).mtimeMs).toISOString()
+      const line = firstLine(path)
+      let title: string | undefined
+      if (line !== undefined) {
+        try {
+          title = headerStep({}, decodeLine(line)).title
+        } catch {
+          title = undefined
+        }
       }
+      return { id: session, updatedAt, ...(title === undefined ? {} : { title }) }
+    } catch {
+      // Deleting a Session is `unlink`, and a list may race one.
+      return undefined
     }
   }
 
   return {
-    recovery,
-    highWater: Effect.succeed(recovery.highWater),
+    // Asked per session on first touch, so opening the sink reads nothing:
+    // one session's high water is one file's read, not the directory's.
+    highWater: (session) => Effect.sync(() => headOfEvents(eventsAt(session)).seq),
 
     write: (group) =>
       Effect.sync(() => {
-        writeSync(handle, group.map(encodeLine).join("\n") + "\n")
-        fsyncSync(handle)
+        const lines = new Map<SessionID, string[]>()
+        for (const event of group) {
+          const held = lines.get(event.session)
+          if (held === undefined) lines.set(event.session, [encodeLine(event)])
+          else held.push(encodeLine(event))
+        }
+        for (const [session, written] of lines) {
+          const handle = handleOf(session)
+          writeSync(handle, written.join("\n") + "\n")
+          if (fsync) fsyncSync(handle)
+        }
       }),
 
-    replay: (session) =>
-      Stream.suspend(() => {
-        const found: Event[] = []
-        walk((event) => {
-          if (event.session === session) found.push(event)
-        })
-        return Stream.fromIterable(found)
-      }),
+    replay: (session) => Stream.suspend(() => Stream.fromIterable(eventsAt(session))),
 
-    sessions: Effect.sync(() => {
-      const found = new Set<SessionID>()
-      walk((event) => void found.add(event.session))
-      return [...found]
+    sessions: Effect.sync(list),
+
+    headers: Effect.sync(() =>
+      list().flatMap((session) => {
+        const header = headerAt(session)
+        return header === undefined ? [] : [header]
+      }),
+    ),
+
+    close: Effect.sync(() => {
+      for (const handle of handles.values()) closeSync(handle)
+      handles.clear()
     }),
-
-    close: Effect.sync(() => closeSync(handle)),
   }
 }
 
-export const makeJsonlSink = (path: string): Effect.Effect<JsonlSink> =>
+export const makeJsonlSink = (
+  dir: string,
+  options: JsonlSinkOptions = {},
+): Effect.Effect<JsonlSink> =>
   Effect.gen(function* () {
-    const store = makeJsonlStore(path)
-    return { ...(yield* sequenced(store)), path, recovery: store.recovery }
+    const store = makeJsonlStore(dir, options.fsync ?? true)
+    return { ...(yield* sinkOf(store)), dir }
   })
