@@ -264,7 +264,7 @@ of them tracks it.
 | C0 — Console               | done        | nothing      |
 | W0 — Client runtime        | done        | nothing      |
 | W1 — The wire and the page | done        | nothing      |
-| 2 — Tools and the loop     | not started | the plans    |
+| 2 — Tools and the loop     | in progress | 14 tickets   |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
@@ -283,8 +283,7 @@ run and what a full measurement costs.
 W1's four paths — `packages/session-view`, the read half of `plugins/api`,
 `plugins/web`, and `apps/web` — all ship.
 
-**Stage 2 — Tools and the loop.** Not started. Execution starts the same way
-Stage 1 did: read the roadmap's stage, then write the stage's plan as one
-ticket per plan, with a priority, an effort, and what it depends on. Build the
-tickets in dependency order, one commit each, and record the result as each
-lands.
+**Stage 2 — Tools and the loop.** In progress. The stage plan is written: 14
+tickets in five waves, each with a priority, an effort, and what it depends
+on. The tickets build in dependency order, one commit each, and this row
+records the result as each lands. Nothing has landed yet.
