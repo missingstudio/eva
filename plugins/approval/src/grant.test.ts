@@ -39,9 +39,10 @@ describe("the grant an allow_always writes", () => {
     })
   })
 
-  // It reaches disk in the rule language the deterministic gate reads, so the
-  // next Run answers from the rule and nobody is asked again.
-  it("is read back by the same reader a run uses", () => {
+  // It reaches disk as an entry of `policy.rules`, which is the rule language
+  // the deterministic gate reads. That the gate then answers from it is proven
+  // where the two plugins meet, in `packages/conformance`.
+  it("is an entry of policy.rules in the file", () => {
     expect(writeGrant(path, grantedRule(["git", "push"], "a person allowed it"))).toBe(true)
 
     expect(rules()).toEqual([{ allow: [["git"], ["push"]], why: "a person allowed it" }])
