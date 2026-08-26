@@ -116,33 +116,23 @@ directory, and to rewrite its `@/…` imports to relative ones: a package that
 imports this page compiles these files under its own tsconfig, where `@/` means
 nothing.
 
-## The brand, mirrored
+## The design system
 
-`packages/brand` is Eva's design system — a measured palette on `--eva-*`
-custom properties, a motion table, and one focus treatment. It lives on the
-`feat/website` branch and has not landed, so `src/tokens.css` holds the part of
-it this page needs, under brand's own names and at brand's own values.
-
-Nothing in it is invented. When brand lands, the whole file is deleted and the
-line that imports it in `src/styles.css` becomes
+`packages/ui` is Eva's design system — a measured palette on `--eva-*` custom
+properties, two self-hosted faces, a motion table, and one focus treatment.
+`src/styles.css` imports it whole:
 
 ```css
-@import "@missingstudio/eva-brand/tokens.css";
+@import "@missingstudio/ui/tokens.css";
 ```
 
-and nothing downstream changes.
-
-One distinction in it is worth naming, because it is easy to flatten. Brand
-splits the hairline between two static surfaces from the boundary that says
-"this is a control": WCAG SC 1.4.11 asks 3:1 of the second and nothing of the
-first, and the two are measured separately. shadcn/ui spends one `--border` on
-both. `src/shadcn.css` keeps them apart — `--color-border` is the hairline and
-`--color-input` is the control boundary — so a card draws `border-rule` and a
-disclosure draws `border-control`.
-
-The two faces are self-hosted by brand, from `.woff2` files this branch does
-not carry. They are named here with their fallbacks, so the page sets type in
-the right stack the day the `@font-face` rules arrive with it.
+One distinction in it is worth naming, because it is easy to flatten. The
+tokens split the hairline between two static surfaces from the boundary that
+says "this is a control": WCAG SC 1.4.11 asks 3:1 of the second and nothing of
+the first, and the two are measured separately. shadcn/ui spends one `--border`
+on both. `src/shadcn.css` keeps them apart — `--color-border` is the hairline
+and `--color-input` is the control boundary — so a card draws `border-rule` and
+a disclosure draws `border-control`.
 
 ## Prerequisites
 
@@ -198,7 +188,6 @@ cd apps/web && bun run dev
 | `src/components/`   | the vendored components — see below                          |
 | `src/lib/utils.ts`  | `cn`, which every vendored component calls                   |
 | `src/styles.css`    | the entry: Tailwind, the tokens, the bridge                  |
-| `src/tokens.css`    | Eva's design system, mirrored until `packages/brand` lands   |
 | `src/shadcn.css`    | shadcn/ui's semantic names, pointed at Eva's                 |
 | `components.json`   | where the shadcn CLI writes, for the next `add`              |
 

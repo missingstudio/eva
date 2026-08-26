@@ -12,7 +12,7 @@
 import { FileIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes } from "react"
 
-import { cn } from "../../lib/utils.js"
+import { cn } from "@missingstudio/ui/lib/utils"
 
 export type CommitFileProps = HTMLAttributes<HTMLDivElement>
 
@@ -64,7 +64,7 @@ export const CommitFileStatus = ({
 export type CommitFileIconProps = ComponentProps<typeof FileIcon>
 
 export const CommitFileIcon = ({ className, ...props }: CommitFileIconProps) => (
-  <FileIcon className={cn("size-3.5 shrink-0 text-muted", className)} {...props} />
+  <FileIcon className={cn("size-3.5 shrink-0 text-muted-foreground", className)} {...props} />
 )
 
 export type CommitFilePathProps = HTMLAttributes<HTMLSpanElement>
@@ -79,7 +79,10 @@ export type CommitFileChangesProps = HTMLAttributes<HTMLDivElement>
 
 export const CommitFileChanges = ({ className, children, ...props }: CommitFileChangesProps) => (
   <div
-    className={cn("flex shrink-0 items-center gap-1 font-mono text-muted text-xs", className)}
+    className={cn(
+      "flex shrink-0 items-center gap-1 font-mono text-muted-foreground text-xs",
+      className,
+    )}
     {...props}
   >
     {children}

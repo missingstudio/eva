@@ -16,16 +16,13 @@
     "@missingstudio/eva-core": "workspace:*",
     "@missingstudio/eva-schema": "workspace:*",
     "@missingstudio/eva-session-view": "workspace:*",
+    "@missingstudio/ui": "workspace:*",
     "@tanstack/react-router": "1.170.31",
-    "class-variance-authority": "0.7.1",
-    "clsx": "2.1.1",
     "effect": "catalog:",
-    "lucide-react": "1.33.0",
-    "radix-ui": "1.6.7",
+    "lucide-react": "catalog:",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "streamdown": "2.5.0",
-    "tailwind-merge": "3.6.0"
+    "streamdown": "2.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",
@@ -33,6 +30,8 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

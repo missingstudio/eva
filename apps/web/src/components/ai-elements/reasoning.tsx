@@ -17,8 +17,12 @@
 import { BrainIcon, ChevronDownIcon } from "lucide-react"
 import type { ComponentProps } from "react"
 
-import { cn } from "../../lib/utils.js"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.js"
+import { cn } from "@missingstudio/ui/lib/utils"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@missingstudio/ui/components/collapsible"
 import { MessageResponse } from "./message.js"
 
 export type ReasoningProps = ComponentProps<typeof Collapsible>
@@ -34,14 +38,14 @@ export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & 
 export const ReasoningTrigger = ({ className, children, ...props }: ReasoningTriggerProps) => (
   <CollapsibleTrigger
     className={cn(
-      "flex w-full items-center gap-2 text-muted text-xs uppercase tracking-[0.06em] transition-colors hover:text-ink",
+      "flex w-full items-center gap-2 text-muted-foreground text-xs uppercase tracking-[0.06em] transition-colors hover:text-ink",
       className,
     )}
     {...props}
   >
     <BrainIcon className="size-4" />
     {children}
-    <ChevronDownIcon className="size-4 transition-transform group-data-[state=closed]:-rotate-90" />
+    <ChevronDownIcon className="size-4 transition-transform group-data-closed:-rotate-90" />
   </CollapsibleTrigger>
 )
 
@@ -52,7 +56,10 @@ export type ReasoningContentProps = ComponentProps<typeof CollapsibleContent> & 
 
 export const ReasoningContent = ({ className, children, ...props }: ReasoningContentProps) => (
   <CollapsibleContent
-    className={cn("mt-1 border-rule border-l-2 pl-3 text-muted text-sm italic", className)}
+    className={cn(
+      "mt-1 border-rule border-l-2 pl-3 text-muted-foreground text-sm italic",
+      className,
+    )}
     {...props}
   >
     <MessageResponse>{children}</MessageResponse>

@@ -5,15 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Eva</title>
     <!--
-      Which scheme the page is in, before the first paint. Brand carries the
-      scheme on a `dark` class rather than on a media query, because both of
-      its sites let a reader pick one; this page offers no control, so it
-      follows the machine. It is inline and not a module for the one reason a
-      no-flash script always is: a bundle loads after the first paint, and a
-      page that corrects its own colours is a page that flashed.
+      Which scheme the page is in, before the first paint. The ui package
+      carries the scheme on a `dark` class rather than on a media query,
+      because both of its sites let a reader pick one; this page offers no
+      control, so it follows the machine. It is inline and not a module for
+      the one reason a no-flash script always is: a bundle loads after the
+      first paint, and a page that corrects its own colours is a page that
+      flashed.
 
-      Brand's own `themeScript` replaces this when that branch lands, and it
-      answers the same question with a cookie in front of the media query.
+      The ui package's `themeScript` answers the same question with a cookie
+      in front of the media query — but that cookie is set by the sites on
+      their own domain, which this locally served page never sees, so the
+      media query alone is the whole answer here.
     -->
     <script>
       document.documentElement.classList.toggle(

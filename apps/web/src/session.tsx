@@ -164,16 +164,16 @@ export const Named = ({
   readonly header: SessionHeader | undefined
 }) => (
   <>
-    <h1 className="text-3xl" title={header?.title}>
+    <h1 className="d-3" title={header?.title}>
       {titleLine(header?.title)}
     </h1>
-    <p className="text-muted text-sm">
+    <p className="text-muted-foreground text-sm">
       <code>{session}</code>
       {header?.updatedAt === undefined ? null : (
         <time dateTime={header.updatedAt}> · {header.updatedAt}</time>
       )}
     </p>
-    <p className="text-muted text-sm">
+    <p className="text-muted-foreground text-sm">
       <a href="/">every Session</a>
     </p>
   </>
@@ -221,7 +221,9 @@ export const Session = ({
     <Named session={session} header={header} />
     <Notice pipe={pipe} />
     {reading.folded.kind === "folding" ? (
-      <p className="mt-6 text-muted">Reading the transcript…</p>
+      <p aria-busy="true" className="mt-6 text-muted-foreground" role="status">
+        Reading the transcript…
+      </p>
     ) : (
       <>
         <Turns turns={reading.folded.turns} />

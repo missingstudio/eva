@@ -19,7 +19,7 @@ import type { ComponentProps, HTMLAttributes } from "react"
 import { memo } from "react"
 import { Streamdown } from "streamdown"
 
-import { cn } from "../../lib/utils.js"
+import { cn } from "@missingstudio/ui/lib/utils"
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: ActorKind
@@ -80,7 +80,9 @@ const MarkdownCode = ({ children, className, node: _node, ...props }: MarkdownCo
   return "data-block" in props ? (
     <div className="my-4 overflow-hidden rounded-lg border border-rule bg-card">
       {language === undefined ? null : (
-        <p className="border-rule border-b px-3 py-1 font-mono text-muted text-xs">{language}</p>
+        <p className="border-rule border-b px-3 py-1 font-mono text-muted-foreground text-xs">
+          {language}
+        </p>
       )}
       <pre className="overflow-x-auto px-3 py-2 text-code">
         {/* A fence closes with a newline, and drawn in a `pre` it is a blank last line. */}

@@ -22,7 +22,7 @@ import type { CostSummary } from "@missingstudio/eva-schema"
 import type { ComponentProps, ReactNode } from "react"
 import { createContext, useContext, useMemo } from "react"
 
-import { cn } from "../../lib/utils.js"
+import { cn } from "@missingstudio/ui/lib/utils"
 
 interface ContextSchema {
   cost: CostSummary
@@ -60,8 +60,8 @@ export const Context = ({ cost, className, ...props }: ContextProps) => {
 
 const Usage = ({ label, tokens }: { label: string; tokens: number | null }) => (
   <>
-    <dt className="text-muted">{label}</dt>
-    <dd className="font-mono">
+    <dt className="text-muted-foreground">{label}</dt>
+    <dd className="tnum font-mono">
       {tokens === null ? "—" : new Intl.NumberFormat("en-US").format(tokens)}
     </dd>
   </>
@@ -71,8 +71,8 @@ export type ContextContentHeaderProps = { children: ReactNode }
 
 export const ContextContentHeader = ({ children }: ContextContentHeaderProps) => (
   <>
-    <dt className="text-muted">spend</dt>
-    <dd className="font-mono">{children}</dd>
+    <dt className="text-muted-foreground">spend</dt>
+    <dd className="tnum font-mono">{children}</dd>
   </>
 )
 

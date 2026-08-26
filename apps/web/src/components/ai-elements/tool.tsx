@@ -22,9 +22,13 @@ import {
 } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
 
-import { cn } from "../../lib/utils.js"
-import { Badge } from "../ui/badge.js"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.js"
+import { cn } from "@missingstudio/ui/lib/utils"
+import { Badge } from "@missingstudio/ui/components/badge"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@missingstudio/ui/components/collapsible"
 
 export type ToolProps = ComponentProps<typeof Collapsible>
 
@@ -92,13 +96,13 @@ export const ToolHeader = ({
     {...props}
   >
     <div className="flex flex-wrap items-center gap-2">
-      <WrenchIcon className="size-4 text-muted" />
+      <WrenchIcon className="size-4 text-muted-foreground" />
       <span className="font-medium text-sm">{name}</span>
       <Badge variant="outline">{tool}</Badge>
       {getStatusBadge(status)}
       {disposition === undefined ? null : getDispositionBadge(disposition)}
     </div>
-    <ChevronDownIcon className="size-4 shrink-0 text-muted transition-transform group-data-[state=open]:rotate-180" />
+    <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-open:rotate-180" />
   </CollapsibleTrigger>
 )
 
@@ -106,7 +110,10 @@ export type ToolContentProps = ComponentProps<typeof CollapsibleContent> & { id:
 
 export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   <CollapsibleContent
-    className={cn("space-y-2 border-rule border-t px-3 py-2 text-muted text-xs", className)}
+    className={cn(
+      "space-y-2 border-rule border-t px-3 py-2 text-muted-foreground text-xs",
+      className,
+    )}
     {...props}
   />
 )

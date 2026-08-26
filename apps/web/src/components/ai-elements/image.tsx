@@ -5,7 +5,7 @@
  * the AI SDK's Experimental_GeneratedImage, so the page carries no second
  * data model. What it draws is the same: the bytes, as a data URL.
  */
-import { cn } from "../../lib/utils.js"
+import { cn } from "@missingstudio/ui/lib/utils"
 
 export type ImageProps = {
   base64: string

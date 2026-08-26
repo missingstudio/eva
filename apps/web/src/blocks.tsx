@@ -144,14 +144,14 @@ export const BlockView = ({
             mediaType={block.mimeType}
             alt={`an image, ${block.mimeType}`}
           />
-          <figcaption className="mt-1 text-muted text-xs">
+          <figcaption className="mt-1 text-muted-foreground text-xs">
             {block.uri === undefined ? block.mimeType : `${block.mimeType} · ${block.uri}`}
           </figcaption>
         </figure>
       )
     case "unknown":
       return (
-        <p className="rounded-md border border-rule border-dashed px-3 py-2 text-muted text-sm">
+        <p className="rounded-md border border-rule border-dashed px-3 py-2 text-muted-foreground text-sm">
           this page cannot draw <code>{block.originalKind}</code>, and the record holds one
         </p>
       )
@@ -172,13 +172,15 @@ export const Turns = ({ turns }: { readonly turns: readonly Turn[] }) =>
     // A Session that folds to nothing and one whose fold has not arrived are
     // two different things, and a page that drew them alike would be lying
     // about one of them.
-    <p className="text-muted">This Session has said nothing yet.</p>
+    <p className="text-muted-foreground">This Session has said nothing yet.</p>
   ) : (
     <ol className="mt-6 flex list-none flex-col gap-6 p-0">
       {turns.map((turn) => (
         <li key={turn.key}>
           <Message from={turn.author}>
-            <p className="text-muted text-xs uppercase tracking-[0.06em]">{turn.author}</p>
+            <p className="text-muted-foreground text-xs uppercase tracking-[0.06em]">
+              {turn.author}
+            </p>
             <MessageContent>
               {turn.blocks.map((block) => (
                 <BlockView key={block.key} author={turn.author} block={block} />

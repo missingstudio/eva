@@ -1,7 +1,6 @@
 @import "tailwindcss";
-/* Replaced by `@import "@missingstudio/eva-brand/tokens.css"` when brand lands. */
-@import "./tokens.css";
-@import "./shadcn.css";
+@import "@missingstudio/ui/tokens.css";
+@import "@missingstudio/ui/shadcn.css";
 
 /*
    Streamdown writes Tailwind class names into the markdown it renders, and
