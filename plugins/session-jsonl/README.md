@@ -9,7 +9,7 @@ Eva is built on a plugin kernel: every capability is a plugin. This plugin
 fills the `SessionStore` slot that
 [`@missingstudio/eva-core`](../../packages/core/README.md) defines, and it
 reads whatever sink holds the `TraceSink` slot — in the default build, the
-JSONL file [`eva.trace.jsonl`](../trace-jsonl/README.md) writes. The glossary
+SQLite store [`eva.trace.sqlite`](../trace-sqlite/README.md) keeps. The glossary
 in [docs/context.md](../../docs/context.md) defines Session, Header, and
 Trace: the trace is the single source of truth, and anything a trace cannot
 rebuild is a bug.
@@ -67,14 +67,16 @@ What each method does:
   plugin), so the fold can answer a cost estimate; without one the estimate
   is absent rather than guessed.
 - `list` unions the Sessions the sink holds with the ones this process
-  opened. An empty `TraceSink` slot lists nothing rather than failing.
+  opened, in one stated order: most recently updated first, id as the
+  tiebreak. A sink that keeps Headers beside the log (`headers`) answers
+  without a replay; one that does not is folded, a Session at a time. An
+  empty `TraceSink` slot lists nothing rather than failing.
 
 ## What it does not do
 
 Nothing here parses JSONL. The records arrive through the `TraceSink` slot,
-and this package works over whatever sink is loaded — the id names its
-pairing with `eva.trace.jsonl` in the default build, not a format it
-implements. `create` persists nothing either: a Session with no committed
+and this package works over whatever sink is loaded — SQLite in the default
+build; the id keeps the name it shipped under, not a format it implements. `create` persists nothing either: a Session with no committed
 event exists only in this process, and a restart forgets it was ever created.
 
 ## API

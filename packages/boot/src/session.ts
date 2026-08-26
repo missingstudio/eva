@@ -1,4 +1,5 @@
 import {
+  byRecency,
   foldTranscript,
   newSessionID,
   ResumeTooFarBehind,
@@ -300,10 +301,15 @@ export const makeSessionAPI = (
         return made
       }),
 
+      // A build with no store lists what this process opened. The order is
+      // the same order a store owes, because a listing states one order
+      // whatever produced it.
       list: Effect.fn("session.list")(function* () {
         const store = yield* kernel.slot.sessionStore.peek
         if (store !== undefined) return yield* store.list
-        return [...live.keys()].map((id) => ({ id })) satisfies readonly SessionHeader[]
+        return [...live.keys()]
+          .map((id) => ({ id }))
+          .sort(byRecency) satisfies readonly SessionHeader[]
       })(),
 
       attach: Effect.fn("session.attach")(function* (id: SessionID): Effect.fn.Return<Transcript> {
@@ -345,7 +351,7 @@ export const makeSessionAPI = (
              */
             if (sink === undefined) return Stream.never
 
-            const head = (yield* sink.highWater).get(id) ?? 0
+            const head = yield* sink.highWater(id)
             if (head - from.seq > WATCH_REPLAY_BOUND) {
               return Stream.fail(new ResumeTooFarBehind({ from, head }))
             }

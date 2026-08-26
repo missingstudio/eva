@@ -1,4 +1,5 @@
 import {
+  numbered,
   providerTurn,
   sequenced,
   ResumeTooFarBehind,
@@ -8,8 +9,8 @@ import {
   type ModelRef,
   type Provider,
   type Recorder,
+  type StampedStore,
   type SubmitInput,
-  type TraceStore,
 } from "@missingstudio/eva-core"
 import {
   eventID,
@@ -328,13 +329,10 @@ const committedEvent = (session: SessionID, payload: Payload): Event => ({
 // What every store in these tests does with what it is handed. Only the
 // read differs, so only the read is written twice.
 const keeping = (events: Event[]) => ({
-  highWater: Effect.sync(() => {
-    const water = new Map<SessionID, number>()
-    for (const one of events) {
-      water.set(one.session, Math.max(water.get(one.session) ?? 0, one.seq))
-    }
-    return water
-  }),
+  highWater: (session: SessionID) =>
+    Effect.sync(() =>
+      events.reduce((high, one) => (one.session === session && one.seq > high ? one.seq : high), 0),
+    ),
   write: (group: readonly Event[]) => Effect.sync(() => void events.push(...group)),
   sessions: Effect.sync(() => [...new Set(events.map((one) => one.session))]),
   close: Effect.void,
@@ -354,7 +352,7 @@ const gatedStore = (snapshotAt: "call" | "release") =>
     const events: Event[] = []
     const replays = { count: 0 }
     const snapshot = (session: SessionID) => events.filter((one) => one.session === session)
-    const store: TraceStore = {
+    const store: StampedStore = {
       ...keeping(events),
       replay: (session) =>
         Stream.unwrap(
@@ -384,7 +382,7 @@ describe("a watch with a cursor", () => {
     const seen = await wired({}, (wiring, scope) =>
       Effect.gen(function* () {
         const gate = yield* gatedStore("call")
-        const sink = yield* sequenced(gate.store)
+        const sink = yield* sequenced(yield* numbered(gate.store))
         yield* Effect.provideService(
           wiring.kernel.slot.traceSink.provide("acme.sink", sink),
           Scope.Scope,
@@ -417,7 +415,7 @@ describe("a watch with a cursor", () => {
     const seen = await wired({}, (wiring, scope) =>
       Effect.gen(function* () {
         const gate = yield* gatedStore("release")
-        const sink = yield* sequenced(gate.store)
+        const sink = yield* sequenced(yield* numbered(gate.store))
         yield* Effect.provideService(
           wiring.kernel.slot.traceSink.provide("acme.sink", sink),
           Scope.Scope,
@@ -451,11 +449,11 @@ describe("a watch with a cursor", () => {
     const seen = await wired({}, (wiring, scope) =>
       Effect.gen(function* () {
         const events: Event[] = []
-        const store: TraceStore = {
+        const store: StampedStore = {
           ...keeping(events),
           replay: (session) => Stream.fromIterable(events.filter((one) => one.session === session)),
         }
-        const sink = yield* sequenced(store)
+        const sink = yield* sequenced(yield* numbered(store))
         yield* Effect.provideService(
           wiring.kernel.slot.traceSink.provide("acme.sink", sink),
           Scope.Scope,
@@ -482,8 +480,8 @@ describe("a watch with a cursor", () => {
       Effect.gen(function* () {
         const session = sessionID("sess_far")
         const replays = { count: 0 }
-        const store: TraceStore = {
-          highWater: Effect.sync(() => new Map([[session, WATCH_REPLAY_BOUND + 5]])),
+        const store: StampedStore = {
+          highWater: () => Effect.succeed(WATCH_REPLAY_BOUND + 5),
           write: () => Effect.void,
           replay: () =>
             Stream.unwrap(
@@ -495,7 +493,7 @@ describe("a watch with a cursor", () => {
           sessions: Effect.sync(() => [session]),
           close: Effect.void,
         }
-        const sink = yield* sequenced(store)
+        const sink = yield* sequenced(yield* numbered(store))
         yield* Effect.provideService(
           wiring.kernel.slot.traceSink.provide("acme.sink", sink),
           Scope.Scope,

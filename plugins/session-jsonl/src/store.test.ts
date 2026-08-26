@@ -1,4 +1,4 @@
-import type { TraceSink } from "@missingstudio/eva-core"
+import { sinkOf, type TraceSink } from "@missingstudio/eva-core"
 import { eventID, runID, type Event, type Payload, type SessionID } from "@missingstudio/eva-schema"
 import { Effect, Stream } from "effect"
 import { describe, expect, it } from "vitest"
@@ -16,20 +16,28 @@ const event = (session: SessionID, payload: Payload): Event => ({
   payload,
 })
 
-// Stands for a trace an earlier process wrote: the store has opened none of
-// these sessions, so anything it lists came from the sink.
-const seeded = (events: readonly Event[]): TraceSink => ({
-  append: (group) => Effect.succeed(group),
-  highWater: Effect.sync(() => {
-    const water = new Map<SessionID, number>()
-    for (const one of events) water.set(one.session, Math.max(water.get(one.session) ?? 0, one.seq))
-    return water
-  }),
-  replay: (session) => Stream.fromIterable(events.filter((one) => one.session === session)),
-  follow: () => Effect.succeed(Stream.empty),
-  sessions: Effect.succeed([...new Set(events.map((one) => one.session))]),
-  close: Effect.void,
-})
+/**
+ * Stands for a trace an earlier process wrote: the store has opened none of
+ * these sessions, so anything it lists came from the sink. It is a store
+ * handed to `sinkOf` rather than a sink assembled here, so the fake owes
+ * only what a store owes and the seam supplies the rest.
+ */
+const seeded = (events: readonly Event[]): TraceSink =>
+  Effect.runSync(
+    sinkOf({
+      highWater: (session) =>
+        Effect.sync(() =>
+          events.reduce(
+            (high, one) => (one.session === session && one.seq > high ? one.seq : high),
+            0,
+          ),
+        ),
+      write: () => Effect.void,
+      replay: (session) => Stream.fromIterable(events.filter((one) => one.session === session)),
+      sessions: Effect.succeed([...new Set(events.map((one) => one.session))]),
+      close: Effect.void,
+    }),
+  )
 
 const store = (sink: TraceSink | undefined) => makeSessionStore({ sink: Effect.succeed(sink) })
 

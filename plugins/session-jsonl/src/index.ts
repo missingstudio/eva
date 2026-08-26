@@ -1,4 +1,5 @@
 import {
+  byRecency,
   foldTranscript,
   headerOf,
   newSessionID,
@@ -54,16 +55,32 @@ export const makeSessionStore = (deps: SessionStoreDeps): Effect.Effect<SessionS
           deps.prices === undefined ? undefined : yield* deps.prices,
         )
       }),
-      // The trace is the source. A session opened in this process but not
-      // yet committed is listed too, so a new Session is visible at once.
+      /**
+       * The trace is the source, and every sink answers for it the one way:
+       * a store that keeps Headers beside the log says so cheaply, and one
+       * that does not is folded behind the same call. A session opened in
+       * this process but not yet committed is listed too, so a new Session
+       * is visible at once.
+       *
+       * The order is stated here because the listing is what holds it: two
+       * sources meet at this line, and only something that has seen both
+       * can put them in one order — most recently updated first, id as the
+       * tiebreak.
+       */
       list: Effect.fn("eva.session.jsonl.list")(function* () {
         const sink = yield* deps.sink
-        const onDisk = sink === undefined ? [] : yield* sink.sessions
         const headers: SessionHeader[] = []
-        for (const id of new Set([...onDisk, ...known])) {
-          headers.push(headerOf(id, yield* replay(id)))
+        const listed = new Set<SessionID>()
+        if (sink !== undefined) {
+          for (const header of yield* sink.headers) {
+            headers.push(header)
+            listed.add(header.id)
+          }
         }
-        return headers
+        for (const id of known) {
+          if (!listed.has(id)) headers.push({ id })
+        }
+        return headers.sort(byRecency)
       })(),
     }
   })
