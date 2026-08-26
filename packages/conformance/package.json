@@ -5,6 +5,7 @@
   "type": "module",
   "devDependencies": {
     "@missingstudio/eva-api": "workspace:*",
+    "@missingstudio/eva-approval": "workspace:*",
     "@missingstudio/eva-auth": "workspace:*",
     "@missingstudio/eva-boot": "workspace:*",
     "@missingstudio/eva-catalog-models": "workspace:*",
@@ -51,6 +52,7 @@
     "postgres": "^3.4.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "yaml": "catalog:"
   }
 }

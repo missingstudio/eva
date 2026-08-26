@@ -227,7 +227,7 @@ on.
 | `eva.harness.loop` | harness domain: Eva's own propose → act → observe loop           |
 | `eva.sched`        | tool domain: the parallel-safety policy a group is run under     |
 | `eva.steer`        | hook `session.prompt.before`: mid-Run user input                 |
-| `eva.approval`     | agent domain + hook: named permission modes                      |
+| `eva.approval`     | agent, tool and command domains + hook: named permission modes   |
 | `eva.diff`         | slot `DiffApplier`: dry-run preview, atomic apply                |
 | `eva.api`          | surface: the Session API's write half, over the socket W1 opened |
 
