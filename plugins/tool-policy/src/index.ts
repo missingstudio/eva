@@ -42,9 +42,20 @@ export const toolPolicy = define({
       return
     }
 
-    yield* ctx.toolHooks["tool.execute.before"]((event) => {
-      const decision = judge(set.rules, event.args.get())
-      if (decision !== undefined) event.decide(decision)
-    })
+    /**
+     * The row is read at the moment of use, never captured, so a rebuilt tool
+     * domain is judged on the next call. What a call may change is the row's
+     * `kind`, and a name with no row is judged as a kind nothing reads — the
+     * pipeline refuses that call anyway, and failing closed is what a gate
+     * does.
+     */
+    yield* ctx.toolHooks["tool.execute.before"]((event) =>
+      Effect.gen(function* () {
+        const rows = yield* ctx.tool.get
+        const kind = rows.find((row) => row.id === event.name)?.kind ?? "other"
+        const decision = judge(set.rules, { kind, args: event.args.get() })
+        if (decision !== undefined) event.decide(decision)
+      }),
+    )
   }),
 })

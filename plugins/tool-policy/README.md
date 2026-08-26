@@ -117,10 +117,20 @@ reaches this list. A write to one of these files is a **delayed-action shell
 command** — the next install, the next hook, the next CI job runs what it says,
 long after the call that wrote it was answered.
 
-Both doors reach the same predicate. A tool that names one file names it in a
-`path` argument; a command names it as one of its words. A read is checked the
-same way a write is, because the gate cannot know which argument a tool writes
-to and `.npmrc` holds a credential.
+Both doors reach the same predicate. A tool that changes one file names it in a
+`path` argument; a command names it as one of its words.
+
+**A read is not gated at a protected path**, and a command's words are gated
+whatever the command would do with them. The row's `kind` is what decides: a
+`read`, a `search`, a `think`, and a `fetch` only look, and every other kind may
+change something — a kind this list does not name included. Reading a dependency
+manifest is most of what an agent does first, and the rule is about writes: a
+write there is a delayed-action shell command, and a read there is a file
+somebody looked at. A command is judged by its words because the gate cannot
+know which of them a program writes.
+
+The kind is read off the tool domain at the moment of the call and never
+captured, so a rebuilt registry is judged on the next call.
 
 ### One opaque invocation
 
@@ -183,9 +193,12 @@ read would let a profile whose `deny` rule has a typo go on allowing.
 
 - `toolPolicy` — the plugin definition, id `eva.tool.policy`. It reads the
   `policy` config key and registers one hook.
-- `judge(rules, args)` — the whole gate for one call: the decision, or nothing
-  when neither a protected path nor a rule names it. This is what an advisory
-  hook above the gate calls before it narrows.
+- `judge(rules, call)` — the whole gate for one call, where `call` is a
+  `JudgedCall`: `{ kind, args }`, the row's `ToolKind` and the arguments the
+  boundary settled. It answers the decision, or nothing when neither a protected
+  path nor a rule names the call. **This is what an advisory hook above the gate
+  calls before it narrows**, so that hook can see what this one decided rather
+  than asking about a call a rule already allowed.
 - `rulesOf(config)` — the rule set a run reads, built-in rules first.
 - `readRules(value)` — the one reader: rules and faults out of the `policy`
   value.
@@ -193,6 +206,8 @@ read would let a profile whose `deny` rule has a typo go on allowing.
   is what `eva policy check` holds.
 - `sayFault(fault)` — one fault, as the line a person reads.
 - `matches(rule, words)` — whether one rule matches one command.
+- `argvOf(args)` / `writtenIn(call)` — the words a call would run, and the
+  paths it would change.
 - `partsOf(argv)` / `splitLine(line)` — the splitter.
 - `protects(path)` / `protectedIn(words)` — the protected-path predicate.
 - `BUILT_IN_RULES`, `PROTECTED_FILES`, `PROTECTED_TREES` — the lists.

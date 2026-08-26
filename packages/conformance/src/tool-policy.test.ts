@@ -7,6 +7,7 @@ import { calling, CALLING_SESSION, virtualFileSystem, withKernel } from "@missin
 import { toolBash } from "@missingstudio/eva-tool-bash"
 import { toolEdit } from "@missingstudio/eva-tool-edit"
 import { toolPolicy } from "@missingstudio/eva-tool-policy"
+import { toolRead } from "@missingstudio/eva-tool-read"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { Effect, Stream } from "effect"
@@ -78,7 +79,17 @@ const bench = <A>(
   const sandbox = spying()
 
   return withKernel(
-    [traceMemory, trace, diff, virtual.plugin, sandbox.plugin, toolEdit, toolBash, toolPolicy],
+    [
+      traceMemory,
+      trace,
+      diff,
+      virtual.plugin,
+      sandbox.plugin,
+      toolRead,
+      toolEdit,
+      toolBash,
+      toolPolicy,
+    ],
     (kernel) =>
       Effect.gen(function* () {
         const recorder = yield* kernel.slot.recorder.peek
@@ -147,6 +158,26 @@ describe("the gate in front of eva.tool.edit", () => {
       )
     },
   )
+
+  /**
+   * The row's `kind` is what decides, and these two rows name the same file.
+   * Reading a dependency manifest is most of what an agent does first, and the
+   * rule the roadmap states is about writes.
+   */
+  it("lets a read of the same file through, and refuses the write", async () => {
+    await bench({ "package.json": '{ "name": "eva" }' }, (found) =>
+      Effect.gen(function* () {
+        const read = yield* found.call("read", { path: "package.json" })
+        expect(read.disposition).toBe("ok")
+
+        const write = yield* found.call("edit", {
+          path: "package.json",
+          hunks: [{ find: "eva", replace: "acme" }],
+        })
+        expect(write.disposition).toBe("denied")
+      }),
+    )
+  })
 
   // The gate is not a blanket refusal: a write the list does not name lands.
   it("lets a write to a file no rule protects through", async () => {
