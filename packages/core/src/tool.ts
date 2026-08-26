@@ -1,12 +1,4 @@
 import type { PermissionOutcome, PermissionRequest } from "@missingstudio/eva-acp"
-
-/**
- * ACP's permission types, re-exported: `Approving` names both in its own
- * signature, so anything that fills or calls the gate reaches them from here
- * rather than depending on the protocol package for two type names.
- */
-export type { PermissionOutcome, PermissionRequest }
-
 import type {
   ContentBlock,
   Disposition,
@@ -16,6 +8,13 @@ import type {
   ToolStatus,
 } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
+
+/**
+ * ACP's permission types, re-exported: `Approving` names both in its own
+ * signature, so anything that fills or calls the gate reaches them from here
+ * rather than depending on the protocol package for two type names.
+ */
+export type { PermissionOutcome, PermissionRequest }
 
 /**
  * What a tool answers. Every ending is a result: a tool that could not do the
@@ -166,6 +165,40 @@ export type Approving = (
   request: PermissionRequest,
   call: ToolCall,
 ) => Effect.Effect<PermissionOutcome>
+
+/**
+ * The tool kinds that only look. Everything else may change something, and a
+ * kind this list does not name is one of those — failing closed is what a
+ * gate does.
+ *
+ * It is here rather than in the gate that first needed it, because two gates
+ * ask the same question: the deterministic one decides whether a protected
+ * path in the arguments is a write, and a permission mode decides which tools
+ * it reaches at all. Two lists would be one list to keep in step.
+ */
+export const LOOKS_ONLY: readonly ToolKind[] = ["read", "search", "think", "fetch"]
+
+export const looksOnly = (kind: ToolKind): boolean => LOOKS_ONLY.includes(kind)
+
+/**
+ * The words a call would run, or nothing when it names none. A `command`
+ * argument is already-split words, which is the shape a tool that runs a
+ * program takes — so the words are read out of the arguments and never off the
+ * tool's name, and a second command tool is read with no change here.
+ *
+ * It is here for the reason `looksOnly` is: the deterministic gate judges
+ * these words and the approval gate writes a grant over them, and two readers
+ * of one argument would be two answers to keep in step.
+ */
+export const argvOf = (args: unknown): readonly string[] | undefined => {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return undefined
+  const command = (args as Record<string, unknown>)["command"]
+  return Array.isArray(command) &&
+    command.length > 0 &&
+    command.every((one) => typeof one === "string")
+    ? (command as readonly string[])
+    : undefined
+}
 
 // Why the boundary denied, or nothing when the call may run.
 const denial = (decision: ToolDecision | undefined): string | undefined => {

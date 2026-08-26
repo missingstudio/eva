@@ -1,4 +1,4 @@
-import { strictest, type ToolDecision } from "@missingstudio/eva-core"
+import { argvOf, looksOnly, strictest, type ToolDecision } from "@missingstudio/eva-core"
 import type { ToolKind } from "@missingstudio/eva-schema"
 import { readShape } from "@missingstudio/eva-sdk"
 import { protectedIn } from "./paths.js"
@@ -23,39 +23,22 @@ export interface JudgedCall {
 }
 
 /**
- * The kinds that only look. Everything else may change something, so a
- * protected path in its arguments is not auto-approved — a kind this list does
- * not name included, because failing closed is what a gate does.
- *
  * A read is not gated at a protected path. Reading a dependency manifest is
  * most of what an agent does first, and the rule the roadmap states is about
  * writes: a write there is a delayed-action shell command, and a read there is
  * a file somebody looked at.
+ *
+ * Which kinds only look is `looksOnly` in
+ * [`@missingstudio/eva-core`](../../../packages/core/README.md), because a
+ * permission mode asks the same question about the tools it reaches.
  */
-const READING: readonly ToolKind[] = ["read", "search", "think", "fetch"]
-
-const isWords = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) && value.every((word) => typeof word === "string")
-
-/**
- * The words a call would run. A `command` list is already-split words, which
- * is the shape a tool that runs a program takes. It is read out of the
- * arguments rather than off the tool's name, so a second command tool is
- * judged with no change here.
- */
-export const argvOf = (args: unknown): readonly string[] | undefined => {
-  const found = readShape(args, "mapping")
-  if (found === undefined) return undefined
-  const command = found["command"]
-  return isWords(command) && command.length > 0 ? command : undefined
-}
 
 /**
  * Every path a call would change. `path` is the field a tool that names one
  * file uses, and a call that only looks names none of them here.
  */
 export const writtenIn = (call: JudgedCall): readonly string[] => {
-  if (READING.includes(call.kind)) return []
+  if (looksOnly(call.kind)) return []
   const found = readShape(call.args, "mapping")
   if (found === undefined) return []
   const path = found["path"]
