@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
-import { defineConfig } from "vite-plus"
+import tailwindcss from "@tailwindcss/vite"
+import { defineConfig, type Plugin } from "vite-plus"
 
 // The manifest sits one directory above both src/ and dist/, and a page
 // served as static assets has no manifest to read — so the build injects the
@@ -11,7 +12,17 @@ const version = (): string => {
   return typeof found === "string" ? found : "0.0.0"
 }
 
+/**
+ * Tailwind's Vite plugin is typed against `vite`, and this toolchain is
+ * `vite-plus`, which carries its own build of the same interface under
+ * another name. The two `Plugin` types are the same shape and TypeScript
+ * cannot see it, so the cast is here rather than in the plugin list, where a
+ * reader would take it for a plugin that does not work.
+ */
+const tailwind = (): readonly Plugin[] => tailwindcss() as unknown as readonly Plugin[]
+
 export default defineConfig({
+  plugins: [...tailwind()],
   define: {
     EVA_WEB_VERSION: JSON.stringify(version()),
     /**

@@ -1,0 +1,325 @@
+/*
+   Eva's design system, mirrored.
+
+   `packages/brand` is the real thing: a measured palette on `--eva-*` custom
+   properties, a motion table, and one focus treatment. It lives on the
+   `feat/website` branch and has not landed, so this file holds the part of it
+   this page needs, under brand's own names and at brand's own values.
+
+   Nothing here is invented. When brand lands, this whole file is deleted and
+   the line that imports it becomes
+
+     @import "@missingstudio/eva-brand/tokens.css";
+
+   and nothing downstream changes. So do not add a token brand does not have,
+   and do not change a value brand has measured. What is left out is what a
+   transcript has no use for: the display scale, the reveal system, the grid
+   texture, the hero gradient and the button set, all of which are the
+   marketing site's furniture.
+
+   The two faces are self-hosted by brand, from `.woff2` files this branch does
+   not carry. The families are named here with their fallbacks, so the page
+   sets type in the right stack the day the `@font-face` rules arrive with it.
+*/
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+   Every `hover:` utility is gated on a device that actually hovers. Tailwind's
+   own hover variant is a bare `:hover`, and on touch `:hover` sticks after a
+   tap — the row a reader last touched keeps looking selected until they touch
+   something else. Redefining the variant fixes every call site at once.
+*/
+@custom-variant hover {
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
+@theme {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  /*
+     Two faces, everywhere, code included. Space Grotesk is proportional, so
+     `pre` and `code` below buy back what they can: tabular numerals, so digits
+     and counters still line up in a column, and a little extra tracking, which
+     is what keeps a proportional face legible at code sizes.
+  */
+  --font-mono: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+
+  /*
+     Code is text-sm, the same step on both sites, so a command printed on the
+     marketing page and the same command in the documentation are one size. It
+     stays a token because that agreement is the point.
+  */
+  --text-code: 0.875rem;
+  --text-code--line-height: 1.25rem;
+
+  /*
+     Prose caps at the measure, so a line never outruns a comfortable read. A
+     transcript is prose, so it is what the page is set in.
+  */
+  --container-measure: 42.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   The palette. Every value is measured, and every pairing a component can
+   make is in the contrast tables of brand's own ui-guidelines.
+
+   The ground is dark-first, because the product is a terminal program: the
+   dark column is what brand declares, and the light scheme is the translation
+   of exactly those roles.
+
+   Periwinkle carries only 2.41:1 on paper, so it is a mark rather than a text
+   colour there. `--eva-mark` is the program's exact accent, for painted shapes
+   in both schemes; `--eva-accent` is the text-safe one, which the light scheme
+   takes down the same hue until it clears AA.
+--------------------------------------------------------------------------- */
+:root {
+  --eva-bg: #fafafa;
+  --eva-card: #ffffff;
+  --eva-text: #0a0a0a;
+  --eva-lede: #484848;
+  --eva-muted: #717171;
+  --eva-rule: #e2e2e2;
+  --eva-rule-strong: #c4c4c4;
+
+  /*
+     A hairline separates two static surfaces at about 1.2:1 and cannot say
+     "this is a control". The control boundary is its own token, at 3.31:1 on
+     paper and 3.94:1 on the ground, which is what SC 1.4.11 asks for. A card
+     may use a hairline; an input may not.
+  */
+  --eva-border-control: #8a8a8a;
+
+  /* The mark. The program's own accent, for squares and rules — not for text. */
+  --eva-mark: #7aa2f7;
+  /* The same hue, taken down until it clears AA on paper. */
+  --eva-accent: #3d5fc9;
+
+  --eva-warning: #b37903;
+
+  /* The panel stays dark in both schemes, because the program it stands for is. */
+  --eva-panel-ink: #181818;
+}
+
+.dark {
+  --eva-bg: #000000;
+  --eva-card: #181818;
+  --eva-text: #f5f5f5;
+  --eva-lede: #c4c4c4;
+  --eva-muted: #989898;
+  --eva-rule: #272727;
+  --eva-rule-strong: #313131;
+
+  --eva-border-control: #6b6b6b;
+
+  /* On this ground the program's accent is legible as text, so mark and accent
+     are the same colour here — exactly what the terminal paints. */
+  --eva-mark: #7aa2f7;
+  --eva-accent: #7aa2f7;
+
+  --eva-warning: #e1ad63;
+
+  --eva-panel-ink: #1f1f1f;
+}
+
+/* ---------------------------------------------------------------------------
+   The panel's ink does not flip with the scheme.
+
+   `--eva-panel-ink` is dark on a light page and on a dark one, so anything
+   drawn on it must read these three rather than the scheme-aware pair. A
+   component that reaches for `--eva-accent` here gets #3d5fc9 on a light page
+   and lands at 3.11:1, which fails. This is the one place a component does not
+   read the scheme-aware token.
+--------------------------------------------------------------------------- */
+:root,
+.dark {
+  --eva-on-strong: #f5f5f5;
+  --eva-on-strong-muted: #989898;
+  --eva-on-strong-accent: #7aa2f7;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion. Every animation on the page draws from this table; a literal
+   duration or easing is a bug.
+--------------------------------------------------------------------------- */
+:root {
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-instant: 150ms;
+  --dur-fast: 300ms;
+  --dur-base: 700ms;
+  --dur-reveal: 800ms;
+  --stagger: 50ms;
+
+  /*
+     Tailwind's transition utilities fall back to these two when no duration or
+     easing is named, and its own fallback is a default curve — the one thing
+     the motion contract forbids. Pointing them at the system means a bare
+     `transition-colors` lands on the system rather than off it.
+  */
+  --default-transition-duration: var(--dur-instant);
+  --default-transition-timing-function: var(--ease-fluid);
+}
+
+/*
+   Changing the scheme repaints every colour on the page at once. Left alone,
+   every element that carries a colour transition animates that repaint, and
+   the page wipes through an intermediate palette for the length of the longest
+   transition. The flip is not a state change worth animating, so transitions
+   are suppressed for the frame it takes.
+*/
+[data-theme-changing] *,
+[data-theme-changing] *::before,
+[data-theme-changing] *::after {
+  transition: none !important;
+}
+
+@theme inline {
+  --color-bg: var(--eva-bg);
+  --color-card: var(--eva-card);
+  --color-ink: var(--eva-text);
+  --color-lede: var(--eva-lede);
+  --color-muted: var(--eva-muted);
+  --color-rule: var(--eva-rule);
+  --color-rule-strong: var(--eva-rule-strong);
+  --color-control: var(--eva-border-control);
+  --color-accent: var(--eva-accent);
+  --color-mark: var(--eva-mark);
+  --color-warning: var(--eva-warning);
+  --color-panel: var(--eva-panel-ink);
+  --color-on-strong: var(--eva-on-strong);
+  --color-on-strong-muted: var(--eva-on-strong-muted);
+  --color-on-strong-accent: var(--eva-on-strong-accent);
+}
+
+/*
+   The base layer, and it is a layer on purpose. An unlayered element rule
+   outranks every class in `@layer components`, so an unlayered `h1` here would
+   quietly beat the display classes and the tracking would never land.
+*/
+@layer base {
+  /* Display type is the serif. It stops at h2: Instrument Serif ships one
+     weight, so a small heading set in it reads as body text rather than as
+     structure. h3 and below stay in the sans. */
+  h1,
+  h2 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    letter-spacing: -0.018em;
+  }
+
+  /* No word left alone on the last line. A heading balances its lines; body
+     copy only avoids the orphan, because balancing a paragraph costs more than
+     it buys. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    text-wrap: balance;
+  }
+
+  p,
+  li {
+    text-wrap: pretty;
+  }
+
+  /*
+     Font smoothing is set once, on the root, and never per component. Set in
+     two places it is set twice with different answers, and the two are only
+     visible side by side.
+  */
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /*
+     Underlines are drawn from the font's own metrics and skip the descenders,
+     so a `g` or a `y` is not struck through by its own link.
+  */
+  a {
+    text-underline-position: from-font;
+    text-decoration-skip-ink: auto;
+  }
+
+  /*
+     A long word breaks rather than escaping its column. A URL, an identifier
+     or a flag name is the usual culprit, and the alternative is a page that
+     scrolls sideways.
+  */
+  p,
+  li,
+  dd,
+  td,
+  blockquote {
+    overflow-wrap: break-word;
+  }
+
+  /* Code is Space Grotesk like everything else. A proportional face set as code
+     needs the help below: figures that line up, and air between glyphs so a
+     dense command still parses at a glance. */
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums slashed-zero;
+    letter-spacing: 0.005em;
+  }
+}
+
+/*
+   One focus treatment, every component. `:focus-visible` rather than `:focus`,
+   so a mouse click never paints a ring. The accent measures 5.47:1 on paper
+   and 8.34:1 on the ground, above the 3:1 that SC 1.4.11 asks.
+
+   `outline` rather than a border or a shadow: it is drawn outside the box, so
+   it never moves the layout, and the offset keeps it clear of the element's
+   own edge.
+*/
+:focus-visible {
+  outline: 2px solid var(--eva-accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+@layer components {
+  /*
+     The terminal panel. Eva's program is dark whatever the page is, so the
+     surface that stands in for it stays dark in both schemes — which is why
+     its ink is pinned rather than flipped. Anything drawn here reads the
+     `on-strong` tokens; the scheme-aware accent lands at 3.11:1 on this field
+     in light mode and fails.
+  */
+  .panel-terminal {
+    background: var(--eva-panel-ink);
+    color: var(--eva-on-strong);
+    border: 1px solid var(--eva-rule);
+  }
+  .panel-terminal :is(.text-muted, .muted) {
+    color: var(--eva-on-strong-muted);
+  }
+
+  /*
+     A hairline card. The border goes all the way around — a single-sided
+     border is never a card edge — and hover moves it one step stronger. No
+     shadow, and no lift: the tonal step from ground to card is the hierarchy.
+  */
+  .card-hairline {
+    border: 1px solid var(--eva-rule);
+    background: var(--eva-card);
+    border-radius: 0.75rem;
+    transition: border-color var(--dur-instant) var(--ease-fluid);
+  }
+  @media (hover: hover) {
+    .card-hairline:hover {
+      border-color: var(--eva-rule-strong);
+    }
+  }
+}
