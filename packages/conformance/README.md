@@ -65,6 +65,13 @@ A new sink adds its factory to that table and inherits every test. Behavior
 only one implementation owes — the jsonl sink's survival of a killed
 process — sits in its own `describe` below the shared one.
 
+[src/fs-contract.test.ts](src/fs-contract.test.ts) is the same shape over the
+`FileSystem` slot, and it is where the point is unmissable: one row walks a
+disk and the other walks a map, and both answer the same refusals, the same
+faults, and the same glob results. A third filler adds its row and inherits
+all of it. What only the disk filler owes — a symlink out of the root — sits
+in `plugins/fs`'s own tests.
+
 `eva.trace.postgres` joins both sink tables when `EVA_TEST_POSTGRES_URL`
 points at a disposable database, with a fresh schema per sink and every
 schema dropped at the end. It is the store the allocation contract exists
@@ -91,6 +98,8 @@ priced and accepted, and a test is what keeps it a decision.
 | `sink-contract.test.ts`      | Every TraceSink against one contract, and where they are allowed to differ                 |
 | `list-order.test.ts`         | One listing order over every sink, whatever each reads to answer                           |
 | `swap.test.ts`               | A Slot hot-swaps mid-Run; a missing capability degrades rather than fails                  |
+| `fs-contract.test.ts`        | Every FileSystem against one contract: `eva.fs` on a disk, the testkit's filler on a map   |
+| `ground-slots.test.ts`       | The FileSystem, Shell, and Sandbox slots wired, and each read at the moment of use         |
 | `tui.test.ts`                | The shipped bindings against the surface, the shipped theme against the renderer's palette |
 | `session-view.test.tsx`      | The terminal's mapping and the page's, over one fold of one Trace                          |
 

@@ -1,10 +1,10 @@
 # @missingstudio/eva-testkit
 
-The test helpers of [Eva](../../README.md). A test needs four things the
+The test helpers of [Eva](../../README.md). A test needs five things the
 production tree cannot give it: a Provider that answers a written script
 instead of a model, a replay of a recorded provider stream, a live kernel
-over the plugins under test, and the record read back from behind it. All
-four live here.
+over the plugins under test, the record read back from behind it, and a file
+system with no disk. All five live here.
 
 Eva is built on a plugin kernel: every capability is a plugin, and a plugin
 may not import the kernel — the layer rule in
@@ -98,6 +98,15 @@ can assert what a Repair carried. A request past the end of the script fails
 rather than repeating the final entry, because a silent repeat would make a
 repair test pass for the wrong reason.
 
+To fake the workspace, `virtualFileSystem(files?)` fills the `FileSystem`
+slot from a map: the paths are the keys, and nothing reaches a disk. It is
+held to the same contract `eva.fs` is held to, in
+[fs-contract.test.ts](../conformance/src/fs-contract.test.ts), so a tool test
+that runs on it proves what a tool test on the disk would — with nothing to
+make first and nothing to clean up after. It hands back a `plugin` for a
+`withKernel` load, the `fs` itself for a suite that wants no kernel, and
+`files()`, every file it holds, so a test reads what a tool wrote.
+
 ## API
 
 - `withKernel(loaded, body, options?)` — boots a live kernel over the named
@@ -112,16 +121,21 @@ repair test pass for the wrong reason.
   for chunk, one entry per Provider Turn.
 - `providing(provider, id?)` — wraps any `Provider` as a plugin that answers
   `model.resolve` the way a provider plugin does. Both fakes go through it.
-- `ScriptedTurn`, `Cassette`, `Scripted`, `Loaded`, `KernelOptions`,
-  `LoadOptions` — the shapes above.
-- `FAKE_PROVIDER`, `RECORDED_PROVIDER` — the ids the two fakes register
-  under.
+- `virtualFileSystem(files?, root?)` — a `FileSystem` with no disk; returns
+  `{ plugin, fs, root, files }`.
+- `ScriptedTurn`, `Cassette`, `Scripted`, `Virtual`, `Loaded`,
+  `KernelOptions`, `LoadOptions` — the shapes above.
+- `FAKE_PROVIDER`, `RECORDED_PROVIDER`, `VIRTUAL_FS` — the ids the fakes
+  register under, and `VIRTUAL_ROOT`, the root the virtual files sit under.
 
 ## What it does not do
 
-It fakes one seam: the Provider. There is no fake Validator and no fake
-TraceSink — the suites in [packages/conformance](../conformance/README.md)
-boot the real ones. `packages/exit-test/scripts/record.ts` writes the
+It fakes two seams: the Provider and the FileSystem. There is no fake
+Validator and no fake TraceSink — the suites in
+[packages/conformance](../conformance/README.md) boot the real ones. The
+FileSystem earns its fake because the real filler writes to a disk every tool
+test would otherwise have to make and remove; the Provider earns its fake
+because the real one costs money and answers differently each time. `packages/exit-test/scripts/record.ts` writes the
 cassettes; this package only replays them. And nothing here ships: the layer
 rule in `vite.config.ts` holds it above `boot`, and it is a devDependency
 everywhere it is used.
