@@ -314,6 +314,115 @@ describe("a Prompt that names a harness", () => {
   })
 })
 
+/**
+ * Steering is delivered at a boundary, never as an interrupt. `next-step` is a
+ * boundary inside the Prompt that is running, so it reaches the Harness
+ * answering now; `next-run` is the whole arc's boundary, so it waits and rides
+ * the next prompt the way steering always has.
+ */
+describe("a steer", () => {
+  interface Gate {
+    readonly opened: Deferred.Deferred<void>
+    readonly release: Deferred.Deferred<void>
+  }
+
+  // A Harness that holds its Prompt open, so a steer can arrive while it is
+  // answering. It takes no Run: what is under test is where the line goes.
+  const holding = (seen: SubmitInput[], gate: Gate): Harness => ({
+    id: "acme.held",
+    capabilities: {} as Harness["capabilities"],
+    initialize: () => Effect.succeed({} as Harness["capabilities"]),
+    createSession: () => Effect.succeed(sessionID("sess_held")),
+    resumeSession: () => Effect.succeed({ kind: "undetectable" as const }),
+    prompt: Effect.fn(function* (_id: SessionID, input: SubmitInput) {
+      seen.push(input)
+      if (input.kind === "steer") return "end_turn" as const
+      yield* Deferred.succeed(gate.opened, undefined)
+      yield* Deferred.await(gate.release)
+      return "end_turn" as const
+    }),
+    cancel: () => Effect.void,
+    updates: Stream.empty,
+  })
+
+  // One Prompt held open, one steer submitted while it runs, and then a second
+  // Prompt — so what the Harness was handed, in order, is the whole answer.
+  const steering = (
+    steer: Extract<SubmitInput, { kind: "steer" }>,
+    when: "running" | "idle",
+  ): Promise<readonly SubmitInput[]> => {
+    const seen: SubmitInput[] = []
+    const gate: Gate = {
+      opened: Deferred.makeUnsafe<void>(),
+      release: Deferred.makeUnsafe<void>(),
+    }
+    const row: HarnessInfo = {
+      id: "acme.held",
+      name: "Held",
+      open: () => Effect.succeed(holding(seen, gate)),
+    }
+    return wired({ harness: row }, (wiring, scope) =>
+      Effect.gen(function* () {
+        const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope)
+        const session = yield* api.session.create(".")
+        const prompt = (text: string) =>
+          api.session.submit(session, { kind: "prompt", text, harness: "acme.held" })
+
+        if (when === "running") {
+          const first = yield* Effect.forkChild(prompt("first"))
+          yield* Deferred.await(gate.opened)
+          yield* api.session.submit(session, steer)
+          yield* Deferred.succeed(gate.release, undefined)
+          yield* Fiber.await(first)
+        } else {
+          yield* api.session.submit(session, steer)
+          yield* Deferred.succeed(gate.release, undefined)
+        }
+
+        yield* prompt("second")
+        return seen
+      }),
+    )
+  }
+
+  it("aimed at the next Step, reaches the Harness answering now", async () => {
+    const steer = { kind: "steer", text: "also the tests", target: "next-step" } as const
+    const seen = await steering(steer, "running")
+
+    expect(seen).toEqual([
+      { kind: "prompt", text: "first", harness: "acme.held" },
+      steer,
+      // The line landed in the Prompt that was running, so the next Prompt
+      // carries its own words alone.
+      { kind: "prompt", text: "second", harness: "acme.held" },
+    ])
+  })
+
+  it("aimed at the next Run, waits for the next Prompt", async () => {
+    const seen = await steering(
+      { kind: "steer", text: "also the tests", target: "next-run" },
+      "running",
+    )
+
+    expect(seen).toEqual([
+      { kind: "prompt", text: "first", harness: "acme.held" },
+      { kind: "prompt", text: "also the tests\nsecond", harness: "acme.held" },
+    ])
+  })
+
+  /**
+   * An idle Session is an ordinary prompt and never an error: a steer names no
+   * Harness, so starting a Prompt under one nobody chose would be worse than a
+   * line that arrives with the next one. Both targets wait the same way.
+   */
+  it("with no Prompt running rides the next prompt, whichever boundary it named", async () => {
+    for (const target of ["next-step", "next-run"] as const) {
+      const seen = await steering({ kind: "steer", text: "be brief", target }, "idle")
+      expect(seen).toEqual([{ kind: "prompt", text: "be brief\nsecond", harness: "acme.held" }])
+    }
+  })
+})
+
 // An event as the recorder would stamp it: seq 0, numbered by the sink.
 let stamped = 0
 const committedEvent = (session: SessionID, payload: Payload): Event => ({

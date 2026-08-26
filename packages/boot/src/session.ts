@@ -8,6 +8,7 @@ import {
   type Approving,
   type CancelCause,
   type FrontendAnswer,
+  type Harness,
   type HarnessHost,
   type ModelRef,
   type RequestID,
@@ -34,6 +35,12 @@ interface Live {
   model: ModelRef
   // The Run in flight, so a cancel has something to interrupt.
   fiber: Fiber.Fiber<unknown, unknown> | undefined
+  /**
+   * The Harness answering a Prompt right now. A steer aimed at the next Step
+   * is handed to this one, because only the Harness knows where its next Step
+   * begins.
+   */
+  harness: Harness | undefined
   // Steering that arrived while no Run was open. It rides the next prompt.
   readonly steered: string[]
 }
@@ -240,6 +247,7 @@ export const makeSessionAPI = (
         hub: yield* PubSub.unbounded<Payload>(),
         model,
         fiber: undefined,
+        harness: undefined,
         steered: [],
       }
       live.set(session, made)
@@ -328,7 +336,13 @@ export const makeSessionAPI = (
         Scope.Scope,
         scope,
       )
-      yield* harness.prompt(session, input)
+      // Held only while the Prompt runs, so a steer that arrives later is
+      // kept for the next Prompt rather than delivered to an idle Harness.
+      state.harness = harness
+      yield* Effect.ensuring(
+        harness.prompt(session, input),
+        Effect.sync(() => (state.harness = undefined)),
+      )
     })
 
     const session: SessionAPI = {
@@ -418,13 +432,25 @@ export const makeSessionAPI = (
 
       /**
        * A prompt opens a Run on its own fiber, so the caller is free while it
-       * streams. Steering that arrives between Runs is kept and prepended to
-       * the next prompt; stage 0 has no steps inside a Run, so `next-step`
-       * lands on the next Run too.
+       * streams.
+       *
+       * A steer aimed at the next Step reaches the Harness that is answering
+       * now: the Harness holds the inbox, because only it knows where its next
+       * Step begins. A `next-run` steer is the whole arc's boundary, so it
+       * waits and rides the next prompt — and a steer that names no target
+       * this Session can reach waits the same way, because a steer names no
+       * Harness and starting a Prompt under one nobody chose is worse than a
+       * line that arrives late.
        */
       submit: Effect.fn("session.submit")(function* (id: SessionID, input: SubmitInput) {
         const state = yield* of(id)
         if (input.kind === "steer") {
+          // The Run it lands in emits the `message` payload, so nothing is
+          // published here and a surface reads one copy of the line.
+          if (input.target === "next-step" && state.harness !== undefined) {
+            yield* state.harness.prompt(id, input)
+            return
+          }
           state.steered.push(input.text)
           yield* PubSub.publish(state.hub, {
             kind: "message",
