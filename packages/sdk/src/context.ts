@@ -2,6 +2,7 @@ import type {
   Broadcast,
   Budget,
   CredentialStore,
+  DiffApplier,
   DomainMiss,
   Hooks,
   Recorder,
@@ -53,6 +54,7 @@ export interface Slots {
   readonly credentialStore: Slot<CredentialStore>
   readonly budget: Slot<Budget>
   readonly validator: Slot<Validator>
+  readonly diffApplier: Slot<DiffApplier>
 }
 
 export type ProviderHooks = Hooks<ProviderHookSpec>

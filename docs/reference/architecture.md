@@ -613,6 +613,70 @@ export interface Validator {
   /** Extract, parse, and check are one judgement over the Candidate's text. */
   readonly check: (schema: unknown, candidate: string) => Effect.Effect<Judged, ValidatorError>
 }
+
+/** The part of a `FileSystem` an applier reads and writes through. */
+export interface DiffFiles {
+  readonly read: (path: string) => Effect.Effect<string>
+  readonly write: (path: string, content: string) => Effect.Effect<void>
+}
+
+/** One replacement in one file. `find` must appear exactly once. */
+export interface Hunk {
+  readonly find: string
+  readonly replace: string
+}
+
+/** A structured edit: one file, and the Hunks to land in it, in order. */
+export interface Edit {
+  readonly path: string
+  readonly hunks: readonly Hunk[]
+}
+
+/**
+ * A resolved Edit, and what a dry run answers. `after` is the whole content
+ * an apply writes, and `base` fingerprints what the Preview was computed
+ * against — opaque to everyone but the applier that made it.
+ */
+export interface Preview {
+  readonly path: string
+  readonly base: string
+  readonly after: string
+  readonly hunks: number
+}
+
+/** What one apply wrote, and what reverses it byte for byte. */
+export interface Applied {
+  readonly path: string
+  readonly before: string
+  readonly wrote: string
+}
+
+/** Why an applier would not write. Typed data a caller reports, never a throw. */
+export class DiffRefused extends Data.TaggedError("DiffRefused")<{
+  readonly reason: "hunk_missing" | "hunk_ambiguous" | "stale"
+  readonly path: string
+  readonly hunk?: number
+  readonly found?: number
+  readonly message: string
+}> {}
+
+/**
+ * Previews a structured Edit, then applies it. The `DiffFiles` is handed in
+ * at each call, so an applier reads no Slot and holds no filling.
+ *
+ * Atomicity is a property of the Preview and not of the write: every Hunk is
+ * placed while the Preview is computed, so a Hunk that cannot land refuses
+ * the Preview and an apply is one `write` of an already-complete content.
+ * That is what lets the contract hold over a `FileSystem` that offers no
+ * rename into place, no transaction, and no lock. An Edit names one file,
+ * because one write per file is all the contract offers.
+ */
+export interface DiffApplier {
+  readonly preview: (files: DiffFiles, edit: Edit) => Effect.Effect<Preview, DiffRefused>
+  readonly apply: (files: DiffFiles, preview: Preview) => Effect.Effect<Applied, DiffRefused>
+  /** Reverses one apply, and answers the apply that reverses the reverse. */
+  readonly reverse: (files: DiffFiles, applied: Applied) => Effect.Effect<Applied, DiffRefused>
+}
 ```
 
 ### Writing a sink

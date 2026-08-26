@@ -7,6 +7,7 @@ import { catalogModels } from "@missingstudio/eva-catalog-models"
 import { catalogPrices } from "@missingstudio/eva-catalog-prices"
 import { commands } from "@missingstudio/eva-commands"
 import { config } from "@missingstudio/eva-config"
+import { diff } from "@missingstudio/eva-diff"
 import { keymap } from "@missingstudio/eva-keymap"
 import { print } from "@missingstudio/eva-print"
 import { prompt } from "@missingstudio/eva-prompt"
@@ -144,6 +145,7 @@ export const BUILT_IN: readonly Plugin[] = [
   usage,
   budget,
   validator,
+  diff,
   commands,
   themes,
   keymap,
