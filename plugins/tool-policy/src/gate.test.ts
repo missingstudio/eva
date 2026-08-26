@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { argvOf, judge, pathsOf } from "./gate.js"
+import { argvOf, judge, writtenIn, type JudgedCall } from "./gate.js"
 import { readRules, rulesOf, type Rule } from "./rules.js"
 
 // The rule set a run with no profile carries.
@@ -13,11 +13,22 @@ const profile = (rules: readonly unknown[]): readonly Rule[] => {
   return found.rules
 }
 
-const ran = (...command: readonly string[]) => ({ command })
+// One command call, as the gate reads one. `execute` is the kind a row that
+// runs a program carries.
+const ran = (...command: readonly string[]): JudgedCall => ({
+  kind: "execute",
+  args: { command },
+})
+
+// One call of a tool that changes the file it names.
+const wrote = (path: string): JudgedCall => ({
+  kind: "edit",
+  args: { path, hunks: [{ find: "a", replace: "b" }] },
+})
 
 describe("what the gate reads out of a call", () => {
   it("reads already-split words out of a command list", () => {
-    expect(argvOf(ran("npm", "test"))).toEqual(["npm", "test"])
+    expect(argvOf(ran("npm", "test").args)).toEqual(["npm", "test"])
   })
 
   it("reads no words out of a call that names no command", () => {
@@ -25,10 +36,27 @@ describe("what the gate reads out of a call", () => {
       expect(argvOf(args)).toBeUndefined()
   })
 
-  it("reads the one path a tool names", () => {
-    expect(pathsOf({ path: ".mcp.json", hunks: [] })).toEqual([".mcp.json"])
-    expect(pathsOf({ path: "" })).toEqual([])
-    expect(pathsOf(undefined)).toEqual([])
+  it("reads the one path a tool would change", () => {
+    expect(writtenIn(wrote(".mcp.json"))).toEqual([".mcp.json"])
+    expect(writtenIn({ kind: "edit", args: { path: "" } })).toEqual([])
+    expect(writtenIn({ kind: "edit", args: undefined })).toEqual([])
+  })
+
+  /**
+   * A read at a protected path is a file somebody looked at, and reading a
+   * dependency manifest is most of what an agent does first. The rule the
+   * roadmap states is about writes.
+   */
+  it.each(["read", "search", "think", "fetch"] as const)(
+    "reads no path to guard out of a %s call",
+    (kind) => {
+      expect(writtenIn({ kind, args: { path: "package.json" } })).toEqual([])
+    },
+  )
+
+  // A kind nothing declared reads is a kind that may change something.
+  it.each(["edit", "delete", "move", "other"] as const)("reads the path of a %s call", (kind) => {
+    expect(writtenIn({ kind, args: { path: "package.json" } })).toEqual(["package.json"])
   })
 })
 
@@ -84,8 +112,8 @@ describe("judge", () => {
     })
 
     // The other door: a tool that names one file, and no argv at all.
-    it("is refused through the path a tool names", () => {
-      expect(judge(BUILT_IN, { path: ".mcp.json", hunks: [{ find: "a", replace: "b" }] })).toEqual({
+    it("is refused through the path a tool would change", () => {
+      expect(judge(BUILT_IN, wrote(".mcp.json"))).toEqual({
         kind: "ask",
         question: ".mcp.json bootstraps the toolchain, so no rule approves it. Go on?",
       })
@@ -93,6 +121,10 @@ describe("judge", () => {
 
     it("is refused in any part of a chain", () => {
       expect(judge(BUILT_IN, ran("bash", "-c", "npm test && cp x .npmrc"))?.kind).toBe("ask")
+    })
+
+    it("is not what a read of the same path gets", () => {
+      expect(judge(BUILT_IN, { kind: "read", args: { path: "package.json" } })).toBeUndefined()
     })
 
     // A deny is stricter than the safety floor, so the floor never weakens one.

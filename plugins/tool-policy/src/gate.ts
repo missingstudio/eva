@@ -1,13 +1,38 @@
 import { strictest, type ToolDecision } from "@missingstudio/eva-core"
+import type { ToolKind } from "@missingstudio/eva-schema"
 import { readShape } from "@missingstudio/eva-sdk"
 import { protectedIn } from "./paths.js"
 import { matches, type Rule } from "./rules.js"
 import { partsOf, type Part } from "./shell.js"
 
 /**
- * The gate itself: one call's arguments in, one decision out, and no model in
- * the room.
+ * The gate itself: one call in, one decision out, and no model in the room.
  */
+
+/**
+ * One call, as the gate reads it: what kind of act the row describes, and the
+ * arguments the boundary settled.
+ *
+ * The kind comes from the row rather than from the name, so a tool added later
+ * is judged by what it does. It is read at the moment of use, so a rebuilt tool
+ * domain is judged on the next call.
+ */
+export interface JudgedCall {
+  readonly kind: ToolKind
+  readonly args: unknown
+}
+
+/**
+ * The kinds that only look. Everything else may change something, so a
+ * protected path in its arguments is not auto-approved — a kind this list does
+ * not name included, because failing closed is what a gate does.
+ *
+ * A read is not gated at a protected path. Reading a dependency manifest is
+ * most of what an agent does first, and the rule the roadmap states is about
+ * writes: a write there is a delayed-action shell command, and a read there is
+ * a file somebody looked at.
+ */
+const READING: readonly ToolKind[] = ["read", "search", "think", "fetch"]
 
 const isWords = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((word) => typeof word === "string")
@@ -26,16 +51,12 @@ export const argvOf = (args: unknown): readonly string[] | undefined => {
 }
 
 /**
- * Every path a call names. `path` is the field a tool that names one file
- * uses.
- *
- * A read is checked the same way a write is. The gate cannot know which
- * argument a tool writes to, `.npmrc` holds a credential, and a gate is
- * allowed to narrow — so the path is checked, and what the tool would do with
- * it is not guessed.
+ * Every path a call would change. `path` is the field a tool that names one
+ * file uses, and a call that only looks names none of them here.
  */
-export const pathsOf = (args: unknown): readonly string[] => {
-  const found = readShape(args, "mapping")
+export const writtenIn = (call: JudgedCall): readonly string[] => {
+  if (READING.includes(call.kind)) return []
+  const found = readShape(call.args, "mapping")
   if (found === undefined) return []
   const path = found["path"]
   return typeof path === "string" && path !== "" ? [path] : []
@@ -82,12 +103,18 @@ const wordsOf = (part: Part): readonly string[] => (part.kind === "words" ? part
  * words that would run are not the words a rule could read, so it fails
  * closed and a person is asked.
  */
-export const judge = (rules: readonly Rule[], args: unknown): ToolDecision | undefined => {
-  const argv = argvOf(args)
+export const judge = (rules: readonly Rule[], call: JudgedCall): ToolDecision | undefined => {
+  const argv = argvOf(call.args)
   const parts = argv === undefined ? [] : partsOf(argv)
   const decisions: ToolDecision[] = []
 
-  const guarded = protectedIn([...pathsOf(args), ...parts.flatMap(wordsOf)])
+  /**
+   * Both doors, one predicate. A tool that changes a file names it in a `path`
+   * argument; a command names it as one of its words. A command's words are
+   * checked whatever it would do with them, because the gate cannot know which
+   * of them a program writes and a bootstrap file is where it matters.
+   */
+  const guarded = protectedIn([...writtenIn(call), ...parts.flatMap(wordsOf)])
   if (guarded !== undefined) {
     decisions.push({
       kind: "ask",

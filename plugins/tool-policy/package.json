@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@missingstudio/eva-core": "workspace:*",
+    "@missingstudio/eva-schema": "workspace:*",
     "@missingstudio/eva-sdk": "workspace:*",
     "effect": "catalog:",
     "yaml": "catalog:"
