@@ -88,7 +88,7 @@ an effect that runs once at load. The effect receives the `PluginContext`:
   type, its `<name>.updated` Broadcast topic, and the context field all derive
   from that table.
 - The Slots, in `Slots`: recorder, traceSink, sessionStore, credentialStore,
-  budget, validator. Adding one is a reviewed SDK change.
+  budget, validator, diffApplier. Adding one is a reviewed SDK change.
 - The Hooks, in `ProviderHookSpec`: `model.resolve`,
   `provider.request.before`, `provider.response.after`, `provider.retry`. The
   map is the one place a hook name and its shape are declared, so a

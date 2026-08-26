@@ -1,6 +1,7 @@
 import type {
   Budget,
   CredentialStore,
+  DiffApplier,
   Domain,
   DomainMiss,
   Recorder,
@@ -175,6 +176,7 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     credentialStore: yield* slotOf<CredentialStore>("CredentialStore"),
     budget: yield* slotOf<Budget>("Budget"),
     validator: yield* slotOf<Validator>("Validator"),
+    diffApplier: yield* slotOf<DiffApplier>("DiffApplier"),
   }
 
   // The topic is derived from the name, so a domain cannot be wired up with

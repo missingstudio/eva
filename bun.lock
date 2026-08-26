@@ -29,6 +29,7 @@
         "@missingstudio/eva-commands": "workspace:*",
         "@missingstudio/eva-config": "workspace:*",
         "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-diff": "workspace:*",
         "@missingstudio/eva-kernel": "workspace:*",
         "@missingstudio/eva-keymap": "workspace:*",
         "@missingstudio/eva-print": "workspace:*",
@@ -490,6 +491,20 @@
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/diff": {
+      "name": "@missingstudio/eva-diff",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
         "@types/node": "catalog:",
         "typescript": "catalog:",
       },
@@ -1074,6 +1089,8 @@
     "@missingstudio/eva-conformance": ["@missingstudio/eva-conformance@workspace:packages/conformance"],
 
     "@missingstudio/eva-core": ["@missingstudio/eva-core@workspace:packages/core"],
+
+    "@missingstudio/eva-diff": ["@missingstudio/eva-diff@workspace:plugins/diff"],
 
     "@missingstudio/eva-docs": ["@missingstudio/eva-docs@workspace:apps/docs"],
 

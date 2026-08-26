@@ -1,6 +1,7 @@
 import type {
   Budget,
   CredentialStore,
+  DiffApplier,
   Recorder,
   SessionStore,
   TraceSink,
@@ -21,6 +22,7 @@ const SLOTS: readonly [keyof Slots, string, unknown][] = [
   ["credentialStore", "CredentialStore", {} as CredentialStore],
   ["budget", "Budget", {} as Budget],
   ["validator", "Validator", {} as Validator],
+  ["diffApplier", "DiffApplier", {} as DiffApplier],
 ]
 
 /**

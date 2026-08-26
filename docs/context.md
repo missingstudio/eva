@@ -165,6 +165,19 @@ is shown marked, because an Estimate read as a Cost is the mistake the pair
 exists to prevent, and one record that cannot be priced leaves it absent.
 _Avoid_: Cost, derived cost, approximate cost
 
+**Hunk**:
+One replacement inside one file: the text to find, and the text that takes its
+place. A Hunk lands when its text appears exactly once in what the Hunks before
+it produced; absent or repeated, it refuses the whole Preview.
+_Avoid_: Patch (that is the whole set), chunk, block (a Block is the fold's)
+
+**Preview**:
+A resolved edit: the whole content an apply will write, and a fingerprint of the
+content it was computed against. Every Hunk has already landed in it, so an
+apply is one write and a file that moved underneath it is refused rather than
+mangled.
+_Avoid_: Dry run (that is the act that produces one), patch, plan
+
 ## Execution and continuity
 
 Four systems Eva touches use `turn` for two different things, so Eva does not

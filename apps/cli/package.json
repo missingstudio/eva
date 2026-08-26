@@ -37,6 +37,7 @@
     "@missingstudio/eva-commands": "workspace:*",
     "@missingstudio/eva-config": "workspace:*",
     "@missingstudio/eva-core": "workspace:*",
+    "@missingstudio/eva-diff": "workspace:*",
     "@missingstudio/eva-kernel": "workspace:*",
     "@missingstudio/eva-keymap": "workspace:*",
     "@missingstudio/eva-print": "workspace:*",

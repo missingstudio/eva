@@ -181,3 +181,81 @@ export interface Validator {
    */
   readonly check: (schema: unknown, candidate: string) => Effect.Effect<Judged, ValidatorError>
 }
+
+/**
+ * The part of a `FileSystem` an applier reads and writes through. A
+ * `FileSystem` satisfies it, so an applier works against whichever one the
+ * caller holds — the Slot's filling in a Run, a virtual one in a test — and
+ * reads no Slot of its own. It is handed in at each call, which is why an
+ * applier can never hold a slot value across an await.
+ */
+export interface DiffFiles {
+  readonly read: (path: string) => Effect.Effect<string>
+  readonly write: (path: string, content: string) => Effect.Effect<void>
+}
+
+// One replacement in one file. `find` must appear exactly once.
+export interface Hunk {
+  readonly find: string
+  readonly replace: string
+}
+
+// A structured edit: one file, and the Hunks to land in it, in order.
+export interface Edit {
+  readonly path: string
+  readonly hunks: readonly Hunk[]
+}
+
+/**
+ * A resolved Edit, and what a dry run answers. `after` is the whole content
+ * an apply writes, so every Hunk has already landed here: an apply is one
+ * `write`, and there is no half-edited file for a caller to roll back.
+ *
+ * `base` fingerprints the content the Preview was computed against. It is
+ * opaque — only the applier that made it reads it — and it is how a Preview
+ * whose file moved underneath it is refused instead of applied.
+ */
+export interface Preview {
+  readonly path: string
+  readonly base: string
+  readonly after: string
+  readonly hunks: number
+}
+
+// What one apply wrote, and what reverses it byte for byte.
+export interface Applied {
+  readonly path: string
+  // The content the file held before the apply.
+  readonly before: string
+  // Fingerprints what the apply wrote, the way `Preview.base` does.
+  readonly wrote: string
+}
+
+/**
+ * Why an applier would not write: a Hunk that is not there, a Hunk that is
+ * there more than once, or a file that changed after the Preview read it.
+ * Every reason is typed data a caller reports — a tool turns one into a
+ * result the model can act on, and nothing throws.
+ */
+export class DiffRefused extends Data.TaggedError("DiffRefused")<{
+  readonly reason: "hunk_missing" | "hunk_ambiguous" | "stale"
+  readonly path: string
+  // Which Hunk, counted from zero. Absent when the file itself is stale.
+  readonly hunk?: number
+  // How many times an ambiguous Hunk's `find` appears.
+  readonly found?: number
+  readonly message: string
+}> {}
+
+/**
+ * Previews a structured Edit, then applies it. A Preview touches nothing, an
+ * apply writes once, and a reverse restores what was there byte for byte —
+ * which is what makes every write previewed and undoable before a Snapshot
+ * exists.
+ */
+export interface DiffApplier {
+  readonly preview: (files: DiffFiles, edit: Edit) => Effect.Effect<Preview, DiffRefused>
+  readonly apply: (files: DiffFiles, preview: Preview) => Effect.Effect<Applied, DiffRefused>
+  // Reverses one apply, and answers the apply that reverses the reverse.
+  readonly reverse: (files: DiffFiles, applied: Applied) => Effect.Effect<Applied, DiffRefused>
+}
