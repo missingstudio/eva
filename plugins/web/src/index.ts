@@ -4,9 +4,11 @@ import { Effect } from "effect"
 import { DEFAULT_HOST, DEFAULT_PORT } from "./bind.js"
 import { serveWeb, WEB_SURFACE, type Answering } from "./serve.js"
 
+export * from "./ask.js"
 export * from "./assets.js"
 export * from "./bind.js"
 export * from "./serve.js"
+export * from "./wire.js"
 
 /**
  * One artifact serves single-tenant and multi-tenant alike, so the posture is
@@ -63,9 +65,14 @@ export const makeWeb = (options: WebOptions): Plugin =>
       yield* ctx.surface.transform((draft) => {
         draft.set({
           id: WEB_SURFACE,
-          // The page takes no input in W1, so Eva never asks it anything and
-          // the tool gate turns an ask into a rejection rather than a wait.
-          interactive: false,
+          /**
+           * The page answers a permission request, so Eva may ask this
+           * surface. It is honest because the ask channel knows whether a
+           * page is open: with none, and again the moment the last one goes,
+           * the ask is cancelled rather than held. A row that said `true` and
+           * then waited forever would be worse than one that said `false`.
+           */
+          interactive: true,
           // SSE carries the live tail.
           streaming: true,
           images: false,

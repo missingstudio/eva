@@ -206,8 +206,11 @@ export const BUILT_IN: readonly Plugin[] = [
   // Before `eva.web`, which serves the port it answers on. It registers no
   // row: a wire is not a Domain, and the plugin id is what a person turns off.
   api,
-  // Last, and after `tui`: `eva.web` says `interactive: false`, so it can
-  // never take the interactive branch from the surface a person types into.
+  /**
+   * Last, and after `tui`. Both rows are interactive, and the first one wins
+   * the interactive branch — so the order here is what says a person who
+   * typed `eva` gets the terminal. `eva serve` names this row by id.
+   */
   web,
 ]
 

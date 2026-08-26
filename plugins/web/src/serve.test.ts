@@ -236,8 +236,11 @@ describe("holding until the process stops", () => {
 })
 
 describe("what the surface answers Eva", () => {
-  // The row says `interactive: false`, so nothing asks. An ask that arrived
-  // anyway is refused rather than left waiting for a page with no input.
+  /**
+   * With no page reading the ask channel there is nobody to ask, so the ask is
+   * cancelled rather than held — which is what makes the row's
+   * `interactive: true` honest. The channel itself is `ask.test.ts`.
+   */
   it("cancels an ask rather than holding it", async () => {
     const served = await serving(built())
     const answer = await Effect.runPromise(

@@ -2305,6 +2305,20 @@ One thing falls out. A surface that cannot ask a person declares
 rather than hanging — that is the same rule the harness seam uses, pointed at
 the other side.
 
+**A row that says `interactive: true` owes a way of knowing somebody is
+there.** The flag is a claim about a person and not about a build: a surface
+that declared it and then held every ask would stop a Run on a reader who left,
+which is worse than one that declined. So the claim is answered by whatever
+that surface uses to reach its person. `eva.tui` has a terminal, and a closed
+input ends the surface. `eva.web` has a page that may be open or shut, so it
+streams the questions that stand on the port it serves the page from and reads
+that stream as presence: with no page reading, and again the moment the last
+one goes, the ask is cancelled. **How a surface reaches its own person is the
+surface's own business** — that channel is not a Session API method, because a
+question nobody has answered has no position on the Trace. The answer comes
+back through `SessionAPI.answer`, which is the door every surface writes
+through.
+
 **A permission request carries an id and a question, and no option list.** The
 options are `PERMISSION_OPTIONS` in `packages/core`: Eva's gate offers all four
 of ACP's options every time, so a request that carried them would carry the
