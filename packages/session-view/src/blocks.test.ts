@@ -11,7 +11,7 @@ import {
   type TranscriptMessage,
 } from "@missingstudio/eva-schema"
 import { describe, expect, it } from "vitest"
-import { blockFold, blocksOf, type Block } from "./blocks.js"
+import { askingOf, blockFold, blocksOf, type Block } from "./blocks.js"
 
 const agent = (blocks: TranscriptMessage["blocks"]): TranscriptMessage => ({
   author: "agent",
@@ -96,6 +96,30 @@ describe("the fold to Blocks", () => {
     })
   })
 
+  /**
+   * A mode is a fact on the record, so it reaches a renderer as a Block. Left
+   * out of the fold it would be recorded and drawn nowhere, and a reader would
+   * see writes refused with nothing saying what refused them.
+   */
+  it("draws a mode change as the mode and why it changed", () => {
+    const turns = blockFold([
+      agent([{ type: "mode", mode: "read-only", reason: "a person named it" }]),
+    ])
+    expect(turns[0]?.blocks[0]).toEqual({
+      kind: "mode",
+      key: "0.0",
+      mode: "read-only",
+      reason: "a person named it",
+    })
+  })
+
+  // Absent means absent. A reason nothing recorded is not an empty one, and a
+  // renderer that was handed one would say more than the record.
+  it("carries no reason when the record holds none", () => {
+    const turns = blockFold([agent([{ type: "mode", mode: "autonomous" }])])
+    expect(turns[0]?.blocks[0]).toEqual({ kind: "mode", key: "0.0", mode: "autonomous" })
+  })
+
   it("carries an image, so a renderer that can draw one has it", () => {
     const turns = blockFold([
       agent(content({ type: "image", data: "x", mimeType: "image/png", uri: "file://one.png" })),
@@ -142,6 +166,7 @@ describe("the fold to Blocks", () => {
         disposition: "ok",
       },
       { type: "edit", path: "one.ts", hunks: 1 },
+      { type: "mode", mode: "plan" },
     ]
     expect(kinds(blockFold([agent(blocks)]))).toEqual([
       "words",
@@ -150,6 +175,7 @@ describe("the fold to Blocks", () => {
       "tool",
       "result",
       "diff",
+      "mode",
     ])
   })
 
@@ -208,6 +234,51 @@ describe("the fold from a Transcript", () => {
     const transcript = foldTranscript(sessionID("sess_a"), events)
     expect(blocksOf(transcript)).toEqual(blockFold(transcript.messages()))
     expect(kinds(blocksOf(transcript))).toEqual(["words", "diff"])
+  })
+})
+
+/**
+ * The one Block that is not on the record. A question nobody has answered has
+ * no position on the Trace — an answered one is the Disposition of the call it
+ * gated — so it folds separately, and both renderers still switch over one
+ * union.
+ */
+describe("the questions that stand", () => {
+  const ASK = { request: "call_1", question: "run git push?" }
+
+  it("folds one question to one Block, with the id an answer names", () => {
+    expect(askingOf([ASK])).toEqual([
+      {
+        key: "asking",
+        author: "agent",
+        blocks: [
+          { kind: "permission", key: "asking.0", request: "call_1", question: "run git push?" },
+        ],
+      },
+    ])
+  })
+
+  // One Turn, whatever stands. A reader is being asked once, however many
+  // calls are waiting on them.
+  it("folds every question that stands into one Turn", () => {
+    const turns = askingOf([ASK, { request: "call_2", question: "and this one?" }])
+    expect(turns).toHaveLength(1)
+    expect(kinds(turns)).toEqual(["permission", "permission"])
+  })
+
+  // A renderer keys its rows by this, and the record's own keys are numbers —
+  // so a question can never take a key a Turn of the record made.
+  it("keys the Blocks apart from the record's", () => {
+    const record = blockFold([agent(content({ type: "text", text: "one" }))])
+    const keys = [
+      ...record.flatMap((turn) => turn.blocks.map((block) => block.key)),
+      ...askingOf([ASK]).flatMap((turn) => turn.blocks.map((block) => block.key)),
+    ]
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it("folds nothing when nothing is standing", () => {
+    expect(askingOf([])).toEqual([])
   })
 })
 

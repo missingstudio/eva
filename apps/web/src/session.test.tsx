@@ -1,4 +1,4 @@
-import { foldTranscript, type SessionHeader } from "@missingstudio/eva-core"
+import { foldTranscript, PERMISSION_OPTIONS, type SessionHeader } from "@missingstudio/eva-core"
 import {
   eventID,
   runID,
@@ -286,10 +286,10 @@ describe("the cost line", () => {
 })
 
 /**
- * The page takes no input of any kind — no prompt box, no permission answer,
- * no model switch. Those are W2's and they wait for the permission gate, so
- * the count of ways to put something into Eva from this page is zero, and it
- * is a check that fails rather than a habit.
+ * The page writes one thing: an answer to a permission request that stands. No
+ * prompt box, no model switch — those are W2's — so the count of ways to put
+ * something into Eva from this page is one, and it is a check that fails rather
+ * than a habit.
  *
  * What is counted is the rule and not a proxy for it. A field is input: an
  * `<input>`, a `<textarea>`, a `<form>` and a `<select>` are each a way to
@@ -302,9 +302,10 @@ describe("the cost line", () => {
  * prompt box through under an `<a>`.
  *
  * So the write half of the Session API is what is counted instead. `create`,
- * `submit`, `cancel`, `answer` and `model.set` are every call that changes
- * anything, and a page that named one would be a page with something to
- * press.
+ * `submit`, `cancel` and `model.set` are the calls that open, stop or change a
+ * Session, and a page that named one would be a page with something to press.
+ * `answer` is the one that is left, and it is drawn only where a question
+ * stands — a card with four options and no field on it.
  *
  * Each surface is drawn in the state a reader sees it in. `renderToStaticMarkup`
  * runs no effect, so `Page` draws only the words it says before the listing has
@@ -326,12 +327,44 @@ describe("what the page offers", () => {
     },
   )
 
-  it.each(["create", "submit", "cancel", "answer", "model.set"])(
-    "and no way to %s: nothing on the page writes to a Session",
+  it.each(["create", "submit", "cancel", "model.set"])(
+    "and no way to %s: nothing on the page opens, stops or changes a Session",
     (call) => {
       for (const drawn of drawings()) expect(drawn).not.toContain(call)
     },
   )
+
+  // Nothing is offered while nothing is standing. A page that always drew
+  // four options would be asking a reader to answer a question nobody asked.
+  it("offers no answer while no question stands", () => {
+    for (const drawn of drawings()) {
+      for (const option of PERMISSION_OPTIONS) expect(drawn).not.toContain(option.name)
+    }
+  })
+
+  /**
+   * The one write. It is four options and the question they answer, and it is
+   * still no field: a reader picks one of four words the gate already knows,
+   * and there is nothing to type.
+   */
+  it("offers the four options where a question stands, and no field", () => {
+    const drawn = renderToStaticMarkup(
+      <Session
+        answer={() => undefined}
+        asking={[{ request: "call_1", question: "edit may change something. Run it?" }]}
+        header={HEADER}
+        pipe={READY}
+        reading={reading()}
+        session={SESSION}
+      />,
+    )
+
+    expect(drawn).toContain("edit may change something. Run it?")
+    for (const option of PERMISSION_OPTIONS) expect(drawn).toContain(option.name)
+    for (const field of ["<input", "<textarea", "<form", "<select"]) {
+      expect(drawn).not.toContain(field)
+    }
+  })
 
   // The rows are on the page this was read from, so a listing that drew
   // nothing could not pass the clause above by drawing nothing.

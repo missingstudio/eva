@@ -173,6 +173,17 @@ export const panelWindow = (overlay: Overlay, limit = PANEL_ROWS): PanelWindow =
 }
 
 /**
+ * How many hunks changed, in words. One is not "1 hunks", and a reader
+ * counting the work does not want to read a number twice to find out.
+ *
+ * The page says it the same way under the same name. A renderer may not
+ * import another renderer and neither may import an app, so the copy is
+ * forced; a second name for it would not be, and a reader would take the two
+ * for two rules.
+ */
+const hunkText = (hunks: number): string => `${hunks} ${hunks === 1 ? "hunk" : "hunks"}`
+
+/**
  * One Block as terminal rows. What the Run did is settled before this is
  * called — the fold in `session-view` settled it — so all this decides is
  * what a row looks like.
@@ -195,8 +206,29 @@ const rowsOf = (block: Block, author: Group["kind"]): readonly Line[] => {
     // as a call that worked, and `denied` is not that.
     case "result":
       return [{ key, text: `${block.name} ${block.status} ${block.disposition}`, kind: "tool" }]
+    // The path and the count of hunks, because a reader counting the work
+    // wants the size of it: one file changed in one place is not one file
+    // rewritten.
     case "diff":
-      return [{ key, text: `edit ${block.path}`, kind: "tool" }]
+      return [{ key, text: `edit ${block.path} ${hunkText(block.hunks)}`, kind: "tool" }]
+    case "mode":
+      return [
+        {
+          key,
+          text:
+            block.reason === undefined
+              ? `mode ${block.mode}`
+              : `mode ${block.mode} · ${block.reason}`,
+          kind: "system",
+        },
+      ]
+    /**
+     * A question that stands is answered in the Overlay, not on the line the
+     * scroll-back holds: the four options are a choice a person moves through
+     * and a row is a line of text. So the row is drawn nowhere and the panel
+     * is what asks — a renderer that renders less, in the way an image is.
+     */
+    case "permission":
     case "image":
     case "unknown":
       return []

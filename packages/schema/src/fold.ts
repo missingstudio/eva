@@ -227,6 +227,12 @@ export type TranscriptBlock =
    */
   | { readonly type: "edit"; readonly path: string; readonly hunks: number }
   /**
+   * The permission mode the Session runs under, from the moment it changed.
+   * A mode is a fact on the record and not only a change in behaviour, so a
+   * reader who scrolls back reads which mode each Run was made under.
+   */
+  | { readonly type: "mode"; readonly mode: string; readonly reason?: string }
+  /**
    * A payload kind the schema does not define. It is still something the Run
    * said, so the fold keeps it: `originalKind` is what it was and `raw` is
    * what it said. A renderer draws that it could not draw it, which is a
@@ -332,6 +338,16 @@ export const transcriptFold = (events: readonly Event[]): readonly TranscriptMes
       // work out.
       case "edit":
         agentTail().blocks.push({ type: "edit", path: payload.path, hunks: payload.hunks })
+        break
+      // Which mode the Session runs under, and why it changed. It is a thing
+      // the Run did, for the reason an edit is: a transcript that left it out
+      // would show writes being refused and never say what refused them.
+      case "mode":
+        agentTail().blocks.push({
+          type: "mode",
+          mode: payload.mode,
+          ...(payload.reason === undefined ? {} : { reason: payload.reason }),
+        })
         break
       // The codec parks a wire kind it does not recognise here. It survives
       // the fold as what it was, so a Surface can say the record holds one.

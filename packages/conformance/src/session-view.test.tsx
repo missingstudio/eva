@@ -8,7 +8,7 @@ import {
   type Event,
   type Payload,
 } from "@missingstudio/eva-schema"
-import { blockFold, blocksOf, type Block } from "@missingstudio/eva-session-view"
+import { askingOf, blockFold, blocksOf, type Block } from "@missingstudio/eva-session-view"
 import { toLines } from "@missingstudio/eva-tui"
 import { EMPTY } from "@missingstudio/eva-tui-core"
 import { BlockView, Turns } from "@missingstudio/eva-web-app"
@@ -77,9 +77,10 @@ const ANSWERED = ["```json", "[", '  { "file": "merge.ts", "severity": "low" }',
  * One Run that did the things a Run does: it was asked in words and then in
  * pasted source, it thought on the way to an answer, it answered in prose and
  * in a fenced block, it called a tool and the call was refused, it left
- * another call open, it changed a file, it produced an image, and it produced
- * two things neither renderer names: a content type the schema does not
- * define, and a payload kind it does not define either.
+ * another call open, it changed a file, it changed the mode it runs under, it
+ * produced an image, and it produced two things neither renderer names: a
+ * content type the schema does not define, and a payload kind it does not
+ * define either.
  */
 const TRACE: readonly Event[] = [
   event({ kind: "started", intent: "read the trace back" }),
@@ -108,6 +109,7 @@ const TRACE: readonly Event[] = [
     redacted: false,
   }),
   event({ kind: "edit", path: "docs/summary.md", hunks: 3 }),
+  event({ kind: "mode", mode: "read-only", reason: "a person named it" }),
   event(said(2, { type: "image", data: "aGk=", mimeType: "image/png" })),
   event(said(3, { type: "audio", data: "aGk=", mimeType: "audio/wav" })),
   event({ kind: "unknown", originalKind: "acp/party_mode", raw: { confetti: true } }),
@@ -143,6 +145,12 @@ const factsOf = (block: Block): readonly string[] => {
       return [block.name, block.status, block.disposition]
     case "diff":
       return [block.path, String(block.hunks)]
+    case "mode":
+      return block.reason === undefined ? [block.mode] : [block.mode, block.reason]
+    // The id an answer names, and the question. The id is the tool call's, so
+    // a reader ties the question to the card the record drew for that call.
+    case "permission":
+      return [block.request, block.question]
     case "image":
       return [block.mimeType]
     case "unknown":
@@ -169,7 +177,19 @@ const namedIn = (drawing: string, block: Block): readonly string[] =>
 
 const record = foldTranscript(SESSION, TRACE)
 const turns = blocksOf(record)
-const blocks = turns.flatMap((turn) => turn.blocks)
+
+/**
+ * The one question that stands, folded the way a surface folds one. It is not
+ * on the record and it cannot be — nobody has answered it — so it is a second
+ * source, and both renderers still take it as a Block.
+ *
+ * The request names the call the record left open, which is the whole reason
+ * the id is the tool call's: the card the record drew for `t2` is the card
+ * this question stands under.
+ */
+const asking = askingOf([{ request: "t2", question: "search wants to read outside the root" }])
+const drawn = [...turns, ...asking]
+const blocks = drawn.flatMap((turn) => turn.blocks)
 
 /**
  * Who wrote a Block. Both renderers take it from the Turn — the page draws a
@@ -177,7 +197,7 @@ const blocks = turns.flatMap((turn) => turn.blocks)
  * markdown — so a Block drawn on its own has to be given it back.
  */
 const authorOf = (block: Block): ActorKind => {
-  const turn = turns.find((one) => one.blocks.includes(block))
+  const turn = drawn.find((one) => one.blocks.includes(block))
   if (turn === undefined) throw new Error(`no Turn holds ${block.key}`)
   return turn.author
 }
@@ -185,7 +205,7 @@ const authorOf = (block: Block): ActorKind => {
 // The terminal reads the Messages it already holds and the page reads the
 // Transcript it was handed. One fold, two ways into it.
 const rows = toLines({ ...EMPTY, session: record.messages() })
-const page = renderToStaticMarkup(<Turns turns={turns} />)
+const page = renderToStaticMarkup(<Turns turns={drawn} />)
 
 // One Block as each renderer draws it: the terminal's rows for it, and the
 // page's own element for it.
@@ -215,9 +235,11 @@ describe("one fold, two renderers", () => {
       "result",
       "tool",
       "diff",
+      "mode",
       "image",
       "unknown",
       "unknown",
+      "permission",
     ])
   })
 })
@@ -257,11 +279,20 @@ describe("what the two renderings agree the Run did", () => {
    * A row is a line of text and an image is not one, so the screen draws
    * fewer Blocks than the page. That is a renderer that renders less, and the
    * page is where the record stays whole.
+   *
+   * The permission Block is the same case for a different reason: the four
+   * options are a choice a person moves through, so the terminal asks in its
+   * Overlay and draws no row in the scroll-back.
    */
   it("draws no row for the Blocks the terminal has none for, and the page draws them", () => {
     const undrawn = blocks.filter((block) => rowsFor(block) === "")
 
-    expect(undrawn.map((block) => block.kind)).toEqual(["image", "unknown", "unknown"])
+    expect(undrawn.map((block) => block.kind)).toEqual([
+      "image",
+      "unknown",
+      "unknown",
+      "permission",
+    ])
     for (const block of undrawn) expect(namedIn(cardFor(block), block)).toEqual(factsOf(block))
   })
 

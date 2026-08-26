@@ -1,4 +1,11 @@
-import { blockFold, type Block, type Turn } from "@missingstudio/eva-session-view"
+import { PERMISSION_OPTIONS } from "@missingstudio/eva-core"
+import {
+  askingOf,
+  blockFold,
+  type Asking,
+  type Block,
+  type Turn,
+} from "@missingstudio/eva-session-view"
 import type { ActorKind, TranscriptMessage } from "@missingstudio/eva-schema"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
@@ -31,6 +38,7 @@ const RECORD: TranscriptMessage["blocks"] = [
     disposition: "denied",
   },
   { type: "edit", path: "docs/summary.md", hunks: 3 },
+  { type: "mode", mode: "read-only", reason: "a person named it" },
   { type: "content", block: 2, content: { type: "image", data: "aGk=", mimeType: "image/png" } },
   { type: "content", block: 3, content: { type: "audio", data: "aGk=", mimeType: "audio/wav" } },
 ]
@@ -117,6 +125,14 @@ describe("one Block, in page primitives", () => {
     const markup = drawn(at("diff"))
     expect(markup).toContain("docs/summary.md")
     expect(markup).toContain("3 hunks")
+  })
+
+  // A mode is a fact on the record, so a reader who scrolls back reads which
+  // mode each Run was made under.
+  it("draws a mode change as the mode and why it changed", () => {
+    const markup = drawn(at("mode"))
+    expect(markup).toContain("read-only")
+    expect(markup).toContain("a person named it")
   })
 
   it("draws an image as an image, from the bytes the record holds", () => {
@@ -221,6 +237,68 @@ describe("one Session's Turns", () => {
     const markup = renderToStaticMarkup(<Turns turns={[]} />)
     expect(markup).toContain("said nothing yet")
     expect(markup).not.toContain("Reading")
+  })
+})
+
+/**
+ * The one Block that is not on the record, and the one thing this page writes.
+ * A question nobody has answered has no position on the Trace, so it arrives
+ * as a second source and folds into the same union — which is what lets the
+ * terminal and this page draw one question from one shape.
+ */
+describe("a permission request that stands", () => {
+  const ASK: Asking = { request: "call_1", question: "edit may change something. Run it?" }
+  const asked = (answer?: (request: string, optionId: string) => void): string =>
+    renderToStaticMarkup(
+      <BlockView
+        author="agent"
+        block={askingOf([ASK])[0]?.blocks[0] as Block}
+        {...(answer === undefined ? {} : { answer })}
+      />,
+    )
+
+  it("names the question and the call it is about", () => {
+    const markup = asked()
+    expect(markup).toContain(ASK.question)
+    expect(markup).toContain(ASK.request)
+  })
+
+  /**
+   * The four options are `PERMISSION_OPTIONS` and never a field on the Block.
+   * Eva offers all four every time, so a Block that carried them would carry
+   * the same four words forever and give this page two places to read the
+   * labels from.
+   */
+  it("offers the four options the gate answers with", () => {
+    const markup = asked()
+    for (const option of PERMISSION_OPTIONS) expect(markup).toContain(option.name)
+  })
+
+  /**
+   * A control that looks live and reaches nothing is worse than one that says
+   * it is not. So a card drawn with nowhere to send an answer draws the four
+   * options and takes none of them.
+   *
+   * What a chosen option then reaches is proven over a socket, in
+   * `packages/conformance/src/both-doors.test.ts`: the page's own answer
+   * travels the wire and the gate reads it.
+   */
+  it("takes no answer when it was drawn with nowhere to send one", () => {
+    expect(asked()).toContain('data-disabled=""')
+    expect(asked(() => undefined)).not.toContain('data-disabled=""')
+  })
+
+  // A Turn of its own, after the record. It is the second source, and the
+  // keys never collide with a Turn the record made.
+  it("folds into a Turn of its own, keyed apart from the record's", () => {
+    const asks = askingOf([ASK, { request: "call_2", question: "and this one?" }])
+    expect(asks).toHaveLength(1)
+    expect(asks[0]?.author).toBe("agent")
+    expect(asks[0]?.blocks.map((one) => one.key)).toEqual(["asking.0", "asking.1"])
+  })
+
+  it("folds nothing when nothing is standing", () => {
+    expect(askingOf([])).toEqual([])
   })
 })
 

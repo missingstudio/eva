@@ -7,7 +7,7 @@ import {
   type Cursor,
   type Spend,
 } from "@missingstudio/eva-schema"
-import type { Turn } from "@missingstudio/eva-session-view"
+import { askingOf, type Asking, type Turn } from "@missingstudio/eva-session-view"
 import { Turns } from "./blocks.js"
 import {
   Context,
@@ -66,9 +66,9 @@ export interface Pipe {
  * without this page, and the page catches up by Cursor when the pipe is back.
  *
  * `synchronizing` cannot arrive here. It is a Run refolding and this page
- * drives no Run — W1 takes no input of any kind. It is said anyway, because
- * the three are a closed set and an arm left off is a page that says nothing
- * on the day the write half lands.
+ * opens no Run — the one thing it writes is an answer to a permission
+ * request. It is said anyway, because the three are a closed set and an arm
+ * left off is a page that says nothing on the day a prompt lands.
  */
 export const noticeOf = (pipe: Pipe): string | undefined => {
   switch (pipe.at) {
@@ -201,21 +201,32 @@ export const Live = ({ said }: { readonly said: string }) =>
 
 /**
  * One Session, read: which Session it is, what the pipe is, then what was said
- * in it, then what the open Run is saying, then what it cost.
+ * in it, then the questions that stand, then what the open Run is saying, then
+ * what it cost.
  *
- * Nothing here takes input. No prompt, no permission answer, no model
- * switch: those are W2's, and they wait for the permission gate.
+ * The one thing this page writes is an answer to a permission request. A
+ * prompt and a model switch are W2's; a question that stands blocks a Run, and
+ * a reader watching it blocked is the person the Run is waiting on.
+ *
+ * The questions are drawn after the record and never inside it. They are the
+ * second source — the same separation the tail of an open Run has — and they
+ * are Blocks all the same, so the terminal and this page draw one question
+ * from one shape.
  */
 export const Session = ({
   session,
   header,
   reading,
   pipe,
+  asking = [],
+  answer,
 }: {
   readonly session: string
   readonly header: SessionHeader | undefined
   readonly reading: Reading
   readonly pipe: Pipe
+  readonly asking?: readonly Asking[]
+  readonly answer?: (request: string, optionId: string) => void
 }) => (
   <main className="mx-auto max-w-measure px-6 py-16">
     <Named session={session} header={header} />
@@ -226,7 +237,10 @@ export const Session = ({
       </p>
     ) : (
       <>
-        <Turns turns={reading.folded.turns} />
+        <Turns
+          turns={[...reading.folded.turns, ...askingOf(asking)]}
+          {...(answer === undefined ? {} : { answer })}
+        />
         <Live said={reading.said} />
         <Cost cost={reading.folded.cost} ran={reading.folded.at.seq > 0} />
       </>
