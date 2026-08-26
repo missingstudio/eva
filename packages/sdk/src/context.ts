@@ -33,7 +33,9 @@ export type DomainUpdated = {
 export interface BroadcastMap extends DomainUpdated {
   "plugin.added": { readonly id: string }
   "plugin.removed": { readonly id: string }
-  "plugin.failed": { readonly id: string; readonly cause: unknown }
+  // `hook` names the boundary when an observing hook of a loaded plugin
+  // threw, and is absent when the plugin's own load died.
+  "plugin.failed": { readonly id: string; readonly cause: unknown; readonly hook?: string }
   "config.changed": { readonly path: string }
   "session.started": { readonly session: string }
   "run.opened": { readonly run: string; readonly session: string }

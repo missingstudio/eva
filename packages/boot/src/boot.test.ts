@@ -7,9 +7,11 @@ import type {
   Validator,
 } from "@missingstudio/eva-core"
 import type { BroadcastMap, Plugin, Slots } from "@missingstudio/eva-sdk"
+import type { Payload } from "@missingstudio/eva-schema"
 import { Effect, Exit, Fiber, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 import { boot, buildOf } from "./boot.js"
+import { runDeps } from "./deps.js"
 
 // Every Slot the kernel holds, with the name it publishes under.
 const SLOTS: readonly [keyof Slots, string, unknown][] = [
@@ -217,3 +219,63 @@ describe("an edit that reached no row is published", () => {
  * What boot still decides is above: that a Slot says when it is filled, and
  * that the resolved list loads once, in order, in one batch.
  */
+
+/**
+ * A provider boundary observes: none of its hooks decides whether the call
+ * proceeds, so one that throws is reported and the Run goes on with what the
+ * hook left behind. Boot is where a boundary's kind and a hook's owner are
+ * stamped, so the pair is pinned here.
+ */
+describe("an observing provider hook that throws", () => {
+  const group: readonly Payload[] = [
+    { kind: "text", block: 0, content: { type: "text", text: "hi" } },
+  ]
+
+  it("is published as its plugin's failure, and the payloads survive", async () => {
+    const observer: Plugin = {
+      id: "acme.broken",
+      effect: Effect.fn(function* (ctx) {
+        yield* ctx.provider["provider.response.after"](() => {
+          throw new Error("the observer broke")
+        })
+      }),
+    }
+
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const scope = yield* Scope.make()
+        const seen: BroadcastMap["plugin.failed"][] = []
+        const kernel = yield* boot({
+          scope,
+          resolved: [{ id: observer.id }],
+          build: buildOf([observer]),
+        })
+        yield* Effect.forkIn(
+          Stream.runForEach(kernel.broadcast.subscribe("plugin.failed"), (payload) =>
+            Effect.sync(() => void seen.push(payload)),
+          ),
+          scope,
+        )
+        yield* Effect.yieldNow
+
+        const afterResponse = runDeps(kernel, () => Effect.void).afterResponse
+        if (afterResponse === undefined) return yield* Effect.die("boot wired no afterResponse")
+        const kept = yield* afterResponse(group)
+
+        yield* Effect.yieldNow
+        const published = [...seen]
+        yield* Scope.close(scope, Exit.void)
+        return { kept, published }
+      }),
+    )
+
+    // The Run continued: the group reached the commit unchanged.
+    expect(found.kept).toEqual(group)
+    expect(found.published).toHaveLength(1)
+    expect(found.published[0]).toMatchObject({
+      id: "acme.broken",
+      hook: "provider.response.after",
+    })
+    expect(String(found.published[0]?.cause)).toContain("the observer broke")
+  })
+})
