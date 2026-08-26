@@ -1,4 +1,11 @@
-import { ResumeTooFarBehind, type ModelRef, type SessionHeader } from "@missingstudio/eva-core"
+import {
+  ResumeTooFarBehind,
+  type CancelCause,
+  type FrontendAnswer,
+  type ModelRef,
+  type SessionHeader,
+  type SubmitInput,
+} from "@missingstudio/eva-core"
 import {
   decode,
   decodePayloadLine,
@@ -19,11 +26,22 @@ export const API_PLUGIN = "eva.api"
 export const API_ROOT = "/api"
 export const SESSIONS = `${API_ROOT}/sessions`
 
+/**
+ * `answer` is keyed by a `RequestID` and not by a Session, so it is the one
+ * method that sits outside the listing. A request is what a Run asked a
+ * person, and a person may answer it from a page that never named a Session.
+ */
+export const REQUESTS = `${API_ROOT}/requests`
+
 export const sessionPath = (session: string): string => `${SESSIONS}/${encodeURIComponent(session)}`
 
 export const modelPath = (session: string): string => `${sessionPath(session)}/model`
 
 export const watchPath = (session: string): string => `${sessionPath(session)}/watch`
+
+export const cancelPath = (session: string): string => `${sessionPath(session)}/cancel`
+
+export const answerPath = (request: string): string => `${REQUESTS}/${encodeURIComponent(request)}`
 
 /**
  * The Cursor's name on the wire. `watch` is one way, so it is SSE — and SSE
@@ -32,6 +50,18 @@ export const watchPath = (session: string): string => `${sessionPath(session)}/w
  * position and nothing else.
  */
 export const CURSOR = "last-event-id"
+
+/**
+ * Which write a request is, so the same write asked for twice is answered
+ * twice and done once. It rides a header for the reason the Cursor does: the
+ * body is the contract's own shape, and a key inside it would be exactly the
+ * envelope this wire refuses to add.
+ *
+ * A write has no error channel, so a call that cannot reach the far side
+ * waits and asks again — and a `submit` whose answer was lost would otherwise
+ * open a second Run. The key is what makes asking again safe.
+ */
+export const IDEMPOTENCY = "idempotency-key"
 
 // A position is a whole number and may sit behind the record's start, which
 // is exactly the case a refusal answers. Anything else names no position.
@@ -97,6 +127,62 @@ export const modelIn = (value: unknown): ModelRef | undefined => {
   const provider = stringAt(row, "provider")
   const model = stringAt(row, "model")
   return provider === undefined || model === undefined ? undefined : { provider, model }
+}
+
+/**
+ * What a write carries, read the way an answer is. The shapes are the
+ * contract's own — a `SubmitInput` body *is* the Prompt and a `CancelCause`
+ * body *is* the cause — so there is nothing to unwrap and nothing to name a
+ * field twice.
+ *
+ * A body one of these cannot read is a refusal, never a partially applied
+ * write. It is the rule `headersIn` keeps pointed the other way: a shape half
+ * understood is worse than a call that says it was not understood.
+ */
+export const submitInputIn = (value: unknown): SubmitInput | undefined => {
+  const row = objectIn(value)
+  if (row === undefined) return undefined
+  const text = stringAt(row, "text")
+  if (text === undefined) return undefined
+
+  if (stringAt(row, "kind") === "prompt") {
+    const harness = stringAt(row, "harness")
+    // An absent Harness is the behaviour a Prompt has always had, so it is
+    // read as absent and never as an empty name.
+    if (harness === undefined && row["harness"] !== undefined) return undefined
+    return { kind: "prompt", text, ...(harness === undefined ? {} : { harness }) }
+  }
+
+  if (stringAt(row, "kind") === "steer") {
+    const target = stringAt(row, "target")
+    if (target !== "next-run" && target !== "next-step") return undefined
+    return { kind: "steer", text, target }
+  }
+
+  return undefined
+}
+
+export const cancelCauseIn = (value: unknown): CancelCause | undefined =>
+  value === "user" || value === "budget" || value === "shutdown" ? value : undefined
+
+export const answerIn = (value: unknown): FrontendAnswer | undefined => {
+  const row = objectIn(value)
+  if (row === undefined) return undefined
+
+  switch (stringAt(row, "kind")) {
+    case "permission": {
+      const optionId = stringAt(row, "optionId")
+      return optionId === undefined ? undefined : { kind: "permission", optionId }
+    }
+    case "text": {
+      const text = stringAt(row, "text")
+      return text === undefined ? undefined : { kind: "text", text }
+    }
+    case "cancelled":
+      return { kind: "cancelled" }
+    default:
+      return undefined
+  }
 }
 
 /**

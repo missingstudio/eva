@@ -8,6 +8,7 @@ import {
 import {
   ResumeTooFarBehind,
   WATCH_REPLAY_BOUND,
+  type CancelCause,
   type ModelRef,
   type SessionAPI,
 } from "@missingstudio/eva-core"
@@ -411,38 +412,139 @@ describe("a pipe that is down", () => {
     expect(found.seen).toContain("disconnected")
     expect(found.found).toEqual([])
   })
+
+  // A write keeps the same rule as a read: it waits and asks again, and
+  // nothing about its type says the pipe was down.
+  it("waits and asks again for a write, then lands it", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    let asked = 0
+    const request = ((...given: Parameters<Request>) => {
+      asked += 1
+      return asked <= 2 ? Promise.reject(new Error("connect ECONNREFUSED")) : fetch(...given)
+    }) as Request
+
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const transport = yield* httpTransport({ origin: served.origin, gap: 1, request })
+        return yield* watching(
+          transport.health,
+          transport.api.model.set(memory.session, { provider: "wire", model: "later" }),
+        )
+      }),
+    )
+
+    expect(found.seen).toContain("disconnected")
+    expect(found.seen.at(-1)).toBe("ready")
+    expect(memory.calls).toEqual([
+      { method: "model.set", args: [memory.session, { provider: "wire", model: "later" }] },
+    ])
+
+    await served.close()
+  })
+
+  /**
+   * The case the idempotency key is for, end to end. The request lands and the
+   * answer is lost, which no caller can tell from a request that never left —
+   * so the write is asked again, and the far side answers it from the write it
+   * already made rather than opening a second Run.
+   */
+  it("opens one Run when a write lands and its answer is lost", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    let asked = 0
+    const request = (async (...given: Parameters<Request>) => {
+      asked += 1
+      const answered = await fetch(...given)
+      // The first answer is dropped after the far side wrote it, which is what
+      // a connection that died between the two looks like from here.
+      if (asked === 1) throw new Error("socket hang up")
+      return answered
+    }) as Request
+
+    await Effect.runPromise(
+      Effect.flatMap(httpTransport({ origin: served.origin, gap: 1, request }), (transport) =>
+        transport.api.submit(memory.session, { kind: "prompt", text: "ask" }),
+      ),
+    )
+
+    expect(asked).toBe(2)
+    expect(memory.calls.filter((one) => one.method === "submit")).toHaveLength(1)
+
+    await served.close()
+  })
+
+  /**
+   * And the other side of that rule. A write the far side read and refused is
+   * a shape the two halves disagree about, so asking again forever would be a
+   * hang where a report belongs.
+   */
+  it("makes a refused shape a defect rather than an endless ask", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    // A body the wire cannot read, which the contract's own types would never
+    // produce — so the cast is what stands in for two halves that disagree.
+    const failed = await Effect.runPromise(
+      Effect.flatMap(httpTransport({ origin: served.origin, gap: 1 }), (transport) =>
+        Effect.exit(transport.api.cancel(memory.session, "whenever" as CancelCause)),
+      ),
+    )
+
+    expect(Exit.isFailure(failed)).toBe(true)
+    expect(String(failed)).toContain("Refused")
+    expect(memory.calls).toEqual([])
+
+    await served.close()
+  })
 })
 
 /**
- * `SessionAPI` is one interface and a filler answers all of it. A method the
- * read half has not reached is a defect where it is called, so a caller that
- * reached for one hears about it instead of waiting on a stream that never
- * opens.
+ * `SessionAPI` is one interface and a filler answers all of it. A method this
+ * one does not reach is a defect where it is called, so a caller that reached
+ * for one hears about it instead of waiting on a stream that never opens.
  */
-describe("what the wire does not carry yet", () => {
-  const transport = httpTransport({ origin: "http://eva.invalid" })
+describe("what the wire does not carry", () => {
+  const transport = httpTransport({ origin: "http://eva.invalid", gap: 1 })
 
-  it("makes a write a defect rather than a wait", async () => {
+  /**
+   * A call that has to wait for a pipe that is down is not a defect, so a
+   * write is given a moment and then dropped. What is asserted is that it
+   * travelled at all — a method nobody wired would say so at once.
+   */
+  const tried = <A>(call: Effect.Effect<A>): Effect.Effect<string> =>
+    Effect.race(Effect.map(Effect.exit(call), String), Effect.as(Effect.sleep(5), "still waiting"))
+
+  it("makes `create` a defect rather than a wait", async () => {
     const failed = await Effect.runPromise(
-      Effect.flatMap(transport, (one) =>
-        Effect.exit(one.api.submit(sessionID("ses_1"), { kind: "prompt", text: "ask" })),
-      ),
+      Effect.flatMap(transport, (one) => Effect.exit(one.api.create("/here"))),
     )
 
     expect(Exit.isFailure(failed)).toBe(true)
     expect(String(failed)).toContain("NotOnTheWire")
   })
 
-  // The read half is whole: `list`, `attach`, `watch` and `model.get` are
-  // what W1 carries, and every one of them is on the wire.
-  it("carries every read the page makes", async () => {
+  // Everything else is whole. `create` is the one method in neither half: a
+  // page that takes no input opens no Session.
+  it("carries every other call the page makes", async () => {
     const found = await Effect.runPromise(
       Effect.flatMap(transport, (one) =>
-        Effect.exit(Stream.runCollect(one.api.watch(sessionID("ses_1")))),
+        Effect.all([
+          tried(Stream.runCollect(one.api.watch(sessionID("ses_1")))),
+          tried(one.api.list),
+          tried(Effect.scoped(one.api.attach(sessionID("ses_1")))),
+          tried(one.api.model.get(sessionID("ses_1"))),
+          tried(one.api.model.set(sessionID("ses_1"), MODEL)),
+          tried(one.api.submit(sessionID("ses_1"), { kind: "prompt", text: "ask" })),
+          tried(one.api.cancel(sessionID("ses_1"), "user")),
+          tried(one.api.answer("call_1", { kind: "cancelled" })),
+        ]),
       ),
     )
 
-    expect(String(found)).not.toContain("NotOnTheWire")
+    expect(found.join("\n")).not.toContain("NotOnTheWire")
   })
 })
 

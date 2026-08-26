@@ -47,23 +47,60 @@ curl http://127.0.0.1:7777/api/sessions
 [{"id":"ses_019a","title":"read the trace back over HTTP"}]
 ```
 
-| Method      | Route                         | What                                     |
-| ----------- | ----------------------------- | ---------------------------------------- |
-| `list`      | `GET /api/sessions`           | every Session, each with its Header      |
-| `attach`    | `GET /api/sessions/:id`       | that Session's record, as events         |
-| `watch`     | `GET /api/sessions/:id/watch` | what commits after a Cursor, as a stream |
-| `model.get` | `GET /api/sessions/:id/model` | the model that Session is kept at        |
+| Method      | Route                           | What                                     |
+| ----------- | ------------------------------- | ---------------------------------------- |
+| `list`      | `GET /api/sessions`             | every Session, each with its Header      |
+| `attach`    | `GET /api/sessions/:id`         | that Session's record, as events         |
+| `watch`     | `GET /api/sessions/:id/watch`   | what commits after a Cursor, as a stream |
+| `model.get` | `GET /api/sessions/:id/model`   | the model that Session is kept at        |
+| `submit`    | `POST /api/sessions/:id`        | opens a Run in that Session              |
+| `cancel`    | `POST /api/sessions/:id/cancel` | stops the Run open in it                 |
+| `model.set` | `PUT /api/sessions/:id/model`   | keeps that Session at another model      |
+| `answer`    | `PUT /api/requests/:id`         | answers what a Run asked a person        |
 
 What travels is the contract's own shapes, with no envelope around them and no
-rendering in them. A path under `/api` that no route carries is answered 404
-here rather than left to fall through, because the page's own server answers an
-unknown path with the page — and a call answered with HTML reads as a broken
-parse instead of as a miss.
+rendering in them. A `SubmitInput` body _is_ the Prompt and a `CancelCause`
+body _is_ the cause, so there is nothing to unwrap on either side, and a write
+answers a status and nothing else. A path under `/api` that no route carries is
+answered 404 here rather than left to fall through, because the page's own
+server answers an unknown path with the page — and a call answered with HTML
+reads as a broken parse instead of as a miss.
 
-Those four are the whole read half. `submit`, `cancel`, `answer` and
-`model.set` are stage 2's, against the permission gate that stage builds
-anyway. `create` is in neither half: a page that takes no input opens no
-Session.
+A `POST` opens or stops work and a `PUT` sets a value, so asking twice is what
+tells the two apart. `answer` is the one call keyed by a `RequestID` rather
+than by a Session, so it sits outside the listing: the id is the tool call's,
+which the `tool_call` record named before anybody was asked.
+
+`create` is in neither half: a page that takes no input opens no Session, so
+the composition root opens one beside the wire.
+
+## A write is asked twice and done once
+
+A write carries a **client-minted key**, in an `Idempotency-Key` header. It
+rides a header rather than a body for the reason the Cursor does: the body is
+the contract's own shape, and a key inside it would be exactly the envelope
+this wire refuses to add.
+
+The key is what makes asking again safe. `SessionAPI` gives a write no error
+channel, so a call that cannot reach the far side waits and asks again — and no
+caller can tell "the request never left" from "the request landed and the
+answer was lost". A `submit` asked again would open a second Run. So this side
+keeps the write each path is answering under the key its caller named, and a
+repeat of a key waits on the write it already made.
+
+Two limits, stated rather than hidden. The table holds the **last** key per
+path, because a caller retries the write it just made and never an older one;
+two callers writing to one Session at once already collide inside the Recorder,
+and this neither makes that worse nor pretends to fix it. And a write runs on a
+fiber of its own rather than inside the request, so **a dropped connection
+costs a repaint and not a Run** — the Run finishes, and the record is where its
+outcome is.
+
+A body the wire cannot read is refused `400` and nothing is applied: a shape
+half understood would be a partly applied write, and nothing later would say
+there had been one. On the browser side that refusal is a **defect** rather
+than another ask, because a shape the two halves of one wire disagree about
+would be refused again however often it is sent.
 
 ## `attach` sends the record, not a fold of it
 
@@ -164,8 +201,9 @@ slower, never differently typed** — the rule `droppableTransport` states, kept
 by the filler that really has a pipe. `SessionAPI` has no error channel and
 this keeps it that way.
 
-A method the read half has not reached is a defect where it is called. A wire
-that hung instead would be a page that waits on a stream nobody opened.
+A method this wire does not carry is a defect where it is called, and `create`
+is the only one. A wire that hung instead would be a page that waits on a
+stream nobody opened.
 
 ## API
 
@@ -174,17 +212,24 @@ that hung instead would be a page that waits on a stream nobody opened.
 - `apiWire(api)` — the request handler, answering from any filler of the
   Session API. It says whether it answered, so the server that owns the socket
   can serve the page with what falls past it.
-- `routeFor(method, path)` — the route table, as a pure function.
+- `routeFor(method, path, body)` — the route table, as a pure function. The
+  body arrives as a third argument the way `watchFor` takes its Cursor, so a
+  write route is still a description of an answer and never a write itself.
 - `watchFor(method, path, from)` — the same, for the one method that answers a
   stream. It is matched first, because a `Route` answers a body.
-- `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `sessionPath(session)`,
-  `modelPath(session)`, `watchPath(session)` — the id and the paths, rooted so
-  no address is built into the page.
+- `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `REQUESTS`, `sessionPath(session)`,
+  `modelPath(session)`, `watchPath(session)`, `cancelPath(session)`,
+  `answerPath(request)` — the id and the paths, rooted so no address is built
+  into the page.
 - `headerIn`, `headersIn`, `modelIn`, `eventsIn` — what a body has to be to be
   an answer. `eventsOut` is the record on its way out.
-- `CURSOR`, `cursorIn(value)`, `StreamFrame`, `frameOut(frame)`, `framesIn(text)`,
-  `payloadIn(frame)`, `refusalOut(refused)`, `refusalIn(from, body)` — the
-  stream's own shapes, read by both halves for the reason the paths are.
+- `submitInputIn`, `cancelCauseIn`, `answerIn` — what a body has to be to be a
+  write. `modelIn` reads both directions, because `model.set` sends back what
+  `model.get` answers.
+- `CURSOR`, `cursorIn(value)`, `IDEMPOTENCY`, `StreamFrame`, `frameOut(frame)`,
+  `framesIn(text)`, `payloadIn(frame)`, `refusalOut(refused)`,
+  `refusalIn(from, body)` — the headers and the stream's own shapes, read by
+  both halves for the reason the paths are.
 - `httpTransport(options)` — from `@missingstudio/eva-api/client`.
 
 ## Development
@@ -193,9 +238,10 @@ Tests live beside the source. [src/routes.test.ts](src/routes.test.ts) binds a
 real ephemeral port and reads the routes back over it, because a wire a browser
 calls is not proven by a test that never opens a socket;
 [src/client/transport.test.ts](src/client/transport.test.ts) holds the health
-rule. `packages/conformance` runs the whole Session API contract against this
-wire, standing it up behind `eva.web`'s own server. Run the suite from the
-repository root:
+rule and the write that lands once. `packages/conformance` runs the whole
+Session API contract against this wire, standing it up behind `eva.web`'s own
+server, and drives the write half from both doors — in this process and over
+the socket — against one live kernel. Run the suite from the repository root:
 
 ```bash
 bun run test

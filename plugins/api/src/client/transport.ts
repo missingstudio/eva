@@ -1,14 +1,22 @@
 import type { Transport, TransportHealth } from "@missingstudio/eva-client-runtime"
-import { foldTranscript, type ResumeTooFarBehind, type SessionAPI } from "@missingstudio/eva-core"
+import {
+  foldTranscript,
+  shortID,
+  type ResumeTooFarBehind,
+  type SessionAPI,
+} from "@missingstudio/eva-core"
 import type { Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
 import { Effect, Schedule, Scope, Stream, SubscriptionRef } from "effect"
 import {
+  answerPath,
+  cancelPath,
   CURSOR,
   CURSOR_REFUSED,
   eventsIn,
   EVENT_STREAM,
   framesIn,
   headersIn,
+  IDEMPOTENCY,
   modelIn,
   modelPath,
   payloadIn,
@@ -38,16 +46,26 @@ export interface HttpOptions {
 }
 
 /**
- * What the wire does not carry yet. `SessionAPI` is one interface and a filler
- * answers all of it, so a method the read half has not reached is a defect
- * where it is called — not a hang, and not a shape nobody can read. 006 takes
- * `watch`, and the write half is stage 2's.
+ * What the wire does not carry. `SessionAPI` is one interface and a filler
+ * answers all of it, so a method this one does not reach is a defect where it
+ * is called — not a hang, and not a shape nobody can read. `create` is the
+ * only one left: a page that takes no input opens no Session.
  */
 export class NotOnTheWire extends Error {
   override readonly name = "NotOnTheWire"
   constructor(method: string) {
     super(`the wire does not carry \`${method}\` yet`)
   }
+}
+
+/**
+ * A write the far side read and refused. It is a shape the two halves of one
+ * wire disagree about — a page held from an older build, calling a newer one —
+ * so it is a defect where the call was made. Asking again forever would turn
+ * a report into a hang, which is why `NotOnTheWire` is a defect too.
+ */
+export class Refused extends Error {
+  override readonly name = "Refused"
 }
 
 // The far side did not answer, or did not answer the wire. It never leaves
@@ -118,6 +136,67 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
       )
 
     const missing = (method: string) => Effect.die(new NotOnTheWire(method))
+
+    /**
+     * One write, sent. `undefined` back is a write that landed; a `Refused` is
+     * one the far side read and would refuse again however often it is asked.
+     * Anything else is not this wire answering, which is the same fact as a
+     * pipe that is down.
+     */
+    const send = async (
+      method: string,
+      path: string,
+      body: unknown,
+      key: string,
+      signal: AbortSignal,
+    ): Promise<Refused | undefined> => {
+      const response = await request(`${origin}${path}`, {
+        method,
+        signal,
+        headers: { "content-type": "application/json", [IDEMPOTENCY]: key },
+        body: JSON.stringify(body),
+      })
+      if (response.ok) return undefined
+
+      const kind = response.headers.get("content-type") ?? ""
+      if (kind.includes("application/json")) {
+        return new Refused(`${path} refused this shape with ${response.status}`)
+      }
+      throw new Unreachable(`${path} answered ${kind === "" ? "nothing" : kind}`)
+    }
+
+    /**
+     * One write, and the pipe's state as it answers. It keeps `call`'s rule —
+     * a write that cannot reach the far side waits and asks again, because
+     * `SessionAPI` gives a write no error channel either.
+     *
+     * The key is minted once, before the first send, so every retry of this
+     * write names the same one. That is what makes asking again safe: a
+     * `submit` whose answer was lost is answered from the Run it already
+     * opened rather than opening a second.
+     */
+    const write = (method: string, path: string, body: unknown): Effect.Effect<void> =>
+      Effect.suspend(() => {
+        const key = shortID()
+        return Effect.tap(
+          Effect.orDie(
+            Effect.retry(
+              Effect.tapError(
+                Effect.flatMap(
+                  Effect.tryPromise({
+                    try: (signal) => send(method, path, body, key, signal),
+                    catch: (cause) => new Unreachable(String(cause)),
+                  }),
+                  (refused) => (refused === undefined ? Effect.void : Effect.die(refused)),
+                ),
+                () => SubscriptionRef.set(health, "disconnected"),
+              ),
+              Schedule.spaced(gap),
+            ),
+          ),
+          () => SubscriptionRef.set(health, "ready"),
+        )
+      })
 
     // A pipe that is not answering, said where it can be acted on. The watch
     // ends and no error channel carries it, which is the rule every filler of
@@ -229,7 +308,7 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
       list: call(SESSIONS, headersIn),
       model: {
         get: (session) => call(modelPath(session), modelIn),
-        set: () => missing("model.set"),
+        set: (session, model) => write("PUT", modelPath(session), model),
       },
       create: () => missing("create"),
       /**
@@ -249,9 +328,16 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
       // implementation is one function, as it is where the API is built.
       watch: ((session: SessionID, from?: Cursor) =>
         Stream.unwrap(opened(session, from))) as SessionAPI["watch"],
-      submit: () => missing("submit"),
-      cancel: () => missing("cancel"),
-      answer: () => missing("answer"),
+      /**
+       * A Prompt is a `POST` on the Session it opens a Run in, and it answers
+       * when that Run has closed — the contract every filler of this seam
+       * keeps. So the request is open for as long as the Run is, and a
+       * connection that drops meanwhile costs a repaint and not the Run: the
+       * far side goes on, and a Cursor is how a page catches up.
+       */
+      submit: (session, input) => write("POST", sessionPath(session), input),
+      cancel: (session, cause) => write("POST", cancelPath(session), cause),
+      answer: (request, given) => write("PUT", answerPath(request), given),
     }
 
     return { api, health }

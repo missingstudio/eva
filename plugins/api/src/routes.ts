@@ -1,17 +1,23 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { ResumeTooFarBehind, SessionAPI } from "@missingstudio/eva-core"
 import { encodePayloadLine, sessionID } from "@missingstudio/eva-schema"
-import { Effect, Stream } from "effect"
+import { Effect, Fiber, Stream } from "effect"
 import {
+  answerIn,
   API_ROOT,
+  cancelCauseIn,
   cursorIn,
   CURSOR,
   CURSOR_REFUSED,
   eventsOut,
   EVENT_STREAM,
   frameOut,
+  IDEMPOTENCY,
+  modelIn,
   refusalOut,
+  REQUESTS,
   SESSIONS,
+  submitInputIn,
   type StreamFrame,
 } from "./wire.js"
 
@@ -39,6 +45,8 @@ export type Route = (api: SessionAPI) => Effect.Effect<Answer>
 const SESSION = new RegExp(`^${SESSIONS}/([^/]+)$`)
 const MODEL = new RegExp(`^${SESSIONS}/([^/]+)/model$`)
 const WATCH = new RegExp(`^${SESSIONS}/([^/]+)/watch$`)
+const CANCEL = new RegExp(`^${SESSIONS}/([^/]+)/cancel$`)
+const REQUEST = new RegExp(`^${REQUESTS}/([^/]+)$`)
 
 // A segment is a name, and a name that is not valid percent-encoding names
 // nothing. A request a browser can send may never end a server.
@@ -57,42 +65,111 @@ const askedFor = (shape: RegExp, path: string): string | undefined => {
 }
 
 /**
- * The read half `eva.api` carries as a body, and no more of it. `watch` is
- * not here: it answers a stream rather than a body, so it has a table of its
- * own that is matched first. The write half is stage 2's, against the
- * permission gate that stage builds anyway.
+ * A write answers nothing. The wire adds no envelope to say it with, so what
+ * travels is JSON's own nothing and the status is the whole of the answer.
+ */
+const DONE: Answer = { status: 200, body: null }
+
+/**
+ * A body this wire cannot read. The path is carried, so this is not a miss:
+ * the two halves disagree about a shape, which a caller has to hear rather
+ * than ask again about forever. Nothing is written before it is refused.
+ */
+const UNREADABLE: Answer = { status: 400, body: { error: "the wire cannot read this body" } }
+
+const refusing: Route = () => Effect.succeed(UNREADABLE)
+
+/**
+ * Both halves `eva.api` carries as a body. `watch` is in neither: it answers
+ * a stream rather than a body, so it has a table of its own that is matched
+ * first.
+ *
+ * The body arrives as a third argument, the way `watchFor` takes the Cursor
+ * it read off a header. So a write route is still a description of an answer
+ * and this table is still a pure function — the socket reads the bytes and
+ * this decides what they mean.
  *
  * `create` is in neither half: a page that takes no input opens no Session.
  */
-export const routeFor = (method: string, path: string): Route | undefined => {
-  if (method !== "GET") return undefined
+export const routeFor = (method: string, path: string, body?: unknown): Route | undefined => {
+  if (method === "GET") {
+    if (path === SESSIONS) {
+      return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: rows }))
+    }
 
-  if (path === SESSIONS) {
-    return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: rows }))
+    const attaching = askedFor(SESSION, path)
+    if (attaching !== undefined) {
+      const asked = sessionID(attaching)
+      /**
+       * Scoped here, and everything the answer needs read inside it. `attach`
+       * is the one read that asks for a Scope, and a socket callback is not an
+       * Effect — so the request that opened the Scope is what closes it, and
+       * nothing outlives the answer it was opened for.
+       */
+      return (api) =>
+        Effect.scoped(
+          Effect.map(api.attach(asked), (record) => ({
+            status: 200,
+            body: eventsOut(record.events()),
+          })),
+        )
+    }
+
+    const session = askedFor(MODEL, path)
+    if (session !== undefined) {
+      const asked = sessionID(session)
+      return (api) => Effect.map(api.model.get(asked), (found) => ({ status: 200, body: found }))
+    }
+
+    return undefined
   }
 
-  const attaching = askedFor(SESSION, path)
-  if (attaching !== undefined) {
-    const asked = sessionID(attaching)
-    /**
-     * Scoped here, and everything the answer needs read inside it. `attach`
-     * is the one read that asks for a Scope, and a socket callback is not an
-     * Effect — so the request that opened the Scope is what closes it, and
-     * nothing outlives the answer it was opened for.
-     */
-    return (api) =>
-      Effect.scoped(
-        Effect.map(api.attach(asked), (record) => ({
-          status: 200,
-          body: eventsOut(record.events()),
-        })),
-      )
+  /**
+   * A `POST` opens or stops work and a `PUT` sets a value. So asking twice is
+   * what tells the two apart: the same `PUT` twice leaves the same model and
+   * the same answer, and the same `POST` twice would be a second Run — which
+   * is what the idempotency key exists for.
+   */
+  if (method === "POST") {
+    const prompting = askedFor(SESSION, path)
+    if (prompting !== undefined) {
+      const input = submitInputIn(body)
+      if (input === undefined) return refusing
+      const asked = sessionID(prompting)
+      return (api) => Effect.as(api.submit(asked, input), DONE)
+    }
+
+    const stopping = askedFor(CANCEL, path)
+    if (stopping !== undefined) {
+      const cause = cancelCauseIn(body)
+      if (cause === undefined) return refusing
+      const asked = sessionID(stopping)
+      return (api) => Effect.as(api.cancel(asked, cause), DONE)
+    }
+
+    return undefined
   }
 
-  const session = askedFor(MODEL, path)
-  if (session !== undefined) {
-    const asked = sessionID(session)
-    return (api) => Effect.map(api.model.get(asked), (found) => ({ status: 200, body: found }))
+  if (method === "PUT") {
+    const session = askedFor(MODEL, path)
+    if (session !== undefined) {
+      const model = modelIn(body)
+      if (model === undefined) return refusing
+      const asked = sessionID(session)
+      return (api) => Effect.as(api.model.set(asked, model), DONE)
+    }
+
+    // A `RequestID` is not a `SessionID`, so this is the one write that sits
+    // outside the listing. The id is the tool call's, which the `tool_call`
+    // record named before anybody was asked.
+    const request = askedFor(REQUEST, path)
+    if (request !== undefined) {
+      const given = answerIn(body)
+      if (given === undefined) return refusing
+      return (api) => Effect.as(api.answer(request, given), DONE)
+    }
+
+    return undefined
   }
 
   return undefined
@@ -239,13 +316,66 @@ const pathOf = (url: string): string | undefined => {
 }
 
 /**
+ * What a request carries, as JSON. Bytes are all this reads: what the shape
+ * has to be to be a write is the route table's judgement, and a body that is
+ * not JSON at all names no shape either way.
+ *
+ * A GET carries no body, so nothing is read for one.
+ */
+const bodyOf = (request: IncomingMessage): Effect.Effect<unknown> =>
+  Effect.callback<unknown>((resume) => {
+    let text = ""
+    request.setEncoding("utf8")
+    request.on("data", (chunk: string) => void (text += chunk))
+    request.on("error", () => resume(Effect.succeed(undefined)))
+    request.on("end", () => {
+      try {
+        resume(Effect.succeed(JSON.parse(text) as unknown))
+      } catch {
+        resume(Effect.succeed(undefined))
+      }
+    })
+  })
+
+// The write a key names, and what is answering it.
+interface Once {
+  readonly key: string
+  readonly fiber: Fiber.Fiber<Answer>
+}
+
+/**
  * Everything under the root, answered from the contract it was given. Which
  * filler that is — the kernel's, or one a suite stands up — is not a fact
  * this wire holds: it calls the Session API as any other caller does.
  */
-export const apiWire =
-  (api: SessionAPI): Answering =>
-  (request, response) => {
+export const apiWire = (api: SessionAPI): Answering => {
+  /**
+   * The write each path is answering, under the key its caller named. A write
+   * has no error channel, so a caller that could not reach this side waits
+   * and asks again — and a `submit` asked again would open a second Run.
+   *
+   * So a repeat of a key waits on the write it already made. The fiber is
+   * forked rather than run inside the request, which is also what keeps a
+   * dropped connection costing a repaint rather than a Run: the Run finishes
+   * and the record is where its outcome is.
+   *
+   * One entry per path, holding the last key, because a caller retries the
+   * write it just made and never an older one. Two callers writing to one
+   * Session at once already collide inside the Recorder, and this neither
+   * makes that worse nor pretends to fix it.
+   */
+  const answering = new Map<string, Once>()
+
+  const once = (path: string, key: string | undefined, route: Route): Effect.Effect<Answer> => {
+    if (key === undefined) return route(api)
+    const held = answering.get(path)
+    if (held?.key === key) return Fiber.join(held.fiber)
+    const fiber = Effect.runFork(route(api))
+    answering.set(path, { key, fiber })
+    return Fiber.join(fiber)
+  }
+
+  return (request, response) => {
     const asked = pathOf(request.url ?? "/")
     if (asked === undefined || !(asked === API_ROOT || asked.startsWith(`${API_ROOT}/`))) {
       return false
@@ -264,12 +394,20 @@ export const apiWire =
       return true
     }
 
-    const route = routeFor(method, asked)
+    const read = method === "GET" ? Effect.succeed(undefined) : bodyOf(request)
     Effect.runFork(
-      Effect.map(route === undefined ? Effect.succeed(MISS) : route(api), (answer) => {
-        response.writeHead(answer.status, HEAD)
-        response.end(`${JSON.stringify(answer.body)}\n`)
+      Effect.flatMap(read, (body) => {
+        const route = routeFor(method, asked, body)
+        const answered =
+          route === undefined
+            ? Effect.succeed(MISS)
+            : once(asked, headerOf(request, IDEMPOTENCY), route)
+        return Effect.map(answered, (answer) => {
+          response.writeHead(answer.status, HEAD)
+          response.end(`${JSON.stringify(answer.body)}\n`)
+        })
       }),
     )
     return true
   }
+}
