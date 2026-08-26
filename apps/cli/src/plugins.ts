@@ -1,3 +1,4 @@
+import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { API_PLUGIN, makeApi, type Answering } from "@missingstudio/eva-api"
 import { auth } from "@missingstudio/eva-auth"
@@ -26,7 +27,7 @@ import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { validator } from "@missingstudio/eva-validator"
 import { makeTui } from "@missingstudio/eva-tui-surface"
 import { usage } from "@missingstudio/eva-usage"
-import { makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
+import { hasPage, makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
 import { workflow } from "@missingstudio/eva-workflow"
 import { VERSION } from "./version.js"
 
@@ -46,16 +47,26 @@ export const tui = makeTui({
   version: VERSION,
 })
 
+// What `scripts/release/build.ts` names the page it stages beside the binary.
+const PAGE = "eva-page"
+
 /**
- * Where the built page is: `apps/web/dist`, beside this app. `src` and `dist`
- * sit at the same depth, so the same lookup answers from source and from the
- * packed build — as `version.ts` reads the manifest above both.
+ * Where the built page is. In the workspace that is `apps/web/dist`, beside
+ * this app: `src` and `dist` sit at the same depth, so the same lookup answers
+ * from source and from the packed build — as `version.ts` reads the manifest
+ * above both.
  *
- * A compiled binary carries no tree to look in. Carrying `apps/web/dist` next
- * to a release is `scripts/release/build.ts`'s concern, and until it is done
- * the surface says there is no built page rather than serving 404s.
+ * A compiled binary carries no tree to look in and has no workspace over it,
+ * so the release stages the page beside the binary and this looks there first.
+ * `process.execPath` is that binary when Eva is compiled, and it is `bun`
+ * itself when Eva is run from source — where nothing is staged beside it, so
+ * the workspace answers. The workspace also answers when neither holds a
+ * page, because the notice a person then reads names the build they can run.
  */
-export const assetRoot = (): string => fileURLToPath(new URL("../../web/dist", import.meta.url))
+export const assetRoot = (executable: string = process.execPath): string => {
+  const staged = resolve(dirname(executable), PAGE)
+  return hasPage(staged) ? staged : fileURLToPath(new URL("../../web/dist", import.meta.url))
+}
 
 /**
  * The plugin holds the server; the app holds the tree the page was built
