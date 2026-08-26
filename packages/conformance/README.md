@@ -100,6 +100,7 @@ priced and accepted, and a test is what keeps it a decision.
 | `swap.test.ts`               | A Slot hot-swaps mid-Run; a missing capability degrades rather than fails                  |
 | `fs-contract.test.ts`        | Every FileSystem against one contract: `eva.fs` on a disk, the testkit's filler on a map   |
 | `ground-slots.test.ts`       | The FileSystem, Shell, and Sandbox slots wired, and each read at the moment of use         |
+| `tool-edit.test.ts`          | The write tool over the real applier and Recorder: previewed, undoable, recorded           |
 | `tui.test.ts`                | The shipped bindings against the surface, the shipped theme against the renderer's palette |
 | `session-view.test.tsx`      | The terminal's mapping and the page's, over one fold of one Trace                          |
 
