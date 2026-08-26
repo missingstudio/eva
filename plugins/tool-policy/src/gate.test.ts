@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { argvOf, judge, writtenIn, type JudgedCall } from "./gate.js"
+import { argvOf } from "@missingstudio/eva-core"
+import { judge, writtenIn, type JudgedCall } from "./gate.js"
 import { readRules, rulesOf, type Rule } from "./rules.js"
 
 // The rule set a run with no profile carries.
