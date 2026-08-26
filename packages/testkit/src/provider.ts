@@ -1,6 +1,7 @@
 import {
   ProviderError,
   providerTurn,
+  type ProposedCall,
   type Provider,
   type ProviderRequest,
 } from "@missingstudio/eva-core"
@@ -35,12 +36,14 @@ export const providing = (provider: Provider, id: string = FAKE_PROVIDER): Plugi
 
 /**
  * One Provider Turn as written down: the payloads the stream yields, in
- * order, and why the exchange ended. No `stopReason` means a normal end of
- * turn.
+ * order, why the exchange ended, and the calls it proposed. No `stopReason`
+ * means a normal end of turn, and no `toolCalls` means a response of words
+ * alone.
  */
 export interface ScriptedTurn {
   readonly payloads: readonly Payload[]
   readonly stopReason?: StopReason
+  readonly toolCalls?: readonly ProposedCall[]
 }
 
 // A vendored recording of provider streams, one entry per Provider Turn.
@@ -74,7 +77,11 @@ const answering = (
           ),
         )
       }
-      return providerTurn(Stream.fromIterable(entry.payloads), entry.stopReason ?? "end_turn")
+      return providerTurn(
+        Stream.fromIterable(entry.payloads),
+        entry.stopReason ?? "end_turn",
+        entry.toolCalls ?? [],
+      )
     },
   }
 }
