@@ -35,13 +35,15 @@ const started = <A>(
   provider: Plugin,
   body: (client: Client, path: string) => Effect.Effect<A>,
 ): Promise<A> => {
-  const path = join(mkdtempSync(join(tmpdir(), "eva-conv-")), "trace.jsonl")
-  return withKernel([trace, { plugin: traceJsonl, options: { path } }, provider], (kernel, scope) =>
-    Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), (api) =>
-      Effect.flatMap(Effect.flatMap(localTransport(api.session), makeClient), (client) =>
-        body(client, path),
+  const path = mkdtempSync(join(tmpdir(), "eva-conv-"))
+  return withKernel(
+    [trace, { plugin: traceJsonl, options: { dir: path } }, provider],
+    (kernel, scope) =>
+      Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), (api) =>
+        Effect.flatMap(Effect.flatMap(localTransport(api.session), makeClient), (client) =>
+          body(client, path),
+        ),
       ),
-    ),
   )
 }
 
@@ -211,7 +213,10 @@ describe("the trace a killed process leaves", () => {
     ).then((path) => path)
 
     const reader = await Effect.runPromise(makeJsonlSink(lines))
-    expect(reader.recovery.tornTrailingLine).toBe(false)
+    for (const session of await Effect.runPromise(reader.sessions)) {
+      const replayed = await Effect.runPromise(Stream.runCollect(reader.replay(session)))
+      expect([...replayed].length).toBeGreaterThan(0)
+    }
     await Effect.runPromise(reader.close)
   })
 })

@@ -20,7 +20,7 @@ describe("the built-in table", () => {
   // The trace comes first because everything records through it.
   it("registers the trace before anything that writes one", () => {
     const ids = BUILT_IN.map((plugin) => plugin.id)
-    expect(ids.indexOf("eva.trace")).toBeLessThan(ids.indexOf("eva.trace.jsonl"))
+    expect(ids.indexOf("eva.trace")).toBeLessThan(ids.indexOf("eva.trace.sqlite"))
   })
 
   /**

@@ -24,6 +24,8 @@ import { themes } from "@missingstudio/eva-themes"
 import { trace } from "@missingstudio/eva-trace"
 import { traceJsonl } from "@missingstudio/eva-trace-jsonl"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
+import { tracePostgres } from "@missingstudio/eva-trace-postgres"
+import { traceSqlite } from "@missingstudio/eva-trace-sqlite"
 import { validator } from "@missingstudio/eva-validator"
 import { makeTui } from "@missingstudio/eva-tui-surface"
 import { usage } from "@missingstudio/eva-usage"
@@ -128,7 +130,7 @@ export const serving = (build: Build, bind: WebBind, write: (text: string) => vo
  */
 export const BUILT_IN: readonly Plugin[] = [
   trace,
-  traceJsonl,
+  traceSqlite,
   sessionJsonl,
   auth,
   catalogModels,
@@ -163,8 +165,12 @@ export const BUILT_IN: readonly Plugin[] = [
   web,
 ]
 
-// Available by id but not loaded unless config asks for it.
-export const OPTIONAL: readonly Plugin[] = [traceMemory]
+/**
+ * Available by id but not loaded unless config asks for it. The other three
+ * trace sinks live here: SQLite is the default, and swapping it is two
+ * lines of config — disable `eva.trace.sqlite`, name the one wanted.
+ */
+export const OPTIONAL: readonly Plugin[] = [traceJsonl, traceMemory, tracePostgres]
 
 /**
  * What this build carries, as the one thing that answers for it. `boot` is

@@ -101,9 +101,9 @@ const buildWith = (script: readonly string[]): Build =>
 // writes nothing into the person's own home directory.
 const contained = (directory: string): string => `
 plugins:
-  - id: eva.trace.jsonl
+  - id: eva.trace.sqlite
     options:
-      path: "${join(directory, "trace.jsonl")}"
+      path: "${join(directory, "trace.sqlite")}"
   - id: eva.auth
     options:
       authStore: "${join(directory, "auth.json")}"

@@ -52,6 +52,8 @@
     "@missingstudio/eva-trace": "workspace:*",
     "@missingstudio/eva-trace-jsonl": "workspace:*",
     "@missingstudio/eva-trace-memory": "workspace:*",
+    "@missingstudio/eva-trace-postgres": "workspace:*",
+    "@missingstudio/eva-trace-sqlite": "workspace:*",
     "@missingstudio/eva-tui": "workspace:*",
     "@missingstudio/eva-tui-surface": "workspace:*",
     "@missingstudio/eva-usage": "workspace:*",
