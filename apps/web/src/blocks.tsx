@@ -1,3 +1,4 @@
+import type { ActorKind } from "@missingstudio/eva-schema"
 import type { Block, Turn } from "@missingstudio/eva-session-view"
 import {
   CommitFile,
@@ -34,21 +35,44 @@ export const hunkText = (hunks: number): string => `${hunks} ${hunks === 1 ? "hu
 const panelOf = (key: string): string => `panel-${key}`
 
 /**
- * One Block, in page primitives. What the Run did is settled before this is
- * called — the fold in `session-view` settled it — so all this decides is
- * what a reader sees.
+ * One Block, in page primitives, from the Turn that says who wrote it. What
+ * the Run did is settled before this is called — the fold in `session-view`
+ * settled it — so all this decides is what a reader sees.
  *
  * Every member is drawn, including the one this page has no primitive for.
  * A Surface may render less than another; it may never know more. So a Block
  * nothing here can draw says what it was and that it could not be drawn,
  * rather than leaving a hole a reader would read as nothing having happened.
+ *
+ * The author is a fact about the words and not about the Turn's colour, which
+ * is why it is carried this far down. An agent writes markdown by convention.
+ * Nobody else does, and reading a person's words as markdown rewrites them:
+ * a pasted comment line becomes a bullet, the line breaks close up, and the
+ * backticks around a template literal are eaten by the chip they draw. So the
+ * agent's words go through the markdown renderer and everyone else's are
+ * drawn as the characters they were written in.
  */
-export const BlockView = ({ block }: { readonly block: Block }) => {
+export const BlockView = ({
+  block,
+  author,
+}: {
+  readonly block: Block
+  readonly author: ActorKind
+}) => {
   switch (block.kind) {
-    // Markdown, rendered. A Run says tables and links, and a page that drew
-    // the source would be showing a reader the pipe rather than the answer.
+    /**
+     * Markdown when an agent said it: a Run writes tables and links, and a
+     * page that drew the source would be showing a reader the pipe rather
+     * than the answer. Verbatim from anyone else — a person pasted it and
+     * `system` is Eva's own text handed to a model, and neither was written
+     * to be rendered.
+     */
     case "words":
-      return <MessageResponse>{block.text}</MessageResponse>
+      return author === "agent" ? (
+        <MessageResponse>{block.text}</MessageResponse>
+      ) : (
+        <p className="whitespace-pre-wrap">{block.text}</p>
+      )
     /**
      * What was thought on the way, behind a disclosure a reader can close. It
      * is open to start with, because the record stands whole on this page: a
@@ -157,7 +181,7 @@ export const Turns = ({ turns }: { readonly turns: readonly Turn[] }) =>
             <p className="text-muted text-xs uppercase tracking-[0.06em]">{turn.author}</p>
             <MessageContent>
               {turn.blocks.map((block) => (
-                <BlockView key={block.key} block={block} />
+                <BlockView key={block.key} author={turn.author} block={block} />
               ))}
             </MessageContent>
           </Message>

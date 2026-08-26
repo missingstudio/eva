@@ -1,5 +1,5 @@
 import { blockFold, type Block, type Turn } from "@missingstudio/eva-session-view"
-import type { TranscriptMessage } from "@missingstudio/eva-schema"
+import type { ActorKind, TranscriptMessage } from "@missingstudio/eva-schema"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 import { BlockView, hunkText, Turns } from "./blocks.js"
@@ -9,9 +9,11 @@ import { BlockView, hunkText, Turns } from "./blocks.js"
  * the served page is proven against — `plugins/web` opens a socket for that,
  * and `packages/conformance` holds this mapping against the terminal's.
  */
-const drawn = (block: Block): string => renderToStaticMarkup(<BlockView block={block} />)
+const drawn = (block: Block, author: ActorKind = "agent"): string =>
+  renderToStaticMarkup(<BlockView author={author} block={block} />)
 
-const words = (text: string): string => drawn({ kind: "words", key: "0.0", text })
+const words = (text: string, author: ActorKind = "agent"): string =>
+  drawn({ kind: "words", key: "0.0", text }, author)
 
 // Every kind of block one Message can hold, folded by the one fold. The
 // fixture is the record rather than the Blocks, so what is drawn here is
@@ -159,6 +161,37 @@ describe("what a Run writes, and what a reader gets", () => {
     ["a footnote", "text[^1]\n\n[^1]: the note", "the note"],
   ])("draws %s, rather than nothing", (_construct, source, said) => {
     expect(words(source)).toContain(said)
+  })
+})
+
+/**
+ * Whose words these are decides how they are drawn. Markdown is a convention
+ * an agent writes by; a person pastes what they have, and Eva's own text is
+ * written for a model rather than for a page.
+ */
+describe("whose words these are", () => {
+  const PASTED = "/**\n * a comment line\n */\nconst path = `${prefix}.${key}`\n"
+
+  it.each(["human", "system"] as const)("draws %s words as the characters they are", (author) => {
+    const markup = words(PASTED, author)
+
+    expect(markup).toContain("whitespace-pre-wrap")
+    expect(markup).not.toContain("<li")
+    expect(markup).not.toContain("<code")
+  })
+
+  // The line breaks, the leading spaces and the backticks all survive, which
+  // is the whole of what "as they were written" means.
+  it("keeps a human's line breaks, indentation and backticks", () => {
+    const markup = words(PASTED, "human")
+
+    expect(markup).toContain(" * a comment line\n")
+    expect(markup).toContain("`${prefix}.${key}`")
+  })
+
+  // And an agent's words are still markdown, so the rule turned nothing off.
+  it("still reads an agent's words as markdown", () => {
+    expect(words("- alpha", "agent")).toContain("<li")
   })
 })
 
