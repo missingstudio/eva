@@ -10,6 +10,7 @@ import { commands } from "@missingstudio/eva-commands"
 import { config } from "@missingstudio/eva-config"
 import { diff } from "@missingstudio/eva-diff"
 import { fs } from "@missingstudio/eva-fs"
+import { harnessLoop } from "@missingstudio/eva-harness-loop"
 import { keymap } from "@missingstudio/eva-keymap"
 import { print } from "@missingstudio/eva-print"
 import { prompt } from "@missingstudio/eva-prompt"
@@ -195,6 +196,10 @@ export const BUILT_IN: readonly Plugin[] = [
   // `validator`: load order is transform-replay precedence, and the built-in
   // repair Template fills only a row the person's config left empty.
   workflow,
+  // After `prompt` for the same reason, and after the tools and both gates:
+  // the loop reads the tool domain at every Step, so what it offers a model
+  // is the registry the mode built.
+  harnessLoop,
   config,
   print,
   tui,
