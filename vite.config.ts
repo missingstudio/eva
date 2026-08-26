@@ -211,6 +211,10 @@ export default defineConfig({
 
   fmt: {
     semi: false,
+    // The route trees are TanStack's own output, committed because the router
+    // reads them at runtime. Their header asks the formatter to leave them
+    // alone, and the lint step above already does.
+    ignorePatterns: ["apps/*/src/routeTree.gen.ts"],
   },
 
   staged: {
