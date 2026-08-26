@@ -92,12 +92,45 @@ creates a server, so no path through this plugin serves a bind it refuses.
 
 ## The row
 
-`eva.web` declares `interactive: false`, because the page takes no input: Eva
-never asks it anything, and an ask that arrived anyway is answered rather than
-left waiting. `streaming: true`, because SSE carries the live tail.
+`eva.web` declares `interactive: true`, because the page answers a permission
+request. `streaming: true`, because SSE carries the live tail.
 
-`eva serve --web` starts this row **by id**. It is not the first interactive
-surface, which is what `eva` with no verb picks.
+`eva serve --web` starts this row **by id**. `eva` with no verb takes the first
+interactive surface, and this row is registered after the terminal's — so the
+order in the built-in table is what says a person who typed `eva` gets the
+terminal.
+
+## The ask channel
+
+A permission request nobody has answered has no position on the Trace: nothing
+about it is recorded, because an answered request is the Disposition of the call
+it gated. So the surface reaches its own person on the port it serves the page
+from.
+
+- **`GET /asking`** is an event stream of the questions that stand. Every frame
+  carries the **whole set**, so a page holds no bookkeeping: a question
+  withdrawn is a set with one fewer in it, and a page that joined late reads the
+  same frame as one that was there. One question is `{ id, question }` — a
+  permission request without its kind, and no option list, because the four
+  options are `PERMISSION_OPTIONS` in `packages/core` and every surface already
+  holds them.
+- The path sits **outside `/api`**, which [`eva.api`](../api/README.md) claims
+  whole. It is this surface's own door and not a Session API method.
+- **The stream is also the presence signal**, and that is what makes the row
+  honest. `ask` is offered only while a page is reading: with none open it is
+  cancelled at once, and the moment the last page goes it is cancelled then. A
+  surface that said it takes input and then held a Run forever would be worse
+  than one that declined.
+- The answer travels the other way, through `SessionAPI.answer` on the wire —
+  the door every surface writes through. The gate races the two answers to one
+  request, so the answer that lands first is the one it reads, and the question
+  is withdrawn from this stream however the ask ended.
+
+**The page's half is `@missingstudio/eva-web/client`.** `watchAsking(each,
+options?)` reads the stream and calls `each` with the whole set; the origin is
+nothing by default, which is the origin the page was served by. It lives here
+rather than in `apps/web` for the reason `eva.api`'s client half lives with the
+wire: a page holds no wire of its own and knows no address.
 
 ## What it does not do
 
@@ -105,8 +138,9 @@ surface, which is what `eva` with no verb picks.
   root is a path the composition root injects.
 - **It does not answer the Session API.** The page reaches Eva over the wire
   [`eva.api`](../api/README.md) serves, and this row only carries it: the
-  `Client` the row is started with is what the wire answers from, and the
-  surface itself starts to ask at W2.
+  `Client` the row is started with is what the wire answers from. The one thing
+  this surface asks for itself is a permission request, over the ask channel
+  above; a prompt, a steer and a model switch are W2's.
 - **It does not find the page.** The asset root is a path, and which path it
   is belongs to the composition root: `apps/web/dist` in the workspace, and
   `eva-page` beside the binary in a release. `scripts/release/build.ts` stages

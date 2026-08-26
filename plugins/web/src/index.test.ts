@@ -24,10 +24,15 @@ const rows = (assets: () => string, config: Record<string, unknown> = {}) =>
   withPlugin(makeWeb({ assets }), (kernel) => kernel.domains.surface.get, { config })
 
 describe("the eva.web row", () => {
-  it("declares a surface that takes no input", async () => {
+  /**
+   * The page answers a permission request, so the row says Eva may ask this
+   * surface. It is honest because the ask channel knows whether a page is
+   * open: with none, the ask is cancelled rather than held.
+   */
+  it("declares a surface that takes input", async () => {
     expect((await rows(built)).find((one) => one.id === WEB_SURFACE)).toMatchObject({
       id: WEB_SURFACE,
-      interactive: false,
+      interactive: true,
       streaming: true,
       images: false,
     })

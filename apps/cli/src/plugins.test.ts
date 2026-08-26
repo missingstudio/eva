@@ -24,10 +24,10 @@ describe("the built-in table", () => {
   })
 
   /**
-   * `eva.web` says `interactive: false`, so it cannot take the interactive
-   * branch from the terminal — but registration order is what `pickSurface`
-   * reads, and a row registered ahead of the terminal that later flipped that
-   * flag would take it in silence.
+   * Both rows are interactive, so registration order is the whole of what
+   * says a person who typed `eva` gets the terminal: `pickSurface` takes the
+   * first interactive row, and a web row registered ahead of the terminal
+   * would take that branch in silence.
    */
   it("registers the web surface after the terminal", () => {
     const ids = BUILT_IN.map((plugin) => plugin.id)

@@ -85,8 +85,9 @@ at `tool.execute.before` cannot disagree about what a malformed rule set is.
 Session, and `--acp` at 9c is the next answer to "serve what". A serve that
 names no posture is refused rather than defaulted, because a default would
 start a surface nobody chose. The verb starts the `eva.web` row **by id** —
-`eva` with no verb takes the first interactive surface, and that row says
-`interactive: false`. `--host` and `--port` ride the invocation and reach the
+`eva` with no verb takes the first interactive surface, and that row is
+registered after the terminal's, so registration order is what says a person
+who typed `eva` gets the terminal. `--host` and `--port` ride the invocation and reach the
 plugin through the build, because a surface row is started with a Client and
 nothing else, so the bind is closed over when the plugin is made.
 

@@ -5,6 +5,7 @@ import { basename } from "node:path"
 import type { Frontend } from "@missingstudio/eva-sdk"
 import { Effect, Scope } from "effect"
 import { assetFor, hasPage, mediaType, unbuilt } from "./assets.js"
+import { askChannel, NOBODY } from "./ask.js"
 import { refusal, type Bind } from "./bind.js"
 
 export const WEB_SURFACE = "eva.web"
@@ -80,12 +81,15 @@ const cacheFor = (found: string): string =>
  *
  * The wire is offered the request first, and before the built page is looked
  * for: a call is answered from the record and a build nobody ran says nothing
- * about whether Eva can answer it.
+ * about whether Eva can answer it. The ask channel is offered next: it is this
+ * surface's own door, so it sits under no root the wire claims and it is
+ * looked for before the page, for the same reason the wire is.
  */
 const answer =
-  (root: string, api?: Answering) =>
+  (root: string, asking: Answering, api?: Answering) =>
   (request: IncomingMessage, response: ServerResponse): void => {
     if (api?.(request, response) === true) return
+    if (asking(request, response)) return
 
     if (!hasPage(root)) {
       response.writeHead(503, PLAIN)
@@ -112,12 +116,13 @@ export const urlOf = (bound: AddressInfo): string =>
  * The surface holds until the process stops it: `done` completes when the
  * server has closed, and nothing on the page closes it.
  *
- * The row says `interactive: false`, so Eva never asks this surface
- * anything. An ask that arrived anyway is answered rather than left waiting.
+ * The ask is the channel's when there is a server, and nobody's when there is
+ * not: a surface that bound no port has no page behind it, so every ask it is
+ * handed is declined rather than left waiting.
  */
-const frontendOf = (done: Effect.Effect<void>): Frontend => ({
+const frontendOf = (done: Effect.Effect<void>, ask: Frontend["ask"] = NOBODY): Frontend => ({
   id: WEB_SURFACE,
-  ask: () => Effect.succeed({ kind: "cancelled" }),
+  ask,
   done,
 })
 
@@ -144,7 +149,13 @@ export const serveWeb = Effect.fn(WEB_SURFACE)(function* (options: Serve) {
     return frontendOf(Effect.void)
   }
 
-  const server = createServer(answer(options.root, options.api))
+  /**
+   * The page's own door, made before the server so the server can offer
+   * requests to it. It is what turns a question into something a reader can
+   * see, and what says whether there is a reader at all.
+   */
+  const asking = askChannel()
+  const server = createServer(answer(options.root, asking.takes, options.api))
 
   const bound = yield* Effect.callback<AddressInfo | Error>((resume) => {
     server.once("error", (cause) => resume(Effect.succeed(cause)))
@@ -185,5 +196,6 @@ export const serveWeb = Effect.fn(WEB_SURFACE)(function* (options: Serve) {
       if (!server.listening) return resume(Effect.void)
       server.once("close", () => resume(Effect.void))
     }),
+    asking.ask,
   )
 })
