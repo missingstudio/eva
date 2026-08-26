@@ -8,13 +8,18 @@
  * the Block's own key: a generated one makes the same Block draw differently
  * in two places, and `packages/conformance` holds one drawing against the
  * other. The palette is Eva's brand tokens.
+ *
+ * The panel draws its markdown through `MessageResponse`, which is upstream's
+ * own arrangement: a thought and an answer are both the agent writing, so one
+ * renderer draws both and a fenced block in a thought is not lost on the way
+ * to a page that keeps one in an answer.
  */
 import { BrainIcon, ChevronDownIcon } from "lucide-react"
 import type { ComponentProps } from "react"
-import { Streamdown } from "streamdown"
 
 import { cn } from "../../lib/utils.js"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.js"
+import { MessageResponse } from "./message.js"
 
 export type ReasoningProps = ComponentProps<typeof Collapsible>
 
@@ -50,8 +55,6 @@ export const ReasoningContent = ({ className, children, ...props }: ReasoningCon
     className={cn("mt-1 border-rule border-l-2 pl-3 text-muted text-sm italic", className)}
     {...props}
   >
-    <Streamdown controls={false} linkSafety={{ enabled: false }} mode="static">
-      {children}
-    </Streamdown>
+    <MessageResponse>{children}</MessageResponse>
   </CollapsibleContent>
 )

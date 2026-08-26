@@ -11,6 +11,8 @@ import { BlockView, hunkText, Turns } from "./blocks.js"
  */
 const drawn = (block: Block): string => renderToStaticMarkup(<BlockView block={block} />)
 
+const words = (text: string): string => drawn({ kind: "words", key: "0.0", text })
+
 // Every kind of block one Message can hold, folded by the one fold. The
 // fixture is the record rather than the Blocks, so what is drawn here is
 // what a Session really produces.
@@ -56,20 +58,37 @@ describe("one Block, in page primitives", () => {
    * the answer.
    */
   it("renders what was said as markdown, rather than as its source", () => {
-    const markup = renderToStaticMarkup(
-      <BlockView
-        block={{
-          kind: "words",
-          key: "0.0",
-          text: "| file | why |\n| --- | --- |\n| one.ts | it changed |\n\nand **so** it did",
-        }}
-      />,
+    const markup = words(
+      "| file | why |\n| --- | --- |\n| one.ts | it changed |\n\nand **so** it did",
     )
 
     expect(markup).toContain("<table")
     expect(markup).toContain("<td")
     expect(markup).not.toContain("| --- |")
     expect(markup).not.toContain("**so**")
+  })
+
+  /**
+   * A fenced block is where the answer usually is — a JSON answer, a patch, a
+   * command to run — and it is the one construct that can be drawn by a
+   * renderer that is not there. So the code is on the page as its own
+   * characters, in a `pre`, with the lines it was written in.
+   */
+  it("draws a fenced code block as code, with its lines kept", () => {
+    const markup = words('```json\n[\n  { "file": "merge.ts" }\n]\n```')
+
+    expect(markup).toContain("<pre")
+    expect(markup).toContain("&quot;file&quot;: &quot;merge.ts&quot;")
+    expect(markup).toContain("[\n  { &quot;file&quot;: &quot;merge.ts&quot; }\n]")
+    expect(markup).toContain("json")
+  })
+
+  it("draws a fence that names no language, which is a fence all the same", () => {
+    expect(words("```\nbun run verify\n```")).toContain("bun run verify")
+  })
+
+  it("draws a language it has no renderer for as the code it is", () => {
+    expect(words("```mermaid\ngraph TD;\n```")).toContain("graph TD;")
   })
 
   it("draws an open call with its Tool Status", () => {
@@ -112,6 +131,34 @@ describe("one Block, in page primitives", () => {
     const markup = drawn(at("unknown"))
     expect(markup).toContain("cannot draw")
     expect(markup).toContain("audio")
+  })
+})
+
+/**
+ * The whole rule, over every construct a Run can write. A renderer that has
+ * no primitive for one of them draws less; a renderer that draws nothing at
+ * all for one of them has dropped the answer, and a reader has no way to know
+ * an answer was there. So each construct is asked for the words inside it.
+ */
+describe("what a Run writes, and what a reader gets", () => {
+  it.each([
+    ["a heading", "## a heading", "a heading"],
+    ["a bullet list", "- alpha\n- beta", "alpha"],
+    ["an ordered list", "1. alpha\n2. beta", "beta"],
+    ["a table", "| a | b |\n| - | - |\n| one | two |", "one"],
+    ["a block quote", "> quoted words", "quoted words"],
+    ["a horizontal rule", "before\n\n---\n\nafter", "<hr"],
+    ["an image", "![alt words](https://example.com/one.png)", "alt words"],
+    ["a link", "[label](https://example.com)", "label"],
+    ["inline code", "a `chip` here", "chip"],
+    ["a fenced block", '```json\n{ "file": "x" }\n```', "file"],
+    ["an indented block", "    indented code", "indented code"],
+    ["inline html", "<em>emphasis</em>", "emphasis"],
+    ["a strikethrough", "~~gone~~", "gone"],
+    ["a task list", "- [x] done thing", "done thing"],
+    ["a footnote", "text[^1]\n\n[^1]: the note", "the note"],
+  ])("draws %s, rather than nothing", (_construct, source, said) => {
+    expect(words(source)).toContain(said)
   })
 })
 
