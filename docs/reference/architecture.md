@@ -364,20 +364,37 @@ The ten domains the SDK declares today, their state, and the plugins that
 write to them. Later stages add `workspace`, `check`, `memory`, `skill`,
 `importer`, and `signal`. Adding one is a reviewed SDK change.
 
-| Domain        | Holds                                           | Finalizer does                                                                | Written by                                           |
-| ------------- | ----------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `catalog`     | providers, models, the default model            | validates policy, builds the lookup index                                     | `eva.catalog.models`, `eva.provider.*`, `eva.config` |
-| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists — checked at selection, not at commit | `eva.harness.*`, `eva.workflow`                      |
-| `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set                                 | `eva.tui`, `eva.print`, `eva.api`, `eva.web`         |
-| `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default                                     | `eva.agents`, `eva.profile`, `eva.config`            |
-| `tool`        | tool registrations, one entry per tool          | —                                                                             | `eva.tool.*`, `eva.config`                           |
-| `prompt`      | Templates, one row per Template                 | —                                                                             | `eva.prompt`, `eva.workflow`, `eva.config`           |
-| `command`     | slash commands and their handlers               | checks name and alias collisions                                              | `eva.commands`, `eva.print`, `eva.config`            |
-| `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys                                 | `eva.themes`, `eva.config`                           |
-| `keymap`      | key bindings by surface                         | detects conflicting bindings                                                  | `eva.keymap`, `eva.config`                           |
-| `integration` | credential sources and auth methods             | projects live connections                                                     | `eva.auth`, `eva.provider.*`                         |
+| Domain        | Holds                                           | Finalizer does                                                                | Written by                                                |
+| ------------- | ----------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `catalog`     | providers, models, the default model            | validates policy, builds the lookup index                                     | `eva.catalog.models`, `eva.provider.*`, `eva.config`      |
+| `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists — checked at selection, not at commit | `eva.harness.*`, `eva.workflow`                           |
+| `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set                                 | `eva.tui`, `eva.print`, `eva.api`, `eva.web`              |
+| `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default                                     | `eva.agents`, `eva.profile`, `eva.config`, `eva.approval` |
+| `tool`        | tool registrations, one entry per tool          | —                                                                             | `eva.tool.*`, `eva.sched`, `eva.approval`, `eva.config`   |
+| `prompt`      | Templates, one row per Template                 | —                                                                             | `eva.prompt`, `eva.workflow`, `eva.config`                |
+| `command`     | slash commands and their handlers               | checks name and alias collisions                                              | `eva.commands`, `eva.print`, `eva.config`                 |
+| `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys                                 | `eva.themes`, `eva.config`                                |
+| `keymap`      | key bindings by surface                         | detects conflicting bindings                                                  | `eva.keymap`, `eva.config`                                |
+| `integration` | credential sources and auth methods             | projects live connections                                                     | `eva.auth`, `eva.provider.*`                              |
 
 Each domain publishes `<name>.updated` after it commits.
+
+**What `eva.approval` writes.** One `agent` row per permission mode —
+`read-only`, `supervised`, `autonomous`, `plan` — carrying the mode's `id` and
+the `prompt` that says what the mode is there to do. That is where a mode is
+published: `/mode` lists what the rows say, so a person who overrode a mode's
+prompt in config reads their own words. The rows leave `AgentInfo.tools` empty
+on purpose. A mode selects by what a tool **does** — its `ToolInfo.kind` — so a
+tool that loads tomorrow is selected by its kind rather than by whether
+somebody listed its name, and a name list beside that rule would be a second
+statement of it that goes stale on the next load.
+
+The selection itself is a `tool` transform that **removes** the rows the mode
+does not reach, so a mode change rebuilds the registry rather than filtering it
+at call time; and `/mode` is a `command` row. A domain is process-wide and a
+mode is per Session, so the registry is built to the widest mode any Session
+has named and each Session's own mandate at `tool.execute.before` is what
+refuses. The strict side is at the gate, where it decides.
 
 A row that describes an action carries the action. `CommandInfo.run`,
 `SurfaceInfo.start`, `HarnessInfo.open` and `ToolInfo.execute` are all
@@ -879,9 +896,10 @@ carries the tool policy, and it is how a plugin denies an action.
 ```ts
 // packages/core/src/tool.ts
 /**
- * What a hook may decide. `ask` is not a final answer — a gate that can reach
- * a person resolves it through `Frontend.ask` and produces one of the other
- * four, and a call that reaches the tool still holding an `ask` is denied.
+ * What a hook may decide. `ask` is not a final answer — the pipeline resolves
+ * the `ask` the boundary settled on into one of the other four through
+ * `ToolDeps.approving`, and a call that reaches the tool still holding an
+ * `ask` is denied.
  */
 export type ToolDecision =
   | { readonly kind: "allow_once" }
@@ -902,6 +920,13 @@ export interface ToolExecuteBefore {
   }
   /** The strictest decision wins. A non-interactive surface turns ask into reject_once. */
   decide(decision: ToolDecision): void
+  /**
+   * What happens when nothing decided. A baseline, read only when no hook at
+   * this boundary decided at all, so specific standing authority — a rule a
+   * person wrote — is never asked about again. A permission mode supervises
+   * with this and refuses with `decide`.
+   */
+  otherwise(decision: ToolDecision): void
 }
 
 export interface ToolExecuteAfter {
@@ -944,7 +969,20 @@ export const toolPolicy = define({
 gate, with no model in it — so the same answer is reachable from CI through
 `eva policy check`. A hook that decides nothing allows, which is why the gate
 says nothing about a call no rule names: which calls need an answer at all is
-the permission mode's question.
+the permission mode's question, and the mode answers it with `otherwise`.
+
+**Where the `ask` is resolved, and why not in a hook.** `ToolDeps.approving`
+takes the ACP `PermissionRequest` the pipeline builds — the call id is the
+request id, and `PERMISSION_OPTIONS` is the option list, because Eva's gate
+offers all four options every time and a request carrying them would carry the
+same four words on every ask. It runs **after** `strictest` has chosen, so one
+call asks one person once whichever hook asked, and no other hook's `ask` can
+outrank the answer a person gave. `overSurface` in `packages/boot` fills it:
+it asks the running surface through `Frontend.ask`, which already carries the
+request id and the question, and races that against `Api.request` so a surface
+at the end of a socket answers with `SessionAPI.answer`. Absent, or with a
+surface whose row says `interactive: false`, an `ask` is `reject_once` — a
+permission request with nobody to answer it is a denial.
 
 ## 7. Broadcasts
 
@@ -1173,15 +1211,15 @@ many more that later stages add.
 
 **Workflow, scheduling, and approval**
 
-| Plugin id       | Package         | Contributes                                         |
-| --------------- | --------------- | --------------------------------------------------- |
-| `eva.prompt`    | `eva-prompt`    | prompt domain: Templates, includes, Variables       |
-| `eva.validator` | `eva-validator` | fills `Validator`: judges a Candidate, names Faults |
-| `eva.workflow`  | `eva-workflow`  | harness domain: a declared list of Steps, no agency |
-| `eva.sched`     | `eva-sched`     | tool transform: the parallel-safety policy          |
-| `eva.steer`     | `eva-steer`     | hook `session.prompt.before`: mid-Run input         |
-| `eva.approval`  | `eva-approval`  | agent domain + hook: named permission modes         |
-| `eva.diff`      | `eva-diff`      | fills `DiffApplier`: dry-run preview, atomic apply  |
+| Plugin id       | Package         | Contributes                                                    |
+| --------------- | --------------- | -------------------------------------------------------------- |
+| `eva.prompt`    | `eva-prompt`    | prompt domain: Templates, includes, Variables                  |
+| `eva.validator` | `eva-validator` | fills `Validator`: judges a Candidate, names Faults            |
+| `eva.workflow`  | `eva-workflow`  | harness domain: a declared list of Steps, no agency            |
+| `eva.sched`     | `eva-sched`     | tool transform: the parallel-safety policy                     |
+| `eva.steer`     | `eva-steer`     | hook `session.prompt.before`: mid-Run input                    |
+| `eva.approval`  | `eva-approval`  | agent, tool and command domains + hook: named permission modes |
+| `eva.diff`      | `eva-diff`      | fills `DiffApplier`: dry-run preview, atomic apply             |
 
 **Execution environment**
 
@@ -2225,6 +2263,15 @@ One thing falls out. A surface that cannot ask a person declares
 `interactive: false`, and the tool gate turns every `ask` into `reject_once`
 rather than hanging — that is the same rule the harness seam uses, pointed at
 the other side.
+
+**A permission request carries an id and a question, and no option list.** The
+options are `PERMISSION_OPTIONS` in `packages/core`: Eva's gate offers all four
+of ACP's options every time, so a request that carried them would carry the
+same four words on every ask and a surface would have two places to read the
+labels from. `FrontendRequest.permission`'s `id` is the `RequestID`, so a
+surface answers either by returning a `{ kind: "permission", optionId }` from
+`ask` or by calling `SessionAPI.answer` with that id — and the id is the tool
+call's, which the `tool_call` record named first.
 
 `eva.tui`, `eva.print`, `eva.api`, and `eva.web` each register a surface and
 implement this. So does a third party, which is the point.

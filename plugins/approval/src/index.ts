@@ -65,11 +65,15 @@ export const approval = define({
     const modeFor = (session: string): ModeInfo =>
       modeInfo(sessions.get(session) ?? read.mode) ?? DEFAULT_INFO
 
-    // The modes in play, which is the default plus every Session's own.
-    const live = (): readonly ModeInfo[] => [
-      modeFor(""),
-      ...[...sessions.keys()].map((session) => modeFor(session)),
-    ]
+    /**
+     * The modes in play: the ones Sessions have named, or the default while no
+     * Session has named one. A Session that never named a mode runs under the
+     * default, and its registry may therefore be narrower than its mandate —
+     * which is the fail-closed direction, and the only one worth being wrong
+     * in.
+     */
+    const live = (): readonly ModeInfo[] =>
+      sessions.size === 0 ? [modeFor("")] : [...sessions.keys()].map((session) => modeFor(session))
 
     /**
      * Capability selection. The transform is registered once and replayed on
