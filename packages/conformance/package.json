@@ -29,6 +29,7 @@
     "@missingstudio/eva-tool-edit": "workspace:*",
     "@missingstudio/eva-tool-glob": "workspace:*",
     "@missingstudio/eva-tool-grep": "workspace:*",
+    "@missingstudio/eva-tool-policy": "workspace:*",
     "@missingstudio/eva-tool-read": "workspace:*",
     "@missingstudio/eva-tool-web": "workspace:*",
     "@missingstudio/eva-trace": "workspace:*",
