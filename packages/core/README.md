@@ -70,24 +70,26 @@ same rule:
 
 ## What is in each module
 
-| Module           | What it holds                                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `extension.ts`   | The extension-point shapes: `Domain`, `Slot`, `Hooks`, `Broadcast`, `Registration`, the `Row` draft                    |
-| `contracts.ts`   | What fills the slots: `Recorder`, `TraceSink`, `SessionStore`, `CredentialStore`, `Budget`, `Validator`, `DiffApplier` |
-| `spec.ts`        | The work: `Spec`, `Outcome`, the budget shapes, `ModelRef`, `Usage`                                                    |
-| `transcript.ts`  | `Session`, `Transcript`, and `foldTranscript`                                                                          |
-| `provider.ts`    | The `Provider`: one `turn` method that begins a provider turn                                                          |
-| `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                                            |
-| `session-api.ts` | The whole of what a surface may do to Eva                                                                              |
-| `session.ts`     | `submit`, the one-Run mechanism                                                                                        |
-| `sink.ts`        | `sinkOf`, the one store-to-sink entry, over the `sequenced` and `numbered` seams                                       |
-| `rows.ts`        | The row-shaped store both SQL sinks keep: columns, codec, head row, allocation                                         |
-| `archive.ts`     | Reading a Trace back from JSONL, one file or a directory of them                                                       |
+| Module           | What it holds                                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `extension.ts`   | The extension-point shapes: `Domain`, `Slot`, `Hooks`, `Broadcast`, `Registration`, the `Row` draft                                       |
+| `contracts.ts`   | What fills the slots: `Recorder`, `TraceSink`, `SessionStore`, `CredentialStore`, `Budget`, `Validator`, `FileSystem`, `Shell`, `Sandbox`, `DiffApplier` |
+| `spec.ts`        | The work: `Spec`, `Outcome`, the budget shapes, `ModelRef`, `Usage`                                                                       |
+| `transcript.ts`  | `Session`, `Transcript`, and `foldTranscript`                                                                                             |
+| `provider.ts`    | The `Provider`: one `turn` method that begins a provider turn                                                                             |
+| `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                                                               |
+| `session-api.ts` | The whole of what a surface may do to Eva                                                                                                 |
+| `session.ts`     | `submit`, the one-Run mechanism                                                                                                           |
+| `sink.ts`        | `sinkOf`, the one store-to-sink entry, over the `sequenced` and `numbered` seams                                                          |
+| `rows.ts`        | The row-shaped store both SQL sinks keep: columns, codec, head row, allocation                                                            |
+| `glob.ts`        | `globMatcher`: what a glob pattern means, for every `FileSystem` filler                                                                   |
+| `archive.ts`     | Reading a Trace back from JSONL, one file or a directory of them                                                                          |
 
 ## What it does not do
 
 Nothing here fills a slot. The Recorder, the sinks, the session and credential
-stores, the Validator, and every Provider are plugins. `submit` is one step
+stores, the Validator, the file system, the shell, the sandbox, and every
+Provider are plugins. `submit` is one step
 with no tools and no agency: a tool-calling loop belongs to a harness, and a
 harness is a plugin too. And nothing here loads plugins — the plugin runtime
 is the kernel's.
