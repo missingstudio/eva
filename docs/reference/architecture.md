@@ -1233,13 +1233,13 @@ many more that later stages add.
 
 **Harnesses**
 
-| Plugin id              | Package                | Contributes                                |
-| ---------------------- | ---------------------- | ------------------------------------------ |
-| `eva.harness.loop`     | `eva-harness-loop`     | Eva's native harness; a host plugin        |
-| `eva.harness.acp`      | `eva-harness-acp`      | the ACP runtime, for any ACP agent         |
-| `eva.harness.claude`   | `eva-harness-claude`   | vendor extension: launch, auth             |
-| `eva.harness.codex`    | `eva-harness-codex`    | vendor extension over the App Server       |
-| `eva.harness.deepseek` | `eva-harness-deepseek` | vendor extension over its `dsh-acp` server |
+| Plugin id              | Package                | Contributes                                      |
+| ---------------------- | ---------------------- | ------------------------------------------------ |
+| `eva.harness.loop`     | `eva-harness-loop`     | harness domain: Eva's own loop, one Step per Run |
+| `eva.harness.acp`      | `eva-harness-acp`      | the ACP runtime, for any ACP agent               |
+| `eva.harness.claude`   | `eva-harness-claude`   | vendor extension: launch, auth                   |
+| `eva.harness.codex`    | `eva-harness-codex`    | vendor extension over the App Server             |
+| `eva.harness.deepseek` | `eva-harness-deepseek` | vendor extension over its `dsh-acp` server       |
 
 Hosted by `eva.harness.loop`, and reachable only through it:
 
@@ -1653,13 +1653,28 @@ to tell it apart from the rest.
 `eva.harness.loop` is not a monolith. It is a **host plugin**: it loads plugins
 of its own and exposes host-scoped extension points to them.
 
-It exposes six. Five are slots — `context`, because context assembly is a
+It will expose six. Five are slots — `context`, because context assembly is a
 research area; `compaction`, because the strategy differs per model and per
 task; `schedule`, because parallel-safety policy is swappable; `retry`, because
 providers need different policies; and `inbox`, because steering semantics are a
 choice. One is a domain — `systemPrompt`, because many plugins contribute
 instructions to it and they have to compose in a defined order. The plugins that
 fill them are in the package inventory above.
+
+**None of the six exists yet, and that is deliberate.** The plugin as it stands
+hosts nothing: what each point is for is a swap there is no second
+implementation of, and five empty slots nobody fills is scaffolding a reader has
+to guess about. Each of the six is a parameter of `LoopDeps` today — the tool
+rows, the prompt rows, the Catalog, the Budget, and the two ceilings — read at
+the point of use and never captured, so cutting one into a host slot is a change
+inside the plugin and not a rewrite. The system prompt is already a **prompt
+row** rather than a constant, under the id `loop.system`, so a person replaces it
+by config before the host domain exists.
+
+Two of the six have an owner outside the loop today, and the loop duplicates
+neither: `schedule` is `eva.sched`'s policy over `executeToolGroup`'s ceiling,
+and `retry` is `eva.provider.retry`'s hook. When the host points land, those
+become per-instance rather than per-process.
 
 This is the shape both references arrived at. DeepSeek Harness's `agent-loop` is
 one row among 78 in its base bundle, sitting beside `compaction-basic`,
@@ -1696,6 +1711,15 @@ here that opens a Run and the only thing that closes one, so a native harness
 gets the same Recorder open, block grouping, provider hooks, Budget charge and
 close-on-interrupt every other caller gets.
 
+**A harness that wants tools reaches them through `run`, and the contract stays
+two members.** A Step is one model request plus the tool executions its response
+causes, and that is one Run: the harness names its tools on `RunInput.tools`,
+the Run runs the calls that response proposed, and `RunResult.calls` answers
+each proposal beside what the tool said. So the three records of a call commit
+inside the Run that proposed them rather than after it closed, and a third
+member handing a harness the pipeline would be a second thing here that writes
+into a Run.
+
 `report` commits one group through the same Recorder, outside any Run. The
 second member is there for one reason: a `verdict` is known only after the Run
 that produced the Candidate has closed, and it has to be on the Trace before a
@@ -1713,9 +1737,9 @@ field's own comment ties it to the wire format, and `payloads` in the acp
 package is what reads it. Synthesizing ACP updates so that reader could run
 would renumber block indices a Provider Turn already assigned, and it would give
 the seam a second record path. Empty is the truthful value, not a gap. The
-client half goes unused for the same reason: a native harness with no tools
-never calls `requestPermission`, and one with no wire never calls
-`sessionUpdate`.
+client half goes unused for the same reason: the tool pipeline's own gate is
+what reaches a person, so a native harness never calls `requestPermission` even
+when it does have tools, and one with no wire never calls `sessionUpdate`.
 
 A refusal is itself a Run, so `SessionAPI.submit` opens and closes one without
 taking a Provider Turn. That is the only Run boot opens outside `submit`, and no
