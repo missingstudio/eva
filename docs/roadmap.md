@@ -1509,7 +1509,7 @@ primitives differ. Vite through `vite-plus`, the repo's toolchain. TanStack
 Router for typed routes with no server runtime to deploy. Effect's React atom
 bindings, because `client-runtime` is Effect Streams. HTTP for calls and SSE
 for `watch`, because `watch` is one-way and SSE's `Last-Event-ID` is the
-Cursor with a standard name. Styling is whatever `packages/brand` fixes,
+Cursor with a standard name. Styling is whatever `packages/ui` fixes,
 because the terminal palette and the page share one brand or they are two
 products. Rejected: a server-rendered framework, because
 the page is static assets served by the binary and an SSR runtime would be a

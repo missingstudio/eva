@@ -1,0 +1,149 @@
+/* ===========================================================================
+   The bridge from shadcn/ui's semantic names to Eva's.
+
+   The components in this package come from the shadcn base-nova registry, and
+   they paint from shadcn's palette: `bg-primary`, `text-muted-foreground`,
+   `border-border`. Eva's palette is in tokens.css and answers to different
+   names. Rather than ship two palettes and let a reader find the seam, every
+   shadcn name that has an honest counterpart in the tokens is pointed at it.
+
+   This file is what an app imports. globals.css is not: it carries shadcn's
+   own neutral scale, its own font, and its own `dark` variant, and importing
+   it would replace the brand rather than bridge to it.
+
+   Import it after tokens.css. Two rules follow from that order, and both are
+   deliberate:
+
+     - `--color-muted` is redefined here. See the note above it.
+     - `--radius` is defined here, because tokens.css has no radius scale and
+       eight components read `var(--radius-*)` arithmetic.
+
+   The one distinction worth keeping: the tokens split the hairline between two
+   static surfaces from the boundary that says "this is a control", because
+   SC 1.4.11 asks 3:1 of the second and nothing of the first. shadcn spends one
+   `--border` on both. Here `--color-border` is the hairline and `--color-input`
+   is the control boundary, so a component that draws a control reaches for a
+   boundary that is measured for one.
+=========================================================================== */
+
+/*
+   The components live outside every app's Vite root, and Tailwind's content
+   detection skips node_modules — which is how this package resolves through a
+   workspace symlink. Without this, a component's classes are never generated
+   and it arrives unstyled.
+*/
+@source "../components/*.tsx";
+
+@theme inline {
+  /* Ground and ink. */
+  --color-background: var(--eva-bg);
+  --color-foreground: var(--eva-text);
+
+  /* Surfaces. A card is the raised step; a popover is the same field. */
+  --color-card: var(--eva-card);
+  --color-card-foreground: var(--eva-text);
+  --color-popover: var(--eva-card);
+  --color-popover-foreground: var(--eva-text);
+
+  /*
+     `--color-muted` is the one name where the two systems disagree outright.
+     Brand means a text grey by it; shadcn means the quietest surface off the
+     ground, and forty of the components paint `bg-muted` as their hover wash.
+     A chip painted in the text grey is a slab, so shadcn's meaning wins here
+     and the hairline is that quietest step.
+
+     The text grey keeps its value under shadcn's name for it. An app says
+     `text-muted-foreground` for secondary copy, never `text-muted`.
+  */
+  --color-muted: var(--eva-rule);
+  --color-muted-foreground: var(--eva-muted);
+
+  /* The accent carries primary. It is text-safe in both schemes; the mark is not. */
+  --color-primary: var(--eva-accent);
+  --color-primary-foreground: var(--eva-bg);
+
+  /* Secondary is a filled quiet control, which is the raised surface. */
+  --color-secondary: var(--eva-card);
+  --color-secondary-foreground: var(--eva-text);
+
+  /*
+     Brand has no destructive hue — nothing on either surface deletes anything.
+     Warning is the one alarm colour it does define, and it is a mark rather
+     than a text colour, so the components' tinted-background destructive
+     variants land on it correctly.
+  */
+  --color-destructive: var(--eva-warning);
+
+  /* Warning under its own name, for the variants added on top of the registry. */
+  --color-warning: var(--eva-warning);
+
+  /* Boundaries. The hairline and the control boundary stay distinct. */
+  --color-border: var(--eva-rule);
+  --color-input: var(--eva-border-control);
+  --color-ring: var(--eva-accent);
+
+  /* Streamdown draws its table and code containers on `bg-sidebar`. */
+  --color-sidebar: var(--eva-card);
+  --color-sidebar-foreground: var(--eva-text);
+  --color-sidebar-border: var(--eva-rule);
+  --color-sidebar-accent: var(--eva-rule);
+  --color-sidebar-accent-foreground: var(--eva-text);
+  --color-sidebar-primary: var(--eva-accent);
+  --color-sidebar-primary-foreground: var(--eva-bg);
+  --color-sidebar-ring: var(--eva-accent);
+}
+
+/*
+   The radius scale. tokens.css declares no radius, so without this the
+   components fall through to Tailwind's defaults — which happens to look
+   close, but means `rounded-[min(var(--radius-md),10px)]` silently reads a
+   number nobody chose. DESIGN.md §"Border Radius Scale" sets the step.
+*/
+@theme {
+  --radius: 0.5rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/*
+   Three components read bare custom properties inside `color-mix()` rather
+   than a Tailwind colour utility, so the `--color-*` aliases above never reach
+   them. `bubble` is the one in this package; the names are cheap to hold.
+*/
+:root,
+.dark {
+  --primary: var(--eva-accent);
+  --secondary: var(--eva-card);
+  --muted: var(--eva-rule);
+}
+
+@layer base {
+  /*
+     The components write a bare `border`, which is a width and no colour, and
+     expect the hairline to arrive from the base layer. Tailwind's own default
+     is `currentColor`, which would draw every card edge in the ink.
+  */
+  *,
+  ::after,
+  ::before {
+    border-color: var(--color-border);
+  }
+}
+
+/*
+   The focus ring, settled once.
+
+   tokens.css paints one global `:focus-visible` outline, chosen because an
+   outline never moves layout. Twenty-two components add their own
+   `focus-visible:ring-3 ring-ring/50` on top, and both would draw: a ring
+   inside the outline, at two different radii. The outline is the system's, so
+   the components' ring is suppressed rather than the other way round.
+
+   Unlayered, because a utility is what is being corrected and every layer
+   Tailwind defines is beaten by its own utilities layer.
+*/
+:focus-visible {
+  --tw-ring-shadow: 0 0 #0000;
+}

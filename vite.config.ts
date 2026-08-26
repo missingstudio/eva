@@ -46,7 +46,14 @@ export default defineConfig({
     // The exit-test fixture inputs are vendored data the measurement reads,
     // not code in the tree — one of them is a source file with deliberate
     // smells for a review Workflow to find.
-    ignorePatterns: ["dist/**", "coverage/**", "packages/exit-test/fixture/inputs/**"],
+    ignorePatterns: [
+      "dist/**",
+      "coverage/**",
+      "apps/*/.output/**",
+      "apps/*/.tanstack/**",
+      "apps/*/src/routeTree.gen.ts",
+      "packages/exit-test/fixture/inputs/**",
+    ],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -180,8 +187,25 @@ export default defineConfig({
         ["@missingstudio/eva-tui-core", "@missingstudio/eva-session-view"],
         "the terminal imports tui-core and the session view only",
       ),
-      // apps/* has no import rule on purpose: an app is the composition
+      // apps/cli has no import rule on purpose: an app is the composition
       // root, and composing is the one job that needs every layer at once.
+      // The two sites are the exception. They compose nothing, and they must
+      // never pull the kernel into a browser bundle, so they may reach one
+      // package and no other. Generated reference arrives as MDX.
+      layer(
+        ["packages/ui/**"],
+        ["@missingstudio/ui"],
+        "ui imports nothing internal — its own subpaths only",
+      ),
+      layer(
+        ["apps/www/**", "apps/docs/**"],
+        ["@missingstudio/ui"],
+        "a site imports the ui package only — reference arrives as MDX",
+      ),
+      {
+        files: ["apps/web/**", "apps/www/**", "apps/docs/**"],
+        plugins: ["typescript", "react"],
+      },
     ],
   },
 

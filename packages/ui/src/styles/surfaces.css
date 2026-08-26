@@ -1,0 +1,298 @@
+/* ===========================================================================
+   Surfaces — the panels, cards, and buttons everything sits on.
+
+   Eva is an instrument, so its surfaces are machined: a faint measurement grid
+   instead of paper grain, hairline rules instead of soft edges, and one dark
+   panel that reads as the terminal the product actually is.
+
+   Two rules run through the whole file. Backgrounds are flat — the only
+   gradient in the system is the hero heading text at the foot of this file.
+   And depth is a hairline and a tonal step; there is no shadow anywhere,
+   because a shadow is a light source, and this page has none.
+=========================================================================== */
+
+@layer components {
+  /*
+     The measurement grid. One repeating linear-gradient pair, masked so it
+     fades out rather than ending. It is the site's only texture, and it is a
+     line pattern rather than a wash.
+  */
+  .grid-surface {
+    position: relative;
+    overflow: hidden;
+  }
+  .grid-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, var(--eva-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--eva-grid) 1px, transparent 1px);
+    background-size: var(--eva-grid-cell) var(--eva-grid-cell);
+    mask-image: radial-gradient(120% 90% at 50% 0%, #000 0%, transparent 72%);
+  }
+
+  /*
+     The terminal panel. Eva's program is dark whatever the page is, so the
+     surface that stands in for it stays dark in both schemes — which is why
+     its ink is pinned rather than flipped. Anything drawn here reads the
+     `on-strong` tokens; the scheme-aware accent lands at 3.11:1 on this field
+     in light mode and fails.
+  */
+  .panel-terminal {
+    background: var(--eva-panel-ink);
+    color: var(--eva-on-strong);
+    border: 1px solid var(--eva-rule);
+  }
+  .panel-terminal :is(.text-muted, .muted) {
+    color: var(--eva-on-strong-muted);
+  }
+
+  /*
+     A hairline card. The border goes all the way around — a single-sided
+     border is never a card edge — and hover moves it one step stronger. No
+     shadow, and no lift: the tonal step from ground to card is the hierarchy.
+  */
+  .card-hairline {
+    border: 1px solid var(--eva-rule);
+    background: var(--eva-card);
+    border-radius: 0.75rem;
+    transition: border-color var(--dur-instant) var(--ease-fluid);
+  }
+  @media (hover: hover) {
+    .card-hairline:hover {
+      border-color: var(--eva-rule-strong);
+    }
+  }
+  .card-hairline:active {
+    transform: scale(0.98);
+  }
+
+  /*
+     Buttons. One shape across both surfaces — 8px, tight, almost rectangular.
+     A pill CTA at the density the documentation carries would compete with the
+     prose, so the pill is kept for the navigation island and the stage tag.
+
+     Padding is 8px by 12px and the label is weight 600, which puts a button at
+     about 40px tall: clear of the 24px floor, and close to the 44px a touch
+     target wants.
+  */
+  .btn-primary,
+  .btn-secondary,
+  .btn-accent,
+  .btn-quiet {
+    @apply inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-base font-semibold;
+    transition:
+      background-color var(--dur-instant) var(--ease-fluid),
+      border-color var(--dur-instant) var(--ease-fluid),
+      color var(--dur-instant) var(--ease-fluid),
+      filter var(--dur-instant) var(--ease-fluid),
+      transform var(--dur-instant) var(--ease-fluid);
+  }
+
+  /* The inverted CTA, and the loudest element on a page. One per view. */
+  .btn-primary {
+    background: var(--eva-text);
+    color: var(--eva-bg);
+  }
+
+  /* The outlined default. Its edge moves one step on hover. */
+  .btn-secondary {
+    border: 1px solid var(--eva-rule);
+    background: var(--eva-card);
+    color: var(--eva-text);
+  }
+
+  /* The periwinkle CTA. At most one per page. */
+  .btn-accent {
+    background: var(--eva-accent);
+    color: var(--eva-bg);
+  }
+
+  /*
+     The unlimited one, and the default for chrome. At the 48 buttons a
+     documentation page carries, a filled button is noise.
+  */
+  .btn-quiet {
+    color: var(--eva-lede);
+  }
+
+  /* The same, one step down, for a header row. */
+  .btn-header {
+    @apply inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold;
+    color: var(--eva-lede);
+    transition:
+      background-color var(--dur-instant) var(--ease-fluid),
+      color var(--dur-instant) var(--ease-fluid),
+      transform var(--dur-instant) var(--ease-fluid);
+  }
+
+  /*
+     The header step, for a filled button that sits in a row of chrome. The
+     navigation island is a band of controls, and an accent CTA at the body
+     step makes the island a third taller than the row it belongs to. Size
+     only: the fill, the shape and the weight do not change, so the button is
+     still the same component.
+  */
+  .btn-sm {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  /* An icon alone. It must carry an aria-label; a title never reaches touch. */
+  .btn-icon {
+    @apply inline-flex size-8 items-center justify-center rounded-lg;
+    color: var(--eva-muted);
+    transition:
+      background-color var(--dur-instant) var(--ease-fluid),
+      color var(--dur-instant) var(--ease-fluid),
+      transform var(--dur-instant) var(--ease-fluid);
+  }
+
+  @media (hover: hover) {
+    /* A 6% wash of the ink. Works in both schemes and adds no token. */
+    .btn-quiet:hover,
+    .btn-header:hover,
+    .btn-icon:hover {
+      background: color-mix(in oklch, var(--eva-text) 6%, transparent);
+      color: var(--eva-text);
+    }
+    .btn-secondary:hover {
+      border-color: var(--eva-rule-strong);
+    }
+    /* A filled button has no field to wash, so it lightens by 8% instead. */
+    .btn-primary:hover,
+    .btn-accent:hover {
+      filter: brightness(1.08);
+    }
+  }
+
+  /* Physical feedback, and distinct from hover. */
+  .btn-primary:active,
+  .btn-secondary:active,
+  .btn-accent:active,
+  .btn-quiet:active,
+  .btn-header:active,
+  .btn-icon:active {
+    transform: scale(0.98);
+  }
+
+  /*
+     Disabled is `aria-disabled`, never the attribute: the attribute takes the
+     control out of the tab order, and the explanation of why it is disabled
+     goes with it.
+  */
+  :is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-accent,
+    .btn-quiet,
+    .btn-header,
+    .btn-icon
+  )[aria-disabled="true"] {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+
+  /*
+     The menu control. Two lines that rotate and translate into a true X: they
+     never swap glyph and never simply disappear, so the control reads as one
+     object changing state rather than two icons trading places.
+
+     The rotation lives here rather than in a conditional class list, because
+     the open state is `aria-expanded` — which the control has to carry anyway
+     — and one declaration cannot then disagree with the other.
+  */
+  .hamburger {
+    position: relative;
+    display: block;
+    width: 1rem;
+    height: 1rem;
+  }
+  .hamburger span {
+    position: absolute;
+    inset-inline-start: 0;
+    display: block;
+    width: 1rem;
+    height: 1px;
+    background: currentColor;
+    transition: transform var(--dur-fast) var(--ease-fluid);
+  }
+  .hamburger span:first-child {
+    top: 0.3125rem;
+  }
+  .hamburger span:last-child {
+    top: 0.6875rem;
+  }
+  [aria-expanded="true"] .hamburger span:first-child {
+    transform: translateY(0.1875rem) rotate(45deg);
+  }
+  [aria-expanded="true"] .hamburger span:last-child {
+    transform: translateY(-0.1875rem) rotate(-45deg);
+  }
+
+  /*
+     A stage label. Eva says which roadmap stage an unshipped capability lands
+     in, everywhere it names one, so the marker is a component rather than a
+     span someone styles twice. The text names the stage, so colour never
+     carries it alone.
+  */
+  .stage-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid var(--eva-rule);
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.04em;
+    color: var(--eva-muted);
+    white-space: nowrap;
+  }
+  .stage-tag[data-shipping="true"] {
+    border-color: var(--eva-accent);
+    color: var(--eva-accent);
+  }
+
+  /*
+     The one gradient in the system: left to right across the hero headline's
+     own glyphs, never on a background. The end stop is the weakest point and
+     measures 5.50:1 on paper, 7.56:1 on the ground.
+
+     `background-clip: text` needs a transparent fill to show through, so a
+     browser that cannot paint it would render nothing. The @supports gate is
+     what keeps the headline visible in that case.
+  */
+  /*
+     An image sits on the page with no edge of its own, so a light screenshot
+     on a light ground floats and a dark one on a dark ground merges. A hairline
+     of the opposite ink at 8%, inset by 1px so it never grows the box, gives it
+     a boundary without giving it a frame.
+  */
+  .image-edge {
+    outline: 1px solid rgb(0 0 0 / 8%);
+    outline-offset: -1px;
+  }
+  .dark .image-edge {
+    outline-color: rgb(255 255 255 / 8%);
+  }
+
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    .heading-gradient {
+      /*
+         Interpolated in oklab, so the ramp keeps an even brightness instead of
+         dipping through the muted midpoint sRGB gives it.
+      */
+      background-image: linear-gradient(
+        to right in oklab,
+        var(--eva-heading-from),
+        var(--eva-heading-to)
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  }
+}

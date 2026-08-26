@@ -27,3 +27,8 @@ Thumbs.db
 .eva/
 plans/
 docs/adr
+
+# Website build output
+apps/*/.output/
+apps/*/.tanstack/
+apps/*/src/routeTree.gen.ts
