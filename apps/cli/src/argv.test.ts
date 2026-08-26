@@ -49,6 +49,19 @@ describe("parseArgv", () => {
     expect(ran(["config", "show"]).invocation).toEqual({ kind: "showConfig", overlays: {} })
   })
 
+  /**
+   * Asking a command group what it holds is a question. It used to be read as
+   * a mistake: the same bytes `--help` writes went where a failure is read,
+   * and the process left 1 behind. The two forms answer alike now.
+   */
+  it("answers the help of a command group, and exits 0", () => {
+    const bare = ran(["config"])
+    expect(bare.invocation).toEqual({ kind: "answered", code: 0 })
+    expect(bare.err).toBe("")
+    expect(bare.out).toContain("show")
+    expect(bare.out).toBe(ran(["config", "--help"]).out)
+  })
+
   // A flag is a layer, so a command that resolves config gets the flags
   // whichever side of the verb they were typed on.
   it.each([[["--model", "a/b", "config", "show"]], [["config", "show", "--model", "a/b"]]])(

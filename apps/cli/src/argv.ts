@@ -242,9 +242,25 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
       record({ kind: "untrust" })
     })
 
-  root
+  /**
+   * Asking a command group what it holds is a question, not a mistake. Left
+   * to commander a group with no action of its own writes its help where a
+   * failure is read and exits 1, so `eva config` and `eva config --help`
+   * printed the same bytes and disagreed about whether anything went wrong.
+   */
+  const config = root
     .command("config")
     .description("what a run would read")
+    // An action of its own is what stops commander from complaining, and it
+    // is also what drops the `help` subcommand a group gets for free, so the
+    // group asks for it back.
+    .helpCommand(true)
+    .action(() => {
+      config.outputHelp()
+      record({ kind: "answered", code: 0 })
+    })
+
+  config
     .command("show")
     .description("print the resolved config, and where each key came from")
     .action((_options: RootOptions, command: Command) => {
