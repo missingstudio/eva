@@ -17,6 +17,7 @@ import {
   ContextOutputUsage,
   ContextReasoningUsage,
 } from "./components/ai-elements/context.js"
+import { titleLine } from "./title.js"
 
 /**
  * What the page has of one Session's record: the fold, or not yet. It is a
@@ -149,6 +150,11 @@ export const Cost = ({ cost, ran }: { readonly cost: CostSummary; readonly ran: 
  * It takes no `Folded`, which is how the page keeps its promise that reading
  * is progressive: a long Session cannot be waited on here, because the fold
  * is not reachable from this component at all.
+ *
+ * The title is a Run's intent until an `info` gives a better one, and an
+ * intent is a whole prompt. The record is right to hold all of it and a
+ * heading is the wrong place to draw all of it, so the heading is one line
+ * and the record's own text is on the element behind it.
  */
 export const Named = ({
   session,
@@ -158,7 +164,9 @@ export const Named = ({
   readonly header: SessionHeader | undefined
 }) => (
   <>
-    <h1 className="text-3xl">{header?.title ?? "no title yet"}</h1>
+    <h1 className="text-3xl" title={header?.title}>
+      {titleLine(header?.title)}
+    </h1>
     <p className="text-muted text-sm">
       <code>{session}</code>
       {header?.updatedAt === undefined ? null : (

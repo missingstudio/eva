@@ -43,6 +43,12 @@ A Run says markdown — tables, links, fenced code — so the page renders it. A
 page that drew the source would be showing a reader the pipe rather than the
 answer.
 
+A Session's title is the intent a Run opened on until an `info` gives a better
+one, and an intent is a whole prompt. `headerFold` is right to hold all of it;
+a heading is the wrong place to draw all of it. So `src/title.ts` shapes one
+line for the heading and for the listing row, and the record's own text stays
+on the element behind it.
+
 A Block the page cannot draw is drawn as one it could not draw. A Surface may
 render less than another; it may never know more — so nothing is dropped, and
 a reader never finds a hole where the record holds something.
@@ -218,7 +224,8 @@ browser gets is proven against a real socket in
 [src/session.test.tsx](src/session.test.tsx) the Header before the fold, the
 tail after it and the cost line,
 [src/transcript.test.ts](src/transcript.test.ts) the follow itself — the fold,
-the tail, and the fold that replaces it — and
+the tail, and the fold that replaces it —
+[src/title.test.ts](src/title.test.ts) the shaping of a title, and
 [src/fold.test.ts](src/fold.test.ts) the count of folds. Run the suite from the
 repository root:
 

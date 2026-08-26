@@ -2,6 +2,7 @@ import type { SessionHeader } from "@missingstudio/eva-core"
 import { buildLine } from "./build.js"
 import { sessionHref } from "./paths.js"
 import { useSessions } from "./sessions.js"
+import { titleLine } from "./title.js"
 
 /**
  * One Session, as its Header names it. A Run says the title, so a Session
@@ -9,14 +10,18 @@ import { useSessions } from "./sessions.js"
  * left off the page, because a Session a person cannot see is one they cannot
  * open.
  *
+ * The title is one line here for the same reason it is one line on the
+ * Session: a Run's intent is a whole prompt, and a listing where one row is a
+ * page of text is a listing nobody can scan.
+ *
  * A plain anchor, so the listing is provable without a router standing behind
  * it. `eva.web` answers a path with no extension with the page, so the route
  * is resolved on the load the anchor makes.
  */
 const Row = ({ session }: { readonly session: SessionHeader }) => (
   <li className="flex flex-wrap items-baseline gap-2 border-rule border-t py-2.5">
-    <a className="flex-[1_1_12rem] truncate" href={sessionHref(session.id)}>
-      {session.title ?? "no title yet"}
+    <a className="flex-[1_1_12rem] truncate" href={sessionHref(session.id)} title={session.title}>
+      {titleLine(session.title)}
     </a>
     <code className="text-muted text-sm">{session.id}</code>
     {session.updatedAt === undefined ? null : (
