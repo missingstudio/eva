@@ -6,12 +6,12 @@ import { boot, buildOf } from "@missingstudio/eva-boot"
 import { catalogModels } from "@missingstudio/eva-catalog-models"
 import { catalogPrices } from "@missingstudio/eva-catalog-prices"
 import { config } from "@missingstudio/eva-config"
-import { newSessionID } from "@missingstudio/eva-core"
+import { newSessionID, readTraceDir } from "@missingstudio/eva-core"
 import { resolveConfiguration } from "@missingstudio/eva-kernel"
 import { prompt } from "@missingstudio/eva-prompt"
 import { providerAnthropic } from "@missingstudio/eva-provider-anthropic"
 import { providerRetry } from "@missingstudio/eva-provider-retry"
-import { readTrace, type Event } from "@missingstudio/eva-schema"
+import type { Event } from "@missingstudio/eva-schema"
 import type { Plugin } from "@missingstudio/eva-sdk"
 import { sessionJsonl } from "@missingstudio/eva-session-jsonl"
 import { openRow, type Cassette } from "@missingstudio/eva-testkit"
@@ -49,9 +49,9 @@ const CARRIES: readonly Plugin[] = [
 
 export interface FixtureRun {
   readonly workflow: (typeof WORKFLOWS)[number]
-  // Where the Trace lands. A file already there is removed first: the Trace
-  // this answers is this run's, whole.
-  readonly tracePath: string
+  // Where the Trace lands: a directory, one file per Session. Anything
+  // already there is removed first: the Trace this answers is this run's.
+  readonly traceDir: string
   readonly passes?: number
   /**
    * Riders loaded after the fixture's own plugins — the response recorder,
@@ -70,10 +70,10 @@ export interface FixtureRun {
  */
 export const runFixture = async (run: FixtureRun): Promise<readonly Event[]> => {
   const scratch = mkdtempSync(join(tmpdir(), "eva-fixture-"))
-  const hermit = hermeticEnv(scratch, run.tracePath)
+  const hermit = hermeticEnv(scratch, run.traceDir)
   const input = readFileSync(inputOf(run.workflow), "utf8")
   const riders = run.plugins ?? []
-  rmSync(run.tracePath, { force: true })
+  rmSync(run.traceDir, { recursive: true, force: true })
 
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -99,7 +99,7 @@ export const runFixture = async (run: FixtureRun): Promise<readonly Event[]> => 
 
       // Closing the scope flushes the jsonl sink before the trace is read.
       yield* Scope.close(scope, Exit.void)
-      return readTrace(run.tracePath)
+      return readTraceDir(run.traceDir)
     }),
   )
 }

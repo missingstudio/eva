@@ -27,11 +27,11 @@ describe.each(WORKFLOWS)("the %s cassette through the fixture", (name) => {
 
   it("replays to the committed golden, byte for byte", async () => {
     const cassette = cassetteOf(name)
-    const tracePath = join(mkdtempSync(join(tmpdir(), "eva-replay-")), `${name}.jsonl`)
+    const traceDir = join(mkdtempSync(join(tmpdir(), "eva-replay-")), name)
     const events = await runFixture({
       workflow: name,
       passes: cassette.passes,
-      tracePath,
+      traceDir,
       plugins: [recorded(cassette)],
     })
 

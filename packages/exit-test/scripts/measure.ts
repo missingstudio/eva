@@ -51,13 +51,13 @@ const eva = join(repo, "apps", "cli", "src", "eva.ts")
 
 interface Task {
   readonly workflow: (typeof WORKFLOWS)[number]
-  readonly tracePath: string
+  readonly traceDir: string
 }
 
 const tasks: Task[] = WORKFLOWS.flatMap((workflow) =>
   Array.from({ length: each }, (_, index) => ({
     workflow,
-    tracePath: join(out, "traces", `${workflow}.${index + 1}.jsonl`),
+    traceDir: join(out, "traces", `${workflow}.${index + 1}`),
   })),
 )
 
@@ -67,7 +67,7 @@ const run = (task: Task): Promise<void> =>
       cwd: out,
       // The hermetic world, and where this child's Trace lands. The
       // in-process half says it the same way, so the gate proves it.
-      env: hermeticEnv(out, task.tracePath, endpoint),
+      env: hermeticEnv(out, task.traceDir, endpoint),
       stdio: ["pipe", "ignore", "pipe"],
     })
     let heard = ""
@@ -96,7 +96,7 @@ const worker = async (): Promise<void> => {
 }
 await Promise.all(Array.from({ length: Math.min(jobs, tasks.length) }, worker))
 
-const report = gate(tasks.map((task) => ({ workflow: task.workflow, path: task.tracePath })))
+const report = gate(tasks.map((task) => ({ workflow: task.workflow, path: task.traceDir })))
 
 // The refusal: no rate is reported at all, so nothing else is printed.
 if (report.said.length === 0) {

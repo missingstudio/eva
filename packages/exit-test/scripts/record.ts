@@ -16,8 +16,9 @@
 //
 // Then regenerate the goldens: `bun packages/exit-test/scripts/generate.ts`
 import { mkdirSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { Payload } from "@missingstudio/eva-schema"
+import { encodeLine, type Payload } from "@missingstudio/eva-schema"
 import { define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { WORKFLOWS } from "../src/fixture.js"
@@ -38,12 +39,17 @@ for (const name of WORKFLOWS) {
     }),
   })
 
-  await runFixture({
+  const events = await runFixture({
     workflow: name,
     passes: each,
-    tracePath: join(root, "traces", `${name}.jsonl`),
+    traceDir: join(tmpdir(), `eva-record-${name}`),
     plugins: [recorder],
   })
+
+  // The vendored trace stays one file: the run's per-Session files, in
+  // creation order, flattened for the goldens and the gate tests to read.
+  mkdirSync(join(root, "traces"), { recursive: true })
+  writeFileSync(join(root, "traces", `${name}.jsonl`), events.map(encodeLine).join("\n") + "\n")
 
   mkdirSync(join(root, "cassettes"), { recursive: true })
   writeFileSync(

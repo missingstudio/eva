@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs"
-import { readTrace, type Event } from "@missingstudio/eva-schema"
+import { readArchive } from "@missingstudio/eva-core"
+import type { Event } from "@missingstudio/eva-schema"
 import { readingOf, repairsOf, said } from "./score.js"
 
 // The line, as plan 001 writes it into the roadmap: first-pass validity at
@@ -19,11 +19,17 @@ export const NO_CANDIDATE_SHARE = 0.02
 export const refuses = (unproduced: number, runs: number): boolean =>
   unproduced > runs * NO_CANDIDATE_SHARE
 
-// One Run of one Workflow, and the trace file its process left.
+// One Run of one Workflow, and the trace its process left — a directory
+// of per-Session files from a live child, or one vendored file.
 export interface TracedRun {
   readonly workflow: string
   readonly path: string
 }
+
+// Whichever shape the child left it in — a directory of per-Session files
+// from a live run, or one vendored file. The archive read owns the
+// difference, so the measurement never asks what it is holding.
+const eventsAt = (path: string): readonly Event[] => readArchive(path)
 
 export interface GateReport {
   // The models the Runs actually reported, not the ones config asked for —
@@ -45,7 +51,7 @@ export interface GateReport {
  * printed number and the gated number are one value.
  */
 export const gate = (runs: readonly TracedRun[]): GateReport => {
-  // One trace file per process, read back whole. A file a killed child left
+  // One trace per process, read back whole. A trace a killed child left
   // unreadable is a Run that produced nothing to judge.
   const byWorkflow = new Map<string, Event[]>()
   const unproduced = new Map<string, number>()
@@ -58,7 +64,7 @@ export const gate = (runs: readonly TracedRun[]): GateReport => {
   for (const run of runs) {
     let events: readonly Event[] = []
     try {
-      events = existsSync(run.path) ? readTrace(run.path) : []
+      events = eventsAt(run.path)
     } catch {
       events = []
     }

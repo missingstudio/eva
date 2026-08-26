@@ -29,14 +29,15 @@ export const wrongEndpoint = (ambient: string | undefined, pinned: string): bool
 const TRACE_JSONL = "eva.trace.jsonl"
 
 /**
- * The inline config layer that points one Run's Trace at one file. It is a
- * layer and not an edit of the resolved list, so the in-process Run and the
- * child the fan-out spawns say it the same way and the deterministic gate
- * proves the words the measurement sends. The path is written as JSON, so a
- * path that holds a quote or a backslash stays one scalar.
+ * The inline config layer that points one Run's Trace at one directory —
+ * the JSONL sink keeps one file per Session inside it. It is a layer and
+ * not an edit of the resolved list, so the in-process Run and the child the
+ * fan-out spawns say it the same way and the deterministic gate proves the
+ * words the measurement sends. The path is written as JSON, so a path that
+ * holds a quote or a backslash stays one scalar.
  */
-const tracedAt = (path: string): string =>
-  `plugins:\n  - { id: ${TRACE_JSONL}, options: { path: ${JSON.stringify(path)} } }\n`
+const tracedAt = (dir: string): string =>
+  `plugins:\n  - { id: ${TRACE_JSONL}, options: { dir: ${JSON.stringify(dir)} } }\n`
 
 /**
  * The environment one hermetic Run gets: an empty user config in the given
@@ -51,7 +52,7 @@ const tracedAt = (path: string): string =>
  */
 export const hermeticEnv = (
   scratch: string,
-  tracePath: string,
+  traceDir: string,
   endpoint: string = ENDPOINT,
 ): NodeJS.ProcessEnv => {
   const userConfig = join(scratch, "user-config.yaml")
@@ -60,7 +61,7 @@ export const hermeticEnv = (
     ...process.env,
     EVA_CONFIG: userConfig,
     EVA_CONFIG_DIR: FIXTURE,
-    EVA_CONFIG_CONTENT: tracedAt(tracePath),
+    EVA_CONFIG_CONTENT: tracedAt(traceDir),
     ANTHROPIC_BASE_URL: endpoint,
   }
 }

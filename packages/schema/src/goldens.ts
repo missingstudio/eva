@@ -3,9 +3,14 @@ import { decodeLine } from "./codec.js"
 import type { Event } from "./event.js"
 
 /**
- * Reads one Trace file: one encoded Event per line, blank lines dropped.
- * Every fixture pipeline and every golden test reads a Trace this way, and
- * the read was spelled at four sites before it lived here.
+ * Reads one file of encoded Events, one per line, blank lines dropped.
+ * This is the codec reading its own bytes back, which is why it lives here
+ * and refuses nothing: a fixture or a golden that will not decode is a
+ * test failure worth seeing whole.
+ *
+ * How a Trace is laid out on disk — one file, or a directory of them, or a
+ * tear at the end of one — is not the codec's question. `readArchive` in
+ * core owns that.
  */
 export const readTrace = (path: string): readonly Event[] =>
   readFileSync(path, "utf8").split("\n").filter(Boolean).map(decodeLine)
