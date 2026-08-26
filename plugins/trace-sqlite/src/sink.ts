@@ -9,7 +9,6 @@ import {
   headOfEvents,
   headRowOf,
   PartialRecommit,
-  readTraceFile,
   sessionsOf,
   sinkOf,
   stampGroup,
@@ -21,6 +20,7 @@ import {
   type TraceSink,
   type TraceStore,
 } from "@missingstudio/eva-core"
+import { readTraceFile } from "@missingstudio/eva-core/archive"
 import { HEADER_RULE, sessionID, type Event, type SessionID } from "@missingstudio/eva-schema"
 import { Effect, Stream } from "effect"
 

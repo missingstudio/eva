@@ -1,4 +1,4 @@
-import { expand } from "@missingstudio/eva-core"
+import { expand } from "@missingstudio/eva-core/local"
 import { declare, define } from "@missingstudio/eva-sdk"
 import { Effect, Scope } from "effect"
 import { makeSqliteSink } from "./sink.js"

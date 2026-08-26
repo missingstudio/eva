@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { expand } from "@missingstudio/eva-core"
+import { expand } from "@missingstudio/eva-core/local"
 import { Effect } from "effect"
 import { parse } from "yaml"
 import { deepMerge, leaves } from "./mapping.js"

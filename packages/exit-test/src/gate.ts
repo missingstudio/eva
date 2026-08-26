@@ -1,4 +1,4 @@
-import { readArchive } from "@missingstudio/eva-core"
+import { readArchive } from "@missingstudio/eva-core/archive"
 import type { Event } from "@missingstudio/eva-schema"
 import { readingOf, repairsOf, said } from "./score.js"
 

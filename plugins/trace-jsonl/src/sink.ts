@@ -12,13 +12,11 @@ import { join } from "node:path"
 import {
   headOfEvents,
   sinkOf,
-  traceEvents,
-  traceText,
-  SUFFIX,
   type SessionHeader,
   type StampedStore,
   type TraceSink,
 } from "@missingstudio/eva-core"
+import { traceEvents, traceText, SUFFIX } from "@missingstudio/eva-core/archive"
 import {
   decodeLine,
   encodeLine,
