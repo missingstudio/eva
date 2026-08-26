@@ -1533,8 +1533,8 @@ Trace. Ships four things: `packages/session-view` (the fold, moved out of
 `plugins/web` serving the built assets from the artifact; and `apps/web` as a
 read-only page.
 
-The write half is W2's, because a page that takes no input cannot use it and a
-wire nobody calls is a wire nobody tested. Three fillers, one interface, no
+The write half waits for stage 2, because it is the half that needs the
+permission gate that stage builds anyway. Three fillers, one interface, no
 rewrite: W0's local filler proved the shape, W1's HTTP filler proves the shape
 was right, stage 2 completes the surface. If the seam does not survive its
 second filler, that is the finding, and it is cheaper here than at stage 2.
@@ -1560,10 +1560,11 @@ Disable `eva.web` and nothing else degrades. The terminal and the page render
 one transcript from **one fold**. The count of Session API calls in `apps/web`
 that do not go through `client-runtime` is zero, or W0 was not done.
 
-**W2 — the page that prompts.** Builds on W1 and stage 2. `plugins/api` gains
-the write half — `submit`, `cancel`, `answer`, `model.set` — and `plugins/web`
-implements the `Frontend`, so `ask` reaches a browser. A whole Session becomes
-possible there: prompt, answer a permission request, steer, switch models.
+**W2 — the page that prompts.** Builds on W1 and stage 2. The page calls the
+write half stage 2 put on the wire — `submit`, `cancel`, `answer`, `model.set`
+— and `plugins/web` implements the `Frontend`, so `ask` reaches a browser. A
+whole Session becomes possible there: prompt, answer a permission request,
+steer, switch models.
 
 Two surfaces at once is the case to get right. A permission request is one
 Question with one Resolution; the first answer resolves it and the second

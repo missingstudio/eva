@@ -2238,6 +2238,24 @@ export interface SessionAPI {
 A surface reads **two** sources and never confuses them: `watch` while a Run is
 open, `attach` for everything committed. The stream is never the record.
 
+**Eight of the nine are on the socket, both halves.** `list`, `attach`, `watch`
+and `model.get` are `GET`s; `submit` and `cancel` are `POST`s on the Session
+they act in; `model.set` and `answer` are `PUT`s, because asking twice sets the
+same value. `create` is on neither half: a page that takes no input opens no
+Session, so the composition root opens one beside the wire.
+
+What travels is the contract's own shapes, with no envelope: a `SubmitInput`
+body _is_ the Prompt, and a write answers a status and nothing else. A body the
+wire cannot read is refused whole and never applied in part.
+
+**A write carries a client-minted key**, in an `Idempotency-Key` header rather
+than in a body the no-envelope rule keeps clear. A write has no error channel,
+so a call that cannot reach the far side waits and asks again — and a `submit`
+whose answer was lost would otherwise open a second Run. The far side answers a
+repeated key from the write it already made. It is also why a write runs on a
+fiber of its own rather than inside the request: a dropped connection then
+costs a repaint and not a Run, and the record is where the Run's outcome is.
+
 ### 14.3 The Frontend — what a surface implements
 
 Everything Eva needs back from a surface fits here, and it is small on purpose.
