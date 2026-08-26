@@ -57,6 +57,16 @@ export interface ToolInfo {
   description: string
   kind: ToolKind
   input: unknown
+  /**
+   * Whether this call may run beside another one. The runtime classifies
+   * parallel safety and the model never does, so the claim is the tool's own
+   * — and it reads the arguments, because a tool that is safe for one input
+   * and not for another says which is which per call.
+   *
+   * A row that carries none is unclassified and runs alone. Nothing widens
+   * that.
+   */
+  parallelSafe?: (input: unknown) => boolean
   execute?: (input: unknown, context: ToolContext) => Effect.Effect<ToolResult>
 }
 
@@ -244,4 +254,121 @@ export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, cal
   const result =
     deps.afterExecute === undefined ? answered : yield* deps.afterExecute(call, answered)
   return yield* closed(result)
+})
+
+/**
+ * How many parallel-safe calls run at once when a caller names no bound. A
+ * group is as wide as the model wrote it, and a hundred reads at once is a
+ * hundred open file handles, so the group runs under a ceiling. Eight is a
+ * ceiling and not a target.
+ */
+export const TOOL_GROUP_LIMIT = 8
+
+export interface ToolGroupDeps extends ToolDeps {
+  /**
+   * A lower ceiling than `TOOL_GROUP_LIMIT`, for a caller that wants one. A
+   * bound below one is read as one, so a caller cannot remove the ceiling by
+   * naming a smaller number than there is.
+   */
+  readonly limit?: number
+}
+
+/**
+ * Whether one call may run beside its neighbours. A row that carries no
+ * `parallelSafe` is unclassified and runs alone, and a classifier that throws
+ * is read the same way: the runtime fails closed to serial rather than widen
+ * what a tool did not claim.
+ */
+const runsBeside = (tool: ToolInfo | undefined, args: unknown): boolean => {
+  if (tool?.parallelSafe === undefined) return false
+  try {
+    return tool.parallelSafe(args) === true
+  } catch {
+    return false
+  }
+}
+
+// One call admitted to a parallel window, with the row that classified it.
+interface Admitted {
+  readonly call: ToolCall
+  readonly tool: ToolInfo | undefined
+}
+
+/**
+ * One group of tool calls, as one provider response proposed them. Every
+ * result comes back in the order the calls were made, whatever order they
+ * finished in.
+ *
+ * The group is split into windows. A run of consecutive parallel-safe calls is
+ * one window and runs together under the bound; every other call is a
+ * **barrier** and is a window of one, so everything before it commits before
+ * it starts and nothing after it starts until it has committed. An
+ * unclassified tool is not parallel-safe, which is what makes the split fail
+ * closed.
+ *
+ * A parallel window's records are held until the window ends and are then
+ * committed call by call in source order, so the Trace reads the same bytes
+ * whichever call finished first. Nothing commits early: a call that answered
+ * while its neighbours still work holds its records in this group's own
+ * buffer, and a window that dies commits none of them rather than leaving
+ * half a window on the record.
+ *
+ * A barrier emits straight through, because nothing runs beside it — which is
+ * how a command that streams its output still streams.
+ *
+ * A failure stays with the call that failed. Every ending a tool has is a
+ * Disposition, so a sibling that could not do the work answers `failed` and
+ * the rest of the window answers for itself.
+ */
+export const executeToolGroup = Effect.fn("core.tool.group")(function* (
+  deps: ToolGroupDeps,
+  calls: readonly ToolCall[],
+) {
+  const limit = Math.max(1, deps.limit ?? TOOL_GROUP_LIMIT)
+  const results: ToolResult[] = []
+
+  /**
+   * One call of a parallel window, with its records held back. It runs the
+   * row that classified it, so a registry rebuilt while the window is open
+   * cannot put a tool it now calls unsafe beside another one.
+   */
+  const held = ({ call, tool }: Admitted) => {
+    const said: Payload[] = []
+    const buffered: ToolDeps = {
+      ...deps,
+      tool: () => Effect.succeed(tool),
+      emit: (payload) => Effect.sync(() => void said.push(payload)),
+    }
+    return Effect.map(executeTool(buffered, call), (result) => ({ result, said }))
+  }
+
+  const window = Effect.fn("core.tool.group.window")(function* (admitted: readonly Admitted[]) {
+    const ran = yield* Effect.forEach(admitted, held, { concurrency: limit })
+    for (const one of ran) {
+      for (const payload of one.said) yield* deps.emit(payload)
+      results.push(one.result)
+    }
+  })
+
+  let admitted: Admitted[] = []
+  for (const call of calls) {
+    const tool = yield* deps.tool(call)
+    if (runsBeside(tool, call.args)) {
+      admitted.push({ call, tool })
+      continue
+    }
+    yield* window(admitted)
+    admitted = []
+    /**
+     * A barrier is looked up twice — once here to classify it, once by the
+     * pipeline to run it — and the second read is the one that runs. So a
+     * tool domain rebuilt while the group was in flight decides the barrier,
+     * which is what a mode change needs.
+     */
+    results.push(yield* executeTool(deps, call))
+  }
+  yield* window(admitted)
+
+  const answered: readonly ToolResult[] = results
+  return answered
 })

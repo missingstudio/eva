@@ -371,6 +371,13 @@ or more. A Workflow's Step causes none, and a Repair is a Step. DeepSeek
 Harness's word, and precise.
 _Avoid_: Turn unqualified, stage, task, job
 
+**Barrier**:
+A tool call that runs alone inside a Step: everything before it commits before
+it starts, and nothing after it starts until it has committed. A call the
+runtime has not classified parallel-safe is one, so unclassified fails closed.
+_Avoid_: Lock, fence, serial call, Scheduler (a Scheduler admits work to
+workers, which is a different thing)
+
 **Agent half**:
 The side of the protocol a Harness implements: create a session, prompt, cancel,
 fork, resume, and report updates.

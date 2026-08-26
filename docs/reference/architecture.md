@@ -405,6 +405,8 @@ export interface ToolInfo {
   kind: ToolKind
   /** JSON Schema, the way a Validator is handed one. */
   input: unknown
+  /** Whether a call may run beside another. A row with none runs alone. */
+  parallelSafe?: (input: unknown) => boolean
   execute?: (input: unknown, context: ToolContext) => Effect.Effect<ToolResult>
 }
 ```
@@ -413,6 +415,15 @@ export interface ToolInfo {
 `tool_result`; a tool writes its own `tool_update` records in between. The
 call record lands before the tool runs, because the fold joins the records by
 the call id and drops an orphan without a word.
+
+`executeToolGroup` runs the group one provider response proposed. Ordering a
+group is not something a hook can do — a hook fires per call and a barrier is
+a property of the group — so the algorithm sits beside `executeTool`, where a
+harness plugin can reach it, and the policy it reads is `eva.sched`'s. A run
+of consecutive parallel-safe calls is one window, bounded by
+`TOOL_GROUP_LIMIT`; every other call is a Barrier and is a window of one. A
+window's records are held until it ends and then commit call by call in source
+order, so the Trace reads the same bytes whichever call finished first.
 
 ### 4.3 A domain draft
 

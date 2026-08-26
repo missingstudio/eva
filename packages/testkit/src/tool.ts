@@ -1,5 +1,11 @@
 import { toolDeps, type Kernel } from "@missingstudio/eva-boot"
-import { executeTool, type ToolContext, type ToolResult } from "@missingstudio/eva-core"
+import {
+  executeTool,
+  executeToolGroup,
+  type ToolContext,
+  type ToolGroupDeps,
+  type ToolResult,
+} from "@missingstudio/eva-core"
 import { sessionID, type Payload, type SessionID } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 
@@ -19,10 +25,26 @@ export interface CallOptions {
   // Where the payloads go beside the log: a Recorder, for a suite that wants
   // the call on a real Trace.
   readonly emit?: (payload: Payload) => Effect.Effect<void>
+  // A lower bound on a parallel window than the group runner's own.
+  readonly limit?: number
+}
+
+// One call of a group, as a test writes one. The id is the group's position
+// when a test names none, so the records of a group read in source order.
+export interface GroupCall {
+  readonly name: string
+  readonly args?: unknown
+  readonly id?: string
 }
 
 export interface Calling {
   readonly call: (name: string, args?: unknown, id?: string) => Effect.Effect<ToolResult>
+  /**
+   * One group of calls, scheduled the way a harness schedules one: the
+   * parallel-safe calls run together, every other call is a barrier, and the
+   * results come back in the order they were made.
+   */
+  readonly group: (calls: readonly GroupCall[]) => Effect.Effect<readonly ToolResult[]>
   // Every payload the calls made, in the order they were made.
   readonly said: () => readonly Payload[]
 }
@@ -40,17 +62,23 @@ export const calling = (kernel: Kernel, options: CallOptions = {}): Calling => {
       return options.emit === undefined ? Effect.void : options.emit(payload)
     })
 
-  const deps = toolDeps(kernel, emit)
+  const deps: ToolGroupDeps = {
+    ...toolDeps(kernel, emit),
+    ...(options.limit === undefined ? {} : { limit: options.limit }),
+  }
   let counted = 0
+  const session = options.session ?? CALLING_SESSION
+  const named = (one: GroupCall) => ({
+    id: one.id ?? `call_${(counted += 1)}`,
+    name: one.name,
+    args: one.args,
+    session,
+  })
 
   return {
     call: (name, args, id) =>
-      executeTool(deps, {
-        id: id ?? `call_${(counted += 1)}`,
-        name,
-        args,
-        session: options.session ?? CALLING_SESSION,
-      }),
+      executeTool(deps, named({ name, args, ...(id === undefined ? {} : { id }) })),
+    group: (calls) => executeToolGroup(deps, calls.map(named)),
     said: () => said,
   }
 }

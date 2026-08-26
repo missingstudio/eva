@@ -1,14 +1,17 @@
 import { sessionID, type Payload } from "@missingstudio/eva-schema"
-import { Effect } from "effect"
+import { Deferred, Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import {
   executeTool,
+  executeToolGroup,
   strictest,
   toolText,
+  TOOL_GROUP_LIMIT,
   type Decided,
   type ToolCall,
   type ToolDecision,
   type ToolDeps,
+  type ToolGroupDeps,
   type ToolInfo,
   type ToolResult,
 } from "./tool.js"
@@ -285,5 +288,337 @@ describe("the observing boundary after a call", () => {
 
     expect(seen).toEqual([])
     expect(result.disposition).toBe("denied")
+  })
+})
+
+/**
+ * The safety net under every latch below. No test waits for it when the
+ * schedule is right, and a test that does wait fails with its own words
+ * instead of hanging until the runner gives up.
+ */
+const WAITING = "2 seconds"
+
+/**
+ * What one group left behind: the records that reached the Trace, and which
+ * calls had already committed when each tool started. A call that names the
+ * one before it did not start until that call was on the record.
+ */
+interface Board {
+  readonly said: Payload[]
+  readonly marks: { by: string; saw: readonly string[] }[]
+}
+
+const board = (): Board => ({ said: [], marks: [] })
+
+// The calls whose result is on the record. A `tool_result` is the last of a
+// call's three records, so a call it names has committed whole.
+const committed = (at: Board): readonly string[] =>
+  at.said.filter((payload) => payload.kind === "tool_result").map((payload) => payload.id)
+
+const watcher = (id: string, at: Board, safe: boolean): ToolInfo => ({
+  id,
+  kind: "read",
+  description: "watches",
+  input: {},
+  ...(safe ? { parallelSafe: () => true } : {}),
+  execute: () =>
+    Effect.sync(() => {
+      at.marks.push({ by: id, saw: committed(at) })
+      return toolText("ok", id)
+    }),
+})
+
+/**
+ * Tools that count how many of them are in flight at once. Each one waits for
+ * the count to reach `wanted`, and the last to arrive releases the rest, so
+ * the highest count is a fact about the schedule rather than about a clock.
+ */
+const counting = (ids: readonly string[], wanted: number) =>
+  Effect.gen(function* () {
+    const full = yield* Deferred.make<boolean>()
+    const state = { now: 0, most: 0 }
+    const rows = ids.map(
+      (id): ToolInfo => ({
+        id,
+        kind: "read",
+        description: "counts",
+        input: {},
+        parallelSafe: () => true,
+        execute: () =>
+          Effect.gen(function* () {
+            state.now += 1
+            state.most = Math.max(state.most, state.now)
+            if (state.now >= wanted) yield* Deferred.succeed(full, true)
+            const met = yield* Deferred.await(full).pipe(
+              Effect.timeout(WAITING),
+              Effect.orElseSucceed(() => false),
+            )
+            state.now -= 1
+            return met ? toolText("ok", id) : toolText("failed", `${id} ran alone`)
+          }),
+      }),
+    )
+    return { rows, state }
+  })
+
+const grouping = async (
+  rows: readonly ToolInfo[],
+  wanted: readonly { readonly name: string; readonly args?: unknown }[],
+  options: { readonly at?: Board; readonly limit?: number } = {},
+): Promise<{ results: readonly ToolResult[]; said: readonly Payload[] }> => {
+  const at = options.at ?? board()
+  const deps: ToolGroupDeps = {
+    tool: (one) => Effect.succeed(rows.find((row) => row.id === one.name)),
+    emit: (payload) => Effect.sync(() => void at.said.push(payload)),
+    ...(options.limit === undefined ? {} : { limit: options.limit }),
+  }
+  const results = await Effect.runPromise(
+    executeToolGroup(
+      deps,
+      wanted.map((one, index) => ({
+        id: `call_${index + 1}`,
+        name: one.name,
+        args: one.args ?? {},
+        session: sessionID("sess_tool"),
+      })),
+    ),
+  )
+  return { results, said: at.said }
+}
+
+// Which calls had committed when one tool started, by the tool's own name.
+const sawBy = (at: Board, by: string): readonly string[] =>
+  at.marks.find((mark) => mark.by === by)?.saw ?? []
+
+describe("two parallel-safe calls", () => {
+  /**
+   * A latch and not a clock: neither call is released until both have arrived,
+   * so an overlap that did not happen cannot pass this. The repeat is what
+   * makes it a proof rather than one lucky schedule.
+   */
+  it("overlap", { repeats: 25 }, async () => {
+    const { rows, state } = await Effect.runPromise(counting(["one", "two"], 2))
+    const { results } = await grouping(rows, [{ name: "one" }, { name: "two" }])
+
+    expect(state.most).toBe(2)
+    expect(results.map((result) => result.disposition)).toEqual(["ok", "ok"])
+  })
+})
+
+describe("a call that is not parallel-safe", () => {
+  /**
+   * The barrier clause, whole: the window before it commits before it starts,
+   * and its own records commit before the call after it starts. Both halves
+   * are read off what each tool saw, so neither is a timing assertion.
+   */
+  it("is a barrier: nothing after it starts until it has committed", async () => {
+    const at = board()
+    const rows = [watcher("one", at, true), watcher("edit", at, false), watcher("two", at, true)]
+    const { said } = await grouping(rows, [{ name: "one" }, { name: "edit" }, { name: "two" }], {
+      at,
+    })
+
+    expect(sawBy(at, "one")).toEqual([])
+    expect(sawBy(at, "edit")).toEqual(["call_1"])
+    expect(sawBy(at, "two")).toEqual(["call_1", "call_2"])
+    expect(said.filter((payload) => payload.kind === "tool_result").map((one) => one.id)).toEqual([
+      "call_1",
+      "call_2",
+      "call_3",
+    ])
+  })
+
+  // Nothing runs beside a barrier, so its own records go straight to the
+  // Trace and a command that streams its output still streams.
+  it("commits its records as it makes them", async () => {
+    const at = board()
+    const { said } = await grouping([watcher("edit", at, false)], [{ name: "edit" }], { at })
+
+    expect(said.map((payload) => payload.kind)).toEqual(["tool_call", "tool_update", "tool_result"])
+  })
+})
+
+describe("an unclassified tool", () => {
+  // Fail closed to serial: a row that claims nothing runs alone.
+  it("runs alone", async () => {
+    const at = board()
+    const rows = [watcher("one", at, false), watcher("two", at, false)]
+    await grouping(rows, [{ name: "one" }, { name: "two" }], { at })
+
+    expect(at.marks.map((mark) => mark.saw)).toEqual([[], ["call_1"]])
+  })
+
+  /**
+   * The classification reads the arguments, so the same tool is a barrier for
+   * one input and a neighbour for another. Records held back are the mark of
+   * a parallel window: a call that saw nothing started before the call before
+   * it had committed.
+   */
+  it("runs alone when its classifier answers false for this input", async () => {
+    const choosy = (id: string, at: Board): ToolInfo => ({
+      ...watcher(id, at, false),
+      parallelSafe: (input) => (input as { readonly safe?: unknown }).safe === true,
+    })
+    const alone = board()
+    const together = board()
+    const rowsOf = (at: Board) => [choosy("one", at), choosy("two", at)]
+
+    await grouping(
+      rowsOf(alone),
+      [
+        { name: "one", args: { safe: false } },
+        { name: "two", args: { safe: false } },
+      ],
+      { at: alone },
+    )
+    await grouping(
+      rowsOf(together),
+      [
+        { name: "one", args: { safe: true } },
+        { name: "two", args: { safe: true } },
+      ],
+      { at: together },
+    )
+
+    expect(alone.marks.map((mark) => mark.saw)).toEqual([[], ["call_1"]])
+    expect(together.marks.map((mark) => mark.saw)).toEqual([[], []])
+  })
+
+  // A classifier that throws has not claimed safety, so it is read as a
+  // refusal. The runtime never widens what a tool did not say.
+  it("runs alone when its classifier throws", async () => {
+    const at = board()
+    const angry = (id: string): ToolInfo => ({
+      ...watcher(id, at, false),
+      parallelSafe: () => {
+        throw new Error("cannot say")
+      },
+    })
+    await grouping([angry("one"), angry("two")], [{ name: "one" }, { name: "two" }], { at })
+
+    expect(at.marks.map((mark) => mark.saw)).toEqual([[], ["call_1"]])
+  })
+})
+
+describe("a group's records", () => {
+  /**
+   * The second call cannot finish last: the first waits for it. So completion
+   * order and source order disagree, and the record is in source order all
+   * the same.
+   */
+  it("commit in source order whichever call finished first", async () => {
+    const rows = await Effect.runPromise(
+      Effect.gen(function* () {
+        const done = yield* Deferred.make<boolean>()
+        return [
+          {
+            id: "slow",
+            kind: "read",
+            description: "answers last",
+            input: {},
+            parallelSafe: () => true,
+            execute: () =>
+              Deferred.await(done).pipe(
+                Effect.timeout(WAITING),
+                Effect.match({
+                  onFailure: () => toolText("failed", "the quick call never finished"),
+                  onSuccess: () => toolText("ok", "slow"),
+                }),
+              ),
+          },
+          {
+            id: "quick",
+            kind: "read",
+            description: "answers first",
+            input: {},
+            parallelSafe: () => true,
+            execute: () => Effect.as(Deferred.succeed(done, true), toolText("ok", "quick")),
+          },
+        ] satisfies ToolInfo[]
+      }),
+    )
+    const { results, said } = await grouping(rows, [{ name: "slow" }, { name: "quick" }])
+
+    expect(results.map((result) => result.disposition)).toEqual(["ok", "ok"])
+    expect(said.map((payload) => "id" in payload && payload.id)).toEqual([
+      "call_1",
+      "call_1",
+      "call_1",
+      "call_2",
+      "call_2",
+      "call_2",
+    ])
+  })
+})
+
+describe("the bound on a parallel window", () => {
+  it("holds every group to TOOL_GROUP_LIMIT calls at once", async () => {
+    const ids = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+    const { rows, state } = await Effect.runPromise(counting(ids, TOOL_GROUP_LIMIT))
+    await grouping(
+      rows,
+      ids.map((name) => ({ name })),
+    )
+
+    expect(ids).toHaveLength(TOOL_GROUP_LIMIT + 1)
+    expect(state.most).toBe(TOOL_GROUP_LIMIT)
+  })
+
+  // A caller may lower the ceiling. Nothing raises it.
+  it("holds a group to the lower bound its caller named", async () => {
+    const ids = ["a", "b", "c"]
+    const { rows, state } = await Effect.runPromise(counting(ids, 2))
+    await grouping(
+      rows,
+      ids.map((name) => ({ name })),
+      { limit: 2 },
+    )
+
+    expect(state.most).toBe(2)
+  })
+})
+
+describe("one failing call in a group", () => {
+  /**
+   * Every ending a tool has is a Disposition, so a sibling that could not do
+   * the work is data beside two results and not a failure of the group.
+   */
+  it("reports its failure, and its siblings answer for themselves", async () => {
+    const plain = (id: string, result: ToolResult): ToolInfo => ({
+      id,
+      kind: "read",
+      description: "answers",
+      input: {},
+      parallelSafe: () => true,
+      execute: () => Effect.succeed(result),
+    })
+    const { results, said } = await grouping(
+      [
+        plain("one", toolText("ok", "first")),
+        plain("bad", toolText("failed", "no such file")),
+        plain("two", toolText("ok", "third")),
+      ],
+      [{ name: "one" }, { name: "bad" }, { name: "two" }],
+    )
+
+    expect(results.map((result) => result.disposition)).toEqual(["ok", "failed", "ok"])
+    expect(said.filter((payload) => payload.kind === "tool_result").map((one) => one.id)).toEqual([
+      "call_1",
+      "call_2",
+      "call_3",
+    ])
+  })
+
+  // A name nothing answers is unclassified, so it is a barrier and it is
+  // refused where it stands rather than ending the group.
+  it("refuses a name nothing answers and runs the rest", async () => {
+    const at = board()
+    const { results } = await grouping(
+      [watcher("one", at, true)],
+      [{ name: "one" }, { name: "nowhere" }, { name: "one" }],
+      { at },
+    )
+
+    expect(results.map((result) => result.disposition)).toEqual(["ok", "unknown_tool", "ok"])
   })
 })
