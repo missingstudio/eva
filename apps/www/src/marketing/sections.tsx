@@ -293,29 +293,6 @@ export function Today() {
   )
 }
 
-const ones = [
-  {
-    title: "One contract",
-    body: "Every harness behind the same interface, so a task runs on any of them without being rewritten.",
-    stage: "stage 9c",
-  },
-  {
-    title: "One trace",
-    body: "Everything every harness does, in one event schema. What a trace cannot rebuild is a bug.",
-    stage: "shipping",
-  },
-  {
-    title: "One verifier",
-    body: "Acceptance criteria checked by Eva rather than claimed by the agent that did the work.",
-    stage: "stage 5",
-  },
-  {
-    title: "One bill",
-    body: "Cost attributed per task, per merged change, and per harness.",
-    stage: "stage 11",
-  },
-]
-
 /*
   The marks ship as `currentColor` SVGs, but an `<img>` cannot inherit colour.
   Each one is painted as a mask over the text colour instead, so a harness sits
