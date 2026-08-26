@@ -1,4 +1,12 @@
 import type { PermissionOutcome, PermissionRequest } from "@missingstudio/eva-acp"
+
+/**
+ * ACP's permission types, re-exported: `Approving` names both in its own
+ * signature, so anything that fills or calls the gate reaches them from here
+ * rather than depending on the protocol package for two type names.
+ */
+export type { PermissionOutcome, PermissionRequest }
+
 import type {
   ContentBlock,
   Disposition,

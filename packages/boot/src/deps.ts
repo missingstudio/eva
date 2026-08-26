@@ -1,5 +1,6 @@
 import {
   strictest,
+  type Approving,
   type Decided,
   type ModelRef,
   type ModelResolution,
@@ -91,10 +92,16 @@ export const runDeps = (
  * that fails open because a plugin threw is not a gate. The kernel stops at
  * the failure and no later hook runs, so the denial joins the decisions the
  * hooks before it made and the strictest of them wins.
+ *
+ * `approving` is how an `ask` reaches a person. It is handed in rather than
+ * built here: the surface that holds a person and the rule language that
+ * remembers an answer belong to two different plugins, and the composition
+ * root is where they meet. Left out, an `ask` is a denial.
  */
 export const toolDeps = (
   kernel: Kernel,
   emit: (payload: Payload) => Effect.Effect<void>,
+  approving?: Approving,
 ): ToolDeps => {
   const tool = Effect.fn("boot.tool.resolve")(function* (call: ToolCall) {
     const rows = yield* kernel.domains.tool.get
@@ -139,5 +146,11 @@ export const toolDeps = (
     return held.read()
   })
 
-  return { tool, beforeExecute, afterExecute, emit }
+  return {
+    tool,
+    beforeExecute,
+    afterExecute,
+    emit,
+    ...(approving === undefined ? {} : { approving }),
+  }
 }
