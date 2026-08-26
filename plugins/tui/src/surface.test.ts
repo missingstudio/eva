@@ -9,9 +9,9 @@ import {
 import { sessionID, type Payload, type SessionID } from "@missingstudio/eva-schema"
 import type { CommandInfo, Frontend, KeymapInfo, PickRow } from "@missingstudio/eva-sdk"
 import type { Frame, KeyPress, Renderer, ThemeColors } from "@missingstudio/eva-tui-core"
-import { Effect } from "effect"
+import { Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
-import { ARMED, DISCONNECTED, SYNCHRONIZING } from "./console.js"
+import { ARMED, ASKING, DISCONNECTED, SYNCHRONIZING } from "./console.js"
 import { makeSurface, TICK } from "./surface.js"
 
 // What a Run closes with. The surface reads the Claim off it; the record
@@ -1244,6 +1244,48 @@ describe("a question from Eva", () => {
     expect(result.answer).toEqual({ kind: "text", text: "yes" })
     // An answer is not a prompt: nothing was submitted to the Session.
     expect(result.submitted).toEqual([])
+  })
+
+  // A permission request is answered by naming an option, so the option a
+  // person typed is what the gate reads rather than a line of prose.
+  it("answers a permission request with the option a person named", async () => {
+    const answer = await withSurface([], async (fake, _spy, frontend) => {
+      const answered = Effect.runPromise(
+        frontend.ask({ kind: "permission", id: "call_1", question: "run git push?" }),
+      )
+      await settle()
+      fake.press("Allow once")
+      await settle()
+      return await answered
+    })
+
+    expect(answer).toEqual({ kind: "permission", optionId: "allow_once" })
+  })
+
+  /**
+   * The other door answered. The gate races the two, so the door that lost is
+   * interrupted — and that interrupt is the whole signal: a question nobody has
+   * answered is not on the record, so there is nothing to watch for.
+   *
+   * What retires is the status line. A person who was being asked to answer is
+   * no longer being asked, and a terminal that kept asking would be waiting on
+   * an answer Eva has already had.
+   */
+  it("retires the prompt when the other door answers", async () => {
+    const result = await withSurface([], async (fake, _spy, frontend) => {
+      const asking = Effect.runFork(
+        frontend.ask({ kind: "permission", id: "call_1", question: "run git push?" }),
+      )
+      await settle()
+      const during = fake.last()?.status.mode
+
+      await Effect.runPromise(Fiber.interrupt(asking))
+      await settle()
+      return { during, after: fake.last()?.status.mode }
+    })
+
+    expect(result.during).toBe(ASKING)
+    expect(result.after).toBe("ready")
   })
 })
 
