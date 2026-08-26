@@ -25,7 +25,6 @@ Three things are unblocked right now, and none of them waits on another:
 | ------------------------------ | -------------------------------------------------------------------------------------------------- | ------- |
 | **Stage 2** tools and the loop | the spine. Every stage from 3 to 14 is behind it, and it is the first stage with agency            | Phase I |
 | **W1** the wire and the page   | the highest-leverage work off the spine: it unblocks the desktop, the phone, and the chat channels | Phase V |
-| The stage 1 measurement        | built and unrun by decision; one maintainer, one model, $12–20                                     | Phase I |
 
 **With one lane, do stage 2 first and W1 next.** The factory is the product,
 and a page that watches a Session that cannot use a tool is a page watching
@@ -36,9 +35,6 @@ no exit test: stage 2 works in `plugins/tool-*` and the loop, W1 works in
 `packages/session-view`, `plugins/api`, and `apps/web`. The one place they
 meet is `eva.api`, and the split is already drawn — W1 builds its read half,
 stage 2 adds the write half against the gate it builds anyway.
-
-**With three lanes, someone runs the measurement**, which is a day of
-attention rather than a stage of work.
 
 What not to do first: nothing later on the spine (stages 3 through 14 are all
 behind stage 2), and no surface stage past W1 (W2 needs stage 2's gate, D0
@@ -52,21 +48,21 @@ it waits for; each stage's own "builds on" line in
 of them. A wave is what can be in flight together
 — everything in one wave shares no prerequisite with anything else in it.
 
-| Wave | In flight together                       | Each waits for                          |
-| ---- | ---------------------------------------- | --------------------------------------- |
-| done | 0 · 1 · C0 · W0                          | —                                       |
-| 1    | **2** · **W1** · the stage 1 measurement | 1 · W0 · a maintainer                   |
-| 2    | M0 · chat surfaces                       | W1                                      |
-| 3    | 3 · 4 · C1 · W2 · M1                     | 2 · 2 · 2 · W1+2 · M0                   |
-| 4    | 5 · 7 · D0 · M2 · C4                     | 4 · 2+4 · W2 · M1+W1 · C1               |
-| 5    | 6 · 6.5 · D1 · D2 · M3                   | 0's sink · 0's surface · D0 · D0 · M2+2 |
-| 6    | 8 · 9a · 9c · W5 · M4                    | 5+7 · 7 · 0+2+4+7 · W1+6 · M3           |
-| 7    | 9b · 13 · 9d                             | 9a · 9a · 9c                            |
-| 8    | 10 · W3+C2 · S1 · M5                     | 9a–9c · W2+9a–9b · 9a–9b · M4+9b        |
-| 9    | 11 · S2 · S3                             | 6+9c · S1 · S2                          |
-| 10   | 12 · W4+C3 · S4                          | 8+11 · W3/C2+9c–10 · S3+11              |
-| 11   | S5                                       | S4                                      |
-| 12   | 14                                       | everything                              |
+| Wave | In flight together     | Each waits for                          |
+| ---- | ---------------------- | --------------------------------------- |
+| done | 0 · 1 · C0 · W0        | —                                       |
+| 1    | **2** · **W1**         | 1 · W0                                  |
+| 2    | M0 · chat surfaces     | W1                                      |
+| 3    | 3 · 4 · C1 · W2 · M1   | 2 · 2 · 2 · W1+2 · M0                   |
+| 4    | 5 · 7 · D0 · M2 · C4   | 4 · 2+4 · W2 · M1+W1 · C1               |
+| 5    | 6 · 6.5 · D1 · D2 · M3 | 0's sink · 0's surface · D0 · D0 · M2+2 |
+| 6    | 8 · 9a · 9c · W5 · M4  | 5+7 · 7 · 0+2+4+7 · W1+6 · M3           |
+| 7    | 9b · 13 · 9d           | 9a · 9a · 9c                            |
+| 8    | 10 · W3+C2 · S1 · M5   | 9a–9c · W2+9a–9b · 9a–9b · M4+9b        |
+| 9    | 11 · S2 · S3           | 6+9c · S1 · S2                          |
+| 10   | 12 · W4+C3 · S4        | 8+11 · W3/C2+9c–10 · S3+11              |
+| 11   | S5                     | S4                                      |
+| 12   | 14                     | everything                              |
 
 Read three things out of it.
 
