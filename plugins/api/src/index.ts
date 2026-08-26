@@ -22,10 +22,9 @@ export interface ApiOptions {
 }
 
 /**
- * The read half of the Session API, over HTTP. It registers no row: a wire is
- * not a Domain, the socket is `eva.web`'s, and the contract is the Client's —
- * so loading is the whole of what this plugin does, and the plugin id is what
- * a person turns off.
+ * The Session API, over HTTP. It registers no row: a wire is not a Domain, the
+ * socket is `eva.web`'s, and the contract is the Client's — so loading is the
+ * whole of what this plugin does, and the plugin id is what a person turns off.
  */
 export const makeApi = (options: ApiOptions): Plugin =>
   define({

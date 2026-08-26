@@ -6,7 +6,17 @@ import { SCHEMA_VERSION } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { apiWire, routeFor, watchFor } from "./routes.js"
-import { API_ROOT, CURSOR, modelPath, sessionPath, SESSIONS, watchPath } from "./wire.js"
+import {
+  answerPath,
+  API_ROOT,
+  cancelPath,
+  CURSOR,
+  IDEMPOTENCY,
+  modelPath,
+  sessionPath,
+  SESSIONS,
+  watchPath,
+} from "./wire.js"
 
 const MODEL: ModelRef = { provider: "wire", model: "one" }
 
@@ -331,11 +341,184 @@ describe("the route table", () => {
     expect(watchFor("GET", sessionPath("ses_1"), undefined)).toBeUndefined()
   })
 
-  // The write half is stage 2's, against the permission gate that stage
-  // builds anyway. Until then a method nothing carries is a miss.
-  it("carries no method that writes", () => {
-    expect(routeFor("POST", SESSIONS)).toBeUndefined()
-    expect(routeFor("PUT", modelPath("ses_1"))).toBeUndefined()
+  // The other half, and the same rule: a method and a path this does not
+  // carry is a miss, whatever body arrived with it.
+  it("carries the four calls that write, and nothing else", () => {
+    expect(routeFor("POST", sessionPath("ses_1"), { kind: "prompt", text: "ask" })).toBeTypeOf(
+      "function",
+    )
+    expect(routeFor("POST", cancelPath("ses_1"), "user")).toBeTypeOf("function")
+    expect(routeFor("PUT", modelPath("ses_1"), MODEL)).toBeTypeOf("function")
+    expect(routeFor("PUT", answerPath("call_1"), { kind: "cancelled" })).toBeTypeOf("function")
+
+    expect(routeFor("POST", SESSIONS, {})).toBeUndefined()
+    expect(routeFor("POST", modelPath("ses_1"), MODEL)).toBeUndefined()
+    expect(routeFor("PUT", sessionPath("ses_1"), {})).toBeUndefined()
+    expect(routeFor("DELETE", sessionPath("ses_1"), undefined)).toBeUndefined()
     expect(watchFor("POST", watchPath("ses_1"), undefined)).toBeUndefined()
+  })
+
+  /**
+   * A body the wire cannot read is refused, and the route that refuses it
+   * reaches no method. A shape half understood would be a partly applied
+   * write, and nothing later would say there had been one.
+   */
+  it("refuses a body it cannot read, rather than writing part of it", async () => {
+    const memory = await held()
+    const refusing = routeFor("POST", sessionPath(memory.session), { kind: "prompt" })
+    const answer = await Effect.runPromise(refusing?.(memory.api) ?? Effect.succeed(undefined))
+
+    expect(answer).toEqual({ status: 400, body: { error: "the wire cannot read this body" } })
+    expect(memory.calls).toEqual([])
+  })
+})
+
+/**
+ * The write half. Each call carries the contract's own shape as its body — a
+ * `SubmitInput` *is* the Prompt and a `CancelCause` *is* the cause — so there
+ * is nothing to unwrap on either side, and a write answers nothing back.
+ */
+describe("the write half, over a socket", () => {
+  const wrote = (
+    origin: string,
+    method: string,
+    path: string,
+    body: unknown,
+    key?: string,
+  ): Promise<Response> =>
+    fetch(`${origin}${path}`, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...(key === undefined ? {} : { [IDEMPOTENCY]: key }),
+      },
+      body: JSON.stringify(body),
+    })
+
+  it("opens a Run from a Prompt, and answers nothing back", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const response = await wrote(served.origin, "POST", sessionPath(memory.session), {
+      kind: "prompt",
+      text: "ask",
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toBeNull()
+    expect(memory.calls).toEqual([
+      { method: "submit", args: [memory.session, { kind: "prompt", text: "ask" }] },
+    ])
+
+    await served.close()
+  })
+
+  it("carries a steer with the target it named", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    await wrote(served.origin, "POST", sessionPath(memory.session), {
+      kind: "steer",
+      text: "be brief",
+      target: "next-step",
+    })
+
+    expect(memory.calls[0]?.args[1]).toEqual({
+      kind: "steer",
+      text: "be brief",
+      target: "next-step",
+    })
+
+    await served.close()
+  })
+
+  it("stops a Run with the cause the caller named", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const response = await wrote(served.origin, "POST", cancelPath(memory.session), "budget")
+
+    expect(response.status).toBe(200)
+    expect(memory.calls).toEqual([{ method: "cancel", args: [memory.session, "budget"] }])
+
+    await served.close()
+  })
+
+  // Set over the wire and read back over the wire, which is the whole of what
+  // "it takes effect" means from a page.
+  it("sets the model, and the read half hands the new one back", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const next = { provider: "wire", model: "another" }
+    expect((await wrote(served.origin, "PUT", modelPath(memory.session), next)).status).toBe(200)
+    expect(await (await fetch(`${served.origin}${modelPath(memory.session)}`)).json()).toEqual(next)
+
+    await served.close()
+  })
+
+  // Keyed by the tool call's id and not by a Session, so it is the one write
+  // that sits outside the listing.
+  it("answers a request by naming it, and not a Session", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const response = await wrote(served.origin, "PUT", answerPath("call_1"), {
+      kind: "permission",
+      optionId: "allow_once",
+    })
+
+    expect(response.status).toBe(200)
+    expect(memory.calls).toEqual([
+      { method: "answer", args: ["call_1", { kind: "permission", optionId: "allow_once" }] },
+    ])
+
+    await served.close()
+  })
+
+  it("refuses a body it cannot read with a status, and writes nothing", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const response = await wrote(served.origin, "POST", cancelPath(memory.session), "whenever")
+
+    expect(response.status).toBe(400)
+    expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8")
+    expect(memory.calls).toEqual([])
+
+    await served.close()
+  })
+
+  /**
+   * The one thing a write needs that a read does not. A write has no error
+   * channel, so a caller that could not reach this side waits and asks again —
+   * and a `submit` asked again would open a second Run. The key is what makes
+   * asking again safe: the write is answered twice and done once.
+   */
+  it("answers the same key twice and opens one Run", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const prompt = { kind: "prompt", text: "ask" }
+    const first = await wrote(served.origin, "POST", sessionPath(memory.session), prompt, "key_1")
+    const again = await wrote(served.origin, "POST", sessionPath(memory.session), prompt, "key_1")
+
+    expect(first.status).toBe(200)
+    expect(again.status).toBe(200)
+    expect(memory.calls.filter((one) => one.method === "submit")).toHaveLength(1)
+
+    await served.close()
+  })
+
+  it("opens a second Run for a second key", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const prompt = { kind: "prompt", text: "ask" }
+    await wrote(served.origin, "POST", sessionPath(memory.session), prompt, "key_1")
+    await wrote(served.origin, "POST", sessionPath(memory.session), prompt, "key_2")
+
+    expect(memory.calls.filter((one) => one.method === "submit")).toHaveLength(2)
+
+    await served.close()
   })
 })
