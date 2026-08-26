@@ -26,6 +26,10 @@ import type { Plugin, Reads } from "@missingstudio/eva-sdk"
 import { sessionJsonl } from "@missingstudio/eva-session-jsonl"
 import { themes } from "@missingstudio/eva-themes"
 import { toolBash } from "@missingstudio/eva-tool-bash"
+import { toolGlob } from "@missingstudio/eva-tool-glob"
+import { toolGrep } from "@missingstudio/eva-tool-grep"
+import { toolRead } from "@missingstudio/eva-tool-read"
+import { toolWeb } from "@missingstudio/eva-tool-web"
 import { trace } from "@missingstudio/eva-trace"
 import { traceJsonl } from "@missingstudio/eva-trace-jsonl"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
@@ -156,9 +160,13 @@ export const BUILT_IN: readonly Plugin[] = [
   // the table still reads in the order the capabilities stack.
   sandboxNone,
   diff,
-  // After `sandboxNone`, whose slot it reads for every command it runs. Load
-  // order does not bind them either: the tool reads the Sandbox slot at the
-  // moment of use, so stage 4's containment arrives with no change here.
+  // The tools. Each one registers a row and reads the slot it needs at the
+  // moment of use, so nothing here binds them to the fillers above — and
+  // stage 4's containment arrives behind `toolBash` with no change here.
+  toolRead,
+  toolGrep,
+  toolGlob,
+  toolWeb,
   toolBash,
   commands,
   themes,
