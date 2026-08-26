@@ -55,6 +55,8 @@ export const webTool = (deps: WebDeps): ToolInfo => ({
   kind: "fetch",
   description: "Read an http or https address and answer what it holds.",
   input: INPUT,
+  // Reading an address changes nothing here, so two reads may run at once.
+  parallelSafe: () => true,
   execute: (input) =>
     Effect.gen(function* () {
       const url = addressOf(input)
