@@ -46,6 +46,10 @@
         "@missingstudio/eva-shell": "workspace:*",
         "@missingstudio/eva-themes": "workspace:*",
         "@missingstudio/eva-tool-bash": "workspace:*",
+        "@missingstudio/eva-tool-glob": "workspace:*",
+        "@missingstudio/eva-tool-grep": "workspace:*",
+        "@missingstudio/eva-tool-read": "workspace:*",
+        "@missingstudio/eva-tool-web": "workspace:*",
         "@missingstudio/eva-trace": "workspace:*",
         "@missingstudio/eva-trace-jsonl": "workspace:*",
         "@missingstudio/eva-trace-memory": "workspace:*",
@@ -213,6 +217,10 @@
         "@missingstudio/eva-themes": "workspace:*",
         "@missingstudio/eva-tool-bash": "workspace:*",
         "@missingstudio/eva-tool-edit": "workspace:*",
+        "@missingstudio/eva-tool-glob": "workspace:*",
+        "@missingstudio/eva-tool-grep": "workspace:*",
+        "@missingstudio/eva-tool-read": "workspace:*",
+        "@missingstudio/eva-tool-web": "workspace:*",
         "@missingstudio/eva-trace": "workspace:*",
         "@missingstudio/eva-trace-jsonl": "workspace:*",
         "@missingstudio/eva-trace-memory": "workspace:*",
@@ -730,6 +738,62 @@
         "typescript": "catalog:",
       },
     },
+    "plugins/tool-glob": {
+      "name": "@missingstudio/eva-tool-glob",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/tool-grep": {
+      "name": "@missingstudio/eva-tool-grep",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/tool-read": {
+      "name": "@missingstudio/eva-tool-read",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/tool-web": {
+      "name": "@missingstudio/eva-tool-web",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "plugins/trace": {
       "name": "@missingstudio/eva-trace",
       "version": "0.0.0",
@@ -1217,6 +1281,14 @@
     "@missingstudio/eva-tool-bash": ["@missingstudio/eva-tool-bash@workspace:plugins/tool-bash"],
 
     "@missingstudio/eva-tool-edit": ["@missingstudio/eva-tool-edit@workspace:plugins/tool-edit"],
+
+    "@missingstudio/eva-tool-glob": ["@missingstudio/eva-tool-glob@workspace:plugins/tool-glob"],
+
+    "@missingstudio/eva-tool-grep": ["@missingstudio/eva-tool-grep@workspace:plugins/tool-grep"],
+
+    "@missingstudio/eva-tool-read": ["@missingstudio/eva-tool-read@workspace:plugins/tool-read"],
+
+    "@missingstudio/eva-tool-web": ["@missingstudio/eva-tool-web@workspace:plugins/tool-web"],
 
     "@missingstudio/eva-trace": ["@missingstudio/eva-trace@workspace:plugins/trace"],
 
