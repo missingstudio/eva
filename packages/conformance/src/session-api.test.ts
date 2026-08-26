@@ -39,9 +39,9 @@ const turns = (...answers: readonly (readonly Payload[])[]): readonly ScriptedTu
 // A kernel with a real trace and session store behind it, so the API is
 // exercised against the same slots the CLI fills.
 const withProvider = <A>(plugin: Plugin, body: (api: Api) => Effect.Effect<A>): Promise<A> => {
-  const path = join(mkdtempSync(join(tmpdir(), "eva-api-")), "trace.jsonl")
+  const dir = mkdtempSync(join(tmpdir(), "eva-api-"))
   return withKernel(
-    [trace, { plugin: traceJsonl, options: { path } }, sessionJsonl, plugin],
+    [trace, { plugin: traceJsonl, options: { dir } }, sessionJsonl, plugin],
     (kernel, scope) => Effect.flatMap(makeSessionAPI(kernel, FAKE_MODEL, scope), body),
   )
 }

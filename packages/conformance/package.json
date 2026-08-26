@@ -24,6 +24,8 @@
     "@missingstudio/eva-trace": "workspace:*",
     "@missingstudio/eva-trace-jsonl": "workspace:*",
     "@missingstudio/eva-trace-memory": "workspace:*",
+    "@missingstudio/eva-trace-postgres": "workspace:*",
+    "@missingstudio/eva-trace-sqlite": "workspace:*",
     "@missingstudio/eva-tui": "workspace:*",
     "@missingstudio/eva-tui-core": "workspace:*",
     "@missingstudio/eva-tui-surface": "workspace:*",
@@ -35,6 +37,7 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "effect": "catalog:",
+    "postgres": "^3.4.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "typescript": "catalog:"

@@ -50,9 +50,10 @@ table. In [src/sink-contract.test.ts](src/sink-contract.test.ts), every
 each:
 
 ```ts
-const sinks: readonly [string, () => Effect.Effect<TraceSink>][] = [
+const sinks: readonly Row[] = [
   ["eva.trace.memory", () => makeMemorySink()],
-  ["eva.trace.jsonl", () => makeJsonlSink(temp())],
+  ["eva.trace.jsonl", () => makeJsonlSink(scratch())],
+  ["eva.trace.sqlite", () => makeSqliteSink(join(scratch(), "trace.sqlite"))],
 ]
 
 describe.each(sinks)("the %s sink honors the contract", (_name, make) => {
@@ -64,6 +65,20 @@ A new sink adds its factory to that table and inherits every test. Behavior
 only one implementation owes — the jsonl sink's survival of a killed
 process — sits in its own `describe` below the shared one.
 
+`eva.trace.postgres` joins both sink tables when `EVA_TEST_POSTGRES_URL`
+points at a disposable database, with a fresh schema per sink and every
+schema dropped at the end. It is the store the allocation contract exists
+for — the only one Eva has with many writers on many machines — so it belongs
+here and not only in its own suite. Without a URL it is absent, and the suite
+says nothing false about what it proved.
+
+Where implementations are allowed to differ, the suite states the difference
+instead of omitting it. `sink-contract.test.ts` holds the row stores to an
+exact Header — a later `info` renames the Session — and holds
+`eva.trace.jsonl` to the opening intent, because it reads the first line.
+That is the shortcut [trace-storage.md](../../docs/reference/trace-storage.md)
+priced and accepted, and a test is what keeps it a decision.
+
 ## The suites
 
 | Suite                        | What it holds together                                                                     |
@@ -73,7 +88,8 @@ process — sits in its own `describe` below the shared one.
 | `catalog.test.ts`            | The models and the Prices, which meet only in a build                                      |
 | `compatible.test.ts`         | A compatible endpoint against the Prices and the auth store                                |
 | `session-api.test.ts`        | The Session API over the real trace and session stores                                     |
-| `sink-contract.test.ts`      | Every TraceSink against one contract                                                       |
+| `sink-contract.test.ts`      | Every TraceSink against one contract, and where they are allowed to differ                 |
+| `list-order.test.ts`         | One listing order over every sink, whatever each reads to answer                           |
 | `swap.test.ts`               | A Slot hot-swaps mid-Run; a missing capability degrades rather than fails                  |
 | `tui.test.ts`                | The shipped bindings against the surface, the shipped theme against the renderer's palette |
 | `session-view.test.tsx`      | The terminal's mapping and the page's, over one fold of one Trace                          |

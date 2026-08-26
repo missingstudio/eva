@@ -25,8 +25,8 @@ const kinds = (events: readonly Event[]) => events.map((event) => event.payload.
  * runtime itself: each one adds and removes a different set in its own order,
  * mid-Run. The entries carry the options a hand-added plugin still reads.
  */
-const started = <A>(body: (kernel: Kernel, path: string) => Effect.Effect<A>): Promise<A> => {
-  const path = join(mkdtempSync(join(tmpdir(), "eva-swap-")), "trace.jsonl")
+const started = <A>(body: (kernel: Kernel, dir: string) => Effect.Effect<A>): Promise<A> => {
+  const dir = mkdtempSync(join(tmpdir(), "eva-swap-"))
   return Effect.runPromise(
     Effect.gen(function* () {
       const scope = yield* Scope.make()
@@ -34,19 +34,19 @@ const started = <A>(body: (kernel: Kernel, path: string) => Effect.Effect<A>): P
         scope,
         resolved: [
           { id: "eva.trace" },
-          { id: "eva.trace.jsonl", options: { path } },
+          { id: "eva.trace.jsonl", options: { dir } },
           { id: "eva.trace.memory" },
         ],
       })
-      const result = yield* body(kernel, path)
+      const result = yield* body(kernel, dir)
       yield* Scope.close(scope, Exit.void)
       return result
     }),
   )
 }
 
-const onDisk = Effect.fn("test.onDisk")(function* (path: string) {
-  const reader = yield* makeJsonlSink(path)
+const onDisk = Effect.fn("test.onDisk")(function* (dir: string) {
+  const reader = yield* makeJsonlSink(dir)
   const found = yield* Stream.runCollect(reader.replay(SESSION))
   yield* reader.close
   return [...found]
@@ -55,7 +55,7 @@ const onDisk = Effect.fn("test.onDisk")(function* (path: string) {
 // The architectural bet, settled in one live process.
 describe("a slot hot-swaps", () => {
   it("lands the next commit in the new sink, with no restart", async () => {
-    const found = await started((kernel, path) =>
+    const found = await started((kernel, dir) =>
       Effect.gen(function* () {
         yield* kernel.runtime.add(trace)
         yield* kernel.runtime.add(traceJsonl)
@@ -70,7 +70,7 @@ describe("a slot hot-swaps", () => {
         yield* recorder.close({ result: "done", summary: "answered" }, "end_turn")
 
         const memory = (yield* kernel.slot.traceSink.get) as MemorySink
-        return { memory: kinds(memory.all()), file: kinds(yield* onDisk(path)) }
+        return { memory: kinds(memory.all()), file: kinds(yield* onDisk(dir)) }
       }),
     )
 
@@ -133,7 +133,7 @@ describe("capturing a slot value", () => {
 
   // The quiet failure: nothing errors, and the two writers diverge.
   it("writes into the sink that was replaced, while a late read follows the swap", async () => {
-    const found = await started((kernel, path) =>
+    const found = await started((kernel, dir) =>
       Effect.gen(function* () {
         yield* kernel.runtime.add(traceJsonl)
 
@@ -149,7 +149,7 @@ describe("capturing a slot value", () => {
         const memory = (yield* kernel.slot.traceSink.get) as MemorySink
         return {
           memory: memory.all().length,
-          file: (yield* onDisk(path)).length,
+          file: (yield* onDisk(dir)).length,
         }
       }),
     )
