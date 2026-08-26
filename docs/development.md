@@ -286,4 +286,13 @@ W1's four paths — `packages/session-view`, the read half of `plugins/api`,
 **Stage 2 — Tools and the loop.** In progress. The stage plan is written: 14
 tickets in five waves, each with a priority, an effort, and what it depends
 on. The tickets build in dependency order, one commit each, and this row
-records the result as each lands. Nothing has landed yet.
+records the result as each lands.
+
+Two have landed. The **hook failure rule** is in the kernel: a boundary
+declares whether its hooks decide or observe, a deciding hook that throws
+denies the call it was deciding, and an observing one that throws is reported
+through `plugin.failed` while the Run continues. The four provider boundaries
+stay observers, and a test pins that. The **diff applier** ships as `eva.diff`
+and fills the `DiffApplier` slot: a dry run touches nothing, an apply lands
+every hunk or none, and a reverse restores the file byte for byte. A preview
+whose file moved underneath it refuses rather than mangles.
