@@ -122,6 +122,36 @@ model can act on, so it never counts against the ceiling.
 
 A denial counts against nothing either. A denial is observed, not fatal.
 
+## A steer lands at a Step boundary
+
+A line a person says while the loop works is delivered at the next structural
+boundary and never as an interrupt. The loop holds the inbox, because only the
+loop knows where its next Step begins.
+
+A steer names the boundary it waits for:
+
+- **`next-step`** lands inside the Prompt that is running. The Run in flight
+  stops its tool group before it opens another window: the window that was
+  running commits whole, and the calls of the windows that never opened are
+  `skipped` — each with the same three records a call that ran leaves, so
+  nothing on the Trace is a `tool_call` with no end. The next Step reads the
+  line in its history, and the Run that carries it records a `message` payload,
+  so a fold of the record reads the same human words the request was given.
+- **`next-run`** is the whole arc's boundary. It leaves the Prompt that is
+  running alone and is said before the next Prompt's intent.
+
+Two rules keep a line from being lost. A ceiling reads before the inbox does,
+so a Prompt the Budget or the fuse stopped leaves the words where they are for
+the next Prompt. And a steer that arrives with no Prompt running is not an
+error: it waits, and the next Prompt says it. The answer to a steer is the Stop
+Reason the Session has reached, because the Prompt it lands in is not that
+call's to wait for.
+
+Honest limits: the inbox is in-process and per Session, it is lost on restart or
+unload, and it is unbounded. `architecture.md` §12.3a promises a host-scoped
+`inbox` slot, because steering semantics are a choice; the inbox moves there
+when the loop becomes a host of plugins.
+
 ## What it does not do
 
 - It does not decide whether a call may run. That is
@@ -131,9 +161,9 @@ A denial counts against nothing either. A denial is observed, not fatal.
   `eva.sched` is the policy it is ordered under.
 - It does not choose a model per Step. The Catalog's default answers, so a
   model a person set on a Session does not yet reach a harness.
-- It does not deliver steering. `eva.steer` owns that, and the structural point
-  a steer lands on is the top of the Step loop — once the Run has closed and
-  its tool group has committed.
+- It does not decide when a steer is delivered to it. A Session API hands a
+  `next-step` steer to the Harness answering now; a steer that names no Prompt
+  in flight rides the next prompt, because a steer names no harness.
 - It hosts no plugins yet. `architecture.md` §12.3a describes six host-scoped
   extension points; each is a seam in `LoopDeps` today, so cutting one later is
   a change here and not a rewrite.

@@ -1,4 +1,11 @@
-import type { Budget, CalledTool, HarnessHost, RunResult, ToolInfo } from "@missingstudio/eva-core"
+import type {
+  Budget,
+  CalledTool,
+  HarnessHost,
+  RunResult,
+  SubmitInput,
+  ToolInfo,
+} from "@missingstudio/eva-core"
 import { sessionID, type Disposition, type SessionID } from "@missingstudio/eva-schema"
 import type { CatalogState } from "@missingstudio/eva-sdk"
 import { scriptedHost, type ScriptedHost } from "@missingstudio/eva-testkit"
@@ -383,28 +390,149 @@ describe("a cancelled Prompt", () => {
   })
 })
 
+/**
+ * Steering lands at a boundary and never as an interrupt. `next-step` is a
+ * boundary inside the Prompt that is running: the response and its tool group
+ * are over and their records are committed, which is the top of the Step loop.
+ * `next-run` is the whole arc's boundary, so it waits for the next Prompt.
+ */
 describe("a steer", () => {
+  const STEER = "also rename the tests"
+
+  const steer = (target: "next-run" | "next-step") =>
+    ({ kind: "steer", text: STEER, target }) as const
+
   /**
-   * Steering is `eva.steer`'s, and until it lands the current Stop Reason is
-   * the whole answer. It is never an error: steering an idle Session must not
-   * stop Eva.
+   * A loop whose first Run delivers a steer to it. The Run is where the steer
+   * comes from because that is the only point a test can be sure the Prompt has
+   * not reached its next Step yet — and while it is open, what the Run's own
+   * `stop` answers is what the tool group would do at its next window boundary.
    */
-  it("answers the Stop Reason the last Prompt reached", async () => {
-    const watched = scriptedHost([answering("done")])
-    const harness = loop(watched.host)
-    const reason = await Effect.runPromise(
+  const steerable = (
+    script: readonly Partial<RunResult>[],
+    during?: SubmitInput,
+    over: Partial<LoopDeps> = {},
+  ) => {
+    const watched = scriptedHost(script)
+    const stops: (string | undefined)[] = []
+    let delivered = false
+    const host: HarnessHost = {
+      run: Effect.fn(function* (input) {
+        if (during !== undefined && !delivered) {
+          delivered = true
+          yield* harness.prompt(SESSION, during)
+        }
+        stops.push(input.stop === undefined ? undefined : yield* input.stop)
+        return yield* watched.host.run(input)
+      }),
+      report: watched.host.report,
+    }
+    const harness = loop(host, over)
+    return {
+      watched,
+      stops,
+      harness,
+      prompting: (text = "rename UserSvc") => harness.prompt(SESSION, { kind: "prompt", text }),
+    }
+  }
+
+  // What one Run was handed: the last thing said to the model, and the words
+  // this Run records as the person's.
+  const carried = (watched: ScriptedHost, at: number) => ({
+    last: watched.runs[at]?.history.at(-1),
+    steered: watched.runs[at]?.steered,
+  })
+
+  it("aimed at the next Step lands at the top of the next Step, on the record", async () => {
+    const held = steerable([acting("read", "ok"), answering("done")], steer("next-step"))
+    const reason = await Effect.runPromise(held.prompting())
+
+    expect(reason).toBe("end_turn")
+    // While the steer waited, the Run in flight was told to stop its group.
+    expect(held.stops).toEqual(["a steer arrived and this call did not start", undefined])
+    expect(carried(held.watched, 1)).toEqual({
+      last: {
+        author: "human",
+        blocks: [{ type: "content", block: 0, content: { type: "text", text: STEER } }],
+      },
+      steered: [{ kind: "message", content: { type: "text", text: STEER }, target: "next-step" }],
+    })
+  })
+
+  it("aimed at the next Run leaves the Prompt that is running alone", async () => {
+    const held = steerable([acting("read", "ok"), answering("done")], steer("next-run"))
+    const reason = await Effect.runPromise(held.prompting())
+
+    expect(reason).toBe("end_turn")
+    // Nothing stops the group, and the next Step reads the tool results alone.
+    expect(held.stops).toEqual([undefined, undefined])
+    expect(carried(held.watched, 1).steered).toBeUndefined()
+  })
+
+  // The whole arc's boundary is the next Prompt, and the words are on the
+  // record of the Run that carries them.
+  it("aimed at the next Run is said before the next Prompt's intent", async () => {
+    const held = steerable([answering("done"), answering("done")])
+    await Effect.runPromise(
       Effect.gen(function* () {
-        yield* harness.prompt(SESSION, { kind: "prompt", text: "go" })
-        return yield* harness.prompt(SESSION, {
-          kind: "steer",
-          text: "also this",
-          target: "next-step",
-        })
+        yield* held.prompting("first")
+        yield* held.harness.prompt(SESSION, steer("next-run"))
+        yield* held.prompting("second")
       }),
     )
 
-    expect(reason).toBe("end_turn")
-    expect(watched.calls).toEqual(["run"])
+    expect(held.watched.runs[1]?.history[0]).toMatchObject({
+      author: "human",
+      blocks: [{ content: { type: "text", text: STEER } }],
+    })
+    expect(held.watched.runs[1]?.steered).toEqual([
+      { kind: "message", content: { type: "text", text: STEER }, target: "next-run" },
+    ])
+  })
+
+  /**
+   * An idle Session is an ordinary prompt and never an error. The Prompt has
+   * ended, so there is no Step to land at, and the words wait for the next
+   * Prompt rather than starting one nobody asked for.
+   */
+  it("with no Prompt running answers the last Stop Reason and rides the next Prompt", async () => {
+    const held = steerable([answering("done"), answering("done")])
+    const reasons = await Effect.runPromise(
+      Effect.gen(function* () {
+        const first = yield* held.prompting("first")
+        const answered = yield* held.harness.prompt(SESSION, steer("next-step"))
+        yield* held.prompting("second")
+        return { first, answered }
+      }),
+    )
+
+    expect(reasons).toEqual({ first: "end_turn", answered: "end_turn" })
+    expect(held.watched.runs[1]?.history.at(-1)).toMatchObject({
+      blocks: [{ content: { type: "text", text: STEER } }],
+    })
+  })
+
+  /**
+   * A ceiling reads before the inbox does, so a Prompt that cannot take another
+   * Step leaves the words where they are. A steer is never swallowed by the
+   * Prompt it could not reach.
+   */
+  it("survives a Prompt a ceiling stopped", async () => {
+    const held = steerable([acting("read", "ok"), answering("done")], steer("next-step"), {
+      steps: 1,
+    })
+    const reasons = await Effect.runPromise(
+      Effect.gen(function* () {
+        const first = yield* held.prompting("first")
+        const second = yield* held.prompting("second")
+        return { first, second }
+      }),
+    )
+
+    expect(reasons).toEqual({ first: "max_turn_requests", second: "end_turn" })
+    expect(held.watched.runs[1]?.steered).toEqual([
+      { kind: "message", content: { type: "text", text: STEER }, target: "next-step" },
+    ])
   })
 })
 
