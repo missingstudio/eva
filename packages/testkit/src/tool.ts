@@ -2,6 +2,7 @@ import { toolDeps, type Kernel } from "@missingstudio/eva-boot"
 import {
   executeTool,
   executeToolGroup,
+  type Approving,
   type ToolContext,
   type ToolGroupDeps,
   type ToolResult,
@@ -27,6 +28,12 @@ export interface CallOptions {
   readonly emit?: (payload: Payload) => Effect.Effect<void>
   // A lower bound on a parallel window than the group runner's own.
   readonly limit?: number
+  /**
+   * How an `ask` is answered. A suite that names none is a run with nobody to
+   * answer it, which is a denial — the same thing a build with no interactive
+   * surface is.
+   */
+  readonly approving?: Approving
 }
 
 // One call of a group, as a test writes one. The id is the group's position
@@ -63,7 +70,7 @@ export const calling = (kernel: Kernel, options: CallOptions = {}): Calling => {
     })
 
   const deps: ToolGroupDeps = {
-    ...toolDeps(kernel, emit),
+    ...toolDeps(kernel, emit, options.approving),
     ...(options.limit === undefined ? {} : { limit: options.limit }),
   }
   let counted = 0

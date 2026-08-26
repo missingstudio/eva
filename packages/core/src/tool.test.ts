@@ -1,4 +1,3 @@
-import type { PermissionOutcome, PermissionRequest } from "@missingstudio/eva-acp"
 import { sessionID, type Payload } from "@missingstudio/eva-schema"
 import { Deferred, Effect } from "effect"
 import { describe, expect, it } from "vitest"
@@ -11,6 +10,8 @@ import {
   toolText,
   TOOL_GROUP_LIMIT,
   type Decided,
+  type PermissionOutcome,
+  type PermissionRequest,
   type ToolCall,
   type ToolDecision,
   type ToolDeps,
