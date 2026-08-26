@@ -52,9 +52,19 @@ same rule:
   model, read one provider turn, commit its payloads in block groups, close
   with a claim. An empty Recorder slot is legal — the Run records nothing,
   reports `degraded` naming the slot, and still answers.
-- `sequenced(store)` turns a `TraceStore` into a `TraceSink`: it merges text
-  chunks, numbers each event one past its session's high water, and moves the
-  high water only once the write is durable.
+- `sinkOf(store)` turns a store into a `TraceSink`, and it is the only
+  composition a sink author or a test spells. It merges text chunks before
+  the store numbers them, hands committed records to their followers, folds
+  `headers` for a store that keeps none, and refuses a group after the
+  close. A store that can number inside the act that makes a group durable
+  writes `TraceStore` and owns its allocation; one that cannot writes
+  `StampedStore` and is numbered in this process. `sequenced` and `numbered`
+  are the internal seams behind it.
+- `rows.ts` holds the row-shaped store the two SQL sinks share: the columns,
+  the codec both ways, the head row with the fold rule that wrote it, and
+  the allocation arithmetic. They differ only in the lock.
+- `archive.ts` reads a Trace back from JSONL — one file or a directory of
+  per-Session files — so nothing else has to ask which shape it holds.
 - `foldTranscript(events)` folds a session's trace into the `Transcript` a
   surface displays.
 
@@ -70,7 +80,9 @@ same rule:
 | `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                             |
 | `session-api.ts` | The whole of what a surface may do to Eva                                                               |
 | `session.ts`     | `submit`, the one-Run mechanism                                                                         |
-| `sink.ts`        | `sequenced`, the store-to-sink mechanism                                                                |
+| `sink.ts`        | `sinkOf`, the one store-to-sink entry, over the `sequenced` and `numbered` seams                        |
+| `rows.ts`        | The row-shaped store both SQL sinks keep: columns, codec, head row, allocation                          |
+| `archive.ts`     | Reading a Trace back from JSONL, one file or a directory of them                                        |
 
 ## What it does not do
 

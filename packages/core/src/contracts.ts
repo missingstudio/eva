@@ -16,9 +16,16 @@ import type { Session, SessionHeader, Transcript } from "./transcript.js"
 export interface TraceSink {
   // Commits a group atomically and returns the events with trace positions.
   readonly append: (group: readonly Event[]) => Effect.Effect<readonly Event[]>
-  // Where each session's trace got to. A resume checks its gap against this
-  // before it reads anything.
-  readonly highWater: Effect.Effect<ReadonlyMap<SessionID, number>>
+  /**
+   * Where one session's trace got to. A resume checks its gap against this
+   * before it reads anything, and no caller needs every session at once.
+   *
+   * A store that allocates in its own transaction answers what is durable.
+   * One that cannot is numbered in this process, and answers what this
+   * process committed — the same trade its README states, and the reason a
+   * second writer on those stores is not a posture Eva supports.
+   */
+  readonly highWater: (session: SessionID) => Effect.Effect<number>
   // Replays a session's events in trace order.
   readonly replay: (session: SessionID) => Stream.Stream<Event>
   /**
@@ -31,6 +38,17 @@ export interface TraceSink {
   readonly follow: (session: SessionID) => Effect.Effect<Stream.Stream<Event>, never, Scope.Scope>
   // Every session the trace holds, so a new process can list what is there.
   readonly sessions: Effect.Effect<readonly SessionID[]>
+  /**
+   * Every session's Header. Every sink answers it: a store that keeps
+   * Headers beside the log says so cheaply, and one that does not is folded
+   * over its own replay — so a caller has one way to ask and never a branch
+   * about which sink it got.
+   *
+   * In no order. The listing is what states an order, because a listing
+   * holds Sessions a Trace has never seen; a sink that sorted here would be
+   * paying for a promise its caller has to make again anyway.
+   */
+  readonly headers: Effect.Effect<readonly SessionHeader[]>
   readonly close: Effect.Effect<void>
 }
 
@@ -47,6 +65,13 @@ export interface SessionStore {
   readonly create: Effect.Effect<Session>
   readonly open: (id: SessionID) => Effect.Effect<Session>
   readonly fold: (id: SessionID) => Effect.Effect<Transcript>
+  /**
+   * Every Session, in one stated order: most recently updated first, id as
+   * the tiebreak, newer first — `byRecency` is the rule written down. The
+   * order used to be whatever a store's walk produced, so a terminal fold
+   * and a web fold were one accident away from disagreeing about what Eva
+   * holds. Every store owes this same order.
+   */
   readonly list: Effect.Effect<readonly SessionHeader[]>
 }
 

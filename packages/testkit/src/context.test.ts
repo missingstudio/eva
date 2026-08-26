@@ -1,4 +1,4 @@
-import { sequenced, type TraceStore } from "@missingstudio/eva-core"
+import { numbered, sequenced, type StampedStore } from "@missingstudio/eva-core"
 import { sessionID, type Event, type SessionID } from "@missingstudio/eva-schema"
 import { define } from "@missingstudio/eva-sdk"
 import { Effect, Scope, Stream } from "effect"
@@ -25,15 +25,15 @@ const held: Event[] = []
 const sink = define({
   id: "test.sink.held",
   effect: Effect.fn("test.sink.held")(function* (ctx) {
-    const store: TraceStore = {
-      highWater: Effect.succeed(new Map<SessionID, number>()),
+    const store: StampedStore = {
+      highWater: () => Effect.succeed(0),
       write: (group) => Effect.sync(() => void held.push(...group)),
       replay: (session) =>
         Stream.suspend(() => Stream.fromIterable(held.filter((one) => one.session === session))),
       sessions: Effect.sync(() => [...new Set(held.map((one) => one.session))]),
       close: Effect.void,
     }
-    yield* ctx.slot.traceSink.provide(ctx.id, yield* sequenced(store))
+    yield* ctx.slot.traceSink.provide(ctx.id, yield* sequenced(yield* numbered(store)))
   }),
 })
 

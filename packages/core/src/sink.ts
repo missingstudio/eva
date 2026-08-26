@@ -1,6 +1,7 @@
 import { mergeText, type Event, type SessionID } from "@missingstudio/eva-schema"
 import { Effect, PubSub, Stream } from "effect"
 import type { TraceSink } from "./contracts.js"
+import { headerOf, type SessionHeader } from "./transcript.js"
 
 export class SinkClosedError extends Error {
   override readonly name = "SinkClosedError"
@@ -10,47 +11,126 @@ export class SinkClosedError extends Error {
 }
 
 /**
- * What a sink stores. It is handed records that already carry their trace
- * positions, and it says where each session got to — on a fresh process
- * that answer comes from whatever it kept.
+ * What a sink stores. It is handed a coalesced group with no trace
+ * positions, and it owns the allocation: each event is numbered one past
+ * its session's high water inside the same act that makes it durable.
+ * A store that allocates in its own transaction is safe against a second
+ * writer; one that cannot implements `StampedStore` instead.
  */
 export interface TraceStore {
-  readonly highWater: Effect.Effect<ReadonlyMap<SessionID, number>>
-  // Writes a stamped group. It returns once the group is durable.
-  readonly write: (group: readonly Event[]) => Effect.Effect<void>
+  // Numbers a group and stores it. Returns the stamped group once durable.
+  readonly append: (group: readonly Event[]) => Effect.Effect<readonly Event[]>
+  readonly highWater: (session: SessionID) => Effect.Effect<number>
   readonly replay: (session: SessionID) => Stream.Stream<Event>
   readonly sessions: Effect.Effect<readonly SessionID[]>
+  /**
+   * Every session's Header, when the store can answer without replaying
+   * every Session — a table beside the log, or a first line and an `mtime`.
+   * Optional here and never optional at the seam: a store without one is
+   * folded by `sinkOf`, so the listing is never wrong, only slower.
+   */
+  readonly headers?: Effect.Effect<readonly SessionHeader[]>
   readonly close: Effect.Effect<void>
 }
 
 /**
- * The trace-position rule every sink follows: coalesce text chunks first,
- * then number each event one past its session's high water. Numbering
- * before merging would leave holes. The given map is not written; the
- * caller moves its own high water once the write is safe.
+ * A store that keeps what it is given and numbers nothing: `write` is
+ * handed records that already carry their trace positions, and `highWater`
+ * answers from whatever the store kept — asked per session, so a store
+ * that recovers lazily reads one session's records and not the world's.
  */
-const stampGroup = (
-  highWater: ReadonlyMap<SessionID, number>,
-  group: readonly Event[],
-): readonly Event[] => {
-  const next = new Map(highWater)
-  return mergeText(group).map((event) => {
-    const seq = (next.get(event.session) ?? 0) + 1
-    next.set(event.session, seq)
-    return { ...event, seq }
-  })
+export interface StampedStore {
+  readonly highWater: (session: SessionID) => Effect.Effect<number>
+  // Writes a stamped group. It returns once the group is durable.
+  readonly write: (group: readonly Event[]) => Effect.Effect<void>
+  readonly replay: (session: SessionID) => Stream.Stream<Event>
+  readonly sessions: Effect.Effect<readonly SessionID[]>
+  readonly headers?: Effect.Effect<readonly SessionHeader[]>
+  readonly close: Effect.Effect<void>
 }
 
 /**
- * Turns a store into a sink by holding the rule every sink owed: merge,
- * number from the high water, advance only once the write is durable, and
- * refuse a group after the close. A store answers where records live; this
- * answers where they sit in the Trace, and it is written once for all of
- * them.
+ * Either kind of store. A sink author writes one of them and hands it to
+ * `sinkOf`; which one is the single question they answer, and the answer is
+ * whether the store can number inside the act that makes a group durable.
+ */
+export type AnyStore = TraceStore | StampedStore
+
+/**
+ * In-memory allocation over a store that cannot allocate for itself: the
+ * high water is asked once per session, held here, and moved only after
+ * the write is durable — a group that never landed leaves the next one to
+ * take the numbers it wanted. One process only, which is the trade the
+ * JSONL and memory stores accept and a transactional store must not.
+ *
+ * An internal seam of `sinkOf`, with its own tests. Sink authors reach it
+ * by handing `sinkOf` a `StampedStore`, never by name.
+ */
+export const numbered = (store: StampedStore): Effect.Effect<TraceStore> =>
+  Effect.sync(() => {
+    const highWater = new Map<SessionID, number>()
+
+    const headOf = (session: SessionID): Effect.Effect<number> =>
+      Effect.suspend(() => {
+        const held = highWater.get(session)
+        if (held !== undefined) return Effect.succeed(held)
+        return Effect.map(store.highWater(session), (found) => {
+          highWater.set(session, found)
+          return found
+        })
+      })
+
+    return {
+      append: (group) =>
+        Effect.gen(function* () {
+          const next = new Map<SessionID, number>()
+          const stamped: Event[] = []
+          for (const event of group) {
+            const seq = (next.get(event.session) ?? (yield* headOf(event.session))) + 1
+            next.set(event.session, seq)
+            stamped.push({ ...event, seq })
+          }
+          yield* store.write(stamped)
+          // Positions are provisional until the write is durable, so the
+          // high water moves only after the store says the group landed.
+          for (const [session, seq] of next) highWater.set(session, seq)
+          return stamped
+        }),
+      highWater: headOf,
+      replay: store.replay,
+      sessions: store.sessions,
+      ...(store.headers === undefined ? {} : { headers: store.headers }),
+      close: store.close,
+    }
+  })
+
+/**
+ * Every Session's Header, folded from the record a Session at a time. What
+ * a store answers when it keeps no Headers of its own — right by
+ * construction, because it is the same fold every other projection is, and
+ * slower for exactly that reason.
+ */
+const folded = (store: TraceStore): Effect.Effect<readonly SessionHeader[]> =>
+  Effect.gen(function* () {
+    const found: SessionHeader[] = []
+    for (const session of yield* store.sessions) {
+      found.push(headerOf(session, [...(yield* Stream.runCollect(store.replay(session)))]))
+    }
+    return found
+  })
+
+/**
+ * Turns a store into a sink by holding what every sink owes and no store
+ * should repeat: coalesce text chunks before the store numbers them —
+ * numbering before merging would leave holes — hand a committed record to
+ * its followers, answer for a store that keeps no Headers, and refuse a
+ * group after the close. It is written once for every store, because two
+ * sinks once paid these rules separately and drifted.
+ *
+ * An internal seam of `sinkOf`, with its own tests.
  */
 export const sequenced = (store: TraceStore): Effect.Effect<TraceSink> =>
-  Effect.gen(function* () {
-    const highWater = new Map(yield* store.highWater)
+  Effect.sync(() => {
     let closed = false
 
     // One hub per followed session, made when the first follower arrives.
@@ -72,12 +152,9 @@ export const sequenced = (store: TraceStore): Effect.Effect<TraceSink> =>
       append: (group: readonly Event[]) =>
         Effect.gen(function* () {
           if (closed) return yield* Effect.die(new SinkClosedError())
-          const stamped = stampGroup(highWater, group)
-          if (stamped.length === 0) return [] as readonly Event[]
-          yield* store.write(stamped)
-          // Positions are provisional until the write is durable, so the
-          // high water moves only after the store says the group landed.
-          for (const event of stamped) highWater.set(event.session, event.seq)
+          const merged = mergeText(group)
+          if (merged.length === 0) return [] as readonly Event[]
+          const stamped = yield* store.append(merged)
           // Followers hear the record only once it is the record.
           for (const event of stamped) {
             const hub = followers.get(event.session)
@@ -86,7 +163,7 @@ export const sequenced = (store: TraceStore): Effect.Effect<TraceSink> =>
           return stamped
         }),
 
-      highWater: Effect.sync(() => new Map(highWater)),
+      highWater: store.highWater,
 
       follow: (session: SessionID) =>
         Effect.gen(function* () {
@@ -96,6 +173,7 @@ export const sequenced = (store: TraceStore): Effect.Effect<TraceSink> =>
 
       replay: store.replay,
       sessions: store.sessions,
+      headers: store.headers ?? folded(store),
 
       // Safe to repeat, and the store is closed exactly once.
       close: Effect.suspend(() => {
@@ -105,3 +183,12 @@ export const sequenced = (store: TraceStore): Effect.Effect<TraceSink> =>
       }),
     }
   })
+
+/**
+ * The one way a store becomes a sink. A store that numbers for itself is
+ * sequenced over directly; one that does not is numbered in this process
+ * first. Every sink plugin and every test that wants a sink comes through
+ * here, so the composition is one thing to change rather than eight.
+ */
+export const sinkOf = (store: AnyStore): Effect.Effect<TraceSink> =>
+  "append" in store ? sequenced(store) : Effect.flatMap(numbered(store), sequenced)
