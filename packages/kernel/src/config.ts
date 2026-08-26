@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { expand } from "@missingstudio/eva-core/local"
+import { configPath, expand } from "@missingstudio/eva-core/local"
 import { Effect } from "effect"
 import { parse } from "yaml"
 import { deepMerge, leaves } from "./mapping.js"
@@ -40,12 +40,14 @@ export class ConfigError extends Error {
 }
 
 /**
- * `EVA_CONFIG` replaces this path rather than adding a layer over it. A
- * hermetic run depends on the replacement, and `--config` is the flag that
+ * Where the person's own config file is. `EVA_CONFIG` replaces that path
+ * rather than adding a layer over it, and `--config` is the flag that
  * overlays.
+ *
+ * It lives beside `expand` in `eva-core/local`, because `eva.approval` writes
+ * a grant into the same file and a plugin may not import the kernel.
  */
-export const configPath = (env: NodeJS.ProcessEnv = process.env): string =>
-  expand(env["EVA_CONFIG"] ?? "~/.eva/config.yaml")
+export { configPath } from "@missingstudio/eva-core/local"
 
 /**
  * Where a key came from. A mapping key has no origin of its own, so this

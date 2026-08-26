@@ -1,3 +1,4 @@
+import type { PermissionOutcome, PermissionRequest } from "@missingstudio/eva-acp"
 import type {
   ContentBlock,
   Disposition,
@@ -113,6 +114,51 @@ export const strictest = (decisions: readonly ToolDecision[]): ToolDecision | un
     undefined,
   )
 
+/**
+ * The options a person is offered, and the only ones. ACP carries an option
+ * list per request because a foreign agent may offer a subset; Eva's gate
+ * offers all four of them every time, so the list is a constant here rather
+ * than a field on the request — a request that carried it would carry the
+ * same four words on every ask, and a surface would have two places to read
+ * the labels from.
+ *
+ * `optionId` is the kind, because the answer names an option by id and the
+ * gate turns that id back into an outcome. Two spellings of one option would
+ * be a table to keep in step.
+ */
+export const PERMISSION_OPTIONS: PermissionRequest["options"] = [
+  { optionId: "allow_once", name: "Allow once", kind: "allow_once" },
+  { optionId: "allow_always", name: "Allow always", kind: "allow_always" },
+  { optionId: "reject_once", name: "Reject once", kind: "reject_once" },
+  { optionId: "reject_always", name: "Reject always", kind: "reject_always" },
+]
+
+/**
+ * The option this text names, or nothing. It reads an `optionId` and the
+ * human name, so a surface that offers the four as words needs no table of
+ * its own.
+ */
+export const optionFor = (text: string): PermissionOutcome["kind"] | undefined => {
+  const wanted = text.trim().toLowerCase()
+  return PERMISSION_OPTIONS.find(
+    (one) => one.optionId.toLowerCase() === wanted || one.name.toLowerCase() === wanted,
+  )?.kind
+}
+
+/**
+ * How an `ask` becomes an answer. This is `HarnessClient.requestPermission`
+ * with the call beside it: the ACP request names the call and not its
+ * arguments, and remembering an answer that says "always" is written over the
+ * words the call would run.
+ *
+ * Absent, an `ask` is a denial. A permission request with nobody to answer it
+ * is a denial, and a surface that takes no input has nobody behind it.
+ */
+export type Approving = (
+  request: PermissionRequest,
+  call: ToolCall,
+) => Effect.Effect<PermissionOutcome>
+
 // Why the boundary denied, or nothing when the call may run.
 const denial = (decision: ToolDecision | undefined): string | undefined => {
   if (decision === undefined) return undefined
@@ -153,6 +199,15 @@ export interface ToolDeps {
   readonly tool: (call: ToolCall) => Effect.Effect<ToolInfo | undefined>
   // The deciding boundary. Absent means nothing decides and the call runs.
   readonly beforeExecute?: (call: ToolCall) => Effect.Effect<Decided>
+  /**
+   * Turns the `ask` the boundary settled on into one of the four options.
+   *
+   * It runs after the boundary rather than inside a hook, and that is the
+   * whole reason it is here: `strictest` has already chosen, so one call asks
+   * one person once whichever hook asked, and no other hook's `ask` can
+   * outrank the answer a person gave.
+   */
+  readonly approving?: Approving
   readonly afterExecute?: (call: ToolCall, result: ToolResult) => Effect.Effect<ToolResult>
   // Where the records of the call go, in order.
   readonly emit: (payload: Payload) => Effect.Effect<void>
@@ -245,7 +300,24 @@ export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, cal
     deps.beforeExecute === undefined ? { args: call.args } : yield* deps.beforeExecute(call)
   yield* opened(found.kind, settled.args)
 
-  const refused = denial(settled.decision)
+  /**
+   * The person answers after the call record lands, so a surface drawing the
+   * question already holds the call it is about — the call id is the request
+   * id, and the record naming that id came first.
+   */
+  const asked =
+    settled.decision?.kind === "ask" && deps.approving !== undefined
+      ? yield* deps.approving(
+          {
+            sessionId: call.session,
+            toolCall: { toolCallId: call.id, title: settled.decision.question },
+            options: PERMISSION_OPTIONS,
+          },
+          { ...call, args: settled.args },
+        )
+      : settled.decision
+
+  const refused = denial(asked)
   if (refused !== undefined) return yield* closed(toolText("denied", refused))
 
   const answered = yield* found.execute(settled.args, { id: call.id, emit: deps.emit })

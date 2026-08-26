@@ -1,9 +1,12 @@
+import type { PermissionOutcome, PermissionRequest } from "@missingstudio/eva-acp"
 import { sessionID, type Payload } from "@missingstudio/eva-schema"
 import { Deferred, Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import {
   executeTool,
   executeToolGroup,
+  optionFor,
+  PERMISSION_OPTIONS,
   strictest,
   toolText,
   TOOL_GROUP_LIMIT,
@@ -257,6 +260,82 @@ describe("the deciding boundary", () => {
     // The record names what ran, because the schema carries the arguments in
     // one place and a record of arguments nothing ran with is a lie.
     expect(said[0]?.kind === "tool_call" && said[0].args).toEqual({ path: "two.md" })
+  })
+})
+
+describe("a question the boundary settled on", () => {
+  const asking = (outcome: PermissionOutcome, held: PermissionRequest[] = []) =>
+    running({
+      ...answering(reader(toolText("ok", "hello"))),
+      beforeExecute: deciding({ kind: "ask", question: "read one.md?" }),
+      approving: (request) =>
+        Effect.sync(() => {
+          held.push(request)
+          return outcome
+        }),
+    })
+
+  // All four options round-trip. Two of them run the call and two refuse it,
+  // because the "always" axis is persistence and not strictness.
+  it.each(["allow_once", "allow_always"] as const)("runs the call on %s", async (kind) => {
+    expect((await asking({ kind })).result.disposition).toBe("ok")
+  })
+
+  it.each(["reject_once", "reject_always"] as const)("refuses the call on %s", async (kind) => {
+    const { result } = await asking({ kind, reason: "not that file" })
+    expect(result.disposition).toBe("denied")
+    expect(result.content).toEqual([{ type: "text", text: "not that file" }])
+  })
+
+  /**
+   * The call id is the request id, and the record naming it landed first, so
+   * a surface drawing the question already holds the call it is about.
+   */
+  it("asks about the call the record already named", async () => {
+    const held: PermissionRequest[] = []
+    const { said } = await asking({ kind: "allow_once" }, held)
+
+    expect(said[0]?.kind).toBe("tool_call")
+    expect(held).toEqual([
+      {
+        sessionId: call.session,
+        toolCall: { toolCallId: call.id, title: "read one.md?" },
+        options: PERMISSION_OPTIONS,
+      },
+    ])
+  })
+
+  it("offers ACP's four options and no others", () => {
+    expect(PERMISSION_OPTIONS.map((one) => one.kind)).toEqual([
+      "allow_once",
+      "allow_always",
+      "reject_once",
+      "reject_always",
+    ])
+    // The answer names an option by id, so a second spelling of an option
+    // would be a table to keep in step with the kinds.
+    for (const one of PERMISSION_OPTIONS) expect(one.optionId).toBe(one.kind)
+  })
+
+  it("reads an option from its id, or from the words a person is offered", () => {
+    expect(optionFor("allow_always")).toBe("allow_always")
+    expect(optionFor("  Reject Once ")).toBe("reject_once")
+    expect(optionFor("maybe")).toBeUndefined()
+  })
+
+  // A call the boundary allowed or refused outright never reaches a person.
+  it("is the only decision that asks", async () => {
+    const held: PermissionRequest[] = []
+    await running({
+      ...answering(reader(toolText("ok", "hello"))),
+      beforeExecute: deciding({ kind: "allow_once" }),
+      approving: (request) =>
+        Effect.sync(() => {
+          held.push(request)
+          return { kind: "allow_once" } as const
+        }),
+    })
+    expect(held).toEqual([])
   })
 })
 
