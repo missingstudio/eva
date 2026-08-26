@@ -1,10 +1,16 @@
-import type {
-  ModelRef,
-  ModelResolution,
-  ProviderError,
-  ProviderRequest,
-  Retry,
-  RunDeps,
+import {
+  strictest,
+  type Decided,
+  type ModelRef,
+  type ModelResolution,
+  type ProviderError,
+  type ProviderRequest,
+  type Retry,
+  type RunDeps,
+  type ToolCall,
+  type ToolDecision,
+  type ToolDeps,
+  type ToolResult,
 } from "@missingstudio/eva-core"
 import type { Payload } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
@@ -74,4 +80,64 @@ export const runDeps = (
     sleep: (milliseconds) => Effect.sleep(milliseconds),
     emit,
   }
+}
+
+/**
+ * The dependencies one tool call reads, built from the kernel. The tool
+ * domain answers which tool a name names, and the three tool hooks run here.
+ *
+ * `tool.execute.before` is a deciding boundary, so this is where its answer
+ * is read: a hook that threw denies the call it was deciding, because a gate
+ * that fails open because a plugin threw is not a gate. The kernel stops at
+ * the failure and no later hook runs, so the denial joins the decisions the
+ * hooks before it made and the strictest of them wins.
+ */
+export const toolDeps = (
+  kernel: Kernel,
+  emit: (payload: Payload) => Effect.Effect<void>,
+): ToolDeps => {
+  const tool = Effect.fn("boot.tool.resolve")(function* (call: ToolCall) {
+    const rows = yield* kernel.domains.tool.get
+    const held = cell(rows.find((row) => row.id === call.name))
+    yield* kernel.toolHooks.run("tool.resolve", {
+      name: call.name,
+      session: call.session,
+      resolve: held.set,
+    })
+    return held.read()
+  })
+
+  const beforeExecute = Effect.fn("boot.tool.before")(function* (call: ToolCall) {
+    const args = cell(call.args)
+    const decisions: ToolDecision[] = []
+    const failure = yield* kernel.toolHooks.run("tool.execute.before", {
+      name: call.name,
+      session: call.session,
+      args: args.port,
+      decide: (decision) => void decisions.push(decision),
+    })
+    if (failure !== undefined)
+      decisions.push({
+        kind: "reject_once",
+        reason: `the ${failure.hook} hook of ${failure.owner} failed`,
+      })
+
+    const decision = strictest(decisions)
+    return {
+      args: args.read(),
+      ...(decision === undefined ? {} : { decision }),
+    } satisfies Decided
+  })
+
+  const afterExecute = Effect.fn("boot.tool.after")(function* (call: ToolCall, result: ToolResult) {
+    const held = cell(result)
+    yield* kernel.toolHooks.run("tool.execute.after", {
+      name: call.name,
+      session: call.session,
+      result: held.port,
+    })
+    return held.read()
+  })
+
+  return { tool, beforeExecute, afterExecute, emit }
 }

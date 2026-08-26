@@ -360,10 +360,9 @@ scope, so a plugin's transforms disappear when the plugin unloads.
 
 ### 4.2 The domain list
 
-The nine domains the SDK declares today, their state, and the plugins that
-write to them. `tool` arrives with the stage that needs it; later stages add
-`workspace`, `check`, `memory`, `skill`, `importer`, and `signal`. Adding one
-is a reviewed SDK change.
+The ten domains the SDK declares today, their state, and the plugins that
+write to them. Later stages add `workspace`, `check`, `memory`, `skill`,
+`importer`, and `signal`. Adding one is a reviewed SDK change.
 
 | Domain        | Holds                                           | Finalizer does                                                                | Written by                                           |
 | ------------- | ----------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -371,6 +370,7 @@ is a reviewed SDK change.
 | `harness`     | harness registrations, one entry per harness    | checks that the selected harness exists — checked at selection, not at commit | `eva.harness.*`, `eva.workflow`                      |
 | `surface`     | surface registrations, one entry per surface    | checks id collisions, resolves the active set                                 | `eva.tui`, `eva.print`, `eva.api`, `eva.web`         |
 | `agent`       | agent definitions: model, tools, budget, prompt | resolves inheritance, applies the default                                     | `eva.agents`, `eva.profile`, `eva.config`            |
+| `tool`        | tool registrations, one entry per tool          | —                                                                             | `eva.tool.*`, `eva.config`                           |
 | `prompt`      | Templates, one row per Template                 | —                                                                             | `eva.prompt`, `eva.workflow`, `eva.config`           |
 | `command`     | slash commands and their handlers               | checks name and alias collisions                                              | `eva.commands`, `eva.print`, `eva.config`            |
 | `theme`       | themes: colors and syntax styles                | resolves the active theme, fills missing keys                                 | `eva.themes`, `eva.config`                           |
@@ -380,8 +380,8 @@ is a reviewed SDK change.
 Each domain publishes `<name>.updated` after it commits.
 
 A row that describes an action carries the action. `CommandInfo.run`,
-`SurfaceInfo.start` and `HarnessInfo.open` are all optional, so one plugin may
-name a command and
+`SurfaceInfo.start`, `HarnessInfo.open` and `ToolInfo.execute` are all
+optional, so one plugin may name a command and
 another supply what it does: `eva.commands` declares `/cost`, and `eva.print`
 fills in its handler, because the formatter it needs belongs to the plugin that
 prints. A row with the field absent names something the build knows of but
@@ -795,17 +795,26 @@ Rules:
 
 Stage 0's four provider hooks observe: each decorates a Run and none of them
 decides whether it proceeds. `tool.execute.before` is the first deciding
-boundary. The kinds are declared beside the hook spec — `PROVIDER_BOUNDARIES`
-in `packages/sdk/src/hooks.ts` — and the composition root hands them to
-`makeHooks`, so a hook the spec declares and the boundary map misses is a
-compile error. A hook registration carries the id of the plugin that made it,
-the way a domain transform does, so a failure names whose hook threw.
+boundary, and the only one today. The kinds are declared beside the hook spec
+— `PROVIDER_BOUNDARIES` and `TOOL_BOUNDARIES` in `packages/sdk/src/hooks.ts` —
+and the composition root hands them to `makeHooks`, so a hook the spec
+declares and the boundary map misses is a compile error. A hook registration
+carries the id of the plugin that made it, the way a domain transform does, so
+a failure names whose hook threw.
+
+`run` answers the denial a deciding boundary produced, or nothing, and the
+caller of the hooks turns a denial into one: `toolDeps` in
+`packages/boot/src/deps.ts` reads the answer at `tool.execute.before` and
+hands the pipeline a `reject_once` naming the hook and the plugin. The kernel
+cannot force that read, so a new deciding boundary owes it.
 
 ### The hook list
 
 Every hook, and the roadmap stage that introduces it.
 [roadmap.md](../roadmap.md#the-extension-points-by-stage) carries the same
-table, split by stage; a hook missing from one of the two is a defect.
+table, split by stage; a hook missing from one of the two is a defect. The
+four provider boundaries and the three tool boundaries exist today; every
+other row is the plan of the stage beside it.
 
 | Hook                      | Stage | Fires                                 | Can change                              |
 | ------------------------- | ----- | ------------------------------------- | --------------------------------------- |
@@ -830,10 +839,11 @@ The tool gate is the important one, so here it is in full. It is the seam that
 carries the tool policy, and it is how a plugin denies an action.
 
 ```ts
-// packages/sdk/src/domains/tool.ts
+// packages/core/src/tool.ts
 /**
- * What a hook may decide. `ask` is not a final answer — the gate resolves it
- * through `Frontend.ask` and produces one of the other four.
+ * What a hook may decide. `ask` is not a final answer — a gate that can reach
+ * a person resolves it through `Frontend.ask` and produces one of the other
+ * four, and a call that reaches the tool still holding an `ask` is denied.
  */
 export type ToolDecision =
   | { readonly kind: "allow_once" }
@@ -841,13 +851,16 @@ export type ToolDecision =
   | { readonly kind: "reject_once"; readonly reason: string }
   | { readonly kind: "reject_always"; readonly reason: string }
   | { readonly kind: "ask"; readonly question: string }
+```
 
+```ts
+// packages/sdk/src/hooks.ts
 export interface ToolExecuteBefore {
   readonly name: string
-  readonly sessionID: string
+  readonly session: SessionID
   readonly args: {
     get(): unknown
-    update(next: (args: any) => any): void
+    update(next: (args: unknown) => unknown): void
   }
   /** The strictest decision wins. A non-interactive surface turns ask into reject_once. */
   decide(decision: ToolDecision): void
@@ -855,33 +868,36 @@ export interface ToolExecuteBefore {
 
 export interface ToolExecuteAfter {
   readonly name: string
-  readonly sessionID: string
+  readonly session: SessionID
   readonly result: {
     get(): ToolResult
     update(next: (result: ToolResult) => ToolResult): void
   }
 }
 
-export type ToolHooks = Hooks<{
-  resolve: ToolResolve
-  "execute.before": ToolExecuteBefore
-  "execute.after": ToolExecuteAfter
-}>
+// The hook names are the boundary names, so a `plugin.failed` report and this
+// table say the same word.
+export interface ToolHookSpec {
+  "tool.resolve": ToolResolve
+  "tool.execute.before": ToolExecuteBefore
+  "tool.execute.after": ToolExecuteAfter
+}
 ```
+
+The family is `ctx.toolHooks` and not `ctx.tool`, because `ctx.tool` is the
+tool domain: a plugin registers a tool as a row and decorates a call with a
+hook, and the two are different extension points.
 
 ```ts
 export const ToolPolicy = define({
   id: "eva.tool.policy",
   effect: Effect.fn(function* (ctx) {
-    yield* ctx.tool.hook(
-      "execute.before",
-      Effect.fn(function* (event) {
-        const config = yield* ctx.config.get()
-        if (!allowed(config.tools, event.name, event.args.get())) {
-          event.decide({ kind: "reject_once", reason: `${event.name} is not in this profile` })
-        }
-      }),
-    )
+    const config = yield* ctx.config
+    yield* ctx.toolHooks["tool.execute.before"]((event) => {
+      if (!allowed(config.tools, event.name, event.args.get())) {
+        event.decide({ kind: "reject_once", reason: `${event.name} is not in this profile` })
+      }
+    })
   }),
 })
 ```

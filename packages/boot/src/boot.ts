@@ -5,6 +5,7 @@ import type {
   Domain,
   DomainMiss,
   FileSystem,
+  HookFailure,
   Recorder,
   Sandbox,
   SessionStore,
@@ -28,6 +29,7 @@ import type { Broadcast } from "@missingstudio/eva-core"
 import {
   priceLookup,
   PROVIDER_BOUNDARIES,
+  TOOL_BOUNDARIES,
   type BroadcastMap,
   type CatalogDraft,
   type CatalogState,
@@ -39,6 +41,8 @@ import {
   type RowDomainName,
   type RowInfos,
   type Slots,
+  type ToolHooks,
+  type ToolHookSpec,
 } from "@missingstudio/eva-sdk"
 import type { PriceLookup } from "@missingstudio/eva-schema"
 import { Effect, type Scope } from "effect"
@@ -88,6 +92,9 @@ export interface Kernel {
   readonly slot: Slots
   readonly broadcast: Broadcast<BroadcastMap>
   readonly hooks: HookRegistry<ProviderHookSpec>
+  // The tool boundaries. A second registry rather than a wider spec, because
+  // a boundary map belongs to one spec and one caller.
+  readonly toolHooks: HookRegistry<ToolHookSpec>
   readonly domains: Domains
   // The Catalog's rates, derived once. The same read a plugin gets.
   readonly prices: Effect.Effect<PriceLookup>
@@ -209,6 +216,7 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     harness: yield* rowsOf("harness"),
     surface: yield* rowsOf("surface"),
     integration: yield* rowsOf("integration"),
+    tool: yield* rowsOf("tool"),
   } satisfies Domains
 
   // Derived once, beside the Catalog it folds. Read at the point of use, so
@@ -220,14 +228,16 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
    * soften one. An observing hook that threw is reported as the failure of
    * the plugin that registered it, because that is what it is.
    */
-  const hooks = yield* makeHooks<ProviderHookSpec>(PROVIDER_BOUNDARIES, {
-    failed: (failure) =>
+  const reportFailure = {
+    failed: (failure: HookFailure) =>
       broadcast.publish("plugin.failed", {
         id: failure.owner,
         cause: failure.cause,
         hook: failure.hook,
       }),
-  })
+  }
+  const hooks = yield* makeHooks<ProviderHookSpec>(PROVIDER_BOUNDARIES, reportFailure)
+  const toolHooks = yield* makeHooks<ToolHookSpec>(TOOL_BOUNDARIES, reportFailure)
   const optionsFor = new Map(options.resolved.map((entry) => [entry.id, entry.options ?? {}]))
 
   // Each entry is checked against the spec, so a hook the SDK declares and
@@ -238,6 +248,12 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     "provider.request.before": (callback) => hooks.on("provider.request.before", callback, owner),
     "provider.response.after": (callback) => hooks.on("provider.response.after", callback, owner),
     "provider.retry": (callback) => hooks.on("provider.retry", callback, owner),
+  })
+
+  const toolHooksFor = (owner: string): ToolHooks => ({
+    "tool.resolve": (callback) => toolHooks.on("tool.resolve", callback, owner),
+    "tool.execute.before": (callback) => toolHooks.on("tool.execute.before", callback, owner),
+    "tool.execute.after": (callback) => toolHooks.on("tool.execute.after", callback, owner),
   })
 
   const runtime: PluginRuntime<PluginContext> = yield* makePluginRuntime<PluginContext>(
@@ -271,8 +287,10 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
       harness: withOwner(domains.harness, id),
       surface: withOwner(domains.surface, id),
       integration: withOwner(domains.integration, id),
+      tool: withOwner(domains.tool, id),
       slot,
       provider: providerFor(id),
+      toolHooks: toolHooksFor(id),
       broadcast,
       prices,
       config: Effect.succeed(options.config ?? {}),
@@ -291,6 +309,7 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     slot,
     broadcast,
     hooks,
+    toolHooks,
     domains,
     prices,
     // The same predicate the report asked before booting, so a run and the

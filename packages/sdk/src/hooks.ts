@@ -5,8 +5,11 @@ import type {
   ProviderError,
   ProviderRequest,
   Retry,
+  ToolDecision,
+  ToolInfo,
+  ToolResult,
 } from "@missingstudio/eva-core"
-import type { Payload } from "@missingstudio/eva-schema"
+import type { Payload, SessionID } from "@missingstudio/eva-schema"
 
 // A hook changes an operation through purpose-built methods, never a field.
 export interface ModelResolve {
@@ -57,4 +60,60 @@ export const PROVIDER_BOUNDARIES: HookBoundaries<ProviderHookSpec> = {
   "provider.request.before": "observing",
   "provider.response.after": "observing",
   "provider.retry": "observing",
+}
+
+export interface ToolResolve {
+  readonly name: string
+  readonly session: SessionID
+  /**
+   * Set-only, as `model.resolve` is: a hook states its own answer and a later
+   * hook replaces it. The row the tool domain holds is the answer no hook
+   * changed.
+   */
+  resolve(tool: ToolInfo): void
+}
+
+export interface ToolExecuteBefore {
+  readonly name: string
+  readonly session: SessionID
+  readonly args: {
+    get(): unknown
+    update(next: (args: unknown) => unknown): void
+  }
+  /**
+   * The strictest decision wins, and a boundary nobody decided at allows. An
+   * `ask` that reaches the tool still unanswered is a denial.
+   */
+  decide(decision: ToolDecision): void
+}
+
+export interface ToolExecuteAfter {
+  readonly name: string
+  readonly session: SessionID
+  readonly result: {
+    get(): ToolResult
+    update(next: (result: ToolResult) => ToolResult): void
+  }
+}
+
+// The tool boundaries, declared the way the provider spec is: one map from
+// hook name to event shape, so a misspelling is a compile error.
+export interface ToolHookSpec {
+  "tool.resolve": ToolResolve
+  "tool.execute.before": ToolExecuteBefore
+  "tool.execute.after": ToolExecuteAfter
+}
+
+/**
+ * `tool.execute.before` is the first deciding boundary in the tree: the call
+ * it stands in front of may not run without it, so a hook there that throws
+ * denies the call rather than being reported and passed over.
+ *
+ * The other two observe. One states which tool answers a name and one reads
+ * what the tool answered, and neither may end a call by failing.
+ */
+export const TOOL_BOUNDARIES: HookBoundaries<ToolHookSpec> = {
+  "tool.resolve": "observing",
+  "tool.execute.before": "deciding",
+  "tool.execute.after": "observing",
 }

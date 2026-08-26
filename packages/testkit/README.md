@@ -1,10 +1,11 @@
 # @missingstudio/eva-testkit
 
-The test helpers of [Eva](../../README.md). A test needs five things the
+The test helpers of [Eva](../../README.md). A test needs six things the
 production tree cannot give it: a Provider that answers a written script
 instead of a model, a replay of a recorded provider stream, a live kernel
-over the plugins under test, the record read back from behind it, and a file
-system with no disk. All five live here.
+over the plugins under test, the record read back from behind it, a file
+system with no disk, and a tool call over the pipeline that runs one. All six
+live here.
 
 Eva is built on a plugin kernel: every capability is a plugin, and a plugin
 may not import the kernel — the layer rule in
@@ -107,6 +108,14 @@ make first and nothing to clean up after. It hands back a `plugin` for a
 `withKernel` load, the `fs` itself for a suite that wants no kernel, and
 `files()`, every file it holds, so a test reads what a tool wrote.
 
+To call a tool, `calling(kernel, options?)` builds the pipeline the
+composition root builds and answers `{ call, said }`: `call(name, args?, id?)`
+runs one call through the tool domain and the three tool boundaries, and
+`said()` is every payload it emitted, in order. A plugin may not import boot,
+so without this a tool plugin's own tests could reach its `execute` and never
+the pipeline that runs it. `options.emit` sends each payload on to a Recorder
+as well, for a suite that wants the call on a real Trace.
+
 ## API
 
 - `withKernel(loaded, body, options?)` — boots a live kernel over the named
@@ -123,10 +132,13 @@ make first and nothing to clean up after. It hands back a `plugin` for a
   `model.resolve` the way a provider plugin does. Both fakes go through it.
 - `virtualFileSystem(files?, root?)` — a `FileSystem` with no disk; returns
   `{ plugin, fs, root, files }`.
+- `calling(kernel, options?)` — tool calls over a live kernel; returns
+  `{ call, said }`.
 - `ScriptedTurn`, `Cassette`, `Scripted`, `Virtual`, `Loaded`,
-  `KernelOptions`, `LoadOptions` — the shapes above.
+  `KernelOptions`, `LoadOptions`, `Calling`, `CallOptions` — the shapes above.
 - `FAKE_PROVIDER`, `RECORDED_PROVIDER`, `VIRTUAL_FS` — the ids the fakes
-  register under, and `VIRTUAL_ROOT`, the root the virtual files sit under.
+  register under, `VIRTUAL_ROOT`, the root the virtual files sit under, and
+  `CALLING_SESSION`, the Session a call is made in when a test names none.
 
 ## What it does not do
 

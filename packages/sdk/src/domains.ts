@@ -7,6 +7,7 @@ import {
   type ModelRef,
   type Row,
   type SessionAPI,
+  type ToolInfo,
 } from "@missingstudio/eva-core"
 import type { ModelPrice, PriceLookup, SessionID } from "@missingstudio/eva-schema"
 import type { Effect, Scope } from "effect"
@@ -114,6 +115,13 @@ export interface CommandInfo {
  * the other. A plugin still reaches it from here.
  */
 export type { Row } from "@missingstudio/eva-core"
+
+/**
+ * The tool row lives in core for the same reason, and one more: the pipeline
+ * that executes a tool is core's, and core may not import the SDK. A plugin
+ * still reaches the row from here.
+ */
+export type { ToolInfo } from "@missingstudio/eva-core"
 
 export interface ThemeInfo {
   id: string
@@ -227,6 +235,7 @@ export interface RowInfos {
   readonly harness: HarnessInfo
   readonly surface: SurfaceInfo
   readonly integration: IntegrationInfo
+  readonly tool: ToolInfo
 }
 
 export type RowDomainName = keyof RowInfos
