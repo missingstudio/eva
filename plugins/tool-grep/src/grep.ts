@@ -62,6 +62,8 @@ export const grepTool = (deps: GrepDeps): ToolInfo => ({
   kind: "search",
   description: "Search the content of files under the workspace root.",
   input: INPUT,
+  // A search changes nothing, so two searches may run at once.
+  parallelSafe: () => true,
   execute: (input) =>
     Effect.gen(function* () {
       const asked = (input ?? {}) as Asked

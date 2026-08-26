@@ -38,6 +38,8 @@ export const globTool = (deps: GlobDeps): ToolInfo => ({
   kind: "search",
   description: "Name the files under the workspace root that a glob matches.",
   input: INPUT,
+  // A listing changes nothing, so two listings may run at once.
+  parallelSafe: () => true,
   execute: (input) =>
     Effect.gen(function* () {
       const pattern = patternOf(input)

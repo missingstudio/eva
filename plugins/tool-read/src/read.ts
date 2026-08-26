@@ -37,6 +37,8 @@ export const readTool = (deps: ReadDeps): ToolInfo => ({
   kind: "read",
   description: "Read a file under the workspace root and answer its content.",
   input: INPUT,
+  // A read changes nothing, so two reads may run at once.
+  parallelSafe: () => true,
   execute: (input) =>
     Effect.gen(function* () {
       const path = pathOf(input)
