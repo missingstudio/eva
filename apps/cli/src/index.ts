@@ -3,12 +3,12 @@ import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
 import { refusal } from "@missingstudio/eva-web"
-import { Cause, Effect, Exit, Scope } from "effect"
+import { Effect, Exit, Scope } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
 import { BUILD, serving } from "./plugins.js"
 import { report } from "./report.js"
 import { showConfig } from "./show.js"
-import { runInteractive } from "./interactive.js"
+import { interacted, runInteractive } from "./interactive.js"
 import { runPrint } from "@missingstudio/eva-print"
 import { resolveConfig, runHarness, startFrom, withSignals } from "./run.js"
 import { runServe, served } from "./serve.js"
@@ -164,10 +164,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       if (invocation.kind === "interactive") {
         const outcome = yield* Effect.exit(withSignals(runInteractive(started)))
         yield* Scope.close(scope, Exit.void)
-        if (Exit.isSuccess(outcome)) return 0
-        world.err(`${Cause.squash(outcome.cause) as Error}\n`)
-        showHelp(world)
-        return 1
+        return interacted(outcome, world.err, () => showHelp(world))
       }
 
       // The same Session API a Console calls, driven by the command line
