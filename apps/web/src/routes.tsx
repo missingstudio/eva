@@ -6,6 +6,7 @@ import {
   Outlet,
   useParams,
 } from "@tanstack/react-router"
+import { answer, useAsking } from "./asking.js"
 import { Page } from "./page.js"
 import { SESSION_ROUTE } from "./paths.js"
 import { Session } from "./session.js"
@@ -16,9 +17,10 @@ const Shell = () => <Outlet />
 /**
  * The one Session the route names, read. The views take what they draw as
  * props, so this is the only place on the page where a read and a drawing
- * meet — and the Header, the record and the pipe are three reads, because the
- * Header is drawn before the fold has arrived and the pipe is drawn whatever
- * the fold is doing.
+ * meet — and the Header, the record, the pipe and the questions that stand are
+ * four reads, because the Header is drawn before the fold has arrived, the
+ * pipe is drawn whatever the fold is doing, and a question is not on the
+ * record at all.
  */
 const Read = () => {
   const params = useParams({ from: SESSION_ROUTE })
@@ -26,10 +28,12 @@ const Read = () => {
 
   return (
     <Session
-      session={session}
+      answer={answer}
+      asking={useAsking()}
       header={useHeader(session)}
-      reading={useTranscript(session)}
       pipe={usePipe()}
+      reading={useTranscript(session)}
+      session={session}
     />
   )
 }
