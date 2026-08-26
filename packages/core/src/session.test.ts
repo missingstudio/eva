@@ -413,3 +413,49 @@ describe("the calls a response proposed", () => {
     expect(seen[0]?.tools).toEqual(offered)
   })
 })
+
+/**
+ * A cap or a refusal cut the response short, so the calls in it are not calls
+ * the model finished making — and the reason ends the Run for whoever reads
+ * the result, which means such a call would answer with nobody watching.
+ */
+describe("a response a cap cut short", () => {
+  const truncated = (stopReason: StopReason): Provider => ({
+    id: "eva.provider.fake",
+    available: () => true,
+    turn: () =>
+      providerTurn(Stream.fromIterable([text("half a call")]), stopReason, [
+        { id: "call_1", name: "read", args: {} },
+      ]),
+  })
+
+  it("does not run the calls it proposed", async () => {
+    const recorder = fakeRecorder()
+    const result = await Effect.runPromise(
+      submit(deps(recorder, truncated("max_tokens")), { ...input, tools: [] }),
+    )
+
+    expect(result.calls).toEqual([])
+    expect(result.stopReason).toBe("max_tokens")
+    expect(kinds(recorder.groups.flat())).toEqual(["started", "text", "finished"])
+  })
+
+  // A provider that reported no reason drained cleanly, which is not a
+  // truncation.
+  it("runs them when the provider reported no reason at all", async () => {
+    const silent: Provider = {
+      id: "eva.provider.fake",
+      available: () => true,
+      turn: () =>
+        providerTurn(Stream.fromIterable([text("working")]), undefined, [
+          { id: "call_1", name: "read", args: {} },
+        ]),
+    }
+    const result = await Effect.runPromise(
+      submit(deps(fakeRecorder(), silent), { ...input, tools: [] }),
+    )
+
+    expect(result.calls[0]?.result.disposition).toBe("unknown_tool")
+    expect(result.stopReason).toBeUndefined()
+  })
+})

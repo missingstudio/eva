@@ -292,8 +292,18 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
     // that reported none closes with a Claim and no reason, rather than with
     // an `end_turn` nobody said.
     if (failure === undefined) {
-      yield* proposed(turn.toolCalls === undefined ? [] : yield* turn.toolCalls)
-      return yield* close({ result: "done", summary: "answered" }, yield* turn.stopReason)
+      const reason = yield* turn.stopReason
+      /**
+       * A response a cap or a refusal cut short proposed nothing it finished
+       * proposing. Such a reason ends the Run for whoever reads the result,
+       * so a call run here would have answered with nobody to observe it —
+       * and a write that landed unobserved is worse than a call that did not
+       * run. An unreported reason is not a truncation: the stream drained.
+       */
+      if (reason !== "max_tokens" && reason !== "refusal") {
+        yield* proposed(turn.toolCalls === undefined ? [] : yield* turn.toolCalls)
+      }
+      return yield* close({ result: "done", summary: "answered" }, reason)
     }
 
     const decision =
