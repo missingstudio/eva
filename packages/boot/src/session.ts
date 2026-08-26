@@ -5,6 +5,7 @@ import {
   ResumeTooFarBehind,
   submit,
   WATCH_REPLAY_BOUND,
+  type Approving,
   type CancelCause,
   type FrontendAnswer,
   type HarnessHost,
@@ -44,18 +45,29 @@ export interface TurnInput {
   // Prior Runs, folded from the record. The stream is never the history.
   readonly history: readonly TranscriptMessage[]
   readonly emit: (payload: Payload) => Effect.Effect<void>
+  // How an `ask` reaches a person. This Run names no tools, so nothing asks;
+  // it is carried so one path builds the Run whatever opened it.
+  readonly approving?: Approving
 }
 
-// `HarnessHost` over this kernel. `run` binds the kernel's slots and hooks
-// into `submit`, so a Harness needs no kernel of its own. The contract itself
-// is in packages/core/src/harness.ts. The session is what a reported group
-// that opens its own Run is recorded under.
+/**
+ * `HarnessHost` over this kernel. `run` binds the kernel's slots and hooks
+ * into `submit`, so a Harness needs no kernel of its own. The contract itself
+ * is in packages/core/src/harness.ts. The session is what a reported group
+ * that opens its own Run is recorded under.
+ *
+ * Still two members. A Harness that wants tools names them on its `RunInput`
+ * and reads what they answered off its `RunResult`, so the tool pipeline
+ * reaches a Harness through the Run it already opens — and a native harness
+ * still never holds a `HarnessClient`.
+ */
 export const harnessHost = (
   kernel: Kernel,
   session: SessionID,
   emit: (payload: Payload) => Effect.Effect<void>,
+  approving?: Approving,
 ): HarnessHost => ({
-  run: (input) => submit(runDeps(kernel, emit), input),
+  run: (input) => submit(runDeps(kernel, emit, approving), input),
 
   /**
    * Emit, then commit. `submit`'s own report buffers first, because an
@@ -91,7 +103,7 @@ export const harnessHost = (
 
 // One Run against the resolved model, with every hook and the Budget wired.
 export const runTurn = Effect.fn("session.runTurn")(function* (kernel: Kernel, input: TurnInput) {
-  return yield* harnessHost(kernel, input.session, input.emit).run({
+  return yield* harnessHost(kernel, input.session, input.emit, input.approving).run({
     session: input.session,
     spec: { intent: input.prompt },
     model: input.model,
@@ -163,11 +175,22 @@ export interface Api {
    * from the moment this is called rather than from when the fiber runs, so
    * an answer can never arrive before there is something to answer.
    *
-   * Nothing at stage 0 asks. A harness needing a permission is the first
-   * caller, and this is the seam it uses.
+   * A tool call's `ask` is the first caller, through the `Gate` this API is
+   * built with. It stays on `Api` because a caller may hold the other half of
+   * one request without holding the gate.
    */
   readonly request: (id: RequestID) => Effect.Effect<FrontendAnswer>
 }
+
+/**
+ * How this build turns a tool call's `ask` into an answer, given the request
+ * half `makeSessionAPI` mints. It is a function of that half rather than an
+ * `Approving` outright, because the half does not exist until the API does —
+ * and because the asker that reaches a person and the rule language that
+ * remembers an answer belong to two different plugins, which meet in the
+ * composition root.
+ */
+export type Gate = (request: (id: RequestID) => Effect.Effect<FrontendAnswer>) => Approving
 
 /**
  * The whole of what a Surface may do to Eva, over this kernel. A surface
@@ -187,10 +210,27 @@ export const makeSessionAPI = (
   kernel: Kernel,
   model: ModelRef,
   scope: Scope.Scope,
+  gate?: Gate,
 ): Effect.Effect<Api> =>
   Effect.sync(() => {
     const live = new Map<SessionID, Live>()
     const pending = new Map<RequestID, Deferred.Deferred<FrontendAnswer>>()
+
+    /**
+     * Opens a question the surface must answer, and waits. The request is
+     * open from the moment this is called rather than from when the fiber
+     * runs, so an answer can never arrive before there is something to
+     * answer.
+     */
+    const request = (id: RequestID): Effect.Effect<FrontendAnswer> => {
+      const waiting = Deferred.makeUnsafe<FrontendAnswer>()
+      pending.set(id, waiting)
+      return Deferred.await(waiting)
+    }
+
+    // The gate is built here because the request half is minted here. A build
+    // that named none asks nobody, and an `ask` is then a denial.
+    const approving = gate?.(request)
 
     const of = Effect.fn("session.of")(function* (session: SessionID) {
       const found = live.get(session)
@@ -224,6 +264,7 @@ export const makeSessionAPI = (
         prompt,
         history,
         emit: emitTo(state),
+        ...(approving === undefined ? {} : { approving }),
       })
     })
 
@@ -283,7 +324,7 @@ export const makeSessionAPI = (
       }
 
       const harness = yield* Effect.provideService(
-        row.open(harnessHost(kernel, session, emit)),
+        row.open(harnessHost(kernel, session, emit, approving)),
         Scope.Scope,
         scope,
       )
@@ -433,12 +474,6 @@ export const makeSessionAPI = (
         pending.delete(id)
         yield* Deferred.succeed(waiting, given)
       }),
-    }
-
-    const request = (id: RequestID): Effect.Effect<FrontendAnswer> => {
-      const waiting = Deferred.makeUnsafe<FrontendAnswer>()
-      pending.set(id, waiting)
-      return Deferred.await(waiting)
     }
 
     return { session, request }
