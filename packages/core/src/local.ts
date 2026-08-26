@@ -25,5 +25,11 @@ export const shortID = (): string => randomUUID().replaceAll("-", "").slice(0, 1
  * A fresh Session identity. Whatever opens a Session mints one — the store
  * when there is one, and the composition root when nothing fills the slot —
  * so the spelling belongs under both rather than beside either.
+ *
+ * It is time-ordered: twelve hex characters of epoch milliseconds, then
+ * eight random. Sorting the ids sorts creation, which names a Session's
+ * file, breaks the `list` tie, and derives a date shard — all for one line.
+ * An older random id still parses, still resolves, and still folds.
  */
-export const newSessionID = (): SessionID => sessionID(`sess_${shortID()}`)
+export const newSessionID = (): SessionID =>
+  sessionID(`sess_${Date.now().toString(16).padStart(12, "0")}${shortID().slice(0, 8)}`)

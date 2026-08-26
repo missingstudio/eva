@@ -97,3 +97,18 @@ export const headerOf = (session: SessionID, events: readonly Event[]): SessionH
   id: session,
   ...headerFold(events.filter((event) => event.session === session)),
 })
+
+/**
+ * The order `SessionStore.list` promises: most recently updated first, id
+ * as the tiebreak, newer first. `updatedAt` is an ISO-8601 UTC timestamp,
+ * so the wall order is the string order. A Header with none — a Session
+ * opened in this process and not yet committed — sorts last.
+ */
+export const byRecency = (a: SessionHeader, b: SessionHeader): number => {
+  if (a.updatedAt !== b.updatedAt) {
+    if (a.updatedAt === undefined) return 1
+    if (b.updatedAt === undefined) return -1
+    return a.updatedAt < b.updatedAt ? 1 : -1
+  }
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0
+}
