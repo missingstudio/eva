@@ -17,6 +17,7 @@ import { providerCompatible } from "@missingstudio/eva-provider-compatible"
 import { providerOpenAI } from "@missingstudio/eva-provider-openai"
 import { providerRetry } from "@missingstudio/eva-provider-retry"
 import { sandboxNone } from "@missingstudio/eva-sandbox-none"
+import { sched } from "@missingstudio/eva-sched"
 import { shell } from "@missingstudio/eva-shell"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
 import type { ReviewedEntry } from "@missingstudio/eva-config"
@@ -170,6 +171,9 @@ export const BUILT_IN: readonly Plugin[] = [
   toolGlob,
   toolWeb,
   toolBash,
+  // After the tools, because it narrows the rows they registered: a build
+  // that forces a tool serial edits a row that is already there.
+  sched,
   commands,
   themes,
   keymap,
