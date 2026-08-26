@@ -927,18 +927,24 @@ tool domain: a plugin registers a tool as a row and decorates a call with a
 hook, and the two are different extension points.
 
 ```ts
-export const ToolPolicy = define({
+export const toolPolicy = define({
   id: "eva.tool.policy",
-  effect: Effect.fn(function* (ctx) {
-    const config = yield* ctx.config
+  reads: POLICY_KEYS.shapes,
+  effect: Effect.fn("eva.tool.policy")(function* (ctx) {
+    const set = rulesOf(yield* ctx.config)
     yield* ctx.toolHooks["tool.execute.before"]((event) => {
-      if (!allowed(config.tools, event.name, event.args.get())) {
-        event.decide({ kind: "reject_once", reason: `${event.name} is not in this profile` })
-      }
+      const decision = judge(set.rules, event.args.get())
+      if (decision !== undefined) event.decide(decision)
     })
   }),
 })
 ```
+
+`judge` is a pure function of the rule set and the call's arguments — the whole
+gate, with no model in it — so the same answer is reachable from CI through
+`eva policy check`. A hook that decides nothing allows, which is why the gate
+says nothing about a call no rule names: which calls need an answer at all is
+the permission mode's question.
 
 ## 7. Broadcasts
 
