@@ -23,6 +23,7 @@ import {
 import type { Broadcast } from "@missingstudio/eva-core"
 import {
   priceLookup,
+  PROVIDER_BOUNDARIES,
   type BroadcastMap,
   type CatalogDraft,
   type CatalogState,
@@ -206,17 +207,30 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
   // a Catalog rebuild moves the next estimate.
   const prices = Effect.map(domains.catalog.get, priceLookup)
 
-  const hooks = yield* makeHooks<ProviderHookSpec>()
+  /**
+   * The boundaries come from the SDK beside the spec, so this build cannot
+   * soften one. An observing hook that threw is reported as the failure of
+   * the plugin that registered it, because that is what it is.
+   */
+  const hooks = yield* makeHooks<ProviderHookSpec>(PROVIDER_BOUNDARIES, {
+    failed: (failure) =>
+      broadcast.publish("plugin.failed", {
+        id: failure.owner,
+        cause: failure.cause,
+        hook: failure.hook,
+      }),
+  })
   const optionsFor = new Map(options.resolved.map((entry) => [entry.id, entry.options ?? {}]))
 
   // Each entry is checked against the spec, so a hook the SDK declares and
-  // this map misses is a compile error.
-  const provider: ProviderHooks = {
-    "model.resolve": (callback) => hooks.on("model.resolve", callback),
-    "provider.request.before": (callback) => hooks.on("provider.request.before", callback),
-    "provider.response.after": (callback) => hooks.on("provider.response.after", callback),
-    "provider.retry": (callback) => hooks.on("provider.retry", callback),
-  }
+  // this map misses is a compile error. The owner is stamped here the way a
+  // domain's transform stamps it: a plugin never names its own id.
+  const providerFor = (owner: string): ProviderHooks => ({
+    "model.resolve": (callback) => hooks.on("model.resolve", callback, owner),
+    "provider.request.before": (callback) => hooks.on("provider.request.before", callback, owner),
+    "provider.response.after": (callback) => hooks.on("provider.response.after", callback, owner),
+    "provider.retry": (callback) => hooks.on("provider.retry", callback, owner),
+  })
 
   const runtime: PluginRuntime<PluginContext> = yield* makePluginRuntime<PluginContext>(
     options.scope,
@@ -250,7 +264,7 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
       surface: withOwner(domains.surface, id),
       integration: withOwner(domains.integration, id),
       slot,
-      provider,
+      provider: providerFor(id),
       broadcast,
       prices,
       config: Effect.succeed(options.config ?? {}),

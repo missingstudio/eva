@@ -1,4 +1,5 @@
 import type {
+  HookBoundaries,
   ModelRef,
   ModelResolution,
   ProviderError,
@@ -43,4 +44,17 @@ export interface ProviderHookSpec {
   "provider.request.before": ProviderRequestBefore
   "provider.response.after": ProviderResponseAfter
   "provider.retry": ProviderRetry
+}
+
+/**
+ * What each provider boundary does. All four observe: none of them decides
+ * whether a call proceeds, so one that throws is reported and the Run goes
+ * on. A hook the spec declares and this map misses is a compile error, so a
+ * new boundary has to say which kind it is.
+ */
+export const PROVIDER_BOUNDARIES: HookBoundaries<ProviderHookSpec> = {
+  "model.resolve": "observing",
+  "provider.request.before": "observing",
+  "provider.response.after": "observing",
+  "provider.retry": "observing",
 }

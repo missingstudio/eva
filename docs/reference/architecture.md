@@ -681,6 +681,22 @@ Rules:
 - A later hook sees what an earlier hook changed.
 - A hook is not replayed during a domain rebuild.
 - Disposal affects the next invocation. An in-flight invocation finishes.
+- A boundary is **deciding** or **observing**. The boundary declares which,
+  because only the caller of the hooks knows what they decide.
+- A hook that dies fails toward its boundary's safe side. At an observing
+  boundary the failure is published as `plugin.failed` and the next hook runs:
+  a broken observer must never end a Run. At a deciding boundary the failure
+  is a denial — the call the boundary was deciding never runs, and no later
+  hook runs either, because a gate that fails open because a plugin threw is
+  not a gate.
+
+Stage 0's four provider hooks observe: each decorates a Run and none of them
+decides whether it proceeds. `tool.execute.before` is the first deciding
+boundary. The kinds are declared beside the hook spec — `PROVIDER_BOUNDARIES`
+in `packages/sdk/src/hooks.ts` — and the composition root hands them to
+`makeHooks`, so a hook the spec declares and the boundary map misses is a
+compile error. A hook registration carries the id of the plugin that made it,
+the way a domain transform does, so a failure names whose hook threw.
 
 ### The hook list
 
@@ -792,25 +808,25 @@ schema freezes.
 **Broadcasts** are process-local notifications. They are never written to the
 trace and they carry no schema guarantee across versions.
 
-| Broadcast             | Published when                             |
-| --------------------- | ------------------------------------------ |
-| `plugin.added`        | a plugin finished loading                  |
-| `plugin.removed`      | a plugin unloaded                          |
-| `plugin.failed`       | a plugin effect died during load           |
-| `catalog.updated`     | the catalog committed new state            |
-| `harness.updated`     | the harness domain committed new state     |
-| `surface.updated`     | the surface domain committed new state     |
-| `agent.updated`       | the agent domain committed new state       |
-| `command.updated`     | the command domain committed new state     |
-| `theme.updated`       | the theme domain committed new state       |
-| `keymap.updated`      | the keymap domain committed new state      |
-| `integration.updated` | the integration domain committed new state |
-| `config.changed`      | a config file on disk changed              |
-| `session.started`     | a session opened                           |
-| `run.opened`          | a run opened inside a session              |
-| `run.finished`        | a run closed with a claim                  |
-| `slot.filled`         | a slot received an implementation          |
-| `slot.emptied`        | a slot lost its implementation             |
+| Broadcast             | Published when                                    |
+| --------------------- | ------------------------------------------------- |
+| `plugin.added`        | a plugin finished loading                         |
+| `plugin.removed`      | a plugin unloaded                                 |
+| `plugin.failed`       | a plugin's load died, or its observing hook threw |
+| `catalog.updated`     | the catalog committed new state                   |
+| `harness.updated`     | the harness domain committed new state            |
+| `surface.updated`     | the surface domain committed new state            |
+| `agent.updated`       | the agent domain committed new state              |
+| `command.updated`     | the command domain committed new state            |
+| `theme.updated`       | the theme domain committed new state              |
+| `keymap.updated`      | the keymap domain committed new state             |
+| `integration.updated` | the integration domain committed new state        |
+| `config.changed`      | a config file on disk changed                     |
+| `session.started`     | a session opened                                  |
+| `run.opened`          | a run opened inside a session                     |
+| `run.finished`        | a run closed with a claim                         |
+| `slot.filled`         | a slot received an implementation                 |
+| `slot.emptied`        | a slot lost its implementation                    |
 
 ## 8. The kernel
 

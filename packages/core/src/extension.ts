@@ -106,6 +106,32 @@ export type Hooks<Spec> = {
   ) => Effect.Effect<Registration, never, Scope.Scope>
 }
 
+/**
+ * What the hooks at a boundary do there. A deciding boundary asks a question
+ * the caller may not answer without them — the tool gate is one. An
+ * observing boundary only watches. The boundary declares its kind, because
+ * only the caller of the hooks knows what they decide.
+ */
+export type HookBoundary = "deciding" | "observing"
+
+// One kind per hook the spec declares, so a hook with no boundary is a
+// compile error rather than a boundary that guesses.
+export type HookBoundaries<Spec> = {
+  readonly [Name in keyof Spec]: HookBoundary
+}
+
+/**
+ * A hook that threw: the boundary it ran at, the plugin that registered it,
+ * and what it threw. At an observing boundary this is reported and the Run
+ * continues. At a deciding boundary this is the boundary's answer — the call
+ * it was deciding is denied.
+ */
+export interface HookFailure {
+  readonly hook: string
+  readonly owner: string
+  readonly cause: unknown
+}
+
 export interface Broadcast<Map> {
   readonly subscribe: <Type extends keyof Map>(type: Type) => Stream.Stream<Map[Type]>
   readonly publish: <Type extends keyof Map>(type: Type, payload: Map[Type]) => Effect.Effect<void>
