@@ -56,6 +56,32 @@ export type Block =
    * and this member does not change shape when it does.
    */
   | { readonly kind: "diff"; readonly key: string; readonly path: string; readonly hunks: number }
+  /**
+   * The permission mode the Session runs under, from the moment it changed.
+   * A mode is a fact on the record, so a reader who scrolls back reads which
+   * mode each Run was made under rather than inferring it from what a Run was
+   * refused.
+   */
+  | { readonly kind: "mode"; readonly key: string; readonly mode: string; readonly reason?: string }
+  /**
+   * A permission request nobody has answered. It is the one Block that is not
+   * on the record, and it cannot be: a request a person has answered is the
+   * Disposition of the call it gated, and one nobody has answered is a thing
+   * that is still happening. It is a Block anyway, so that both surfaces draw
+   * one question the same way and neither invents a shape of its own.
+   *
+   * `request` is the id an answer names, which is the id of the tool call the
+   * question is about — so the card the record drew for that call is the card
+   * this stands under. The four options are not here: they are
+   * `PERMISSION_OPTIONS`, the same four every time, and a Block that carried
+   * them would give a renderer two places to read the labels from.
+   */
+  | {
+      readonly kind: "permission"
+      readonly key: string
+      readonly request: string
+      readonly question: string
+    }
   | {
       readonly kind: "image"
       readonly key: string
@@ -139,6 +165,13 @@ const blockOf = (key: string, block: TranscriptBlock): Block => {
           }
     case "edit":
       return { kind: "diff", key, path: block.path, hunks: block.hunks }
+    case "mode":
+      return {
+        kind: "mode",
+        key,
+        mode: block.mode,
+        ...(block.reason === undefined ? {} : { reason: block.reason }),
+      }
     // A payload kind the schema does not define, and a content type it does
     // not define, are the same fact to a renderer: the record holds one and
     // nothing here can draw it.
@@ -165,3 +198,39 @@ export const blockFold = (messages: readonly TranscriptMessage[]): readonly Turn
 // once rather than in every surface that folds one.
 export const blocksOf = (transcript: Transcript): readonly Turn[] =>
   blockFold(transcript.messages())
+
+/**
+ * A permission request nobody has answered: the id an answer names, and the
+ * question that was asked. The id is the tool call's, so the record the
+ * surface already holds names the call the question is about.
+ */
+export interface Asking {
+  readonly request: string
+  readonly question: string
+}
+
+/**
+ * The questions that stand, as Turns. It is a second source and never the
+ * record — a request nobody has answered has no position on the Trace — so it
+ * folds separately and a surface draws it after the record, the way it draws
+ * the tail of an open Run after the record.
+ *
+ * It answers Turns rather than Blocks so that a surface has one thing to draw
+ * and one switch to write. The author is the agent, because the question is
+ * the Run asking.
+ */
+export const askingOf = (asking: readonly Asking[]): readonly Turn[] =>
+  asking.length === 0
+    ? []
+    : [
+        {
+          key: "asking",
+          author: "agent",
+          blocks: asking.map((one, at) => ({
+            kind: "permission" as const,
+            key: `asking.${at}`,
+            request: one.request,
+            question: one.question,
+          })),
+        },
+      ]

@@ -88,13 +88,52 @@ describe("toLines", () => {
     expect(lines[0]).toMatchObject({ kind: "tool", text: "write failed denied" })
   })
 
-  // A file the Run changed is something the Run did. It used to fall out of
-  // the record fold before the terminal could ever draw it.
-  it("draws an edit as the file it changed", () => {
+  /**
+   * A file the Run changed is something the Run did. It used to fall out of
+   * the record fold before the terminal could ever draw it.
+   *
+   * The count of hunks is named beside the path, because the record holds it
+   * and it is the size of the work: one file changed in one place is not one
+   * file rewritten.
+   */
+  it("draws an edit as the file it changed and how much of it", () => {
     const lines = toLines(
       frameOf([message("agent", [{ type: "edit", path: "docs/one.md", hunks: 2 }])]),
     )
-    expect(lines[0]).toMatchObject({ kind: "tool", text: "edit docs/one.md" })
+    expect(lines[0]).toMatchObject({ kind: "tool", text: "edit docs/one.md 2 hunks" })
+  })
+
+  // One is not "1 hunks", and a reader counting the work does not want to
+  // read a number twice to find out.
+  it("says one hunk in the singular", () => {
+    const lines = toLines(
+      frameOf([message("agent", [{ type: "edit", path: "docs/one.md", hunks: 1 }])]),
+    )
+    expect(lines[0]).toMatchObject({ kind: "tool", text: "edit docs/one.md 1 hunk" })
+  })
+
+  /**
+   * A mode is a fact on the record, so the scroll-back says which mode each
+   * Run was made under. It is a system line: nobody said it, and drawing it
+   * as the agent's words would put it in the Run's voice.
+   */
+  it("draws a mode change as the mode and why it changed", () => {
+    const lines = toLines(
+      frameOf([
+        message("agent", [{ type: "mode", mode: "read-only", reason: "a person named it" }]),
+      ]),
+    )
+    expect(lines[0]).toMatchObject({
+      kind: "system",
+      text: "mode read-only · a person named it",
+    })
+  })
+
+  // A record that names no reason is drawn with none. An invented one would
+  // be a renderer that knows more than the record.
+  it("draws a mode change with no reason as the mode alone", () => {
+    const lines = toLines(frameOf([message("agent", [{ type: "mode", mode: "autonomous" }])]))
+    expect(lines[0]).toMatchObject({ kind: "system", text: "mode autonomous" })
   })
 
   it("passes over content that is not text", () => {

@@ -1,5 +1,7 @@
+import { PERMISSION_OPTIONS } from "@missingstudio/eva-core"
 import type { ActorKind } from "@missingstudio/eva-schema"
 import type { Block, Turn } from "@missingstudio/eva-session-view"
+import { Button } from "@missingstudio/ui/components/button"
 import {
   CommitFile,
   CommitFileChanges,
@@ -55,9 +57,17 @@ const panelOf = (key: string): string => `panel-${key}`
 export const BlockView = ({
   block,
   author,
+  answer,
 }: {
   readonly block: Block
   readonly author: ActorKind
+  /**
+   * Where an answer to a permission request goes. A page that holds a Client
+   * hands one over; a page drawn without one draws the four options and takes
+   * none of them, because a control that looks live and reaches nothing is
+   * worse than one that says it is not.
+   */
+  readonly answer?: (request: string, optionId: string) => void
 }) => {
   switch (block.kind) {
     /**
@@ -132,6 +142,56 @@ export const BlockView = ({
         </CommitFile>
       )
     /**
+     * Which mode the Session runs under, from the moment it changed. It is
+     * drawn as a plain line and not as a badge on the Turn: a mode is a fact
+     * with a position on the record, and a badge would say it was always so.
+     */
+    case "mode":
+      return (
+        <p className="rounded-md border border-rule px-3 py-2 text-sm">
+          mode <strong>{block.mode}</strong>
+          {block.reason === undefined ? null : (
+            <span className="text-muted-foreground"> · {block.reason}</span>
+          )}
+        </p>
+      )
+    /**
+     * A question that stands, and the four options it may be answered with.
+     * The options are `PERMISSION_OPTIONS` and not a field on the Block: Eva
+     * offers all four every time, so a Block that carried them would carry
+     * the same four words forever.
+     *
+     * The request id is drawn beside the question, because it is the id of the
+     * tool call the question is about — so a reader ties the question to the
+     * card the record drew for that call.
+     */
+    case "permission":
+      return (
+        <div
+          aria-label="permission request"
+          className="rounded-md border border-warning bg-card px-3 py-2"
+          role="group"
+        >
+          <p className="text-muted-foreground text-xs uppercase tracking-[0.06em]">
+            permission · call <code>{block.request}</code>
+          </p>
+          <p className="mt-1 whitespace-pre-wrap">{block.question}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {PERMISSION_OPTIONS.map((option) => (
+              <Button
+                disabled={answer === undefined}
+                key={option.optionId}
+                onClick={() => answer?.(block.request, option.optionId)}
+                size="sm"
+                variant="outline"
+              >
+                {option.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )
+    /**
      * An image travels as bytes, so the page draws the bytes. A `uri` on the
      * record names a file on the machine that made it, which a browser cannot
      * open — it is said beside the image as evidence, not used as a source.
@@ -167,7 +227,13 @@ export const BlockView = ({
  * well as in the styling a `Message` carries: a reader who cannot tell the
  * two apart by colour still has to be able to tell them apart.
  */
-export const Turns = ({ turns }: { readonly turns: readonly Turn[] }) =>
+export const Turns = ({
+  turns,
+  answer,
+}: {
+  readonly turns: readonly Turn[]
+  readonly answer?: (request: string, optionId: string) => void
+}) =>
   turns.length === 0 ? (
     // A Session that folds to nothing and one whose fold has not arrived are
     // two different things, and a page that drew them alike would be lying
@@ -183,7 +249,12 @@ export const Turns = ({ turns }: { readonly turns: readonly Turn[] }) =>
             </p>
             <MessageContent>
               {turn.blocks.map((block) => (
-                <BlockView key={block.key} author={turn.author} block={block} />
+                <BlockView
+                  key={block.key}
+                  author={turn.author}
+                  block={block}
+                  {...(answer === undefined ? {} : { answer })}
+                />
               ))}
             </MessageContent>
           </Message>
