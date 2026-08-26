@@ -18,7 +18,7 @@ import type { PriceLookup } from "@missingstudio/eva-schema"
 import type { Effect } from "effect"
 import type { Domains } from "./domains.js"
 import type { Plugin } from "./plugin.js"
-import type { ProviderHookSpec } from "./hooks.js"
+import type { ProviderHookSpec, ToolHookSpec } from "./hooks.js"
 
 /**
  * Every domain says when it commits. The topics are derived from the domain
@@ -66,6 +66,13 @@ export interface Slots {
 export type ProviderHooks = Hooks<ProviderHookSpec>
 
 /**
+ * The tool boundaries. It is not `tool`, because that field is the tool
+ * domain: a plugin registers a tool as a row and decorates a call with a
+ * hook, and the two are different extension points.
+ */
+export type ToolHooks = Hooks<ToolHookSpec>
+
+/**
  * Everything a plugin may touch. A plugin reaches the kernel no other way,
  * so adding an extension point is a change to this file and a reviewed one.
  */
@@ -75,6 +82,7 @@ export interface PluginContext extends Domains {
 
   readonly slot: Slots
   readonly provider: ProviderHooks
+  readonly toolHooks: ToolHooks
   readonly broadcast: Broadcast<BroadcastMap>
 
   // The kernel reads config; interpreting it is `eva.config`'s job. There is
