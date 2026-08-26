@@ -658,6 +658,14 @@ unpack_and_install() {
 	# not on every machine.
 	mv "$2/eva" "$3/eva"
 	chmod 0755 "$3/eva"
+
+	# The page `eva serve --web` serves travels beside the binary, because that
+	# is where the binary looks for it. A release from before it shipped one
+	# carries none, and an archive without a page installs the binary alone.
+	if [ -d "$2/eva-page" ]; then
+		rm -rf "$3/eva-page"
+		mv "$2/eva-page" "$3/eva-page"
+	fi
 }
 
 # The wordmark.

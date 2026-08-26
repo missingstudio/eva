@@ -113,7 +113,7 @@ musl, baseline (pre-AVX2), and `windows-arm64` variants — all of which OpenCod
 ships — are deferred until a user reports the gap; each is one line in the
 target list when it earns its place.
 
-Two traps, both found by OpenCode before us:
+Three traps, the first two found by OpenCode before us:
 
 **Native dependencies must be installed for every platform before compiling.**
 OpenTUI's renderer is one prebuilt package per platform, named as optional
@@ -129,8 +129,20 @@ prefers the injected value. The guard in §4 asks the built binary rather than
 the source, so a wrong wiring here reports `0.0.0` and fails before anything
 publishes.
 
-Each target the runner can execute gets a smoke test — run `--version`, expect
-the version — so "it compiled" is never mistaken for "it starts".
+**The page is a directory and a compiled binary is one file.**
+`eva serve --web` serves what `apps/web` built, and a binary has no workspace
+to look in. The release builds the page once, stages it as `eva-page` beside
+every binary, and archives that directory whole — a zip that junks paths
+flattens the bundle out of reach and serves a page that names nothing.
+`apps/cli` resolves `eva-page` from the binary's own path, so the npm packages,
+`install.sh` and the cask carry the page beside the binary and each keeps
+installing one thing.
+
+Each target the runner can execute gets a smoke test, and it runs on the
+unpacked archive rather than on the staged binary: `--version`, `--help`, then
+`serve --web` on a port the machine picks, with the page and the bundle it
+names both fetched over the socket. So "it compiled" is never mistaken for "it
+starts", and "it starts" is never mistaken for "it serves".
 
 ## 4. Cutting a release
 
@@ -280,7 +292,8 @@ archive name or a broken target is caught at a desk or on a pull request
 rather than on the one run where finishing matters most.
 
 In CI it is a job in `ci.yml` that runs when a change can reach the release
-path — the release scripts, the workflows, the CLI's build configuration — and
+path — the release scripts, the workflows, the CLI's build configuration, and
+the page a release now carries — and
 decides that in a step rather than an `if:`, because a skipped job is not a
 passing one and the gate would need a second exception to tell the two apart.
 Everything the rehearsal asserts about the tree's correctness is already

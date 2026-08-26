@@ -99,7 +99,7 @@ jobs:
           fi
           changed=$(git diff --name-only "$BASE"...HEAD)
           printf '%s\n' "$changed" | sed 's/^/  /'
-          if printf '%s\n' "$changed" | grep -qE '^(scripts/release/|\.github/workflows/(ci|release)\.yml|package\.json|bun\.lock|bunfig\.toml)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(scripts/release/|apps/web/|\.github/workflows/(ci|release)\.yml|package\.json|bun\.lock|bunfig\.toml)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "nothing here reaches the release path"
