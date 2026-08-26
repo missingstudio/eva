@@ -8,9 +8,11 @@
       "plugins/*"
     ],
     "catalog": {
+      "@tailwindcss/vite": "4.3.3",
       "@types/node": "22.20.1",
       "commander": "15.0.0",
       "effect": "4.0.0-rc.109",
+      "tailwindcss": "4.3.3",
       "typescript": "7.0.2",
       "vitest": "4.1.10",
       "yaml": "2.9.0",
