@@ -6,6 +6,7 @@ import {
   executeToolGroup,
   optionFor,
   PERMISSION_OPTIONS,
+  refuseCall,
   strictest,
   toolText,
   TOOL_GROUP_LIMIT,
@@ -218,6 +219,42 @@ describe("a call naming no registered tool", () => {
     )
 
     expect(result.disposition).toBe("unknown_tool")
+  })
+})
+
+/**
+ * A call that will not run leaves the same three records a call that ran
+ * leaves, so nothing on the Trace is a `tool_call` with no end.
+ */
+describe("a call that never starts", () => {
+  it("records the pair and names why in the result", async () => {
+    const said: Payload[] = []
+    const deps: ToolDeps = {
+      ...answering(reader(toolText("ok", "hello"))),
+      emit: (payload) => Effect.sync(() => void said.push(payload)),
+    }
+    const result = await Effect.runPromise(
+      refuseCall(deps, call, "budget_denied", "the Budget is exhausted: tokens"),
+    )
+
+    expect(result.disposition).toBe("budget_denied")
+    expect(said.map((payload) => payload.kind)).toEqual(["tool_call", "tool_update", "tool_result"])
+    // The row is resolved, so the record names what the call would have been.
+    expect(said[0]).toMatchObject({ kind: "tool_call", tool: "read", args: { path: "one.md" } })
+    expect(said[2]).toMatchObject({ kind: "tool_result", disposition: "budget_denied" })
+  })
+
+  // Nothing ran, so the tool is never reached.
+  it("does not run the tool", async () => {
+    const seen: unknown[] = []
+    const said: Payload[] = []
+    const deps: ToolDeps = {
+      ...answering(reader(toolText("ok", "hello"), seen)),
+      emit: (payload) => Effect.sync(() => void said.push(payload)),
+    }
+    await Effect.runPromise(refuseCall(deps, call, "skipped", "a steer arrived first"))
+
+    expect(seen).toEqual([])
   })
 })
 

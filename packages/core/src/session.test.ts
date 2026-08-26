@@ -8,9 +8,27 @@ import {
 } from "@missingstudio/eva-schema"
 import { Deferred, Effect, Fiber, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import type { Recorder } from "./contracts.js"
-import { ProviderError, providerTurn, type ModelResolution, type Provider } from "./provider.js"
+import type { Budget, Recorder } from "./contracts.js"
+import {
+  ProviderError,
+  providerTurn,
+  type ModelResolution,
+  type ProposedCall,
+  type Provider,
+  type ProviderRequest,
+} from "./provider.js"
 import { submit, type RunDeps, type RunInput } from "./session.js"
+import type { BudgetState } from "./spec.js"
+import { toolText, type ToolGroupDeps, type ToolInfo } from "./tool.js"
+
+// What a Budget with nothing left says about itself.
+const SPENT: BudgetState = {
+  tokens: 14,
+  costTicks: null,
+  milliseconds: 0,
+  steps: 1,
+  limits: { tokens: 10 },
+}
 
 const input: RunInput = {
   session: sessionID("sess_1"),
@@ -265,5 +283,133 @@ describe("submit", () => {
     const partial = spoken(committed)
     expect(partial).not.toBe("")
     expect("Partial".startsWith(partial)).toBe(true)
+  })
+})
+
+/**
+ * A Step is one model request plus the tool executions its response causes,
+ * and a Run is one Step. So the calls a response proposed run inside the Run
+ * that proposed them, and their records commit before it closes.
+ */
+describe("the calls a response proposed", () => {
+  const proposing = (
+    calls: readonly ProposedCall[],
+    stream: Stream.Stream<Payload, ProviderError> = Stream.fromIterable([text("working")]),
+  ): Provider => ({
+    id: "eva.provider.fake",
+    available: () => true,
+    turn: () => providerTurn(stream, "end_turn", calls),
+  })
+
+  const READ: ToolInfo = {
+    id: "read",
+    description: "reads",
+    kind: "read",
+    input: {},
+    parallelSafe: () => true,
+    execute: (given) => Effect.succeed(toolText("ok", `read ${JSON.stringify(given)}`)),
+  }
+
+  const registry =
+    (rows: readonly ToolInfo[]) =>
+    (into: (payload: Payload) => Effect.Effect<void>): ToolGroupDeps => ({
+      tool: (call) => Effect.succeed(rows.find((row) => row.id === call.name)),
+      emit: into,
+    })
+
+  it("runs them through the pipeline and answers what each one said", async () => {
+    const recorder = fakeRecorder()
+    const wiring = deps(recorder, proposing([{ id: "call_1", name: "read", args: { path: "a" } }]))
+    const result = await Effect.runPromise(
+      submit({ ...wiring, tools: registry([READ]) }, { ...input, tools: [] }),
+    )
+
+    expect(result.calls).toHaveLength(1)
+    expect(result.calls[0]?.call.id).toBe("call_1")
+    expect(result.calls[0]?.result.disposition).toBe("ok")
+    // The answer is the tool's, and the Run's own text stays the model's words.
+    expect(result.text).toBe("working")
+
+    // The three records of the call are committed, and they are inside the
+    // Run: `finished` is last.
+    const committed = recorder.groups.flat()
+    expect(kinds(committed)).toEqual([
+      "started",
+      "text",
+      "tool_call",
+      "tool_update",
+      "tool_result",
+      "finished",
+    ])
+  })
+
+  // A build with no tool domain is a registry that holds nothing, never a
+  // proposal quietly dropped: the model reads `unknown_tool` and can act.
+  it("answers unknown_tool when the build has no pipeline", async () => {
+    const recorder = fakeRecorder()
+    const wiring = deps(recorder, proposing([{ id: "call_1", name: "read", args: {} }]))
+    const result = await Effect.runPromise(submit(wiring, input))
+
+    expect(result.calls[0]?.result.disposition).toBe("unknown_tool")
+    expect(kinds(recorder.groups.flat())).toContain("tool_result")
+  })
+
+  // Exhausting a Budget is an Outcome and the partial work is kept: the call
+  // the response proposed is `budget_denied` on the record, and the Run still
+  // closes with the Claim its answer earned.
+  it("refuses them budget_denied when the response exhausted the Budget", async () => {
+    const recorder = fakeRecorder()
+    const wiring = deps(
+      recorder,
+      proposing(
+        [{ id: "call_1", name: "read", args: {} }],
+        Stream.fromIterable([text("working"), usage]),
+      ),
+    )
+    const spent: Budget = {
+      charge: () => Effect.succeed(SPENT),
+      state: Effect.succeed(SPENT),
+      check: Effect.succeed({ kind: "exhausted", limit: "tokens" }),
+    }
+    const result = await Effect.runPromise(
+      submit(
+        { ...wiring, budget: Effect.succeed(spent), tools: registry([READ]) },
+        { ...input, tools: [] },
+      ),
+    )
+
+    expect(result.calls[0]?.result.disposition).toBe("budget_denied")
+    expect(result.calls[0]?.result.content).toEqual([
+      { type: "text", text: "the Budget is exhausted: tokens" },
+    ])
+    expect(result.claim).toEqual({ result: "done", summary: "answered" })
+
+    const committed = recorder.groups.flat()
+    expect(kinds(committed)).toEqual([
+      "started",
+      "text",
+      "usage",
+      "tool_call",
+      "tool_update",
+      "tool_result",
+      "finished",
+    ])
+  })
+
+  // The list on the Run is the list on the request. A hook may still change
+  // it, because the hook holds the whole request.
+  it("shows the model the tools the Run named", async () => {
+    const seen: ProviderRequest[] = []
+    const watching: Provider = {
+      id: "eva.provider.fake",
+      available: () => true,
+      turn: (request) => {
+        seen.push(request)
+        return providerTurn(Stream.empty, "end_turn")
+      },
+    }
+    const offered = [{ name: "read", description: "reads", input: { type: "object" } }]
+    await Effect.runPromise(submit(deps(fakeRecorder(), watching), { ...input, tools: offered }))
+    expect(seen[0]?.tools).toEqual(offered)
   })
 })
