@@ -7,8 +7,16 @@ import type {
 } from "@missingstudio/eva-schema"
 import { Effect, Stream } from "effect"
 import type { Budget, Recorder } from "./contracts.js"
-import type { ModelResolution, ProviderError, ProviderRequest, Retry } from "./provider.js"
+import type {
+  ModelResolution,
+  ProposedCall,
+  ProviderError,
+  ProviderRequest,
+  Retry,
+  ToolDefinition,
+} from "./provider.js"
 import type { ModelRef, Spec } from "./spec.js"
+import { executeToolGroup, refuseCall, type ToolGroupDeps, type ToolResult } from "./tool.js"
 
 /**
  * Every dependency is an Effect that resolves the current implementation, so
@@ -28,6 +36,20 @@ export interface RunDeps {
   readonly retry?: (error: ProviderError, attempt: number) => Effect.Effect<Retry>
   readonly budget?: Effect.Effect<Budget | undefined>
   readonly sleep?: (milliseconds: number) => Effect.Effect<void>
+  /**
+   * The tool pipeline this Run runs its proposed calls through, built over
+   * the Run's own report path — so the three records of a call commit inside
+   * the Run that proposed it, and not after that Run has closed.
+   *
+   * It takes the emit rather than holding one, because the Run owns where a
+   * record goes and the caller owns which tools answer.
+   *
+   * Absent is a build with no tool domain, and it reads as a registry that
+   * holds nothing rather than as a proposal quietly dropped: every call then
+   * answers `unknown_tool`, which is on the record and is something the model
+   * can act on.
+   */
+  readonly tools?: (emit: (payload: Payload) => Effect.Effect<void>) => ToolGroupDeps
 }
 
 export interface RunInput {
@@ -36,6 +58,15 @@ export interface RunInput {
   readonly model: ModelRef
   readonly history: readonly TranscriptMessage[]
   readonly system?: string
+  // The tools the model may call. Absent means it is shown none, which is
+  // what a Run with no agency asks for.
+  readonly tools?: readonly ToolDefinition[]
+}
+
+// One call this Run's response proposed, and what the tool answered.
+export interface CalledTool {
+  readonly call: ProposedCall
+  readonly result: ToolResult
 }
 
 export interface RunResult {
@@ -56,16 +87,31 @@ export interface RunResult {
    * and a fold of that record joins them the same way.
    */
   readonly text: string
+  /**
+   * The calls this Run's response proposed, each beside what the tool
+   * answered, in the order the response made them. Empty means the response
+   * proposed none, which is a Run that answered in words.
+   *
+   * A loop reads its next Step from here for the reason it reads `text` from
+   * here: the Trace it is still writing is not a source, and a build with no
+   * Recorder answers all the same.
+   */
+  readonly calls: readonly CalledTool[]
 }
 
 const blockOf = (payload: Payload): number | undefined =>
   payload.kind === "text" || payload.kind === "thought" ? payload.block : undefined
 
 /**
- * One Run: open through the Recorder, resolve the model, read one Provider
- * Turn, commit its payloads in block groups, and close with a Claim. A
- * refused attempt becomes a `retry` record inside the same open Run, so the
- * Trace shows every attempt rather than only the one that answered.
+ * One Run, and one Step: open through the Recorder, resolve the model, read
+ * one Provider Turn, commit its payloads in block groups, run the tool calls
+ * that response proposed, and close with a Claim. A refused attempt becomes a
+ * `retry` record inside the same open Run, so the Trace shows every attempt
+ * rather than only the one that answered.
+ *
+ * One Provider Turn per Run is the rule the loop keeps: a caller that wants
+ * a second model request opens a second Run. What a Run holds beside its turn
+ * is the work that turn caused, which is what makes a Run a Step.
  *
  * An empty Recorder slot is a legal state. The Run then records nothing,
  * reports `degraded` naming the slot, and still answers.
@@ -74,6 +120,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
   const degraded: string[] = []
   const buffer: Payload[] = []
   const spoken: string[] = []
+  const called: CalledTool[] = []
   let block: number | undefined
   let attempts = 0
 
@@ -130,6 +177,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
       degraded,
       attempts,
       text: spoken.join(""),
+      calls: called,
     } satisfies RunResult
   })
 
@@ -164,6 +212,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
     model: resolution.model,
     messages: input.history,
     ...(input.system === undefined ? {} : { system: input.system }),
+    ...(input.tools === undefined ? {} : { tools: input.tools }),
   }
   const request =
     deps.beforeRequest === undefined ? requested : yield* deps.beforeRequest(requested)
@@ -174,6 +223,60 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
     block = next
     yield* report(payload)
     if (next === undefined) yield* flush()
+  })
+
+  /**
+   * The tool calls this response proposed, run inside the Run that proposed
+   * them. It is here rather than in the caller because `submit` is the one
+   * thing that opens and closes a Run: a group run outside would commit its
+   * records after the `finished` of the Run that asked for them, and a Step
+   * is one model request plus the tool executions its response causes.
+   *
+   * A call's three records are one commit, so a group that is still working
+   * has already put the calls that answered on the record — and a Run
+   * interrupted mid-group closes with the partial work committed.
+   */
+  const proposed = Effect.fn("core.proposed")(function* (calls: readonly ProposedCall[]) {
+    if (calls.length === 0) return
+    yield* flush()
+
+    const record = Effect.fn("core.tool.record")(function* (payload: Payload) {
+      yield* report(payload)
+      if (payload.kind === "tool_result") yield* flush()
+    })
+    const pipeline: ToolGroupDeps =
+      deps.tools === undefined
+        ? { tool: () => Effect.succeed(undefined), emit: record }
+        : deps.tools(record)
+    const asked = calls.map((call) => ({ ...call, session: input.session }))
+
+    /**
+     * A Budget the response itself exhausted stops its own calls. The charge
+     * ran in the flush above, so this reads the state the response left, and
+     * a stopped call is `budget_denied` on the record with the partial work
+     * kept. The Run still closes with the Claim its answer earned; the caller
+     * reads the Budget and states the Outcome.
+     */
+    const budget = deps.budget === undefined ? undefined : yield* deps.budget
+    const decision = budget === undefined ? undefined : yield* budget.check
+    if (decision?.kind === "exhausted") {
+      for (const call of asked) {
+        const result = yield* refuseCall(
+          pipeline,
+          call,
+          "budget_denied",
+          `the Budget is exhausted: ${decision.limit}`,
+        )
+        called.push({ call, result })
+      }
+      return
+    }
+
+    const answers = yield* executeToolGroup(pipeline, asked)
+    for (const [at, call] of calls.entries()) {
+      const result = answers[at]
+      if (result !== undefined) called.push({ call, result })
+    }
   })
 
   // One attempt, and the decision about whether to make another. A retry is
@@ -189,6 +292,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
     // that reported none closes with a Claim and no reason, rather than with
     // an `end_turn` nobody said.
     if (failure === undefined) {
+      yield* proposed(turn.toolCalls === undefined ? [] : yield* turn.toolCalls)
       return yield* close({ result: "done", summary: "answered" }, yield* turn.stopReason)
     }
 

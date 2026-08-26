@@ -73,6 +73,7 @@ export const scriptedHost = (script: readonly Partial<RunResult>[] = []): Script
             degraded: [],
             attempts: 1,
             text: "",
+            calls: [],
             ...entry,
           } satisfies RunResult
         }),

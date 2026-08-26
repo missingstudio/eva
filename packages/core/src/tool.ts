@@ -280,23 +280,16 @@ const statusOf = (disposition: Disposition): ToolStatus =>
   disposition === "ok" ? "completed" : "failed"
 
 /**
- * One tool call, from the name the model wrote to the three records it
- * leaves: `tool_call`, then the closing `tool_update`, then `tool_result`.
- * The call record lands before the tool runs and before any update or result,
+ * The three records one call leaves, as the two halves that write them. The
+ * call record lands before the tool runs and before any update or result,
  * because a fold joins the three by the call id and drops an orphan without a
- * word. A tool that works for a while writes its own `tool_update` records in
- * between, through the `ToolContext` this hands it.
+ * word.
  *
- * It records the arguments the tool really ran with, so the record is emitted
- * once the deciding boundary has settled them. The schema carries arguments
- * in one place, and a record naming arguments nothing ran with is a lie no
- * fold can correct.
- *
- * Nothing here throws. A name nothing answers, a boundary that denied, and a
- * tool that failed are all Dispositions.
+ * It is one function because two callers write the same three records: the
+ * call that ran, and the call that never started.
  */
-export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, call: ToolCall) {
-  const opened = (tool: ToolKind, args: unknown) =>
+const records = (deps: ToolDeps, call: ToolCall) => ({
+  opened: (tool: ToolKind, args: unknown) =>
     deps.emit({
       kind: "tool_call",
       id: call.id,
@@ -305,9 +298,9 @@ export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, cal
       args,
       status: "pending",
       redacted: false,
-    })
+    }),
 
-  const closed = Effect.fn("core.tool.close")(function* (result: ToolResult) {
+  closed: Effect.fn("core.tool.close")(function* (result: ToolResult) {
     yield* deps.emit({
       kind: "tool_update",
       id: call.id,
@@ -322,7 +315,49 @@ export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, cal
       bytes: bytesOf(result.content),
     })
     return result
-  })
+  }),
+})
+
+/**
+ * One proposed call that will not run, recorded the way a call that ran is.
+ * The row is resolved so the record names what the call would have been, and
+ * no hook is asked: nothing is being decided, because the answer is already
+ * settled.
+ *
+ * A Budget exhausted between a response and its calls is the first caller,
+ * and it answers `budget_denied`. Steering leaves unstarted calls behind and
+ * is the second, and it answers `skipped`. Both need the pair joined by the
+ * call id, and a fold that found a `tool_call` with no `tool_result` would
+ * show a call that never ended.
+ */
+export const refuseCall = Effect.fn("core.tool.refuse")(function* (
+  deps: ToolDeps,
+  call: ToolCall,
+  disposition: Disposition,
+  said: string,
+) {
+  const { opened, closed } = records(deps, call)
+  const found = yield* deps.tool(call)
+  yield* opened(found?.kind ?? "other", call.args)
+  return yield* closed(toolText(disposition, said))
+})
+
+/**
+ * One tool call, from the name the model wrote to the three records it
+ * leaves: `tool_call`, then the closing `tool_update`, then `tool_result`.
+ * A tool that works for a while writes its own `tool_update` records in
+ * between, through the `ToolContext` this hands it.
+ *
+ * It records the arguments the tool really ran with, so the record is emitted
+ * once the deciding boundary has settled them. The schema carries arguments
+ * in one place, and a record naming arguments nothing ran with is a lie no
+ * fold can correct.
+ *
+ * Nothing here throws. A name nothing answers, a boundary that denied, and a
+ * tool that failed are all Dispositions.
+ */
+export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, call: ToolCall) {
+  const { opened, closed } = records(deps, call)
 
   const found = yield* deps.tool(call)
   if (found?.execute === undefined) {
