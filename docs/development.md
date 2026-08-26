@@ -288,11 +288,38 @@ tickets in five waves, each with a priority, an effort, and what it depends
 on. The tickets build in dependency order, one commit each, and this row
 records the result as each lands.
 
-Two have landed. The **hook failure rule** is in the kernel: a boundary
-declares whether its hooks decide or observe, a deciding hook that throws
-denies the call it was deciding, and an observing one that throws is reported
-through `plugin.failed` while the Run continues. The four provider boundaries
-stay observers, and a test pins that. The **diff applier** ships as `eva.diff`
-and fills the `DiffApplier` slot: a dry run touches nothing, an apply lands
-every hunk or none, and a reverse restores the file byte for byte. A preview
-whose file moved underneath it refuses rather than mangles.
+Six have landed, and the action surface is complete.
+
+The **hook failure rule** is in the kernel: a boundary declares whether its
+hooks decide or observe, a deciding hook that throws denies the call it was
+deciding, and an observing one that throws is reported through `plugin.failed`
+while the Run continues. The four provider boundaries stay observers, and a
+test pins that.
+
+The **ground slots** arrive with their first fillers. `eva.fs` reads and writes
+under a root and refuses a path outside it, `eva.shell` starts a process and
+streams its output, and `eva.sandbox.none` fills the `Sandbox` seam and reports
+that it enforces nothing. A Sandbox answers the same live process a Shell does,
+because containment is how a process starts and not what it returns — so the
+real containment stage 4 brings changes no call site. A virtual file system in
+the testkit passes the same contract suite `eva.fs` passes, with no disk, and
+every tool test in the stage runs against it.
+
+The **diff applier** ships as `eva.diff`: a dry run touches nothing, an apply
+lands every hunk or none, and a reverse restores the file byte for byte. A
+preview whose file moved underneath it refuses rather than mangles, and
+staleness is a content hash rather than a timestamp, because a timestamp both
+refuses safe writes and passes unsafe ones.
+
+The **tool domain and its pipeline** hold six tools. The pipeline owns the
+records — `tool_call`, then the closing update, then `tool_result` — so a hook
+that rewrites a result cannot leave the Trace disagreeing with what ran.
+`tool.execute.before` is the stage's first deciding boundary. `eva.tool.read`,
+`eva.tool.grep`, `eva.tool.glob` and `eva.tool.web` answer through it;
+`eva.tool.edit` previews every write and can undo one; and `eva.tool.bash` runs
+a command inside whatever the Sandbox slot holds, reading that slot per call.
+A tool that works for a while says so while it works, through a context the
+pipeline hands it.
+
+What is left is the gate, the modes, the scheduler, the loop, the write half of
+`eva.api`, the Blocks on both surfaces, and the exit test.
