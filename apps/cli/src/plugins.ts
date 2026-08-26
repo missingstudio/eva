@@ -1,6 +1,7 @@
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { API_PLUGIN, makeApi, type Answering } from "@missingstudio/eva-api"
+import { approval } from "@missingstudio/eva-approval"
 import { auth } from "@missingstudio/eva-auth"
 import { budget } from "@missingstudio/eva-budget"
 import { catalogModels } from "@missingstudio/eva-catalog-models"
@@ -179,6 +180,11 @@ export const BUILT_IN: readonly Plugin[] = [
   // gate works: a hook decides wherever it registered, and the strictest
   // decision wins whatever the order was.
   toolPolicy,
+  // After the tools, because a mode removes rows they registered. After
+  // `toolPolicy` for the way the table reads and not for the way the two
+  // gates compose: a mandate is a decision, supervision is a baseline, and
+  // neither reads the other.
+  approval,
   commands,
   themes,
   keymap,
