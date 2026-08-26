@@ -419,6 +419,16 @@ export interface ToolGroupDeps extends ToolDeps {
    * naming a smaller number than there is.
    */
   readonly limit?: number
+  /**
+   * Whether the group must stop before it opens another window, and the words
+   * the calls it leaves unstarted report. It is read at every window
+   * boundary, so a caller that holds an inbox stops the group at a structural
+   * point and never inside a call that is running.
+   *
+   * Absent is a group nothing stops, which is every group until something
+   * holds an inbox.
+   */
+  readonly stop?: Effect.Effect<string | undefined>
 }
 
 /**
@@ -464,6 +474,11 @@ interface Admitted {
  * A barrier emits straight through, because nothing runs beside it — which is
  * how a command that streams its output still streams.
  *
+ * `stop` ends the group at a window boundary: the window that is running
+ * commits whole, and every call from the head of the window that has not
+ * opened to the end of the group is `skipped`. So a group that stops leaves
+ * no call without the records that close it.
+ *
  * A failure stays with the call that failed. Every ending a tool has is a
  * Disposition, so a sibling that could not do the work answers `failed` and
  * the rest of the window answers for itself.
@@ -498,24 +513,55 @@ export const executeToolGroup = Effect.fn("core.tool.group")(function* (
     }
   })
 
-  let admitted: Admitted[] = []
-  for (const call of calls) {
-    const tool = yield* deps.tool(call)
-    if (runsBeside(tool, call.args)) {
-      admitted.push({ call, tool })
-      continue
+  /**
+   * Whether the group stops here, and the calls it leaves behind if it does.
+   * `from` is the head of the window that has not opened, so the calls waiting
+   * in that window are skipped with the ones after it — none of them started.
+   */
+  const stopped = Effect.fn("core.tool.group.stop")(function* (from: number) {
+    const said = deps.stop === undefined ? undefined : yield* deps.stop
+    if (said === undefined) return false
+    for (const call of calls.slice(from)) {
+      results.push(yield* refuseCall(deps, call, "skipped", said))
     }
-    yield* window(admitted)
-    admitted = []
-    /**
-     * A barrier is looked up twice — once here to classify it, once by the
-     * pipeline to run it — and the second read is the one that runs. So a
-     * tool domain rebuilt while the group was in flight decides the barrier,
-     * which is what a mode change needs.
-     */
-    results.push(yield* executeTool(deps, call))
-  }
-  yield* window(admitted)
+    return true
+  })
+
+  /**
+   * The group, window by window. Every window is a unit that either starts
+   * whole or does not start, and the stop is read before each of them — so a
+   * steer that arrived while one window was running stops the next one and
+   * never the one that is committing.
+   */
+  const walk = Effect.fn("core.tool.group.walk")(function* () {
+    let admitted: Admitted[] = []
+    for (const [at, call] of calls.entries()) {
+      const tool = yield* deps.tool(call)
+      if (runsBeside(tool, call.args)) {
+        admitted.push({ call, tool })
+        continue
+      }
+      if (admitted.length > 0) {
+        if (yield* stopped(at - admitted.length)) return
+        yield* window(admitted)
+        admitted = []
+      }
+      if (yield* stopped(at)) return
+      /**
+       * A barrier is looked up twice — once here to classify it, once by the
+       * pipeline to run it — and the second read is the one that runs. So a
+       * tool domain rebuilt while the group was in flight decides the barrier,
+       * which is what a mode change needs.
+       */
+      results.push(yield* executeTool(deps, call))
+    }
+    if (admitted.length > 0) {
+      if (yield* stopped(calls.length - admitted.length)) return
+      yield* window(admitted)
+    }
+  })
+
+  yield* walk()
 
   const answered: readonly ToolResult[] = results
   return answered
