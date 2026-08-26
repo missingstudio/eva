@@ -58,9 +58,6 @@ plugins:
 `timeout` is the limit and not a suggestion: a call may ask for less time and
 never for more.
 
-The tool domain the row goes into arrives with the execution pipeline. Until
-it does, the plugin loads, reads its options, and registers nothing.
-
 ### What the model sends
 
 ```json
@@ -135,8 +132,8 @@ never this tool's.
 - It contains nothing itself. Containment is the `Sandbox` slot's, read per
   call so stage 4's filler arrives with no change here.
 - It writes no `tool_call` and no `tool_result`. It emits the `tool_update`
-  payloads only it can see, and answers the outcome the execution pipeline
-  records.
+  payloads only it can see, through the `ToolContext` the pipeline hands it,
+  and answers the result the pipeline records.
 
 ## API
 

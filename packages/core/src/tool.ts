@@ -25,6 +25,24 @@ export const toolText = (disposition: Disposition, text: string): ToolResult => 
 })
 
 /**
+ * What one call gives the tool beside its arguments.
+ *
+ * There is no `stop` here. Nothing cancels a call yet: a per-call stop is
+ * wired to `SessionAPI.cancel` when that arrives, and an optional field
+ * nothing fills is scaffolding a reader has to guess about.
+ */
+export interface ToolContext {
+  // The call id every record of this call joins on. Not an EventID.
+  readonly id: string
+  /**
+   * Records the tool writes while it works. The pipeline owns `tool_call`,
+   * the closing `tool_update`, and `tool_result`; a tool that works for a
+   * while says so in between.
+   */
+  readonly emit: (payload: Payload) => Effect.Effect<void>
+}
+
+/**
  * One tool, as a row of the tool domain. The row carries the action the way
  * `CommandInfo.run` and `HarnessInfo.open` do, so a row with no `execute`
  * names a tool the build knows of and cannot run.
@@ -39,7 +57,7 @@ export interface ToolInfo {
   description: string
   kind: ToolKind
   input: unknown
-  execute?: (input: unknown) => Effect.Effect<ToolResult>
+  execute?: (input: unknown, context: ToolContext) => Effect.Effect<ToolResult>
 }
 
 /**
@@ -160,7 +178,8 @@ const statusOf = (disposition: Disposition): ToolStatus =>
  * leaves: `tool_call`, then the closing `tool_update`, then `tool_result`.
  * The call record lands before the tool runs and before any update or result,
  * because a fold joins the three by the call id and drops an orphan without a
- * word.
+ * word. A tool that works for a while writes its own `tool_update` records in
+ * between, through the `ToolContext` this hands it.
  *
  * It records the arguments the tool really ran with, so the record is emitted
  * once the deciding boundary has settled them. The schema carries arguments
@@ -219,7 +238,7 @@ export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, cal
   const refused = denial(settled.decision)
   if (refused !== undefined) return yield* closed(toolText("denied", refused))
 
-  const answered = yield* found.execute(settled.args)
+  const answered = yield* found.execute(settled.args, { id: call.id, emit: deps.emit })
   // The observing boundary reads what the tool answered. A denial never
   // reaches it: a hook that could rewrite one into an allow is not a gate.
   const result =

@@ -1,5 +1,5 @@
 import { resolve } from "node:path"
-import type { Command, Exited, Sandbox, SandboxPolicy } from "@missingstudio/eva-core"
+import type { Command, Exited, Sandbox, SandboxPolicy, ToolResult } from "@missingstudio/eva-core"
 import type { ContentBlock, Disposition, Payload, ToolStatus } from "@missingstudio/eva-schema"
 import { Effect, Fiber, Stream } from "effect"
 
@@ -41,11 +41,6 @@ export interface CommandCall {
    * `tool_update` and the Scope is what kills the process there.
    */
   readonly stop?: Effect.Effect<void>
-}
-
-export interface CommandOutcome {
-  readonly disposition: Disposition
-  readonly content: readonly ContentBlock[]
 }
 
 export interface CommandInput {
@@ -112,7 +107,7 @@ const update = (call: CommandCall, status: ToolStatus): Payload => ({
 })
 
 // A command that never started still ends as data the model can act on.
-const refused = (call: CommandCall, why: string): Effect.Effect<CommandOutcome> =>
+const refused = (call: CommandCall, why: string): Effect.Effect<ToolResult> =>
   Effect.as(call.emit(update(call, "failed")), { disposition: "failed", content: [said(why)] })
 
 type Ending =
@@ -153,7 +148,7 @@ const endingOf = (ending: Ending, seconds: number): string => {
  * including an interruption, which is what a cancelled Run does to the fiber
  * this runs on.
  */
-export const runCommand = (deps: CommandDeps, call: CommandCall): Effect.Effect<CommandOutcome> =>
+export const runCommand = (deps: CommandDeps, call: CommandCall): Effect.Effect<ToolResult> =>
   Effect.scoped(
     Effect.gen(function* () {
       const input = readInput(call.args)

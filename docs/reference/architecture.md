@@ -387,6 +387,33 @@ fills in its handler, because the formatter it needs belongs to the plugin that
 prints. A row with the field absent names something the build knows of but
 cannot run, and the surface says so rather than failing silently.
 
+`ToolInfo.execute` takes the input and a `ToolContext`, because a tool that
+works for a while says so while it works:
+
+```ts
+// packages/core/src/tool.ts
+export interface ToolContext {
+  /** The call id every record of this call joins on. Not an EventID. */
+  readonly id: string
+  /** Records the tool writes while it works: streamed output, and progress. */
+  readonly emit: (payload: Payload) => Effect.Effect<void>
+}
+
+export interface ToolInfo {
+  id: string
+  description: string
+  kind: ToolKind
+  /** JSON Schema, the way a Validator is handed one. */
+  input: unknown
+  execute?: (input: unknown, context: ToolContext) => Effect.Effect<ToolResult>
+}
+```
+
+`executeTool` owns the `tool_call`, the closing `tool_update`, and the
+`tool_result`; a tool writes its own `tool_update` records in between. The
+call record lands before the tool runs, because the fold joins the records by
+the call id and drops an orphan without a word.
+
 ### 4.3 A domain draft
 
 The catalog draft, as an example. Every draft follows this shape: `list`, `get`,

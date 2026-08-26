@@ -1,23 +1,5 @@
-import type { Domain, Row } from "@missingstudio/eva-core"
-import type { ToolKind } from "@missingstudio/eva-schema"
-import type { Effect } from "effect"
-import { runCommand, type CommandCall, type CommandDeps, type CommandOutcome } from "./command.js"
-
-/**
- * The tool row, as the execution pipeline is expected to hold it, and the
- * domain it goes into. The tool domain arrives with that pipeline, so this
- * file is the plugin's one guess. Everything the tool does is in
- * `command.ts`, which this only names — so the guess costs one file.
- */
-export interface ToolInfo {
-  id: string
-  description: string
-  kind: ToolKind
-  // A row without `run` names a tool the build knows of but cannot execute.
-  run?: (call: CommandCall) => Effect.Effect<CommandOutcome>
-}
-
-export type ToolDomain = Domain<readonly ToolInfo[], Row<ToolInfo>>
+import type { ToolInfo } from "@missingstudio/eva-core"
+import { runCommand, type CommandDeps } from "./command.js"
 
 const DESCRIPTION = [
   "Runs a command and answers its output and its exit code.",
@@ -28,10 +10,41 @@ const DESCRIPTION = [
   "failure: read the exit code and carry on.",
 ].join(" ")
 
-// The name a model calls, against the plugin id `eva.tool.bash`.
+// What the model is told it may send, which is the shape `readInput` reads.
+const INPUT = {
+  type: "object",
+  properties: {
+    command: {
+      type: "array",
+      minItems: 1,
+      items: { type: "string" },
+      description: "The program and its arguments, already split into words.",
+    },
+    cwd: {
+      type: "string",
+      description: "The directory to run in. It defaults to where Eva runs.",
+    },
+    timeout: {
+      type: "number",
+      description: "Seconds the command may run. It may only shorten the limit this Eva allows.",
+    },
+  },
+  required: ["command"],
+  additionalProperties: false,
+}
+
+/**
+ * The name a model calls, against the plugin id `eva.tool.bash`.
+ *
+ * The call id and the emit are the context's, because the output streams: a
+ * command that works for a while writes `tool_update` records of its own, and
+ * each one joins the call the pipeline opened.
+ */
 export const commandTool = (deps: CommandDeps): ToolInfo => ({
   id: "bash",
   description: DESCRIPTION,
   kind: "execute",
-  run: (call) => runCommand(deps, call),
+  input: INPUT,
+  execute: (input, context) =>
+    runCommand(deps, { id: context.id, args: input, emit: context.emit }),
 })

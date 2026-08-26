@@ -46,6 +46,7 @@
         "@missingstudio/eva-shell": "workspace:*",
         "@missingstudio/eva-themes": "workspace:*",
         "@missingstudio/eva-tool-bash": "workspace:*",
+        "@missingstudio/eva-tool-edit": "workspace:*",
         "@missingstudio/eva-tool-glob": "workspace:*",
         "@missingstudio/eva-tool-grep": "workspace:*",
         "@missingstudio/eva-tool-read": "workspace:*",

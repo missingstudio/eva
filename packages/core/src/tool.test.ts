@@ -32,6 +32,28 @@ const reader = (answer: ToolResult, seen: unknown[] = []): ToolInfo => ({
     }),
 })
 
+/**
+ * A tool that says it is working before it answers, the way a command that
+ * streams its output does. It writes through the context it is handed, so the
+ * id its record joins on is the call's and not one of its own.
+ */
+const working = (): ToolInfo => ({
+  id: "read",
+  kind: "read",
+  description: "reads",
+  input: {},
+  execute: (_input, context) =>
+    Effect.as(
+      context.emit({
+        kind: "tool_update",
+        id: context.id,
+        status: "in_progress",
+        content: [{ type: "text", text: "half way" }],
+      }),
+      toolText("ok", "done"),
+    ),
+})
+
 interface Ran {
   readonly result: ToolResult
   readonly said: readonly Payload[]
@@ -144,6 +166,30 @@ describe("one tool call", () => {
 
     expect(result.disposition).toBe("failed")
     expect(update?.kind === "tool_update" && update.status).toBe("failed")
+  })
+
+  /**
+   * A tool that works for a while says so while it works. Its record lands
+   * after the `tool_call` and before the closing pair: a fold joins by the
+   * call id, so an update the call record does not precede is an orphan.
+   */
+  it("leaves the tool's own update between the call and the closing pair", async () => {
+    const { result, said } = await running(answering(working()))
+
+    expect(result.disposition).toBe("ok")
+    expect(said.map((payload) => payload.kind)).toEqual([
+      "tool_call",
+      "tool_update",
+      "tool_update",
+      "tool_result",
+    ])
+    expect(said[1]).toEqual({
+      kind: "tool_update",
+      id: "call_1",
+      status: "in_progress",
+      content: [{ type: "text", text: "half way" }],
+    })
+    expect(said[2]?.kind === "tool_update" && said[2].status).toBe("completed")
   })
 })
 

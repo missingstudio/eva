@@ -21,6 +21,24 @@ describe("the edit tool plugin", () => {
     expect(loaded).toBe(true)
   })
 
+  it("registers one row in the tool domain, under the name the model calls", async () => {
+    const rows = await withPlugin(toolEdit, (kernel) => kernel.domains.tool.get)
+
+    expect(rows.map((row) => [row.id, row.kind])).toEqual([["edit", "edit"]])
+    expect(rows[0]?.execute).toBeTypeOf("function")
+  })
+
+  it("takes its row with it when it unloads", async () => {
+    const rows = await withPlugin(toolEdit, (kernel) =>
+      Effect.gen(function* () {
+        yield* kernel.runtime.remove("eva.tool.edit")
+        return yield* kernel.domains.tool.get
+      }),
+    )
+
+    expect(rows).toEqual([])
+  })
+
   it("builds a row that names the edit tool and the kind the Trace records", async () => {
     const found = await withPlugin(toolEdit, (kernel) =>
       Effect.map(editToolOf(kernel), (made) => made.row),

@@ -1,6 +1,6 @@
-import { declare, define, type PluginContext } from "@missingstudio/eva-sdk"
+import { declare, define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-import { commandTool, type ToolDomain } from "./row.js"
+import { commandTool } from "./row.js"
 
 export * from "./command.js"
 export * from "./row.js"
@@ -28,12 +28,8 @@ export const toolBash = define({
       timeout: OPTIONS.read(ctx.options, "timeout", DEFAULTS.timeout),
       maxOutput: OPTIONS.read(ctx.options, "maxOutput", DEFAULTS.maxOutput),
     })
-    /**
-     * The tool domain arrives with the execution pipeline. A context without
-     * one registers nothing; the row, and everything it runs, is the same
-     * either way.
-     */
-    const host: PluginContext & { readonly tool?: ToolDomain } = ctx
-    if (host.tool !== undefined) yield* host.tool.transform((draft) => draft.set(row))
+    yield* ctx.tool.transform((draft) => {
+      draft.set(row)
+    })
   }),
 })
