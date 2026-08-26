@@ -8,11 +8,10 @@ import {
   encodeLine,
   headerFold,
   mergeText,
-  readTrace,
   transcriptFold,
   verdictFold,
-  writtenGolden,
 } from "../src/index.js"
+import { readTrace, writtenGolden } from "../src/goldens.js"
 
 const dir = new URL(".", import.meta.url).pathname
 

@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { writtenGolden } from "@missingstudio/eva-schema"
+import { writtenGolden } from "@missingstudio/eva-schema/goldens"
 import { recorded } from "@missingstudio/eva-testkit"
 import { describe, expect, it } from "vitest"
 import { cassetteOf, runFixture } from "./run.js"

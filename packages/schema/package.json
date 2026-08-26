@@ -4,13 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./goldens": "./src/goldens.ts"
   },
   "publishConfig": {
     "exports": {
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
+      },
+      "./goldens": {
+        "types": "./dist/goldens.d.mts",
+        "default": "./dist/goldens.mjs"
       }
     }
   },

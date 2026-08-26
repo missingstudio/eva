@@ -7,7 +7,7 @@
 // and commits real provider streams in their place.
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { readTrace, writtenGolden } from "@missingstudio/eva-schema"
+import { readTrace, writtenGolden } from "@missingstudio/eva-schema/goldens"
 import { WORKFLOWS } from "../src/fixture.js"
 import { readingOf, type Reading } from "../src/score.js"
 

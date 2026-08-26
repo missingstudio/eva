@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { answerFold, readTrace, type Event, type SessionID } from "@missingstudio/eva-schema"
+import { answerFold, type Event, type SessionID } from "@missingstudio/eva-schema"
+import { readTrace } from "@missingstudio/eva-schema/goldens"
 import { describe, expect, it } from "vitest"
 import { foldTranscript, headerOf } from "./transcript.js"
 

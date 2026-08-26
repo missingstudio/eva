@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { readTrace, writtenGolden } from "@missingstudio/eva-schema"
+import { readTrace, writtenGolden } from "@missingstudio/eva-schema/goldens"
 import { describe, expect, it } from "vitest"
 import { WORKFLOWS } from "./fixture.js"
 import { readingOf, said } from "./score.js"
