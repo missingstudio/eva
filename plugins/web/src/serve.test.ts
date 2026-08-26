@@ -11,12 +11,21 @@ const PAGE =
   '<!doctype html><title>Eva</title><div id="page">build 0.0.0 · 2026-08-26T00:00:00</div>'
 const SCRIPT = "export const page = 1\n"
 
+/**
+ * The face the page is set in, under the name the bundler really gives it: the
+ * eight base64url characters of the content hash before the extension. The
+ * fixture's script is deliberately *not* hashed like that, so the two cache
+ * answers are both reachable from one tree.
+ */
+const FONT = "space-grotesk-latin-var-DPT1xrvW.woff2"
+
 // A tree in the shape `vp build` leaves in `apps/web/dist`.
 const built = (): string => {
   const root = mkdtempSync(join(tmpdir(), "eva-web-built-"))
   mkdirSync(join(root, "assets"))
   writeFileSync(join(root, "index.html"), PAGE)
   writeFileSync(join(root, "assets", "index-abc123.js"), SCRIPT)
+  writeFileSync(join(root, "assets", FONT), "woff2")
   return root
 }
 
@@ -126,9 +135,34 @@ describe("the page a browser loads", () => {
 
   // The page names the build it came from, and that is worth nothing if a
   // browser may show the bundle from before the last build.
-  it("lets nothing cache what it serves", async () => {
+  it("lets nothing cache the page", async () => {
     const served = await serving(built())
     expect((await fetch(served.url)).headers.get("cache-control")).toBe("no-store")
+    await served.close()
+  })
+
+  /**
+   * A hashed name is the content, so there is no stale version of it to show:
+   * the next build writes a different name and the page pointing at it was
+   * fetched fresh. Served `no-store`, the font is fetched again on every
+   * refresh and the page repaints from the fallback face each time.
+   */
+  it("lets a browser keep a hashed asset, so the face does not change on refresh", async () => {
+    const served = await serving(built())
+    const response = await fetch(`${served.url}/assets/${FONT}`)
+
+    expect(response.headers.get("content-type")).toBe("font/woff2")
+    expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable")
+    await served.close()
+  })
+
+  // Eight characters exactly, or a file merely called `one-more-thing.js` would
+  // be kept forever and nobody could clear it.
+  it("keeps nothing whose name is not a content hash", async () => {
+    const served = await serving(built())
+    const response = await fetch(`${served.url}/assets/index-abc123.js`)
+
+    expect(response.headers.get("cache-control")).toBe("no-store")
     await served.close()
   })
 })

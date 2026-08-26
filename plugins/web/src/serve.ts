@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import type { AddressInfo } from "node:net"
+import { basename } from "node:path"
 import type { Frontend } from "@missingstudio/eva-sdk"
 import { Effect, Scope } from "effect"
 import { assetFor, hasPage, mediaType, unbuilt } from "./assets.js"
@@ -48,9 +49,34 @@ const PLAIN = {
 }
 
 /**
- * Every request, answered from the tree as it stands. Nothing is cached by
- * the reader: the page names the build it came from, and that fact is worth
- * nothing if a browser can show yesterday's bundle.
+ * A name the build content-addressed: `[name]-[hash].[ext]`, where the hash is
+ * the eight base64url characters the bundler puts before the extension. The
+ * count is exact on purpose — a file merely called `one-more-thing.js` has a
+ * long enough tail to look hashed, and caching that one forever would be a bug
+ * nobody could clear.
+ */
+const HASHED = /-[A-Za-z0-9_-]{8}\.[^.]+$/
+
+/**
+ * How long a browser may keep what it was given.
+ *
+ * The page is never kept: it names the build it came from, and that fact is
+ * worth nothing if a browser can show yesterday's bundle. A hashed asset is
+ * the opposite case — the name *is* the content, a new build writes a new
+ * name, and the page that points at the new name was itself just fetched. So
+ * there is no staleness to protect against, and keeping it is free.
+ *
+ * Serving the fonts `no-store` is what made the page change face on every
+ * refresh: the woff2 was fetched again each time, and `font-display: swap`
+ * paints the fallback until it lands.
+ */
+const cacheFor = (found: string): string =>
+  HASHED.test(basename(found)) ? "public, max-age=31536000, immutable" : "no-store"
+
+/**
+ * Every request, answered from the tree as it stands. What the reader may keep
+ * is `cacheFor`'s decision: the page never, a hashed asset for as long as it
+ * likes.
  *
  * The wire is offered the request first, and before the built page is looked
  * for: a call is answered from the record and a build nobody ran says nothing
@@ -74,7 +100,7 @@ const answer =
       return
     }
 
-    response.writeHead(200, { "content-type": mediaType(found), "cache-control": "no-store" })
+    response.writeHead(200, { "content-type": mediaType(found), "cache-control": cacheFor(found) })
     createReadStream(found).pipe(response)
   }
 
