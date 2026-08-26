@@ -40,6 +40,7 @@
     "@missingstudio/eva-core": "workspace:*",
     "@missingstudio/eva-diff": "workspace:*",
     "@missingstudio/eva-fs": "workspace:*",
+    "@missingstudio/eva-harness-loop": "workspace:*",
     "@missingstudio/eva-kernel": "workspace:*",
     "@missingstudio/eva-keymap": "workspace:*",
     "@missingstudio/eva-print": "workspace:*",
