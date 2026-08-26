@@ -563,21 +563,29 @@ export interface SessionStore {
   readonly list: Effect.Effect<readonly SessionHeader[]>
 }
 
-/** Runs a command under a policy. The policy decides, the sandbox enforces. */
+/**
+ * Runs a command under a policy. The policy decides, the Sandbox enforces,
+ * and `capabilities` says how much of the policy this one holds.
+ */
 export interface Sandbox {
-  readonly run: (command: Command) => Effect.Effect<CommandResult>
+  readonly run: (
+    command: Command,
+    policy: SandboxPolicy,
+  ) => Effect.Effect<Process, SandboxError, Scope.Scope>
   readonly capabilities: Effect.Effect<SandboxCapabilities>
 }
 
+/** Reads and writes files under one root. A path outside it is refused. */
 export interface FileSystem {
-  readonly read: (path: string) => Effect.Effect<string>
-  readonly write: (path: string, content: string) => Effect.Effect<void>
-  readonly glob: (pattern: string, options?: GlobOptions) => Effect.Effect<readonly string[]>
-  readonly stat: (path: string) => Effect.Effect<FileStat | undefined>
+  readonly read: (path: string) => Effect.Effect<string, FileSystemError>
+  readonly write: (path: string, content: string) => Effect.Effect<void, FileSystemError>
+  readonly glob: (pattern: string) => Effect.Effect<readonly string[], FileSystemError>
+  readonly stat: (path: string) => Effect.Effect<FileStat | undefined, FileSystemError>
 }
 
+/** Starts a process and streams its output. A spawn that never started fails. */
 export interface Shell {
-  readonly spawn: (command: Command) => Effect.Effect<Process, never, Scope.Scope>
+  readonly spawn: (command: Command) => Effect.Effect<Process, ShellError, Scope.Scope>
 }
 
 export interface CredentialStore {
@@ -678,6 +686,30 @@ export interface DiffApplier {
   readonly reverse: (files: DiffFiles, applied: Applied) => Effect.Effect<Applied, DiffRefused>
 }
 ```
+
+### Running a command, and reading a file
+
+`Command` is a program and its arguments already split, and nothing in it
+reaches a shell — so a caller that wants shell syntax names the shell itself,
+and the gate that judges a command sees the words that will really run. A
+`Process` is the live half: stdout and stderr merged in arrival order while
+the process runs, the `Exited` code or signal once it ends, and a `kill`. The
+Scope owns the process, so one still running when the scope closes is killed.
+
+A `Sandbox` answers the same `Process` a `Shell` does, because containment is
+how a process starts and not what it returns: one that wraps the argv spawns
+through the `Shell` slot, one that needs its own spawn call makes it, and the
+caller reads the output the same way either way. `SandboxCapabilities` names
+the controls the filler really enforces, so a caller reports the containment
+it has and never the containment it asked for — `eva.sandbox.none` enforces
+nothing and answers an empty list.
+
+Every `FileSystem` path is resolved against the root and refused with
+`outside_root` when it lands outside, whatever way it was spelled. `glob`
+answers paths relative to the root, files only, sorted, and the pattern rule
+is `globMatcher` in `packages/core/src/glob.ts` — it lives beside the contract
+because two fillers of one Slot must answer the same paths, and one walking a
+disk and one walking a map cannot each spell the rule for itself.
 
 ### Writing a sink
 

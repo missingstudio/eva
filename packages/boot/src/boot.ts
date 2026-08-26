@@ -4,8 +4,11 @@ import type {
   DiffApplier,
   Domain,
   DomainMiss,
+  FileSystem,
   Recorder,
+  Sandbox,
   SessionStore,
+  Shell,
   TraceSink,
   Validator,
 } from "@missingstudio/eva-core"
@@ -176,6 +179,9 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
     credentialStore: yield* slotOf<CredentialStore>("CredentialStore"),
     budget: yield* slotOf<Budget>("Budget"),
     validator: yield* slotOf<Validator>("Validator"),
+    fileSystem: yield* slotOf<FileSystem>("FileSystem"),
+    shell: yield* slotOf<Shell>("Shell"),
+    sandbox: yield* slotOf<Sandbox>("Sandbox"),
     diffApplier: yield* slotOf<DiffApplier>("DiffApplier"),
   }
 

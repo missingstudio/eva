@@ -4,9 +4,12 @@ import type {
   CredentialStore,
   DiffApplier,
   DomainMiss,
+  FileSystem,
   Hooks,
   Recorder,
+  Sandbox,
   SessionStore,
+  Shell,
   Slot,
   TraceSink,
   Validator,
@@ -54,6 +57,9 @@ export interface Slots {
   readonly credentialStore: Slot<CredentialStore>
   readonly budget: Slot<Budget>
   readonly validator: Slot<Validator>
+  readonly fileSystem: Slot<FileSystem>
+  readonly shell: Slot<Shell>
+  readonly sandbox: Slot<Sandbox>
   readonly diffApplier: Slot<DiffApplier>
 }
 

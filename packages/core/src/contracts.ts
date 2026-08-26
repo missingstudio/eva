@@ -76,6 +76,143 @@ export interface SessionStore {
 }
 
 /**
+ * A program and the arguments it is started with, already split. Nothing
+ * here reaches a shell, so a caller that wants shell syntax names the shell
+ * in `argv` itself — and a gate that judges a command sees the words that
+ * will really run.
+ */
+export interface Command {
+  readonly argv: readonly string[]
+  // Where the process starts. Absent means the calling process's directory.
+  readonly cwd?: string
+  // Added to the environment the process inherits.
+  readonly env?: Readonly<Record<string, string>>
+}
+
+// One piece of a process's output, named by the stream it arrived on.
+export interface OutputChunk {
+  readonly stream: "stdout" | "stderr"
+  readonly text: string
+}
+
+/**
+ * How a process ended. A nonzero code is a result and not a failure of the
+ * call: the caller reports the exit and the Run carries on.
+ */
+export interface Exited {
+  // Null when a signal ended the process.
+  readonly code: number | null
+  readonly signal: string | null
+}
+
+export interface Process {
+  /**
+   * stdout and stderr, merged in arrival order, while the process runs. The
+   * chunks are queued as they arrive, so a reader that starts late still
+   * reads from the first one, and each chunk is handed out once.
+   */
+  readonly output: Stream.Stream<OutputChunk>
+  // Waits for the process to end. Safe to read more than once.
+  readonly exit: Effect.Effect<Exited>
+  readonly kill: Effect.Effect<void>
+}
+
+export class ShellError extends Data.TaggedError("ShellError")<{
+  readonly reason: "not_found" | "spawn_failed"
+  readonly message: string
+}> {}
+
+/**
+ * Starts a process and streams its output. A spawn that never started is the
+ * only failure; after that every ending is a result the caller reports.
+ *
+ * The Scope owns the process: a process still running when the scope closes
+ * is killed, so a Run that ends never leaves one behind.
+ */
+export interface Shell {
+  readonly spawn: (command: Command) => Effect.Effect<Process, ShellError, Scope.Scope>
+}
+
+export class FileSystemError extends Data.TaggedError("FileSystemError")<{
+  readonly path: string
+  readonly reason: "outside_root" | "not_found" | "io"
+  readonly message: string
+}> {}
+
+export interface FileStat {
+  readonly kind: "file" | "directory"
+  // Zero for a directory: what a directory measures is the store's business.
+  readonly bytes: number
+}
+
+/**
+ * Reads and writes files under one root. A path is relative to the root, or
+ * absolute and under it, and one that lands outside is refused with
+ * `outside_root` — which is the whole reason a tool asks the Slot and never
+ * the disk.
+ *
+ * `write` makes the parent directories it needs. `glob` answers paths
+ * relative to the root, files only, sorted, and `globMatcher` is the pattern
+ * rule every filler owes — one walking a disk and one walking a map answer
+ * the same paths.
+ */
+export interface FileSystem {
+  readonly read: (path: string) => Effect.Effect<string, FileSystemError>
+  readonly write: (path: string, content: string) => Effect.Effect<void, FileSystemError>
+  readonly glob: (pattern: string) => Effect.Effect<readonly string[], FileSystemError>
+  // Nothing at the path is `undefined` rather than a failure.
+  readonly stat: (path: string) => Effect.Effect<FileStat | undefined, FileSystemError>
+}
+
+// One kind of containment a Sandbox may hold a command to.
+export type SandboxControl = "filesystem" | "network"
+
+/**
+ * What a command may reach. The policy is stated in full whatever the
+ * Sandbox behind it can hold, because the policy is the caller's decision
+ * and the containment is a property of the machine.
+ */
+export interface SandboxPolicy {
+  // Absolute paths the command may read.
+  readonly readable: readonly string[]
+  // Absolute paths the command may write.
+  readonly writable: readonly string[]
+  readonly network: boolean
+}
+
+/**
+ * What this Sandbox really enforces, so a caller reports the containment it
+ * has rather than the containment it asked for. `eva.sandbox.none` enforces
+ * nothing and answers an empty list; a filler that enforces a control names
+ * it here.
+ */
+export interface SandboxCapabilities {
+  readonly enforces: readonly SandboxControl[]
+}
+
+export class SandboxError extends Data.TaggedError("SandboxError")<{
+  readonly reason: "unavailable" | "spawn_failed"
+  readonly message: string
+}> {}
+
+/**
+ * Runs a command under a policy. The policy decides, the Sandbox enforces,
+ * and `capabilities` says how much of the policy this one holds.
+ *
+ * `run` answers the same `Process` a Shell does, because containment is how
+ * a process starts and not what it returns: a Sandbox that wraps the argv
+ * spawns through the Shell, one that needs its own spawn call makes it, and
+ * the caller reads the output the same way either way.
+ */
+export interface Sandbox {
+  readonly run: (
+    command: Command,
+    policy: SandboxPolicy,
+  ) => Effect.Effect<Process, SandboxError, Scope.Scope>
+  readonly capabilities: Effect.Effect<SandboxCapabilities>
+}
+
+/**
  * How a turn authenticates. The configured mode alone decides: an exported
  * key does not outrank a login and a login does not outrank a key. Nothing
  * falls back to whatever happens to be on the machine, because a stale
