@@ -30,6 +30,7 @@
         "@missingstudio/eva-config": "workspace:*",
         "@missingstudio/eva-core": "workspace:*",
         "@missingstudio/eva-diff": "workspace:*",
+        "@missingstudio/eva-fs": "workspace:*",
         "@missingstudio/eva-kernel": "workspace:*",
         "@missingstudio/eva-keymap": "workspace:*",
         "@missingstudio/eva-print": "workspace:*",
@@ -38,9 +39,11 @@
         "@missingstudio/eva-provider-compatible": "workspace:*",
         "@missingstudio/eva-provider-openai": "workspace:*",
         "@missingstudio/eva-provider-retry": "workspace:*",
+        "@missingstudio/eva-sandbox-none": "workspace:*",
         "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
         "@missingstudio/eva-session-jsonl": "workspace:*",
+        "@missingstudio/eva-shell": "workspace:*",
         "@missingstudio/eva-themes": "workspace:*",
         "@missingstudio/eva-trace": "workspace:*",
         "@missingstudio/eva-trace-jsonl": "workspace:*",
@@ -193,14 +196,17 @@
         "@missingstudio/eva-catalog-prices": "workspace:*",
         "@missingstudio/eva-client-runtime": "workspace:*",
         "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-fs": "workspace:*",
         "@missingstudio/eva-keymap": "workspace:*",
         "@missingstudio/eva-print": "workspace:*",
         "@missingstudio/eva-prompt": "workspace:*",
         "@missingstudio/eva-provider-compatible": "workspace:*",
+        "@missingstudio/eva-sandbox-none": "workspace:*",
         "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
         "@missingstudio/eva-session-jsonl": "workspace:*",
         "@missingstudio/eva-session-view": "workspace:*",
+        "@missingstudio/eva-shell": "workspace:*",
         "@missingstudio/eva-testkit": "workspace:*",
         "@missingstudio/eva-themes": "workspace:*",
         "@missingstudio/eva-trace": "workspace:*",
@@ -509,6 +515,20 @@
         "typescript": "catalog:",
       },
     },
+    "plugins/fs": {
+      "name": "@missingstudio/eva-fs",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "plugins/keymap": {
       "name": "@missingstudio/eva-keymap",
       "version": "0.0.0",
@@ -616,6 +636,20 @@
         "typescript": "catalog:",
       },
     },
+    "plugins/sandbox-none": {
+      "name": "@missingstudio/eva-sandbox-none",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "plugins/session-jsonl": {
       "name": "@missingstudio/eva-session-jsonl",
       "version": "0.0.0",
@@ -626,6 +660,20 @@
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "plugins/shell": {
+      "name": "@missingstudio/eva-shell",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-core": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
         "@types/node": "catalog:",
         "typescript": "catalog:",
       },
@@ -1096,6 +1144,8 @@
 
     "@missingstudio/eva-exit-test": ["@missingstudio/eva-exit-test@workspace:packages/exit-test"],
 
+    "@missingstudio/eva-fs": ["@missingstudio/eva-fs@workspace:plugins/fs"],
+
     "@missingstudio/eva-kernel": ["@missingstudio/eva-kernel@workspace:packages/kernel"],
 
     "@missingstudio/eva-keymap": ["@missingstudio/eva-keymap@workspace:plugins/keymap"],
@@ -1112,6 +1162,8 @@
 
     "@missingstudio/eva-provider-retry": ["@missingstudio/eva-provider-retry@workspace:plugins/provider-retry"],
 
+    "@missingstudio/eva-sandbox-none": ["@missingstudio/eva-sandbox-none@workspace:plugins/sandbox-none"],
+
     "@missingstudio/eva-schema": ["@missingstudio/eva-schema@workspace:packages/schema"],
 
     "@missingstudio/eva-sdk": ["@missingstudio/eva-sdk@workspace:packages/sdk"],
@@ -1119,6 +1171,8 @@
     "@missingstudio/eva-session-jsonl": ["@missingstudio/eva-session-jsonl@workspace:plugins/session-jsonl"],
 
     "@missingstudio/eva-session-view": ["@missingstudio/eva-session-view@workspace:packages/session-view"],
+
+    "@missingstudio/eva-shell": ["@missingstudio/eva-shell@workspace:plugins/shell"],
 
     "@missingstudio/eva-testkit": ["@missingstudio/eva-testkit@workspace:packages/testkit"],
 

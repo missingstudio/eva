@@ -70,20 +70,20 @@ same rule:
 
 ## What is in each module
 
-| Module           | What it holds                                                                                                                             |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `extension.ts`   | The extension-point shapes: `Domain`, `Slot`, `Hooks`, `Broadcast`, `Registration`, the `Row` draft                                       |
+| Module           | What it holds                                                                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extension.ts`   | The extension-point shapes: `Domain`, `Slot`, `Hooks`, `Broadcast`, `Registration`, the `Row` draft                                                      |
 | `contracts.ts`   | What fills the slots: `Recorder`, `TraceSink`, `SessionStore`, `CredentialStore`, `Budget`, `Validator`, `FileSystem`, `Shell`, `Sandbox`, `DiffApplier` |
-| `spec.ts`        | The work: `Spec`, `Outcome`, the budget shapes, `ModelRef`, `Usage`                                                                       |
-| `transcript.ts`  | `Session`, `Transcript`, and `foldTranscript`                                                                                             |
-| `provider.ts`    | The `Provider`: one `turn` method that begins a provider turn                                                                             |
-| `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                                                               |
-| `session-api.ts` | The whole of what a surface may do to Eva                                                                                                 |
-| `session.ts`     | `submit`, the one-Run mechanism                                                                                                           |
-| `sink.ts`        | `sinkOf`, the one store-to-sink entry, over the `sequenced` and `numbered` seams                                                          |
-| `rows.ts`        | The row-shaped store both SQL sinks keep: columns, codec, head row, allocation                                                            |
-| `glob.ts`        | `globMatcher`: what a glob pattern means, for every `FileSystem` filler                                                                   |
-| `archive.ts`     | Reading a Trace back from JSONL, one file or a directory of them                                                                          |
+| `spec.ts`        | The work: `Spec`, `Outcome`, the budget shapes, `ModelRef`, `Usage`                                                                                      |
+| `transcript.ts`  | `Session`, `Transcript`, and `foldTranscript`                                                                                                            |
+| `provider.ts`    | The `Provider`: one `turn` method that begins a provider turn                                                                                            |
+| `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                                                                              |
+| `session-api.ts` | The whole of what a surface may do to Eva                                                                                                                |
+| `session.ts`     | `submit`, the one-Run mechanism                                                                                                                          |
+| `sink.ts`        | `sinkOf`, the one store-to-sink entry, over the `sequenced` and `numbered` seams                                                                         |
+| `rows.ts`        | The row-shaped store both SQL sinks keep: columns, codec, head row, allocation                                                                           |
+| `glob.ts`        | `globMatcher`: what a glob pattern means, for every `FileSystem` filler                                                                                  |
+| `archive.ts`     | Reading a Trace back from JSONL, one file or a directory of them                                                                                         |
 
 ## What it does not do
 

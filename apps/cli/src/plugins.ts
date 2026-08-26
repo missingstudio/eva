@@ -8,6 +8,7 @@ import { catalogPrices } from "@missingstudio/eva-catalog-prices"
 import { commands } from "@missingstudio/eva-commands"
 import { config } from "@missingstudio/eva-config"
 import { diff } from "@missingstudio/eva-diff"
+import { fs } from "@missingstudio/eva-fs"
 import { keymap } from "@missingstudio/eva-keymap"
 import { print } from "@missingstudio/eva-print"
 import { prompt } from "@missingstudio/eva-prompt"
@@ -15,6 +16,8 @@ import { providerAnthropic } from "@missingstudio/eva-provider-anthropic"
 import { providerCompatible } from "@missingstudio/eva-provider-compatible"
 import { providerOpenAI } from "@missingstudio/eva-provider-openai"
 import { providerRetry } from "@missingstudio/eva-provider-retry"
+import { sandboxNone } from "@missingstudio/eva-sandbox-none"
+import { shell } from "@missingstudio/eva-shell"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
 import type { ReviewedEntry } from "@missingstudio/eva-config"
 import type { SessionAPI } from "@missingstudio/eva-core"
@@ -145,6 +148,12 @@ export const BUILT_IN: readonly Plugin[] = [
   usage,
   budget,
   validator,
+  fs,
+  shell,
+  // After `shell`, which it starts a command through. Load order does not
+  // bind them — the Sandbox reads the Shell slot at the moment of use — and
+  // the table still reads in the order the capabilities stack.
+  sandboxNone,
   diff,
   commands,
   themes,
