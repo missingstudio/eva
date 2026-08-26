@@ -61,7 +61,34 @@ export interface RunInput {
   // The tools the model may call. Absent means it is shown none, which is
   // what a Run with no agency asks for.
   readonly tools?: readonly ToolDefinition[]
+  /**
+   * Words from the person that arrived while a Run was open, which this Run
+   * records after its `started`. A caller that holds an inbox hands them over
+   * with the history that carries them, so a fold of the record reads the same
+   * human words the request was given.
+   *
+   * They ride the Run rather than a commit of their own: a Recorder holds one
+   * open Run, so a group committed beside a Run in flight would land in the
+   * wrong one.
+   */
+  readonly steered?: readonly SteerMessage[]
+  /**
+   * Whether this Run's tool group must stop before it opens another window,
+   * and the words the calls it leaves unstarted report. It is read at every
+   * window boundary, so the group stops at a structural point and no call is
+   * interrupted.
+   *
+   * It is the Run's own statement for the reason `tools` is: the caller holds
+   * the inbox, and a process-wide hook would stop every other Run's group too.
+   */
+  readonly stop?: Effect.Effect<string | undefined>
 }
+
+/**
+ * The `message` payload: words from the person, and the boundary they were
+ * held for. It is what a steer leaves on the record.
+ */
+export type SteerMessage = Extract<Payload, { readonly kind: "message" }>
 
 // One call this Run's response proposed, and what the tool answered.
 export interface CalledTool {
@@ -190,6 +217,9 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
 
   yield* report({ kind: "started", intent: input.spec.intent })
   if (degraded.length > 0) yield* report({ kind: "degraded", missing: [...degraded] })
+  // Before the request that carries them, so the record reads in the order
+  // the words were said.
+  for (const message of input.steered ?? []) yield* report(message)
   yield* flush()
 
   const resolution = yield* deps.resolve(input.model)
@@ -244,10 +274,11 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
       yield* report(payload)
       if (payload.kind === "tool_result") yield* flush()
     })
+    const stopping = input.stop === undefined ? {} : { stop: input.stop }
     const pipeline: ToolGroupDeps =
       deps.tools === undefined
-        ? { tool: () => Effect.succeed(undefined), emit: record }
-        : deps.tools(record)
+        ? { tool: () => Effect.succeed(undefined), emit: record, ...stopping }
+        : { ...deps.tools(record), ...stopping }
     const asked = calls.map((call) => ({ ...call, session: input.session }))
 
     /**

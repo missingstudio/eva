@@ -481,13 +481,18 @@ const counting = (ids: readonly string[], wanted: number) =>
 const grouping = async (
   rows: readonly ToolInfo[],
   wanted: readonly { readonly name: string; readonly args?: unknown }[],
-  options: { readonly at?: Board; readonly limit?: number } = {},
+  options: {
+    readonly at?: Board
+    readonly limit?: number
+    readonly stop?: Effect.Effect<string | undefined>
+  } = {},
 ): Promise<{ results: readonly ToolResult[]; said: readonly Payload[] }> => {
   const at = options.at ?? board()
   const deps: ToolGroupDeps = {
     tool: (one) => Effect.succeed(rows.find((row) => row.id === one.name)),
     emit: (payload) => Effect.sync(() => void at.said.push(payload)),
     ...(options.limit === undefined ? {} : { limit: options.limit }),
+    ...(options.stop === undefined ? {} : { stop: options.stop }),
   }
   const results = await Effect.runPromise(
     executeToolGroup(
@@ -737,5 +742,118 @@ describe("one failing call in a group", () => {
     )
 
     expect(results.map((result) => result.disposition)).toEqual(["ok", "unknown_tool", "ok"])
+  })
+})
+
+/**
+ * A stop that arrives while a window is running. Two parallel-safe tools wait
+ * for each other, and the second to arrive is what turns the stop on — so the
+ * boundary the group stops at is a fact about the schedule and not about a
+ * clock.
+ */
+const arriving = (ids: readonly string[]) =>
+  Effect.gen(function* () {
+    const both = yield* Deferred.make<void>()
+    const state = { arrived: 0, said: undefined as string | undefined }
+    const rows = ids.map(
+      (id): ToolInfo => ({
+        id,
+        kind: "read",
+        description: "waits for its neighbour",
+        input: {},
+        parallelSafe: () => true,
+        execute: () =>
+          Effect.gen(function* () {
+            state.arrived += 1
+            if (state.arrived >= ids.length) {
+              state.said = "a steer arrived"
+              yield* Deferred.succeed(both, undefined)
+            }
+            yield* Deferred.await(both).pipe(
+              Effect.timeout(WAITING),
+              Effect.orElseSucceed(() => undefined),
+            )
+            return toolText("ok", id)
+          }),
+      }),
+    )
+    return { rows, stop: Effect.sync(() => state.said) }
+  })
+
+describe("a group told to stop", () => {
+  /**
+   * The window that is running commits whole and the windows that never opened
+   * are `skipped`. The stop turns on inside the first window, so this is the
+   * mid-flight case and not a group that was stopped before it started.
+   */
+  it("finishes the window in flight and skips every window after it", async () => {
+    const at = board()
+    const { rows, stop } = await Effect.runPromise(arriving(["one", "two"]))
+    const { results } = await grouping(
+      [...rows, watcher("edit", at, false), watcher("three", at, true)],
+      [{ name: "one" }, { name: "two" }, { name: "edit" }, { name: "three" }],
+      { at, stop },
+    )
+
+    expect(results.map((result) => result.disposition)).toEqual(["ok", "ok", "skipped", "skipped"])
+    // Neither the barrier nor the window behind it ran.
+    expect(at.marks.map((mark) => mark.by)).toEqual([])
+    expect(results[2]?.content).toEqual([{ type: "text", text: "a steer arrived" }])
+  })
+
+  // Every call leaves the same three records, so a fold joins each `tool_call`
+  // to the pair that closes it and nothing is orphaned.
+  it("records a skipped call the way it records one that ran", async () => {
+    const at = board()
+    const { rows, stop } = await Effect.runPromise(arriving(["one", "two"]))
+    const { said } = await grouping(
+      [...rows, watcher("edit", at, false)],
+      [{ name: "one" }, { name: "two" }, { name: "edit" }],
+      { at, stop },
+    )
+
+    const ids = (kind: "tool_call" | "tool_update" | "tool_result") =>
+      said.flatMap((payload) => (payload.kind === kind ? [payload.id] : []))
+    expect(ids("tool_call")).toEqual(["call_1", "call_2", "call_3"])
+    expect(ids("tool_update")).toEqual(["call_1", "call_2", "call_3"])
+    expect(ids("tool_result")).toEqual(["call_1", "call_2", "call_3"])
+    expect(said.at(-3)).toMatchObject({ kind: "tool_call", id: "call_3", status: "pending" })
+    expect(said.at(-2)).toMatchObject({ kind: "tool_update", id: "call_3", status: "failed" })
+    expect(said.at(-1)).toMatchObject({ kind: "tool_result", id: "call_3", disposition: "skipped" })
+  })
+
+  // A stop that is already on skips the whole group: no window has opened, so
+  // no call has started.
+  it("skips every call when it is on before the first window", async () => {
+    const at = board()
+    const { results } = await grouping(
+      [watcher("one", at, true), watcher("two", at, true)],
+      [{ name: "one" }, { name: "two" }],
+      { at, stop: Effect.succeed("a steer arrived") },
+    )
+
+    expect(results.map((result) => result.disposition)).toEqual(["skipped", "skipped"])
+    expect(at.marks).toEqual([])
+  })
+
+  // The read is late, as every dependency here is: a group nothing stops runs
+  // every window, and the read happens per boundary rather than once.
+  it("runs the whole group while nothing stops it", async () => {
+    const at = board()
+    let reads = 0
+    const { results } = await grouping(
+      [watcher("one", at, true), watcher("edit", at, false)],
+      [{ name: "one" }, { name: "edit" }],
+      {
+        at,
+        stop: Effect.sync(() => {
+          reads += 1
+          return undefined
+        }),
+      },
+    )
+
+    expect(results.map((result) => result.disposition)).toEqual(["ok", "ok"])
+    expect(reads).toBeGreaterThan(1)
   })
 })

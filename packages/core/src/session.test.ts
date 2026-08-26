@@ -396,6 +396,72 @@ describe("the calls a response proposed", () => {
     ])
   })
 
+  /**
+   * The words a person said while the last Run was open. They are on the
+   * record of the Run that carries them, so a fold reads the same human words
+   * the request was given, and they land inside a Run because a Recorder holds
+   * one open Run at a time.
+   */
+  it("records the words that arrived out of band, right after started", async () => {
+    const recorder = fakeRecorder()
+    const wiring = deps(recorder, proposing([]))
+    await Effect.runPromise(
+      submit(wiring, {
+        ...input,
+        steered: [
+          {
+            kind: "message",
+            content: { type: "text", text: "also the tests" },
+            target: "next-step",
+          },
+        ],
+      }),
+    )
+
+    const committed = recorder.groups.flat()
+    expect(kinds(committed)).toEqual(["started", "message", "text", "finished"])
+    expect(committed[1]).toEqual({
+      kind: "message",
+      content: { type: "text", text: "also the tests" },
+      target: "next-step",
+    })
+  })
+
+  /**
+   * The Run hands its group the stop it was given, so a caller that holds an
+   * inbox stops the group at a window boundary. The calls that never started
+   * are `skipped` beside the ones that ran.
+   */
+  it("hands the group the stop the Run named", async () => {
+    const recorder = fakeRecorder()
+    const wiring = deps(
+      recorder,
+      proposing([
+        { id: "call_1", name: "read", args: { path: "a" } },
+        { id: "call_2", name: "read", args: { path: "b" } },
+      ]),
+    )
+    const result = await Effect.runPromise(
+      submit(
+        { ...wiring, tools: registry([READ]) },
+        { ...input, tools: [], stop: Effect.succeed("a steer arrived") },
+      ),
+    )
+
+    expect(result.calls.map((one) => one.result.disposition)).toEqual(["skipped", "skipped"])
+    expect(kinds(recorder.groups.flat())).toEqual([
+      "started",
+      "text",
+      "tool_call",
+      "tool_update",
+      "tool_result",
+      "tool_call",
+      "tool_update",
+      "tool_result",
+      "finished",
+    ])
+  })
+
   // The list on the Run is the list on the request. A hook may still change
   // it, because the hook holds the whole request.
   it("shows the model the tools the Run named", async () => {
