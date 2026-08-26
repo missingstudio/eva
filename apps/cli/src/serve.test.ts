@@ -67,9 +67,9 @@ describe("runServe", () => {
   })
 
   /**
-   * The row is found by id, not by the rule the interactive branch uses.
-   * `eva.web` says `interactive: false`, so `pickSurface` passes it over —
-   * and a verb that named a posture must name the surface too.
+   * The row is found by id, not by the rule the interactive branch uses. Both
+   * rows are interactive, so a verb that named a posture must name the surface
+   * too — this one names `eva.web` whatever else is registered.
    */
   it("starts the row by id, and never the first interactive one", async () => {
     const ran: string[] = []
