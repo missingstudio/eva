@@ -118,7 +118,9 @@ describe("the wire, read as a Transport", () => {
       Effect.flatMap(httpTransport({ origin: served.origin }), (transport) => transport.api.list),
     )
 
-    expect(rows).toEqual([{ id: memory.session, title: "the first ask" }])
+    expect(rows).toEqual([
+      { id: memory.session, title: "the first ask", updatedAt: "2026-08-25T00:00:00.000Z" },
+    ])
     await served.close()
   })
 

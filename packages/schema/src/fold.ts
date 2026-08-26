@@ -179,27 +179,34 @@ export interface Header {
 }
 
 /**
- * Folds one session's events into its Header. An `info` record answers
- * both questions and a later one wins; the intent a Run opened on is the
- * title until an `info` gives a better one.
+ * The identity of the `headerStep` rule below. A store that keeps a Header
+ * beside the Trace records this number with it, so a row written under an
+ * older rule is found and folded again rather than read as current. Bump it
+ * in the same commit that changes `headerStep`.
  */
-export const headerFold = (events: readonly Event[]): Header => {
-  let title: string | undefined
-  let updatedAt: string | undefined
-  for (const event of events) {
-    if (event.payload.kind === "info") {
-      title = event.payload.title ?? title
-      updatedAt = event.payload.updatedAt ?? updatedAt
-    }
-    if (title === undefined && event.payload.kind === "started") {
-      title = event.payload.intent
-    }
-  }
-  return {
-    ...(title === undefined ? {} : { title }),
-    ...(updatedAt === undefined ? {} : { updatedAt }),
-  }
+export const HEADER_RULE = 2
+
+/**
+ * One event applied to a Header, so a store that keeps a Header beside the
+ * Trace applies the same rule the fold does. The intent a Run opened on is
+ * the title until an `info` gives a better one, and a later `info` wins.
+ * Every event moves `updatedAt` to its own wall time, because a commit is
+ * the Session moving; an `info` that carries an explicit one says better.
+ */
+export const headerStep = (header: Header, event: Event): Header => {
+  const payload = event.payload
+  const title =
+    payload.kind === "info"
+      ? (payload.title ?? header.title)
+      : (header.title ?? (payload.kind === "started" ? payload.intent : undefined))
+  const updatedAt =
+    payload.kind === "info" && payload.updatedAt !== undefined ? payload.updatedAt : event.at.wall
+  return { ...(title === undefined ? {} : { title }), updatedAt }
 }
+
+// Folds one session's events into its Header, one `headerStep` at a time.
+export const headerFold = (events: readonly Event[]): Header =>
+  events.reduce(headerStep, {} as Header)
 
 export type TranscriptBlock =
   | { readonly type: "content"; readonly block: number; readonly content: ContentBlock }

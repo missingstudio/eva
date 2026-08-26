@@ -86,7 +86,9 @@ describe("the read half, over a socket", () => {
     const response = await fetch(`${served.origin}${SESSIONS}`)
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8")
-    expect(await response.json()).toEqual([{ id: memory.session, title: "the first ask" }])
+    expect(await response.json()).toEqual([
+      { id: memory.session, title: "the first ask", updatedAt: "2026-08-25T00:00:00.000Z" },
+    ])
 
     await served.close()
   })

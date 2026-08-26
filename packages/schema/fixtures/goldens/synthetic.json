@@ -206,17 +206,28 @@
   },
   "headers": {
     "sess_synth_tools": {
-      "title": "read the README and summarize it"
+      "title": "read the README and summarize it",
+      "updatedAt": "2026-08-15T09:01:10.000000Z"
     },
     "sess_synth_degraded": {
       "title": "Trace format",
-      "updatedAt": "2026-08-15T09:05:00Z"
+      "updatedAt": "2026-08-15T09:02:22.000000Z"
     },
-    "sess_synth_vclean": {},
-    "sess_synth_vrepair": {},
-    "sess_synth_vexhausted": {},
-    "sess_synth_vunchecked": {},
-    "sess_synth_vsteps": {}
+    "sess_synth_vclean": {
+      "updatedAt": "2026-08-15T09:03:01.000000Z"
+    },
+    "sess_synth_vrepair": {
+      "updatedAt": "2026-08-15T09:03:03.000000Z"
+    },
+    "sess_synth_vexhausted": {
+      "updatedAt": "2026-08-15T09:03:05.000000Z"
+    },
+    "sess_synth_vunchecked": {
+      "updatedAt": "2026-08-15T09:03:07.000000Z"
+    },
+    "sess_synth_vsteps": {
+      "updatedAt": "2026-08-15T09:03:10.000000Z"
+    }
   },
   "verdicts": {
     "sess_synth_tools": {
