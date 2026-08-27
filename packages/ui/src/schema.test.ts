@@ -59,7 +59,7 @@ describe("the JSON-LD graph", () => {
     const page = docPageGraph({
       title: "Install",
       description: entity.product.description,
-      url: "https://docs.missing.studio/install",
+      url: "https://docs.evafactory.co/install",
     })
 
     expect(page.about).toEqual({ "@id": schemaIds.product })

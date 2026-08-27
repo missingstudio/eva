@@ -1,8 +1,8 @@
 # UI guidelines — missing studio
 
 Implementation-ready, token-driven rules for the missing studio web surfaces:
-the marketing site at `missing.studio` and the documentation site at
-`docs.missing.studio`.
+the marketing site at `evafactory.co` and the documentation site at
+`docs.evafactory.co`.
 
 **Design intent, in one sentence:** missing studio ships a dark instrument
 panel — a near-black canvas, a sans for prose and a mono for machine output,
@@ -54,7 +54,7 @@ cost of conforming instead — or resolved in favour of the house rule.
 | -------------------- | ------------------------------------------------------------------------- |
 | Product              | Eva, an open-source autonomous software factory for human and agent teams |
 | Publisher            | missing studio                                                            |
-| Surfaces             | `missing.studio` (marketing), `docs.missing.studio` (documentation)       |
+| Surfaces             | `evafactory.co` (marketing), `docs.evafactory.co` (documentation)         |
 | Stack                | TanStack Start, Tailwind v4, shared `@missingstudio/ui`                   |
 | Documentation layer  | Fumadocs 16, notebook layout                                              |
 | Audience             | Developers and technical teams                                            |

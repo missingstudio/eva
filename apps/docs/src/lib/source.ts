@@ -9,7 +9,7 @@ export const docs = defineDocs({
 })
 
 // The documentation is at the root of its own domain, so there is no /docs
-// prefix. docs.missing.studio/install, not docs.missing.studio/docs/install.
+// prefix. docs.evafactory.co/install, not docs.evafactory.co/docs/install.
 export const source = loader({
   baseUrl: "/",
   source: docs.toFumadocsSource(),

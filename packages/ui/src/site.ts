@@ -20,8 +20,8 @@ export const entity = {
 } as const
 
 export const origin = {
-  web: "https://missing.studio",
-  docs: "https://docs.missing.studio",
+  web: "https://evafactory.co",
+  docs: "https://docs.evafactory.co",
 } as const
 
 const devOrigin = {

@@ -53,7 +53,7 @@ if (channel === "latest") {
   if (changed.trim() === "") {
     console.log("the tap already carries this cask")
   } else {
-    await $`git -C ${DIST}/tap -c user.name=eva-release -c user.email=eva@missing.studio commit -m ${`eva ${version}`}`.quiet()
+    await $`git -C ${DIST}/tap -c user.name=eva-release -c user.email=eva@evafactory.co commit -m ${`eva ${version}`}`.quiet()
     await $`git -C ${DIST}/tap push`.quiet()
     console.log(`pushed eva.rb to the tap`)
   }

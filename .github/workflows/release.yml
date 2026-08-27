@@ -113,7 +113,7 @@ jobs:
           set -eu
           (cd apps/cli && npm pkg set "version=$EVA_VERSION")
           bun install
-          git -c user.name=eva-release -c user.email=eva@missing.studio \
+          git -c user.name=eva-release -c user.email=eva@evafactory.co \
             commit -am "release: v$EVA_VERSION"
 
       - name: Build every target

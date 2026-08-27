@@ -1,6 +1,11 @@
+import { origin } from "@missingstudio/ui"
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import appCss from "../styles/app.css?url"
+
+// One card for both sites, on the marketing origin. site.ts names that origin
+// once, so a move of the domain is a move of one line.
+const ogImage = `${origin.web}/brand/og.png`
 
 export const Route = createRootRoute({
   head: () => ({
@@ -10,10 +15,10 @@ export const Route = createRootRoute({
       // The browser chrome takes the page's own ground. The system is dark
       // only, so one value is the whole answer.
       { name: "theme-color", content: "#08090a" },
-      { property: "og:image", content: "https://missing.studio/brand/og.png" },
+      { property: "og:image", content: ogImage },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
-      { name: "twitter:image", content: "https://missing.studio/brand/og.png" },
+      { name: "twitter:image", content: ogImage },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
