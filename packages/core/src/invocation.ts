@@ -53,8 +53,9 @@ const CLASSES: readonly (readonly [RegExp, string])[] = [
   [/[\n\r]/, "more than one line"],
 ]
 
-// The four a linear chain splits at, and nothing else.
-const CHAIN = /\s*(?:&&|\|\||;|\|)\s*/
+// The four a linear chain splits at, and nothing else. The space around each
+// one is left in place, because the split into words takes it off.
+const CHAIN = /&&|\|\||;|\|/
 
 // `FOO=bar cmd` runs a command in an environment no rule read.
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
@@ -77,8 +78,12 @@ export const SHELLS: readonly string[] = ["sh", "bash", "zsh", "dash", "ksh", "a
 export const isShell = (word: string): boolean =>
   SHELLS.includes(word.split(/[/\\]/).at(-1) as string)
 
-// `-c`, and every bundle that carries it: `-lc`, `-ec`, `-xc`.
-const CARRIES = /^-[A-Za-z]*c[A-Za-z]*$/
+// A flag word is a dash and letters. One that carries a line holds a `c`,
+// which is `-c` itself and every bundle around it: `-lc`, `-ec`, `-xc`. The
+// letters are read apart from the `c` so no input makes the match backtrack.
+const FLAG_WORD = /^-[A-Za-z]*$/
+
+const carriesLine = (word: string): boolean => FLAG_WORD.test(word) && word.includes("c")
 
 /**
  * A shell named inside a chain is opaque, and this is the `curl … | sh` rule.
@@ -124,7 +129,7 @@ export const invocationsOf = (argv: readonly string[]): readonly Invocation[] =>
   if (first === undefined) return [{ kind: "opaque", why: "it names no command" }]
   if (!isShell(first)) return [{ kind: "words", words: argv }]
 
-  const flag = rest.findIndex((word) => CARRIES.test(word))
+  const flag = rest.findIndex(carriesLine)
   if (flag < 0) return [{ kind: "opaque", why: shellReason(first) }]
 
   const [line, ...extra] = rest.slice(flag + 1)
