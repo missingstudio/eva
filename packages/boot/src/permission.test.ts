@@ -11,7 +11,7 @@ import { sessionID } from "@missingstudio/eva-schema"
 import { Deferred, Effect, Exit, Fiber, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { boot, buildOf, type Kernel } from "./boot.js"
-import { overSurface } from "./permission.js"
+import { makeAsking, overSurface } from "./permission.js"
 import { makeSessionAPI } from "./session.js"
 
 const MODEL: ModelRef = { provider: "anthropic", model: "claude-sonnet-4-5" }
@@ -169,6 +169,97 @@ describe("all four options, over SessionAPI.answer", () => {
     })
 
     expect(outcome).toEqual({ kind: "reject_once", reason: "nobody answered: run git push?" })
+  })
+})
+
+/**
+ * The request lifecycle, on the module that owns it. A request is open
+ * exactly while somebody waits on it, the first answer settles it, and it
+ * retires however the wait ends — these are the facts the race stands on, so
+ * they are pinned here without a kernel in the room.
+ */
+describe("one request, from open to retired", () => {
+  const ANSWER: FrontendAnswer = { kind: "permission", optionId: "allow_once" }
+
+  it("hands the first answer to the one waiting, and drops the second", async () => {
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const asking = makeAsking()
+        const asked = yield* Effect.forkChild(asking.request("req_1"))
+        yield* Effect.yieldNow
+        yield* asking.answer("req_1", ANSWER)
+        yield* asking.answer("req_1", { kind: "cancelled" })
+        return yield* Fiber.join(asked)
+      }),
+    )
+
+    expect(found).toEqual(ANSWER)
+  })
+
+  // The door that lost the race is interrupted, and the interrupt retires the
+  // request: an answer that arrives later lands on nothing.
+  it("retires a request whose wait was interrupted", async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const asking = makeAsking()
+        const asked = yield* Effect.forkChild(asking.request("req_1"))
+        yield* Effect.yieldNow
+        yield* Fiber.interrupt(asked)
+        // Dropped: the request retired with the wait. Landing anywhere would
+        // give a later request an answer nobody gave it.
+        yield* asking.answer("req_1", ANSWER)
+      }),
+    )
+  })
+
+  /**
+   * A call id repeats across Runs, so the same id opens a second request once
+   * the first has settled — and the first request's retirement must not close
+   * the second. The stale answer from before the reopening lands on nothing.
+   */
+  it("opens the same id again after the first request settled", async () => {
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const asking = makeAsking()
+        const first = yield* Effect.forkChild(asking.request("req_1"))
+        yield* Effect.yieldNow
+        yield* asking.answer("req_1", { kind: "cancelled" })
+        yield* Fiber.join(first)
+
+        const second = yield* Effect.forkChild(asking.request("req_1"))
+        yield* Effect.yieldNow
+        yield* asking.answer("req_1", ANSWER)
+        return yield* Fiber.join(second)
+      }),
+    )
+
+    expect(found).toEqual(ANSWER)
+  })
+})
+
+/**
+ * The race retires the door that lost. `Frontend.ask` says an interrupted ask
+ * is the other door having answered, so what is pinned here is the contract's
+ * other half: the interrupt arrives, and the surface's own retirement runs
+ * before the gate reads the answer.
+ */
+describe("the door that loses the race", () => {
+  it("is interrupted when the answer arrives over the API", async () => {
+    let retired = false
+    const door: Frontend = {
+      id: "acme.term",
+      ask: () => Effect.onInterrupt(Effect.never, () => Effect.sync(() => void (retired = true))),
+      done: Effect.void,
+    }
+
+    const { outcome } = await asking({
+      plugins: [surfaceRow("acme.term", true)],
+      frontend: door,
+      answer: { kind: "permission", optionId: "allow_once" },
+    })
+
+    expect(outcome).toEqual({ kind: "allow_once" })
+    expect(retired).toBe(true)
   })
 })
 

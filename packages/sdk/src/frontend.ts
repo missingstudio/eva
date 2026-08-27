@@ -17,8 +17,17 @@ export type FrontendRequest =
  */
 export interface Frontend {
   readonly id: string
-  // The one path Eva uses when it needs a person. A surface whose row says
-  // `interactive: false` is never asked.
+  /**
+   * The one path Eva uses when it needs a person. A surface whose row says
+   * `interactive: false` is never asked.
+   *
+   * An ask ends one of two ways, and both are the surface's to handle. It
+   * resolves with the person's answer — or it is interrupted, because the
+   * other door answered the same request first. An interrupted ask retires
+   * whatever it showed: the question is over, and a surface that kept asking
+   * would be waiting on an answer nobody can use. A surface with nobody
+   * behind it answers `cancelled` rather than waiting forever.
+   */
   readonly ask: (request: FrontendRequest) => Effect.Effect<FrontendAnswer>
   // Completes when the surface has stopped. The process waits on this.
   readonly done: Effect.Effect<void>

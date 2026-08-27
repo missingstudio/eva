@@ -26,9 +26,10 @@ import type {
   TranscriptMessage,
 } from "@missingstudio/eva-schema"
 import { nearest } from "@missingstudio/eva-sdk"
-import { Deferred, Effect, Fiber, PubSub, Stream, Scope } from "effect"
+import { Effect, Fiber, PubSub, Stream, Scope } from "effect"
 import type { Kernel } from "./boot.js"
 import { runDeps } from "./deps.js"
+import { makeAsking } from "./permission.js"
 
 interface Live {
   readonly hub: PubSub.PubSub<Payload>
@@ -243,34 +244,14 @@ export const makeSessionAPI = (
 ): Effect.Effect<Api> =>
   Effect.sync(() => {
     const live = new Map<SessionID, Live>()
-    const pending = new Map<RequestID, Deferred.Deferred<FrontendAnswer>>()
 
     /**
-     * Opens a question the surface must answer, and waits. The request is
-     * open from the moment this is called rather than from when the fiber
-     * runs, so an answer can never arrive before there is something to
-     * answer.
+     * The request lifecycle is `makeAsking`'s, in `permission.ts` beside the
+     * race it exists for. This API only holds the two ends: `Api.request`
+     * hands the wait out, and `SessionAPI.answer` is the socket door.
      */
-    const request = (id: RequestID): Effect.Effect<FrontendAnswer> => {
-      const waiting = Deferred.makeUnsafe<FrontendAnswer>()
-      pending.set(id, waiting)
-      /**
-       * The request is open exactly while somebody is waiting on it. A tool
-       * call's `ask` races this door against the surface Eva can call, so the
-       * door that loses is interrupted — and a request left open by the loser
-       * would take a later answer and give it to nobody.
-       *
-       * This is what makes the first answer the only answer: once one has
-       * landed, from either door, the request is no longer open and the second
-       * one is refused as already answered.
-       */
-      return Effect.ensuring(
-        Deferred.await(waiting),
-        Effect.sync(() => {
-          if (pending.get(id) === waiting) pending.delete(id)
-        }),
-      )
-    }
+    const asking = makeAsking()
+    const request = asking.request
 
     // The gate is built here because the request half is minted here. A build
     // that named none asks nobody, and an `ask` is then a denial.
@@ -538,12 +519,7 @@ export const makeSessionAPI = (
 
       // An answer to a request that is not open is dropped. A surface that
       // reconnects and replays a stale answer must not stop Eva.
-      answer: Effect.fn("session.answer")(function* (id: RequestID, given: FrontendAnswer) {
-        const waiting = pending.get(id)
-        if (waiting === undefined) return
-        pending.delete(id)
-        yield* Deferred.succeed(waiting, given)
-      }),
+      answer: asking.answer,
     }
 
     return { session, request }
