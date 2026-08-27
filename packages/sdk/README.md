@@ -123,6 +123,9 @@ rather than coercing one written in another shape — `"8"` is not a number.
   reads the `FileSystem` slot, and one string argument of that call. Every
   file tool answers the same sentence for an empty slot and the same
   Disposition for a path the file system refused.
+- `offering(id, row)` — a plugin whose whole effect is offering one row to the
+  tool domain. The id stays the plugin's own; a plugin that also registers a
+  Command or reads options writes its own effect.
 - Types: `Plugin`, `PluginContext`, `Slots`, `RowInfos`, `Domains`,
   `ProviderHookSpec`, `BroadcastMap`, `Frontend`, `FileDeps`.
 

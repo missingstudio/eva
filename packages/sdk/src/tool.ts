@@ -2,10 +2,13 @@ import {
   toolText,
   type FileSystem,
   type FileSystemError,
+  type ToolInfo,
   type ToolResult,
 } from "@missingstudio/eva-core"
 import { Effect } from "effect"
+import type { PluginContext } from "./context.js"
 import { readShape } from "./options.js"
+import { define, type Plugin } from "./plugin.js"
 
 /**
  * What a tool that reads files takes, and how one call of it ends.
@@ -55,3 +58,26 @@ export const textIn = (input: unknown, key: string): string | undefined => {
   const asked = readShape(found[key], "string")
   return asked === undefined || asked === "" ? undefined : asked
 }
+
+/**
+ * A plugin whose whole effect is offering one row to the tool domain.
+ *
+ * The id stays the plugin's own, because the id is what config turns off and
+ * what a Build carries — what collapses is the registration, which four
+ * plugins wrote the same way. The row is built from the context, so a tool
+ * that reads a Slot still reads it at the moment of use, and the row is
+ * registered whole the way every Draft takes one.
+ *
+ * A plugin that does anything else — a Command of its own, options to read,
+ * a second row — writes its own effect. This is for the ones that do not.
+ */
+export const offering = (id: string, row: (context: PluginContext) => ToolInfo): Plugin =>
+  define({
+    id,
+    effect: Effect.fn(id)(function* (ctx) {
+      const offered = row(ctx)
+      yield* ctx.tool.transform((draft) => {
+        draft.set(offered)
+      })
+    }),
+  })
