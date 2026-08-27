@@ -49,7 +49,7 @@ describe("the web tool plugin", () => {
     expect(rows[0]?.execute).toBeTypeOf("function")
   })
 
-  it("reads an address end to end, through the pipeline", async () => {
+  it("reads an address end to end, through the execution", async () => {
     const served = await serving(200, "over the wire")
     const ran = await reading(served.url)
     await served.close()

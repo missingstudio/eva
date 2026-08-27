@@ -4,7 +4,7 @@ The test helpers of [Eva](../../README.md). A test needs six things the
 production tree cannot give it: a Provider that answers a written script
 instead of a model, a replay of a recorded provider stream, a live kernel
 over the plugins under test, the record read back from behind it, a file
-system with no disk, and a tool call over the pipeline that runs one. All six
+system with no disk, and a tool call over the execution that runs one. All six
 live here.
 
 Eva is built on a plugin kernel: every capability is a plugin, and a plugin
@@ -108,12 +108,12 @@ make first and nothing to clean up after. It hands back a `plugin` for a
 `withKernel` load, the `fs` itself for a suite that wants no kernel, and
 `files()`, every file it holds, so a test reads what a tool wrote.
 
-To call a tool, `calling(kernel, options?)` builds the pipeline the
+To call a tool, `calling(kernel, options?)` builds the execution the
 composition root builds and answers `{ call, said }`: `call(name, args?, id?)`
 runs one call through the tool domain and the three tool boundaries, and
 `said()` is every payload it emitted, in order. A plugin may not import boot,
 so without this a tool plugin's own tests could reach its `execute` and never
-the pipeline that runs it. `options.emit` sends each payload on to a Recorder
+the execution that runs it. `options.emit` sends each payload on to a Recorder
 as well, for a suite that wants the call on a real Trace.
 
 ## API

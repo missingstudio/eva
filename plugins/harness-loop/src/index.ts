@@ -28,7 +28,7 @@ const DEFAULT_REPAIRS = 2
 /**
  * Eva's own propose → act → observe loop: the harness domain's second row, and
  * the first with agency. One Step is one Run, so the tool calls a response
- * proposed run inside the Run that proposed them, through the same pipeline,
+ * proposed run inside the Run that proposed them, through the same execution,
  * the same gate and the same permission mode every other caller uses.
  *
  * It holds no privileged position. It reads four things a foreign adapter can

@@ -298,7 +298,7 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
     capabilities: CAPABILITIES,
     // The loop negotiates nothing: it answers its own capabilities unchanged
     // and keeps the client half without ever calling it. A permission reaches
-    // a person through the tool pipeline's own gate, which is the Run's.
+    // a person through the tool execution's own gate, which is the Run's.
     initialize: () => Effect.succeed(CAPABILITIES),
     createSession: (cwd) =>
       Effect.sync(() => {

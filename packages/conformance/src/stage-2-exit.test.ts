@@ -135,7 +135,7 @@ const CLAUSES: readonly Clause[] = [
     says: "Two parallel-safe reads overlap and you can show it.",
     proofs: [
       {
-        file: "packages/conformance/src/tool-pipeline.test.ts",
+        file: "packages/conformance/src/tool-execution.test.ts",
         test: "overlap, because the tool claims they may",
       },
       { file: "packages/core/src/tool.test.ts", test: "overlap" },
@@ -145,7 +145,7 @@ const CLAUSES: readonly Clause[] = [
     says: "A write between them is a barrier.",
     proofs: [
       {
-        file: "packages/conformance/src/tool-pipeline.test.ts",
+        file: "packages/conformance/src/tool-execution.test.ts",
         test: "is a barrier: nothing after it starts until it has committed",
       },
       {
@@ -158,7 +158,7 @@ const CLAUSES: readonly Clause[] = [
     says: "Results land in source order.",
     proofs: [
       {
-        file: "packages/conformance/src/tool-pipeline.test.ts",
+        file: "packages/conformance/src/tool-execution.test.ts",
         test: "lands its results and its records in source order",
       },
       {
@@ -171,11 +171,11 @@ const CLAUSES: readonly Clause[] = [
     says: "A policy hook that throws denies its tool call; an observing hook that throws is reported and the Run continues.",
     proofs: [
       {
-        file: "packages/conformance/src/tool-pipeline.test.ts",
+        file: "packages/conformance/src/tool-execution.test.ts",
         test: "denies its tool call, and the tool never reads the file",
       },
       {
-        file: "packages/conformance/src/tool-pipeline.test.ts",
+        file: "packages/conformance/src/tool-execution.test.ts",
         test: "is reported as its plugin's failure, and the calls go on",
       },
       {

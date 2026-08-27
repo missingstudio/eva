@@ -185,7 +185,7 @@ describe("changing a live session from autonomous to read-only", () => {
             path: "one.md",
             hunks: [{ find: "after", replace: "again" }],
           })
-          // The row left the registry, so the pipeline refuses the name. A
+          // The row left the registry, so the execution refuses the name. A
           // mode is capability selection and not a filter at call time.
           expect(after.disposition).toBe("unknown_tool")
           expect(found.held()["one.md"]).toBe("after\n")
@@ -278,7 +278,7 @@ describe("all four options, through the gate and the real write tool", () => {
 /**
  * A permission request with nobody to answer it is a denial. `overSurface`
  * covers the surface half — no surface, or one that takes no input; this is the
- * pipeline half, where a build wired no asker at all.
+ * execution half, where a build wired no asker at all.
  */
 describe("a supervised call with nobody to answer it", () => {
   it("is denied, and the denial is on the record", async () => {

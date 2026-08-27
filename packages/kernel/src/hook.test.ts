@@ -5,7 +5,7 @@ import { makeHooks, type HookRegistry } from "./hook.js"
 
 /**
  * Two boundaries this test owns. Stage 2's first deciding boundary arrives
- * with the tool pipeline, and the rule lands before it, so the fixture holds
+ * with the tool execution, and the rule lands before it, so the fixture holds
  * one of each kind: `call.before` decides whether the call runs, `call.after`
  * only watches it.
  */

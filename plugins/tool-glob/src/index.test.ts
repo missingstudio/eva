@@ -15,7 +15,7 @@ describe("the glob tool plugin", () => {
     expect(rows[0]?.execute).toBeTypeOf("function")
   })
 
-  it("names files end to end, through the pipeline and the virtual slot", async () => {
+  it("names files end to end, through the execution and the virtual slot", async () => {
     const virtual = virtualFileSystem({ "src/one.ts": "one", "docs/two.md": "two" })
 
     const ran = await withPlugin(

@@ -64,7 +64,7 @@ export interface TurnInput {
  * that opens its own Run is recorded under.
  *
  * Still two members. A Harness that wants tools names them on its `RunInput`
- * and reads what they answered off its `RunResult`, so the tool pipeline
+ * and reads what they answered off its `RunResult`, so the tool execution
  * reaches a Harness through the Run it already opens — and a native harness
  * still never holds a `HarnessClient`.
  */

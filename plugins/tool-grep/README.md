@@ -89,7 +89,7 @@ fewer files than every file:
 Tests live beside the sources: [src/grep.test.ts](src/grep.test.ts) holds what
 a call answers, against the testkit's virtual file system, and
 [src/index.test.ts](src/index.test.ts) holds the row and one call end to end
-through the pipeline. Run the suite from the repository root:
+through the execution. Run the suite from the repository root:
 
 ```bash
 bun run test

@@ -89,9 +89,9 @@ the calls the response proposed run inside the Run that proposed them: their
 `finished`.
 
 The loop names its tools on the `RunInput` and reads what they answered off the
-`RunResult`. It never calls a Provider, never touches the tool pipeline
+`RunResult`. It never calls a Provider, never touches the tool execution
 directly, and holds no `HarnessClient` — a permission reaches a person through
-the pipeline's own gate, which the Run already carries.
+the execution's own gate, which the Run already carries.
 
 A Step that proposes no call is the answer. The last Run's own Claim closed it,
 so the loop writes nothing more.

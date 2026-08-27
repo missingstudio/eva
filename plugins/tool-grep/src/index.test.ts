@@ -15,7 +15,7 @@ describe("the grep tool plugin", () => {
     expect(rows[0]?.execute).toBeTypeOf("function")
   })
 
-  it("searches end to end, through the pipeline and the virtual slot", async () => {
+  it("searches end to end, through the execution and the virtual slot", async () => {
     const virtual = virtualFileSystem({ "src/one.ts": "const UserSvc = 1\n" })
 
     const ran = await withPlugin(

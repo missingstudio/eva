@@ -310,15 +310,16 @@ preview whose file moved underneath it refuses rather than mangles, and
 staleness is a content hash rather than a timestamp, because a timestamp both
 refuses safe writes and passes unsafe ones.
 
-The **tool domain and its pipeline** hold six tools. The pipeline owns the
-records — `tool_call`, then the closing update, then `tool_result` — so a hook
-that rewrites a result cannot leave the Trace disagreeing with what ran.
+The **tool domain** holds six tools, and one Tool Execution runs a call. The
+execution owns the records — `tool_call`, then the closing update, then
+`tool_result` — so a hook that rewrites a result cannot leave the Trace
+disagreeing with what ran.
 `tool.execute.before` is the stage's first deciding boundary. `eva.tool.read`,
 `eva.tool.grep`, `eva.tool.glob` and `eva.tool.web` answer through it;
 `eva.tool.edit` previews every write and can undo one; and `eva.tool.bash` runs
 a command inside whatever the Sandbox slot holds, reading that slot per call.
 A tool that works for a while says so while it works, through a context the
-pipeline hands it.
+execution hands it.
 
 The **deterministic gate** ships as `eva.tool.policy`. A Rule Set under the
 `policy` config key allows, denies or asks over the words a command would run,

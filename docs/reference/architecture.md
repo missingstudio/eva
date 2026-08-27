@@ -860,7 +860,7 @@ a failure names whose hook threw.
 `run` answers the denial a deciding boundary produced, or nothing, and the
 caller of the hooks turns a denial into one: `toolDeps` in
 `packages/boot/src/deps.ts` reads the answer at `tool.execute.before` and
-hands the pipeline a `reject_once` naming the hook and the plugin. The kernel
+hands the execution a `reject_once` naming the hook and the plugin. The kernel
 cannot force that read, so a new deciding boundary owes it.
 
 ### The hook list
@@ -896,7 +896,7 @@ carries the tool policy, and it is how a plugin denies an action.
 ```ts
 // packages/core/src/tool.ts
 /**
- * What a hook may decide. `ask` is not a final answer — the pipeline resolves
+ * What a hook may decide. `ask` is not a final answer — the execution resolves
  * the `ask` the boundary settled on into one of the other four through
  * `ToolDeps.approving`, and a call that reaches the tool still holding an
  * `ask` is denied.
@@ -972,7 +972,7 @@ says nothing about a call no rule names: which calls need an answer at all is
 the permission mode's question, and the mode answers it with `otherwise`.
 
 **Where the `ask` is resolved, and why not in a hook.** `ToolDeps.approving`
-takes the ACP `PermissionRequest` the pipeline builds — the call id is the
+takes the ACP `PermissionRequest` the execution builds — the call id is the
 request id, and `PERMISSION_OPTIONS` is the option list, because Eva's gate
 offers all four options every time and a request carrying them would carry the
 same four words on every ask. It runs **after** `strictest` has chosen, so one
@@ -1716,7 +1716,7 @@ causes, and that is one Run: the harness names its tools on `RunInput.tools`,
 the Run runs the calls that response proposed, and `RunResult.calls` answers
 each proposal beside what the tool said. So the three records of a call commit
 inside the Run that proposed them rather than after it closed, and a third
-member handing a harness the pipeline would be a second thing here that writes
+member handing a harness the execution would be a second thing here that writes
 into a Run.
 
 `report` commits one group through the same Recorder, outside any Run. The
@@ -1736,7 +1736,7 @@ field's own comment ties it to the wire format, and `payloads` in the acp
 package is what reads it. Synthesizing ACP updates so that reader could run
 would renumber block indices a Provider Turn already assigned, and it would give
 the seam a second record path. Empty is the truthful value, not a gap. The
-client half goes unused for the same reason: the tool pipeline's own gate is
+client half goes unused for the same reason: the tool execution's own gate is
 what reaches a person, so a native harness never calls `requestPermission` even
 when it does have tools, and one with no wire never calls `sessionUpdate`.
 

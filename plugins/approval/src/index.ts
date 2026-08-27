@@ -102,7 +102,7 @@ export const approval = define({
     /**
      * The mandate. The row is read at the moment of use, so a rebuilt tool
      * domain is judged on the next call, and a name with no row is judged as
-     * a kind nothing reads — the pipeline refuses that call anyway.
+     * a kind nothing reads — the execution refuses that call anyway.
      */
     yield* ctx.toolHooks["tool.execute.before"]((event) =>
       Effect.gen(function* () {

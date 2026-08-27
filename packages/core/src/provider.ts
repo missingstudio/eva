@@ -61,7 +61,7 @@ export interface ProposedCall {
  * has one Stop Reason and takes it from the turn that closed it.
  *
  * `toolCalls` is read after the drain for the same reason and answers nothing
- * before it. It is not a payload: the pipeline that runs a call writes the
+ * before it. It is not a payload: the execution that runs a call writes the
  * `tool_call` record once the deciding boundary has settled the arguments, and
  * a proposal on the stream would be a second record of the same call naming
  * arguments nothing ran with. A provider that offers no tools omits it.

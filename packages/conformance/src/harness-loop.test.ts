@@ -32,7 +32,7 @@ import { Deferred, Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 
 /**
- * The loop, the tool pipeline, the gate and a named permission mode, driven
+ * The loop, the tool execution, the gate and a named permission mode, driven
  * end to end with no model in the room. The Provider is a written script and
  * the FileSystem is a map, so the work the tools do is real and the answer
  * that asked for it is fixed.
@@ -121,7 +121,7 @@ interface DriveOptions {
 }
 
 /**
- * One Prompt through the loop over a live kernel: the real tool pipeline, the
+ * One Prompt through the loop over a live kernel: the real tool execution, the
  * real gate, the real Recorder, and a scripted Provider. The build is the
  * shipped load order — the tools, then `eva.sched`, then the two gates.
  */
@@ -285,7 +285,7 @@ describe("a three-file refactor, end to end", () => {
 })
 
 /**
- * The gate is the pipeline's, not the loop's. So a mode the loop knows nothing
+ * The gate is the execution's, not the loop's. So a mode the loop knows nothing
  * about decides its calls, and the loop reads the answer as data.
  */
 describe("every Step's calls pass the gate", () => {

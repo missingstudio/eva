@@ -11,7 +11,7 @@ import { commandTool, toolBash } from "./index.js"
  */
 
 // A Sandbox that answers one line and exits, so what is under test is the
-// pipeline and not a real process.
+// execution and not a real process.
 const speaking = (text: string): Plugin =>
   define({
     id: "acme.sandbox",
@@ -65,9 +65,9 @@ describe("the eva.tool.bash plugin", () => {
   /**
    * The name in, the records out. The streamed `tool_update` lands between the
    * `tool_call` and the closing pair, which is what the widened contract
-   * bought: the pipeline opens the call before the tool writes a word.
+   * bought: the execution opens the call before the tool writes a word.
    */
-  it("runs a command through the pipeline, and streams while it runs", async () => {
+  it("runs a command through the execution, and streams while it runs", async () => {
     const ran = await withPlugin(
       toolBash,
       (kernel) => {
@@ -82,7 +82,7 @@ describe("the eva.tool.bash plugin", () => {
 
     expect(ran.result.disposition).toBe("ok")
     // The tool says it started, streams one window, and says it ended. The
-    // pipeline opens the call before all three and closes it after them.
+    // execution opens the call before all three and closes it after them.
     expect(ran.said.map((payload) => payload.kind)).toEqual([
       "tool_call",
       "tool_update",
