@@ -459,6 +459,12 @@ export const makeSessionAPI = (
        * this Session can reach waits the same way, because a steer names no
        * Harness and starting a Prompt under one nobody chose is worse than a
        * line that arrives late.
+       *
+       * So a Harness routes steering too, and the two are not one decision
+       * made twice: this one says whether a steer can reach a Harness at all,
+       * and the Harness says where in its own Step cycle the line lands. They
+       * become one the day a Harness instance outlives the Prompt it answers
+       * — until then an idle Session holds no Harness to hand a line to.
        */
       submit: Effect.fn("session.submit")(function* (id: SessionID, input: SubmitInput) {
         const state = yield* of(id)

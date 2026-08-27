@@ -109,6 +109,11 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
    * would have to know the shape of every Harness. `architecture.md` §12.3a
    * promises the loop a host-scoped inbox slot, and that is where this moves
    * once the loop hosts extension points of its own.
+   *
+   * A caller routes steering before this does — Eva's own Session API hands
+   * over a `next-step` steer and queues the rest against the next Prompt, so
+   * the `next-run` half here answers a driver that is not it: a direct caller,
+   * and the protocol's client half at a later stage.
    */
   const inbox = new Map<SessionID, Steer[]>()
 
