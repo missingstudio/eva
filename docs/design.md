@@ -620,15 +620,14 @@ result is above 2 px.
 Motion confirms a state change. It never announces one, and it never runs on a
 browser default curve.
 
-| Token         | Value                               | Use                                |
-| ------------- | ----------------------------------- | ---------------------------------- |
-| `ease-fluid`  | `cubic-bezier(0.32, 0.72, 0, 1)`    | Every transition.                  |
-| `ease-spring` | `cubic-bezier(0.34, 1.56, 0.64, 1)` | A control that must feel physical. |
-| `dur-instant` | 150ms                               | Hover, focus, active.              |
-| `dur-fast`    | 300ms                               | Popover, dropdown, disclosure.     |
-| `dur-base`    | 700ms                               | The default transition.            |
-| `dur-reveal`  | 800ms                               | An element entering the viewport.  |
-| `stagger`     | 50ms                                | The step between siblings.         |
+| Token         | Value                            | Use                               |
+| ------------- | -------------------------------- | --------------------------------- |
+| `ease-fluid`  | `cubic-bezier(0.32, 0.72, 0, 1)` | Every transition.                 |
+| `dur-instant` | 150ms                            | Hover, focus, active.             |
+| `dur-fast`    | 300ms                            | Popover, dropdown, disclosure.    |
+| `dur-base`    | 700ms                            | The default transition.           |
+| `dur-reveal`  | 800ms                            | An element entering the viewport. |
+| `stagger`     | 50ms                             | The step between siblings.        |
 
 These live as custom properties in `packages/ui/src/styles/tokens.css`; a test
 fails the build on a literal duration or easing.

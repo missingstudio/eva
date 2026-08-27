@@ -19,24 +19,22 @@
 @layer components {
   @media (prefers-reduced-motion: no-preference) {
     /*
-       Entrance. One move, the whole site: 64px up, blurred and transparent,
-       resolving to settled, sharp and opaque. An IntersectionObserver sets
+       Entrance. One move, the whole site: 24px up and transparent, resolving
+       to settled and opaque. Only transform and opacity animate — a blur is a
+       filter, and it repaints. An IntersectionObserver sets
        `data-shown` when the element arrives, and never unsets it — nothing
        re-hides on the way back up.
     */
     .js .reveal {
       opacity: 0;
-      transform: translateY(4rem);
-      filter: blur(12px);
+      transform: translateY(1.5rem);
       transition:
         opacity var(--dur-reveal) var(--ease-fluid),
-        transform var(--dur-reveal) var(--ease-fluid),
-        filter var(--dur-reveal) var(--ease-fluid);
+        transform var(--dur-reveal) var(--ease-fluid);
     }
     .js .reveal[data-shown] {
       opacity: 1;
       transform: none;
-      filter: none;
     }
 
     /* Stagger the children of a revealed group, one step apart. */

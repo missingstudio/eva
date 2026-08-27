@@ -39,23 +39,25 @@ export const Tool = ({ className, ...props }: ToolProps) => (
   />
 )
 
+// The colour confirms the state; the glyph and the word carry it, so the row
+// still reads in grayscale.
 const statusIcons: Record<ToolStatus, ReactNode> = {
   pending: <CircleIcon className="size-4" />,
-  in_progress: <ClockIcon className="size-4 animate-pulse" />,
-  completed: <CheckCircleIcon className="size-4" />,
-  failed: <XCircleIcon className="size-4" />,
+  in_progress: <ClockIcon className="status-running size-4 animate-pulse" />,
+  completed: <CheckCircleIcon className="status-ok size-4" />,
+  failed: <XCircleIcon className="status-fail size-4" />,
 }
 
 // `ok` is the one Disposition that says nothing went wrong. The other six are
 // each a thing a reader may not skim past, so they are marked.
 const dispositionIcons: Record<Disposition, ReactNode> = {
-  ok: <CheckCircleIcon className="size-4" />,
-  denied: <XCircleIcon className="size-4" />,
-  failed: <XCircleIcon className="size-4" />,
+  ok: <CheckCircleIcon className="status-ok size-4" />,
+  denied: <XCircleIcon className="status-fail size-4" />,
+  failed: <XCircleIcon className="status-fail size-4" />,
   skipped: <CircleIcon className="size-4" />,
   cancelled: <CircleIcon className="size-4" />,
-  unknown_tool: <XCircleIcon className="size-4" />,
-  budget_denied: <XCircleIcon className="size-4" />,
+  unknown_tool: <XCircleIcon className="status-fail size-4" />,
+  budget_denied: <XCircleIcon className="status-fail size-4" />,
 }
 
 export const getStatusBadge = (status: ToolStatus) => (
