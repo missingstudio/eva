@@ -31,6 +31,11 @@ const ROOT = join(new URL(".", import.meta.url).pathname, "..")
  * is the one source of what loads; this table is the universe it may pick
  * from, stated once — the recorder script used to mirror the config's ids by
  * hand and catch the drift with a throw.
+ *
+ * No tool, gate or loop plugin is here, and none belongs here. The fixture
+ * runs canned Workflows, which have no agency, and the number it answers is
+ * about schema validity. A plugin the Workflows never reach would change what
+ * the measured build is without changing what it measures.
  */
 const CARRIES: readonly Plugin[] = [
   trace,

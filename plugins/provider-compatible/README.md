@@ -97,6 +97,10 @@ It never asks an endpoint what models it serves, and it prices nothing: a
 compatible namespace has no price, so a run against one reports its cost as
 unknown rather than estimating.
 
+It does not carry `ProviderRequest.tools`, so a Harness that offers tools over
+this namespace is offered none back and its Prompt ends at the first Step.
+Carrying them is this plugin's own change and reaches no other.
+
 ## API
 
 - `providerCompatible` — the plugin definition, id `eva.provider.compatible`.

@@ -90,6 +90,10 @@ It does not speak Chat Completions — that wire belongs to
 and the two share nothing on purpose. It reports no cost, because OpenAI
 reports counters and never what a request cost.
 
+It does not carry `ProviderRequest.tools`, so a Harness that offers tools over
+this namespace is offered none back and its Prompt ends at the first Step.
+Carrying them is this plugin's own change and reaches no other.
+
 ## API
 
 - `providerOpenAI` — the plugin definition, id `eva.provider.openai`.
