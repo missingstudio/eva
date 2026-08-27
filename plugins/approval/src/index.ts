@@ -79,6 +79,13 @@ export const approval = define({
      * Capability selection. The transform is registered once and replayed on
      * every rebuild, so it reads the modes in play at replay time — which is
      * how `/mode read-only` rebuilds the domain with no second registration.
+     *
+     * It stays a pure edit of the draft: the read is the mode a Session has
+     * named, and nothing outside the draft changes here. Reading it at replay
+     * time is safe because a rebuild is serialized and `/mode` writes the map
+     * before it asks for one, so every replay sees one settled set — and a
+     * rebuild some other plugin asked for is answered with the modes as they
+     * stand, which is the only answer this transform owes.
      */
     yield* ctx.tool.transform((draft) => {
       const reach = widest(live())
