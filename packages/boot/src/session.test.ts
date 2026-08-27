@@ -238,13 +238,13 @@ describe("a Prompt that names a harness", () => {
       ),
     )
 
-    expect(seen.summary).toBe("no harness answers acme.spi, did you mean acme.spy")
+    expect(seen.summary).toBe("no harness answers acme.spi, did you mean acme.spy?")
     expect(seen.kinds).toEqual(["started", "finished"])
     expect(seen.calls).toBe(0)
     expect(seen.closed).toEqual([
       {
         result: "failed",
-        summary: "no harness answers acme.spi, did you mean acme.spy",
+        summary: "no harness answers acme.spi, did you mean acme.spy?",
         errorClass: "other",
       },
     ])
@@ -367,7 +367,7 @@ describe("a build that names a default harness", () => {
       ),
     )
 
-    expect(found).toBe("no harness answers acme.spi, did you mean acme.spy")
+    expect(found).toBe("no harness answers acme.spi, did you mean acme.spy?")
     expect(seen.opens).toBe(0)
   })
 

@@ -1,7 +1,7 @@
 import { WEB_SURFACE } from "@missingstudio/eva-web"
-import { Cause, Effect, Exit } from "effect"
+import { Effect } from "effect"
 import type { Started } from "./run.js"
-import { runSurface } from "./surface.js"
+import { runDoor } from "./surface.js"
 
 export class NoWebSurfaceError extends Error {
   override readonly name = "NoWebSurfaceError"
@@ -27,28 +27,9 @@ export class NoWebSurfaceError extends Error {
  * answer is the one the gate reads.
  */
 export const runServe = Effect.fn("cli.serve")(function* (started: Started) {
-  const rows = yield* started.kernel.domains.surface.get
-  const chosen = rows.find((row) => row.id === WEB_SURFACE)
-  if (chosen?.start === undefined) {
-    return yield* Effect.fail(new NoWebSurfaceError(rows.map((row) => row.id)))
-  }
-
-  return yield* runSurface(started, { ...chosen, start: chosen.start })
+  return yield* runDoor(
+    started,
+    (rows) => rows.find((row) => row.id === WEB_SURFACE),
+    (known) => new NoWebSurfaceError(known),
+  )
 })
-
-/**
- * What a serve that ended exits with, and what it says on the way out.
- *
- * Ctrl-C is the only way to stop this surface — the page holds until the
- * process does — so an interrupt is how a serve ends, and a person who typed
- * it is told nothing. What is left is a build with no `eva.web` row: a door
- * this build does not have, and it names the doors it does.
- */
-export const served = (
-  outcome: Exit.Exit<unknown, unknown>,
-  err: (text: string) => void,
-): number => {
-  if (Exit.isSuccess(outcome) || Cause.hasInterruptsOnly(outcome.cause)) return 0
-  err(`${Cause.squash(outcome.cause) as Error}\n`)
-  return 1
-}
