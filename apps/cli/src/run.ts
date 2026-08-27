@@ -29,6 +29,14 @@ export interface ResolvedConfig extends Resolution {
   // Which harness answers a Prompt that names none. Absent is a bare Run.
   readonly harness?: string
   readonly findings: readonly Finding[]
+  /**
+   * The environment this config was resolved under, carried rather than read
+   * again. What a run reads from outside itself is the World's, and the one
+   * write in the permission lifecycle — the rule an `allow_always` leaves in
+   * the person's own config file — lands where this says and never where the
+   * process does.
+   */
+  readonly env: NodeJS.ProcessEnv
 }
 
 export interface Started {
@@ -36,6 +44,9 @@ export interface Started {
   readonly config: Config
   readonly model: ModelRef
   readonly harness?: string
+  // The environment the config was resolved under. Every door hands it to the
+  // gate, so a grant is written where this run was told to write.
+  readonly env: NodeJS.ProcessEnv
 }
 
 /**
@@ -68,6 +79,7 @@ export const resolveConfig = Effect.fn("cli.resolveConfig")(function* (
   })
   return {
     ...settled,
+    env: world.env,
     // Read through the declaration that owns the key, so the app and the
     // plugin that projects it cannot disagree about what `model` is.
     model: modelRef(KEYS.read(settled.config.raw, "model", "")) ?? DEFAULT_MODEL,
@@ -139,7 +151,7 @@ export const startFrom = Effect.fn("cli.startFrom")(function* (
   // Where boot-time reports land. A caller that hands nothing watches nothing.
   say?: (text: string) => void,
 ) {
-  const { config, model, harness, plugins: resolved } = settled
+  const { config, model, harness, env, plugins: resolved } = settled
 
   const kernel = yield* boot({
     scope,
@@ -153,6 +165,7 @@ export const startFrom = Effect.fn("cli.startFrom")(function* (
     kernel,
     config,
     model,
+    env,
     ...(harness === undefined ? {} : { harness }),
   } satisfies Started
 })

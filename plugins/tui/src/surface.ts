@@ -123,7 +123,6 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
   const now = deps.now ?? (() => Date.now())
   const finished = yield* Deferred.make<void>()
   const keys = yield* Queue.unbounded<LoopSignal>()
-  const asked = yield* Queue.unbounded<FrontendAnswer>()
 
   // Where this run is, which no Run changes. Only the model is read again.
   const place: Place = {
@@ -426,20 +425,52 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     return outcome.kind !== "prompt"
   })
 
-  // What is open, so the answer to a permission names an option rather than
-  // reaching the gate as a line of prose it cannot read.
-  let open: FrontendRequest | undefined
+  /**
+   * The questions that stand, each waiting on its own answer. Eva may ask more
+   * than one at a time — one tool group can hold two calls that both need a
+   * person — and each ask is answered on its own, whichever door answers it.
+   *
+   * A terminal shows one line at a time, so the first question that stands is
+   * the one a person is looking at and a line they type is that one's. The
+   * others wait their turn behind it. One slot and one shared queue used to
+   * hold this: a second ask overwrote the first, both waited on one answer,
+   * and which of them it settled was whichever the runtime happened to wake.
+   */
+  interface Standing {
+    readonly request: FrontendRequest
+    readonly waiting: Deferred.Deferred<FrontendAnswer>
+  }
+  const standing = new Map<string, Standing>()
+
+  // The question a person is looking at, which is the first one that stands.
+  const shown = (): Standing | undefined => standing.values().next().value
+
+  // What the screen says about the questions that stand. Called whenever the
+  // first one changes, so answering one shows the next rather than nothing.
+  const showing = () => {
+    const next = shown()
+    on(
+      next === undefined
+        ? { kind: "answered" }
+        : { kind: "asked", question: next.request.question },
+    )
+  }
 
   const answer = Effect.fn("eva.tui.answer")(function* (line: string) {
-    on({ kind: "answered" })
-    const option = open?.kind === "permission" ? optionFor(line) : undefined
-    open = undefined
-    yield* Queue.offer(
-      asked,
+    const held = shown()
+    // A line typed with nothing standing answers nothing. It used to be kept
+    // for the next question to consume, which answered one nobody had read.
+    if (held === undefined) return on({ kind: "answered" })
+
+    standing.delete(held.request.id)
+    const option = held.request.kind === "permission" ? optionFor(line) : undefined
+    yield* Deferred.succeed(
+      held.waiting,
       (option === undefined
         ? { kind: "text", text: line }
         : { kind: "permission", optionId: option }) satisfies FrontendAnswer,
     )
+    showing()
   })
 
   /**
@@ -453,12 +484,15 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
    * asking to be answered.
    */
   const ask = Effect.fn("eva.tui.ask")(function* (request: FrontendRequest) {
-    open = request
-    on({ kind: "asked", question: request.question })
-    return yield* Effect.onInterrupt(Queue.take(asked), () =>
+    const waiting = yield* Deferred.make<FrontendAnswer>()
+    standing.set(request.id, { request, waiting })
+    // The screen changes only when this is the question now at the front.
+    if (shown()?.request.id === request.id) showing()
+
+    return yield* Effect.onInterrupt(Deferred.await(waiting), () =>
       Effect.sync(() => {
-        open = undefined
-        on({ kind: "answered" })
+        standing.delete(request.id)
+        showing()
       }),
     )
   })

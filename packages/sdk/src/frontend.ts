@@ -27,6 +27,14 @@ export interface Frontend {
    * whatever it showed: the question is over, and a surface that kept asking
    * would be waiting on an answer nobody can use. A surface with nobody
    * behind it answers `cancelled` rather than waiting forever.
+   *
+   * **More than one ask may stand at a time, and each is answered on its
+   * own.** One tool group can hold two calls that both need a person, so a
+   * surface holds the questions that stand by their `id` and settles the one
+   * an answer was given for. How many it shows at once is the surface's — a
+   * terminal shows the first and the rest wait behind it, a page shows them
+   * all — but no surface may let one answer settle a question it was not
+   * given for.
    */
   readonly ask: (request: FrontendRequest) => Effect.Effect<FrontendAnswer>
   // Completes when the surface has stopped. The process waits on this.

@@ -48,6 +48,8 @@ const withKernel = <A>(
 
       const started: Started = {
         kernel,
+        // The environment this run was given, as every door hands it on.
+        env: {},
         config: { plugins: [], raw: {}, origin: {} },
         model: { provider: "fake", model: "model" },
       }

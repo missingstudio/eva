@@ -1,6 +1,7 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { remembering } from "@missingstudio/eva-approval"
 import { apiWire } from "@missingstudio/eva-api"
 import { httpTransport } from "@missingstudio/eva-api/client"
 import { boot, buildOf, makeSessionAPI, overSurface, type Kernel } from "@missingstudio/eva-boot"
@@ -47,6 +48,16 @@ const request: PermissionRequest = {
 
 const call: ToolCall = { id: CALL, name: "edit", args: {}, session: SESSION }
 
+// A call the rule language can grant. A grant is written over the words a
+// command would run, and an Edit names none — so the gate's remembering half
+// is only reachable through a call like this one.
+const ran: ToolCall = {
+  id: CALL,
+  name: "bash",
+  args: { command: ["git", "status"] },
+  session: SESSION,
+}
+
 /**
  * One `eva.web` surface, bound on an ephemeral loopback port, with `eva.api`
  * answering beside it — and a live Session API behind both. The surface is
@@ -89,10 +100,23 @@ const bench = async () => {
   const stopReading = watchAsking((asking) => void heard.push(asking), { origin: url })
   const page = await Effect.runPromise(Effect.flatMap(httpTransport({ origin: url }), makeClient))
 
-  const asking = overSurface(started.kernel, {
-    frontend: Effect.sync(() => surface),
-    request: started.api.request,
-  })
+  /**
+   * The gate a door actually runs, both halves. `remembering` is the reason
+   * this is composed rather than named: `overSurface` alone is a gate no door
+   * has, and a suite that proved things about it would keep passing while the
+   * half that writes a grant went wrong.
+   *
+   * The config path is this bench's own, so what an `allow_always` writes
+   * lands in a scratch directory and never in the person's own home.
+   */
+  const config = join(mkdtempSync(join(tmpdir(), "eva-doors-grant-")), "config.yaml")
+  const asking = remembering(
+    overSurface(started.kernel, {
+      frontend: Effect.sync(() => surface),
+      request: started.api.request,
+    }),
+    { EVA_CONFIG: config },
+  )
 
   // The set the page last heard, once it holds what the caller is waiting for.
   const until = async (holds: (asking: readonly AskedQuestion[]) => boolean) => {
@@ -121,6 +145,16 @@ const bench = async () => {
     nothing: () => until((asking) => asking.length === 0),
     // One ask, on a fiber, so a test can answer it from the other side.
     ask: () => Effect.runFork(asking(request, call)),
+    // The same, for a call the rule language can grant.
+    askRan: () => Effect.runFork(asking(request, ran)),
+    // What an `allow_always` wrote, or nothing when it wrote no file.
+    granted: () => {
+      try {
+        return readFileSync(config, "utf8")
+      } catch {
+        return undefined
+      }
+    },
     // Nobody at this surface, so the direct door cannot answer.
     close: async () => {
       surface = undefined
@@ -174,6 +208,47 @@ describe("a permission request the page answers", () => {
       kind: "reject_always",
       reason: `a person refused: ${QUESTION}`,
     })
+    await desk.close()
+  })
+
+  /**
+   * `allow_always`, answered from the socket door, through the gate a door
+   * actually runs. Both halves are in the room: `overSurface` carries the
+   * answer back and `remembering` writes the rule the next Run reads. The
+   * suite used to compose only the first, so the write had no door-side proof
+   * at all.
+   */
+  it("writes the grant an allow_always leaves, from the door that answered", async () => {
+    const desk = await bench()
+    const asked = desk.askRan()
+    await desk.asked()
+
+    await Effect.runPromise(
+      desk.page.api.answer(CALL, { kind: "permission", optionId: "allow_always" }),
+    )
+
+    expect(await Effect.runPromise(Fiber.join(asked))).toEqual({ kind: "allow_always" })
+    // The rule language is the policy plugin's; what this door owes is that
+    // the write happened, and that it happened where it was told to.
+    const held = desk.granted()
+    expect(held).toContain("policy:")
+    expect(held).toContain("git")
+    await desk.close()
+  })
+
+  // A call the rule language cannot grant is allowed and remembered nowhere,
+  // so a person who wants that changes the mode.
+  it("writes nothing for a call it cannot grant", async () => {
+    const desk = await bench()
+    const asked = desk.ask()
+    await desk.asked()
+
+    await Effect.runPromise(
+      desk.page.api.answer(CALL, { kind: "permission", optionId: "allow_always" }),
+    )
+    await Effect.runPromise(Fiber.join(asked))
+
+    expect(desk.granted()).toBeUndefined()
     await desk.close()
   })
 

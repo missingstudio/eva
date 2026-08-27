@@ -23,16 +23,23 @@ import type { Started } from "./run.js"
  * the surface Eva can call against the request a surface across a socket
  * answers by naming — and `remembering` is `eva.approval`'s, because the rule
  * language a grant is written in is that plugin's. Neither may import the
- * other, so the composition root composes them: the `makeTui({ renderer })`
- * precedent.
+ * other, and boot may import no plugin, so the composition root composes
+ * them: the `makeTui({ renderer })` precedent.
+ *
+ * The environment is part of the interface. `allow_always` writes a rule into
+ * the person's own config file, and that is the one write in the whole
+ * permission lifecycle — so where it lands is read from the World this run was
+ * given and never from the process. A gate that read the process would write
+ * into the person's own home directory from a suite that had been handed a
+ * scratch directory for exactly that reason.
  *
  * The surface is read through the cell rather than captured, because it is
  * started after the API is built and may be stopped and started again.
  */
 export const gateFor =
-  (kernel: Kernel, surface: () => Frontend | undefined): Gate =>
+  (kernel: Kernel, surface: () => Frontend | undefined, env: NodeJS.ProcessEnv): Gate =>
   (request) =>
-    remembering(overSurface(kernel, { frontend: Effect.sync(surface), request }))
+    remembering(overSurface(kernel, { frontend: Effect.sync(surface), request }), env)
 
 // The first row that is interactive and knows how to start. Registration
 // order decides, so a config that loads its own surface last wins.
@@ -54,7 +61,7 @@ export const openClient = Effect.fn("cli.openClient")(function* (
   surface: () => Frontend | undefined = () => undefined,
 ) {
   const api = yield* makeSessionAPI(started.kernel, started.model, scope, {
-    gate: gateFor(started.kernel, surface),
+    gate: gateFor(started.kernel, surface, started.env),
     ...(started.harness === undefined ? {} : { harness: started.harness }),
   })
   return yield* makeClient(yield* localTransport(api.session))

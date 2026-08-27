@@ -1287,6 +1287,53 @@ describe("a question from Eva", () => {
     expect(result.during).toBe(ASKING)
     expect(result.after).toBe("ready")
   })
+
+  /**
+   * Two questions at once. One tool group can hold two calls that both need a
+   * person, and each ask is answered on its own — so the first line settles
+   * the first question and the second question is then the one on the screen.
+   *
+   * One slot and one shared queue used to hold this: the second ask overwrote
+   * the first, both waited on one answer, and which of them it settled was
+   * whichever the runtime happened to wake.
+   */
+  it("answers each of two standing questions on its own, in the order they arrived", async () => {
+    const result = await withSurface([], async (fake, _spy, frontend) => {
+      const first = Effect.runPromise(
+        frontend.ask({ kind: "permission", id: "call_1", question: "run git push?" }),
+      )
+      const second = Effect.runPromise(
+        frontend.ask({ kind: "permission", id: "call_2", question: "run rm -rf build?" }),
+      )
+      await settle()
+      // The first question is the one a person is looking at; the second waits
+      // behind it rather than replacing it on the screen.
+      const shown = fake.written()
+
+      fake.press("Allow once")
+      await settle()
+      const afterFirst = fake.written()
+
+      fake.press("Reject once")
+      await settle()
+      return {
+        shown,
+        afterFirst,
+        first: await first,
+        second: await second,
+        mode: fake.last()?.status.mode,
+      }
+    })
+
+    expect(result.shown).toContain("run git push?")
+    // Answering the first shows the next rather than nothing.
+    expect(result.afterFirst).toContain("run rm -rf build?")
+    // Each answer settled the question it was given for.
+    expect(result.first).toEqual({ kind: "permission", optionId: "allow_once" })
+    expect(result.second).toEqual({ kind: "permission", optionId: "reject_once" })
+    // Nothing stands, so the terminal is back to taking prompts.
+    expect(result.mode).toBe("ready")
+  })
 })
 
 describe("an open Run", () => {
