@@ -1,97 +1,99 @@
 /* ===========================================================================
-   Typography — the instrument voice.
+   Typography — the reading voice.
 
-   Instrument Serif display in a single weight, hierarchy carried by SIZE,
-   leading and tracking rather than by weight, Space Grotesk for everything
-   structural. Tokens live in tokens.css; this file only shapes type and the
-   vertical beat.
+   Geist carries prose and UI; Geist Mono carries anything a machine produced.
+   Hierarchy is size and the step from weight 400 to 500, never a third face.
+   Tokens live in tokens.css; this file only shapes type and the vertical beat.
 
-   Every size lands on a scale step and takes that step's line height. There is
-   no fluid clamp anywhere: a clamp lands between steps by definition, and two
-   headings a few pixels apart read as a mistake rather than as a hierarchy.
-   Fluidity is responsive steps instead, which is why each display class below
-   restates its three properties at each breakpoint.
+   Every size lands on the scale in docs/design.md and takes that step's line
+   height. There is no fluid clamp anywhere: a clamp lands between steps by
+   definition, and two headings a few pixels apart read as a mistake rather
+   than as a hierarchy.
 =========================================================================== */
 
 @layer components {
   /*
-     The display scale, from DESIGN.md's four display steps:
+     The display scale, from design.md's hierarchy:
 
-       .d-hero  display-xl  72px / 1     -0.028em   text-7xl
-       .d-1     display-lg  60px / 1     -0.024em   text-6xl
-       .d-2     display-md  48px / 1     -0.02em    text-5xl
-       .d-3     display-sm  30px / 36px  -0.015em   text-3xl
+       .d-hero  display     56px / 1.05   hero headline (www)
+       .d-1     heading-lg  40px / 1.1    section headline
+       .d-2     heading     32px / 1.15   docs page title, sub-section
+       .d-3     heading-sm  24px / 1.25   docs h2, panel title
 
-     Tracking eases off as the size comes down, because negative tracking that
-     is right at 72px closes the letters up at 30px.
+     All at weight 500, tracking -0.022em. Weight punctuates inline; it never
+     carries a heading past 500.
   */
   .d-hero,
   .d-1,
   .d-2,
   .d-3 {
-    font-family: var(--font-serif);
-    font-weight: 400;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    letter-spacing: var(--tracking-display);
+    text-wrap: balance;
   }
 
-  /*
-     Mobile first: each step opens at the size it takes below 768px, and the
-     two media queries at the foot of this file climb it. Every value is a
-     token, so DESIGN.md stays the one place the scale is decided.
-  */
+  /* Mobile first: each step opens one down and climbs at 768px. */
   .d-hero {
-    font-size: 2.25rem;
-    line-height: 2.5rem;
-    letter-spacing: var(--tracking-display-md);
+    font-size: var(--text-heading-lg);
+    line-height: var(--text-heading-lg--line-height);
   }
-  .d-1,
-  .d-2,
+  .d-1 {
+    font-size: var(--text-heading);
+    line-height: var(--text-heading--line-height);
+  }
+  .d-2 {
+    font-size: var(--text-heading-sm);
+    line-height: var(--text-heading-sm--line-height);
+  }
   .d-3 {
-    font-size: var(--text-display-sm);
-    line-height: var(--text-display-sm--line-height);
-    letter-spacing: var(--tracking-display-sm);
+    font-size: var(--text-subheading);
+    line-height: var(--text-subheading--line-height);
+  }
+
+  @media (width >= 48rem) {
+    .d-hero {
+      font-size: var(--text-display);
+      line-height: var(--text-display--line-height);
+    }
+    .d-1 {
+      font-size: var(--text-heading-lg);
+      line-height: var(--text-heading-lg--line-height);
+    }
+    .d-2 {
+      font-size: var(--text-heading);
+      line-height: var(--text-heading--line-height);
+    }
+    .d-3 {
+      font-size: var(--text-heading-sm);
+      line-height: var(--text-heading-sm--line-height);
+    }
   }
 
   /*
-     The one emphasis the display voice gets, used once per page at most. It
-     was italic; the face is never set in italic anywhere on either surface, so
-     the accent colour carries the emphasis alone.
-  */
-  .d-accent {
-    color: var(--eva-accent);
-  }
-
-  /*
-     Lede — the opening paragraph. One confident step brighter than muted, so
-     the first read carries. Stays in the sans, at text-lg.
+     Lede — the opening paragraph. One step above body and one ink brighter
+     than secondary prose, so the first read carries.
   */
   .lede {
     font-size: 1.125rem;
-    line-height: 1.75rem;
-    color: var(--eva-lede);
+    line-height: 1.6;
+    letter-spacing: var(--tracking-reading);
+    color: var(--color-mist);
   }
 
   /*
-     Eyebrow — the section marker. A filled mark square, then a letterspaced
-     caption at text-xs. It is a label, not a heading, and is not marked up as
-     one.
+     Eyebrow — the editorial label above a headline. This is machine-voice
+     text, so it takes the mono: uppercase at 13px in fog, tracked open. It is
+     a label, not a heading, and is not marked up as one.
   */
   .eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.625rem;
-    font-size: 0.75rem;
-    line-height: 1rem;
-    font-weight: 500;
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+    line-height: 1.4;
+    font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--eva-muted);
-  }
-  .eyebrow::before {
-    content: "";
-    width: 0.5rem;
-    height: 0.5rem;
-    flex: none;
-    background: var(--eva-mark);
+    letter-spacing: var(--tracking-label);
+    color: var(--color-fog);
   }
 
   /*
@@ -100,50 +102,17 @@
      documentation surface uses the notebook layout's continuous one.
   */
   .section-y {
-    padding-block: 4rem;
+    padding-block: 5rem;
   }
   .section-y-lg {
     padding-block: 6rem;
   }
   .section-y-tight {
-    padding-block: 3rem;
+    padding-block: 2.5rem;
   }
 
   /* Numerals that line up in a column. Every metric on the site uses it. */
   .tnum {
     font-variant-numeric: tabular-nums;
-  }
-
-  /*
-     The display steps climb at the two breakpoints DESIGN.md names: 768px,
-     where the layout stops being one column, and 1024px, where the full band
-     layout arrives. A hero reads text-4xl → text-6xl → text-7xl, which is the
-     responsive-step idiom the no-clamp rule asks for.
-  */
-  @media (width >= 48rem) {
-    .d-hero {
-      font-size: var(--text-display-lg);
-      line-height: var(--text-display-lg--line-height);
-      letter-spacing: var(--tracking-display-lg);
-    }
-    .d-1,
-    .d-2 {
-      font-size: var(--text-display-md);
-      line-height: var(--text-display-md--line-height);
-      letter-spacing: var(--tracking-display-md);
-    }
-  }
-
-  @media (width >= 64rem) {
-    .d-hero {
-      font-size: var(--text-display-xl);
-      line-height: var(--text-display-xl--line-height);
-      letter-spacing: var(--tracking-display-xl);
-    }
-    .d-1 {
-      font-size: var(--text-display-lg);
-      line-height: var(--text-display-lg--line-height);
-      letter-spacing: var(--tracking-display-lg);
-    }
   }
 }

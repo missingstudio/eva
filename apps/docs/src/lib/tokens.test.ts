@@ -33,26 +33,33 @@ describe("the two typefaces", () => {
     }
   })
 
+  // Two faces of one family and no more. A third is a defect, not an option.
   test("exactly two families are declared", () => {
     const families = new Set(
       [...tokens.matchAll(/@font-face\s*\{[^}]*font-family:\s*"([^"]+)"/g)].map((m) => m[1]!),
     )
 
-    expect([...families].sort()).toEqual(["Instrument Serif", "Space Grotesk"])
+    expect([...families].sort()).toEqual(["Geist", "Geist Mono"])
   })
 
-  test("code is Space Grotesk too, so no third face reaches the page", () => {
+  // Prose is the sans and machine output is the mono. A monospaced face slows
+  // continuous reading, so the two stacks must stay distinct — pointing them
+  // at one face is what the previous revision got wrong.
+  test("the sans and the mono are distinct stacks", () => {
     const mono = tokens.match(/--font-mono:\s*([^;]+);/)?.[1] ?? ""
+    const sans = tokens.match(/--font-sans:\s*([^;]+);/)?.[1] ?? ""
 
-    expect(mono).toContain("Space Grotesk")
-    expect(mono).not.toContain("Instrument Serif")
+    expect(mono).toContain("Geist Mono")
+    expect(sans).toContain("Geist")
+    expect(sans).not.toContain("Geist Mono")
   })
 
-  test("code buys back what a proportional face costs it", () => {
+  test("code is the mono, with figures that line up", () => {
     const block = tokens.match(/\bcode,\s*\n\s*kbd,\s*\n\s*pre,\s*\n\s*samp\s*\{([^}]*)\}/)?.[1]
 
     expect(block, "pre/code do not set their own type").toBeDefined()
-    // Digits that line up are most of what a monospace face was giving us.
+    // A fallback face may render — tabular figures keep a column of digits
+    // lined up either way.
     expect(block).toContain("tabular-nums")
     expect(block).toContain("font-family: var(--font-mono)")
   })
@@ -94,9 +101,10 @@ describe("the motion contract", () => {
 })
 
 describe("the display scale", () => {
-  // Instrument Serif ships one weight, so every step has to change size,
-  // leading, and tracking together or the hierarchy collapses.
-  test("each display step sets its own size, leading, and tracking", () => {
+  // Hierarchy is size and leading; tracking travels as one token for every
+  // display step rather than per step, so a step that sets its own is off
+  // the system.
+  test("each display step sets its own size and leading", () => {
     // A step's rules may be split between the shared selector group and its
     // own block, so the assertion is on the union of everything that names it.
     const blocks = [...typography.matchAll(/([^{}]+)\{([^}]*)\}/g)]
@@ -111,7 +119,12 @@ describe("the display scale", () => {
       expect(declared, `${step} is missing`).not.toBe("")
       expect(declared, `${step} has no size`).toContain("font-size")
       expect(declared, `${step} has no leading`).toContain("line-height")
-      expect(declared, `${step} has no tracking`).toContain("letter-spacing")
+    }
+  })
+
+  test("no display step invents a literal tracking", () => {
+    for (const value of typography.matchAll(/letter-spacing:\s*([^;]+);/g)) {
+      expect(value[1]!, `a literal tracking: ${value[0]}`).toContain("var(--tracking-")
     }
   })
 })

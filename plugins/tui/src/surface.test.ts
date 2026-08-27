@@ -983,7 +983,7 @@ describe("a picker a command opened", () => {
 })
 
 describe("a picker that paints", () => {
-  const DUSK = { foreground: "#eee", muted: "#888", accent: "#7aa2f7", warning: "#e0af68" }
+  const DUSK = { foreground: "#eee", muted: "#888", accent: "#8888ff", warning: "#ffcc00" }
   const NOON = { foreground: "#111", muted: "#555", accent: "#0000ff", warning: "#ff0000" }
 
   const themePicker: readonly CommandInfo[] = [

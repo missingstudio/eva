@@ -9,9 +9,7 @@
 */
 @source "../node_modules/streamdown/dist/index.js";
 
+/* The ground, the ink and the face come from the ui package's base layer. */
 body {
-  background: var(--eva-bg);
-  color: var(--eva-text);
-  font-family: var(--font-sans);
   margin: 0;
 }

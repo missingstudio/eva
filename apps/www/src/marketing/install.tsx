@@ -29,8 +29,8 @@ type ChannelId = (typeof channels)[number]["id"]
  * copy result announces without moving focus.
  *
  * The field is the terminal panel, dark in both schemes, so everything inside
- * reads the pinned `on-strong` inks rather than the scheme-aware pair. The
- * scheme-aware accent would land at 3.11:1 here on a light page.
+ * is on the carbon field the transcript uses, and reads the same tokens as
+ * everything else — the system is dark only.
  */
 export function Install({ version }: { version: string }) {
   const [active, setActive] = useState<ChannelId>("brew")
@@ -86,7 +86,7 @@ export function Install({ version }: { version: string }) {
         // The row wraps rather than overflowing: at 320px four channels and a
         // version number do not fit on one line, and a clipped tab is a tab
         // nobody can reach.
-        className="border-rule flex flex-wrap items-stretch border-b"
+        className="border-graphite flex flex-wrap items-stretch border-b"
       >
         {channels.map((c, i) => {
           const selected = c.id === active
@@ -106,18 +106,14 @@ export function Install({ version }: { version: string }) {
               // The selected channel is carried by an underline as well as by
               // colour, because colour alone fails SC 1.4.1.
               className={`border-b-2 px-3 py-2 text-xs font-semibold tracking-[0.04em] uppercase ${
-                selected
-                  ? "border-on-strong-accent text-on-strong"
-                  : "text-on-strong-muted hover:text-on-strong border-transparent"
+                selected ? "border-bone text-bone" : "text-mist hover:text-bone border-transparent"
               }`}
             >
               {c.label}
             </button>
           )
         })}
-        <span className="text-on-strong-muted tnum ml-auto self-center px-3 text-xs">
-          v{version}
-        </span>
+        <span className="text-fog tnum ml-auto self-center px-3 text-xs">v{version}</span>
       </div>
 
       <div
@@ -150,7 +146,7 @@ export function Install({ version }: { version: string }) {
           type="button"
           onClick={copy}
           aria-label={status === "copied" ? "Copied" : `Copy the ${channel.label} command`}
-          className="border-rule text-on-strong-muted hover:text-on-strong shrink-0 rounded-md border px-2 py-1 text-xs font-semibold"
+          className="border-graphite text-fog hover:text-bone shrink-0 rounded-md border px-2 py-1 text-xs font-semibold"
         >
           <SteadyLabel
             options={["Copy", "Copied"]}

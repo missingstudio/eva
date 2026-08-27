@@ -142,7 +142,7 @@ export const BlockView = ({
      */
     case "mode":
       return (
-        <p className="rounded-md border border-rule px-3 py-2 text-sm">
+        <p className="rounded-md border border-graphite px-3 py-2 text-sm">
           mode <strong>{block.mode}</strong>
           {block.reason === undefined ? null : (
             <span className="text-muted-foreground"> · {block.reason}</span>
@@ -163,7 +163,7 @@ export const BlockView = ({
       return (
         <div
           aria-label="permission request"
-          className="rounded-md border border-warning bg-card px-3 py-2"
+          className="rounded-md border border-ember bg-card px-3 py-2"
           role="group"
         >
           <p className="text-muted-foreground text-xs uppercase tracking-[0.06em]">
@@ -205,7 +205,7 @@ export const BlockView = ({
       )
     case "unknown":
       return (
-        <p className="rounded-md border border-rule border-dashed px-3 py-2 text-muted-foreground text-sm">
+        <p className="rounded-md border border-graphite border-dashed px-3 py-2 text-muted-foreground text-sm">
           this page cannot draw <code>{block.originalKind}</code>, and the record holds one
         </p>
       )

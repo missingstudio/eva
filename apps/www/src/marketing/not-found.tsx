@@ -18,7 +18,7 @@ export function NotFound() {
         <a className="btn-primary" href="/">
           Go to the home page
         </a>
-        <a className="btn-secondary" href={site.doc("")}>
+        <a className="btn-ghost" href={site.doc("")}>
           Search the documentation
         </a>
       </div>

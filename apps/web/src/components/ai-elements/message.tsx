@@ -41,7 +41,7 @@ export type MessageContentProps = HTMLAttributes<HTMLDivElement>
 export const MessageContent = ({ children, className, ...props }: MessageContentProps) => (
   <div
     className={cn(
-      "flex w-full min-w-0 max-w-full flex-col gap-2 overflow-hidden text-ink text-sm",
+      "flex w-full min-w-0 max-w-full flex-col gap-2 overflow-hidden text-bone text-sm",
       "group-[.is-user]:rounded-lg group-[.is-user]:bg-card group-[.is-user]:px-4 group-[.is-user]:py-3",
       className,
     )}
@@ -78,9 +78,9 @@ type MarkdownCodeProps = ComponentProps<"code"> & { readonly node?: unknown }
 const MarkdownCode = ({ children, className, node: _node, ...props }: MarkdownCodeProps) => {
   const language = LANGUAGE.exec(className ?? "")?.[1]
   return "data-block" in props ? (
-    <div className="my-4 overflow-hidden rounded-lg border border-rule bg-card">
+    <div className="my-4 overflow-hidden rounded-lg border border-graphite bg-card">
       {language === undefined ? null : (
-        <p className="border-rule border-b px-3 py-1 font-mono text-muted-foreground text-xs">
+        <p className="border-graphite border-b px-3 py-1 font-mono text-muted-foreground text-xs">
           {language}
         </p>
       )}

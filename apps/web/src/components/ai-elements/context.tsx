@@ -49,7 +49,7 @@ export const Context = ({ cost, className, ...props }: ContextProps) => {
     <ContextContext.Provider value={contextValue}>
       <dl
         className={cn(
-          "grid grid-cols-[auto_auto] justify-start gap-x-3 border-rule border-t pt-3 text-xs",
+          "grid grid-cols-[auto_auto] justify-start gap-x-3 border-graphite border-t pt-3 text-xs",
           className,
         )}
         {...props}

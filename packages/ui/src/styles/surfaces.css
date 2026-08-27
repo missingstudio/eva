@@ -1,68 +1,45 @@
 /* ===========================================================================
    Surfaces — the panels, cards, and buttons everything sits on.
 
-   Eva is an instrument, so its surfaces are machined: a faint measurement grid
-   instead of paper grain, hairline rules instead of soft edges, and one dark
-   panel that reads as the terminal the product actually is.
+   Depth is a tonal step and a hairline: void to carbon to obsidian, separated
+   by graphite. No card casts a shadow, and no background carries a gradient.
+   The one exception is an element that genuinely detaches from the page — a
+   popover over content — which may cast.
 
-   Two rules run through the whole file. Backgrounds are flat — the only
-   gradient in the system is the hero heading text at the foot of this file.
-   And depth is a hairline and a tonal step; there is no shadow anywhere,
-   because a shadow is a light source, and this page has none.
+   Ember appears as a precise tool: the primary CTA fill, the editorial card's
+   2px left border, the shipping stage tag. It is never decorative.
 =========================================================================== */
 
 @layer components {
   /*
-     The measurement grid. One repeating linear-gradient pair, masked so it
-     fades out rather than ending. It is the site's only texture, and it is a
-     line pattern rather than a wash.
-  */
-  .grid-surface {
-    position: relative;
-    overflow: hidden;
-  }
-  .grid-surface::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image:
-      linear-gradient(to right, var(--eva-grid) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--eva-grid) 1px, transparent 1px);
-    background-size: var(--eva-grid-cell) var(--eva-grid-cell);
-    mask-image: radial-gradient(120% 90% at 50% 0%, #000 0%, transparent 72%);
-  }
-
-  /*
-     The terminal panel. Eva's program is dark whatever the page is, so the
-     surface that stands in for it stays dark in both schemes — which is why
-     its ink is pinned rather than flipped. Anything drawn here reads the
-     `on-strong` tokens; the scheme-aware accent lands at 3.11:1 on this field
-     in light mode and fails.
+     The transcript panel. The program's own surface: carbon, bone ink, a
+     graphite hairline.
   */
   .panel-terminal {
-    background: var(--eva-panel-ink);
-    color: var(--eva-on-strong);
-    border: 1px solid var(--eva-rule);
+    background: var(--color-carbon);
+    color: var(--color-bone);
+    border: 1px solid var(--color-graphite);
+    border-radius: var(--radius-lg);
   }
   .panel-terminal :is(.text-muted, .muted) {
-    color: var(--eva-on-strong-muted);
+    color: var(--color-fog);
   }
 
   /*
      A hairline card. The border goes all the way around — a single-sided
-     border is never a card edge — and hover moves it one step stronger. No
-     shadow, and no lift: the tonal step from ground to card is the hierarchy.
+     border is never a card edge, except the editorial card's ember mark — and
+     hover moves it one step stronger. No shadow, and no lift: the tonal step
+     from void to carbon is the hierarchy.
   */
   .card-hairline {
-    border: 1px solid var(--eva-rule);
-    background: var(--eva-card);
-    border-radius: 0.75rem;
+    border: 1px solid var(--color-graphite);
+    background: var(--color-carbon);
+    border-radius: var(--radius-lg);
     transition: border-color var(--dur-instant) var(--ease-fluid);
   }
   @media (hover: hover) {
     .card-hairline:hover {
-      border-color: var(--eva-rule-strong);
+      border-color: var(--color-smoke);
     }
   }
   .card-hairline:active {
@@ -70,19 +47,28 @@
   }
 
   /*
-     Buttons. One shape across both surfaces — 8px, tight, almost rectangular.
-     A pill CTA at the density the documentation carries would compete with the
-     prose, so the pill is kept for the navigation island and the stage tag.
+     The editorial card's category mark: a 2px solid ember left border running
+     full height — the only colour in the card.
+  */
+  .case-mark {
+    border-left: 2px solid var(--color-ember);
+  }
 
-     Padding is 8px by 12px and the label is weight 600, which puts a button at
-     about 40px tall: clear of the 24px floor, and close to the 44px a touch
-     target wants.
+  /*
+     Buttons. 6px radius, 8px by 16px padding around a 20px line box — about
+     36px tall, clear of the 24px floor. The label is 15px; the CTA carries
+     weight 500 like the rest, because the fill is what makes it loud.
+
+     No shadow, no hover lift — colour change only.
   */
   .btn-primary,
   .btn-secondary,
-  .btn-accent,
-  .btn-quiet {
-    @apply inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-base font-semibold;
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2;
+    font-size: 0.9375rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    letter-spacing: var(--tracking-reading);
     transition:
       background-color var(--dur-instant) var(--ease-fluid),
       border-color var(--dur-instant) var(--ease-fluid),
@@ -91,37 +77,35 @@
       transform var(--dur-instant) var(--ease-fluid);
   }
 
-  /* The inverted CTA, and the loudest element on a page. One per view. */
-  .btn-primary {
-    background: var(--eva-text);
-    color: var(--eva-bg);
-  }
-
-  /* The outlined default. Its edge moves one step on hover. */
-  .btn-secondary {
-    border: 1px solid var(--eva-rule);
-    background: var(--eva-card);
-    color: var(--eva-text);
-  }
-
-  /* The periwinkle CTA. At most one per page. */
-  .btn-accent {
-    background: var(--eva-accent);
-    color: var(--eva-bg);
-  }
-
   /*
-     The unlimited one, and the default for chrome. At the 48 buttons a
-     documentation page carries, a filled button is noise.
+     The ember CTA, the conversion anchor. One per view. The ink is void:
+     bone on ember measures 2.64:1 and fails outright, void measures 6.00:1 —
+     design.md carries the measurement.
   */
-  .btn-quiet {
-    color: var(--eva-lede);
+  .btn-primary {
+    background: var(--color-ember);
+    color: var(--color-void);
   }
 
-  /* The same, one step down, for a header row. */
+  /* The filled default: the elevated step with a hairline. */
+  .btn-secondary {
+    background: var(--color-obsidian);
+    border: 1px solid var(--color-graphite);
+    color: var(--color-bone);
+  }
+
+  /* The unlimited one, and the default for chrome. */
+  .btn-ghost {
+    color: var(--color-mist);
+  }
+
+  /* The chrome step: quiet, for a row in the navigation bar. */
   .btn-header {
-    @apply inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold;
-    color: var(--eva-lede);
+    @apply inline-flex items-center justify-center gap-1 rounded-md px-3 py-2;
+    font-size: 0.9375rem;
+    line-height: 1.25rem;
+    letter-spacing: var(--tracking-reading);
+    color: var(--color-mist);
     transition:
       background-color var(--dur-instant) var(--ease-fluid),
       color var(--dur-instant) var(--ease-fluid),
@@ -129,21 +113,19 @@
   }
 
   /*
-     The header step, for a filled button that sits in a row of chrome. The
-     navigation island is a band of controls, and an accent CTA at the body
-     step makes the island a third taller than the row it belongs to. Size
-     only: the fill, the shape and the weight do not change, so the button is
-     still the same component.
+     The compact size, for a dense row. Size only: the fill, the shape and the
+     weight do not change, so the button is still the same component.
   */
   .btn-sm {
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 0.8125rem;
+    line-height: 1rem;
+    padding-inline: 0.75rem;
   }
 
   /* An icon alone. It must carry an aria-label; a title never reaches touch. */
   .btn-icon {
-    @apply inline-flex size-8 items-center justify-center rounded-lg;
-    color: var(--eva-muted);
+    @apply inline-flex size-8 items-center justify-center rounded-md;
+    color: var(--color-fog);
     transition:
       background-color var(--dur-instant) var(--ease-fluid),
       color var(--dur-instant) var(--ease-fluid),
@@ -151,19 +133,18 @@
   }
 
   @media (hover: hover) {
-    /* A 6% wash of the ink. Works in both schemes and adds no token. */
-    .btn-quiet:hover,
+    /* A 6% wash of the ink. Colour change only, and it adds no token. */
+    .btn-ghost:hover,
     .btn-header:hover,
     .btn-icon:hover {
-      background: color-mix(in oklch, var(--eva-text) 6%, transparent);
-      color: var(--eva-text);
+      background: color-mix(in oklch, var(--color-bone) 6%, transparent);
+      color: var(--color-bone);
     }
     .btn-secondary:hover {
-      border-color: var(--eva-rule-strong);
+      border-color: var(--color-smoke);
     }
     /* A filled button has no field to wash, so it lightens by 8% instead. */
-    .btn-primary:hover,
-    .btn-accent:hover {
+    .btn-primary:hover {
       filter: brightness(1.08);
     }
   }
@@ -171,8 +152,7 @@
   /* Physical feedback, and distinct from hover. */
   .btn-primary:active,
   .btn-secondary:active,
-  .btn-accent:active,
-  .btn-quiet:active,
+  .btn-ghost:active,
   .btn-header:active,
   .btn-icon:active {
     transform: scale(0.98);
@@ -183,14 +163,7 @@
      control out of the tab order, and the explanation of why it is disabled
      goes with it.
   */
-  :is(
-    .btn-primary,
-    .btn-secondary,
-    .btn-accent,
-    .btn-quiet,
-    .btn-header,
-    .btn-icon
-  )[aria-disabled="true"] {
+  :is(.btn-primary, .btn-secondary, .btn-ghost, .btn-header, .btn-icon)[aria-disabled="true"] {
     opacity: 0.45;
     pointer-events: none;
   }
@@ -234,65 +207,51 @@
 
   /*
      A stage label. Eva says which roadmap stage an unshipped capability lands
-     in, everywhere it names one, so the marker is a component rather than a
-     span someone styles twice. The text names the stage, so colour never
-     carries it alone.
+     in, everywhere it names one. Machine-voice text, so the mono: uppercase
+     at 13px in fog, inside a pill outline. The text names the stage, so
+     colour never carries it alone.
   */
   .stage-tag {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    border: 1px solid var(--eva-rule);
+    border: 1px solid var(--color-graphite);
     border-radius: 9999px;
-    padding: 0.125rem 0.5rem;
-    font-size: 0.75rem;
-    line-height: 1rem;
-    letter-spacing: 0.04em;
-    color: var(--eva-muted);
+    padding: 0.25rem 0.5rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    color: var(--color-fog);
     white-space: nowrap;
   }
   .stage-tag[data-shipping="true"] {
-    border-color: var(--eva-accent);
-    color: var(--eva-accent);
+    border-color: var(--color-ember);
+    color: var(--color-ember);
   }
 
   /*
-     The one gradient in the system: left to right across the hero headline's
-     own glyphs, never on a background. The end stop is the weakest point and
-     measures 5.50:1 on paper, 7.56:1 on the ground.
-
-     `background-clip: text` needs a transparent fill to show through, so a
-     browser that cannot paint it would render nothing. The @supports gate is
-     what keeps the headline visible in that case.
+     A run's outcome. The glyph and the word carry the state; the colour only
+     confirms it, which is what keeps the row readable in grayscale.
   */
+  .status-ok {
+    color: var(--color-green);
+  }
+  .status-fail {
+    color: var(--color-red);
+  }
+  .status-running {
+    color: var(--color-teal);
+  }
+
   /*
-     An image sits on the page with no edge of its own, so a light screenshot
-     on a light ground floats and a dark one on a dark ground merges. A hairline
-     of the opposite ink at 8%, inset by 1px so it never grows the box, gives it
-     a boundary without giving it a frame.
+     An image sits on the page with no edge of its own, so a dark capture on
+     the void merges. A hairline of bone at 8%, inset by 1px so it never
+     grows the box, gives it a boundary without giving it a frame.
   */
   .image-edge {
-    outline: 1px solid rgb(0 0 0 / 8%);
+    outline: 1px solid rgb(229 229 230 / 8%);
     outline-offset: -1px;
-  }
-  .dark .image-edge {
-    outline-color: rgb(255 255 255 / 8%);
-  }
-
-  @supports (background-clip: text) or (-webkit-background-clip: text) {
-    .heading-gradient {
-      /*
-         Interpolated in oklab, so the ramp keeps an even brightness instead of
-         dipping through the muted midpoint sRGB gives it.
-      */
-      background-image: linear-gradient(
-        to right in oklab,
-        var(--eva-heading-from),
-        var(--eva-heading-to)
-      );
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
   }
 }

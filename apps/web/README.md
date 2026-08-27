@@ -118,8 +118,9 @@ nothing.
 
 ## The design system
 
-`packages/ui` is Eva's design system — a measured palette on `--eva-*` custom
-properties, two self-hosted faces, a motion table, and one focus treatment.
+`packages/ui` is Eva's design system — a measured dark-only palette, two
+self-hosted faces (a sans for prose, a mono for machine output), a motion
+table, and one focus treatment.
 `src/styles.css` imports it whole:
 
 ```css
@@ -130,9 +131,9 @@ One distinction in it is worth naming, because it is easy to flatten. The
 tokens split the hairline between two static surfaces from the boundary that
 says "this is a control": WCAG SC 1.4.11 asks 3:1 of the second and nothing of
 the first, and the two are measured separately. shadcn/ui spends one `--border`
-on both. `src/shadcn.css` keeps them apart — `--color-border` is the hairline
-and `--color-input` is the control boundary — so a card draws `border-rule` and
-a disclosure draws `border-control`.
+on both. `src/shadcn.css` keeps them apart — `--color-border` is the graphite
+hairline and `--color-input` is the ash control boundary — so a card draws
+`border-graphite` and a disclosure draws `border-input`.
 
 ## Prerequisites
 

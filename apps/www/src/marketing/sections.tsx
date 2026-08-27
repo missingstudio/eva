@@ -4,7 +4,6 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
 import { faq } from "./faq.js"
 import { Install } from "./install.js"
 import { armReveals } from "./reveal.js"
-import { ThemeControl } from "./theme-toggle.js"
 import { site, siteData } from "../lib/site.js"
 
 const doc = (slug: DocSlug) => site.doc(slug)
@@ -24,7 +23,7 @@ export function SkipLink() {
   return (
     <a
       href="#main"
-      className="btn-secondary sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
+      className="btn-ghost sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
     >
       Skip to content
     </a>
@@ -65,7 +64,7 @@ function Section({
   tone?: "grid"
 }) {
   return (
-    <section className={`border-rule border-t ${tone === "grid" ? "grid-surface" : ""}`}>
+    <section className={`border-graphite border-t ${tone === "grid" ? "arrow-field" : ""}`}>
       <div className={`max-w-page relative mx-auto px-6 ${beat}`}>
         {label ? <p className="eyebrow reveal mb-8">{label}</p> : null}
         {children}
@@ -82,9 +81,9 @@ const menu = [
 ]
 
 /**
- * The navigation island — a detached pill below the top edge rather than a
- * docked bar. Below 768px it collapses to a wordmark and a hamburger that
- * rotates into a true X, and the menu opens as a screen-filling overlay.
+ * The navigation bar — one docked bar on the void with a hairline below.
+ * Below 768px it collapses to a wordmark and a hamburger that rotates into a
+ * true X, and the menu opens as a screen-filling overlay.
  *
  * That overlay is a modal dialog, and the package's Sheet is the one that says
  * so. What was written by hand here cycled Tab and restored focus, but the
@@ -111,24 +110,20 @@ export function Nav() {
   return (
     <div className="sticky top-0 z-40">
       {/*
-        Padding on a pill is not padding on a rectangle. The end caps curve
-        away, so a control set 8px from the widest point sits about 1px from
-        the edge at its own top corner, which is what made the CTA look wedged
-        in. 16px either side clears the curve at the corner as well.
-
+        One docked bar on the void, a hairline below — no island, no pill.
         The gaps follow the group rule: 4px inside the link row, 12px between
-        groups, so the row reads as four things rather than seven.
+        groups, so the row reads as three things rather than seven.
       */}
       <nav
         aria-label="Main"
-        className="border-rule bg-card mx-auto mt-6 flex w-max max-w-[calc(100%-var(--eva-gutter)*2)] items-center gap-3 rounded-full border px-4 py-2"
+        className="border-graphite bg-void/80 flex w-full items-center gap-3 border-b px-4 py-2 backdrop-blur-lg"
       >
         <a href="/" aria-label="Eva, home" className="flex items-center py-1">
-          {/* The wordmark from the brand kit, inheriting the text colour. */}
-          <img src="/brand/wordmark.svg" alt="Eva" width={66} height={20} className="dark:invert" />
+          {/* The wordmark from the brand kit, inverted onto the void. */}
+          <img src="/brand/wordmark.svg" alt="Eva" width={66} height={20} className="invert" />
         </a>
 
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="hidden items-center gap-1 md:ml-auto md:flex">
           {menu.map((item) => (
             <a key={item.label} className="btn-header" href={item.href}>
               {item.label}
@@ -142,12 +137,8 @@ export function Nav() {
           ))}
         </div>
 
-        <div className="hidden md:block">
-          <ThemeControl />
-        </div>
-
-        {/* The one accent button on the page, at the row's own step. */}
-        <a className="btn-accent btn-sm hidden md:inline-flex" href={doc("install")}>
+        {/* The one ember button on the page, at the row's own step. */}
+        <a className="btn-primary btn-sm hidden md:inline-flex" href={doc("install")}>
           Install Eva
         </a>
 
@@ -171,7 +162,7 @@ export function Nav() {
           <SheetContent
             side="top"
             showCloseButton={false}
-            className="bg-bg/80 justify-center gap-2 px-6 shadow-none backdrop-blur-3xl duration-(--dur-fast) ease-(--ease-fluid) md:hidden data-[side=top]:h-dvh data-[side=top]:border-0"
+            className="bg-void/80 justify-center gap-2 px-6 shadow-none backdrop-blur-3xl duration-(--dur-fast) ease-(--ease-fluid) md:hidden data-[side=top]:h-dvh data-[side=top]:border-0"
           >
             <SheetTitle className="sr-only">Menu</SheetTitle>
             {menu.map((item, index) => (
@@ -179,15 +170,18 @@ export function Nav() {
                 key={item.label}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="d-3 menu-item hover:text-accent py-2"
+                className="d-3 menu-item py-2"
                 style={step(index)}
               >
                 {item.label}
               </a>
             ))}
             <div className="menu-item mt-6 flex items-center gap-3" style={step(menu.length)}>
-              <ThemeControl />
-              <a className="btn-accent btn-sm" href={doc("install")} onClick={() => setOpen(false)}>
+              <a
+                className="btn-primary btn-sm"
+                href={doc("install")}
+                onClick={() => setOpen(false)}
+              >
                 Install Eva
               </a>
             </div>
@@ -200,14 +194,14 @@ export function Nav() {
 
 export function Hero() {
   return (
-    <header className="grid-surface border-rule border-b">
+    <header className="arrow-field border-graphite border-b">
       <div className="max-w-page relative mx-auto px-6 pt-20 pb-16 sm:pt-28">
         {/*
           The tagline is one string in the ui package. The site never
           restates it in its own words, so the headline reads it rather than
           spelling it out again.
         */}
-        <h1 className="d-hero heading-gradient reveal max-w-measure">{entity.product.tagline}</h1>
+        <h1 className="d-hero reveal max-w-measure">{entity.product.tagline}</h1>
 
         <p className="lede reveal max-w-measure mt-6">
           A local-first control center for coding agents. They run in parallel, and they ship
@@ -219,7 +213,7 @@ export function Hero() {
         </div>
 
         <p className="text-muted-foreground reveal mt-4 text-xs">
-          <a className="link-rule hover:text-ink inline-block py-1" href={doc("install")}>
+          <a className="link-rule hover:text-bone inline-block py-1" href={doc("install")}>
             Every channel, and how to verify a download →
           </a>
         </p>
@@ -283,9 +277,7 @@ export function Today() {
           >
             <h3 className="text-lg font-semibold tracking-tight">{row.title}</h3>
             <p className="text-muted-foreground mt-2 text-sm">{row.body}</p>
-            <span className="text-muted-foreground group-hover:text-accent mt-4 inline-block text-xs">
-              Read →
-            </span>
+            <span className="text-muted-foreground group-mt-4 inline-block text-xs">Read →</span>
           </a>
         ))}
       </div>
@@ -328,7 +320,7 @@ export function Harnesses() {
             <span
               role="img"
               aria-label={name}
-              className="text-muted-foreground hover:text-ink block size-7 bg-current transition-colors duration-[var(--dur-instant)] ease-[var(--ease-fluid)]"
+              className="text-muted-foreground hover:text-bone block size-7 bg-current transition-colors duration-[var(--dur-instant)] ease-[var(--ease-fluid)]"
               style={mark(file)}
             />
           </li>
@@ -368,18 +360,18 @@ export function OpenSource() {
 export function Faq() {
   return (
     <Section label="Questions">
-      <div className="border-rule reveal-group border-t">
+      <div className="border-graphite reveal-group border-t">
         {faq.map((entry, index) => (
           <details
             key={entry.question}
-            className="border-rule reveal group border-b py-5"
+            className="border-graphite reveal group border-b py-5"
             style={step(index)}
           >
             {/*
               `list-none` removes the native marker, so a chevron is supplied
               in its place. Open and closed must differ by more than colour.
             */}
-            <summary className="hover:text-accent flex cursor-pointer list-none items-center gap-3 font-medium tracking-tight transition-colors duration-[var(--dur-instant)] ease-[var(--ease-fluid)]">
+            <summary className="flex cursor-pointer list-none items-center gap-3 font-medium tracking-tight transition-colors duration-[var(--dur-instant)] ease-[var(--ease-fluid)]">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 16 16"
@@ -417,24 +409,24 @@ export function Close() {
 
 export function Footer() {
   return (
-    <footer className="border-rule border-t">
+    <footer className="border-graphite border-t">
       <div className="text-muted-foreground max-w-page mx-auto flex flex-wrap items-center gap-x-6 px-6 py-10 text-xs">
-        <a className="link-rule hover:text-ink inline-block py-1" href={doc("")}>
+        <a className="link-rule hover:text-bone inline-block py-1" href={doc("")}>
           Docs
         </a>
-        <a className="link-rule hover:text-ink inline-block py-1" href={doc("about/roadmap")}>
+        <a className="link-rule hover:text-bone inline-block py-1" href={doc("about/roadmap")}>
           Roadmap
         </a>
-        <a className="link-rule hover:text-ink inline-block py-1" href="/changelog">
+        <a className="link-rule hover:text-bone inline-block py-1" href="/changelog">
           Changelog
         </a>
-        <a className="link-rule hover:text-ink inline-block py-1" href={external.repo}>
+        <a className="link-rule hover:text-bone inline-block py-1" href={external.repo}>
           GitHub
         </a>
-        <a className="link-rule hover:text-ink inline-block py-1" href="/privacy">
+        <a className="link-rule hover:text-bone inline-block py-1" href="/privacy">
           Privacy
         </a>
-        <a className="link-rule hover:text-ink inline-block py-1" href={external.license}>
+        <a className="link-rule hover:text-bone inline-block py-1" href={external.license}>
           MIT license
         </a>
         <span className="ml-auto">
