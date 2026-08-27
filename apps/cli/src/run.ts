@@ -26,6 +26,8 @@ export { newSessionID } from "@missingstudio/eva-core"
  */
 export interface ResolvedConfig extends Resolution {
   readonly model: ModelRef
+  // Which harness answers a Prompt that names none. Absent is a bare Run.
+  readonly harness?: string
   readonly findings: readonly Finding[]
 }
 
@@ -33,6 +35,17 @@ export interface Started {
   readonly kernel: Kernel
   readonly config: Config
   readonly model: ModelRef
+  readonly harness?: string
+}
+
+/**
+ * The default harness this directory names, read through the same declaration
+ * `model` is read through. An empty name is no name: a key written and left
+ * blank is not a harness nobody can find.
+ */
+const harnessIn = (raw: Record<string, unknown>): { readonly harness?: string } => {
+  const named = KEYS.read(raw, "harness", "")
+  return named === "" ? {} : { harness: named }
 }
 
 /**
@@ -58,6 +71,7 @@ export const resolveConfig = Effect.fn("cli.resolveConfig")(function* (
     // Read through the declaration that owns the key, so the app and the
     // plugin that projects it cannot disagree about what `model` is.
     model: modelRef(KEYS.read(settled.config.raw, "model", "")) ?? DEFAULT_MODEL,
+    ...harnessIn(settled.config.raw),
     findings: findings({
       raw: settled.config.raw,
       origin: (key) => originOf(settled.config, key),
@@ -125,7 +139,7 @@ export const startFrom = Effect.fn("cli.startFrom")(function* (
   // Where boot-time reports land. A caller that hands nothing watches nothing.
   say?: (text: string) => void,
 ) {
-  const { config, model, plugins: resolved } = settled
+  const { config, model, harness, plugins: resolved } = settled
 
   const kernel = yield* boot({
     scope,
@@ -135,7 +149,12 @@ export const startFrom = Effect.fn("cli.startFrom")(function* (
     ...(say === undefined ? {} : { observe: watchKernel(scope, say) }),
   })
 
-  return { kernel, config, model } satisfies Started
+  return {
+    kernel,
+    config,
+    model,
+    ...(harness === undefined ? {} : { harness }),
+  } satisfies Started
 })
 
 export const start = Effect.fn("cli.start")(function* (
