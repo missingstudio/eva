@@ -34,6 +34,9 @@ export default defineConfig({
       "packages/*/src/**/*.test.ts",
       "packages/*/src/**/*.test.tsx",
       "plugins/*/src/**/*.test.ts",
+      // `scripts/` is not a workspace package, so the patterns above miss it.
+      // skills.test.ts sat here unrun for as long as it existed.
+      "scripts/**/*.test.ts",
     ],
     coverage: {
       provider: "v8",

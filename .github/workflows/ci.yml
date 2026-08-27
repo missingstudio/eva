@@ -58,6 +58,31 @@ jobs:
       - run: bun run test
       - run: bun run build
 
+      # What the tree says is right, checked against what a host actually
+      # serves. Every check above reads the repository; this one reads
+      # responses — the status, the content type, the Vary, the Link, and the
+      # shape of the body. The defect this exists for was invisible to all of
+      # them: the routes existed, the tests passed, and production answered
+      # 404.
+      #
+      # Served locally rather than probed on a deployment, so the verdict stays
+      # a pure function of the tree. `serve-static.ts` applies the same
+      # `vercel.json` the edge does, which is the file `vercel-config.ts`
+      # generates and the suite above proves is current.
+      - name: Serve both builds with the edge rules applied
+        run: |
+          bun scripts/serve-static.ts apps/www 3000 &
+          bun scripts/serve-static.ts apps/docs 3001 &
+          for port in 3000 3001; do
+            for _ in $(seq 1 30); do
+              curl -sf "http://127.0.0.1:$port/robots.txt" > /dev/null && break
+              sleep 1
+            done
+          done
+
+      - name: Check every contract the sites owe a machine
+        run: bun scripts/agent-ready.ts http://127.0.0.1:3000 http://127.0.0.1:3001
+
   # The release path, run without a dispatch: every target compiled, archived,
   # checksummed, the cask and the npm packages written, nothing published. It
   # only runs when a change can reach that path, because it compiles five
