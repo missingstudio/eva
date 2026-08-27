@@ -118,7 +118,11 @@ cwd is accepted and unused.
 - `readWorkflow(id, raw): ReadWorkflow` — the load-time pass; `workflow` is
   present exactly when `problems` is empty.
 - `makeWorkflowHarness(host, deps): Harness` — the harness itself, buildable
-  without the plugin runtime; `WorkflowDeps` names what it reads.
+  without the plugin runtime; `WorkflowDeps` names what it reads. What is here
+  is the declared list of Steps and the Repair; the session mint, the fiber
+  map, the interrupt classification and the refusal group are `nativeHarness`
+  in [@missingstudio/eva-sdk](../../packages/sdk/README.md), and stating no
+  `steer` there is what refuses steering.
 - `readReference(written)` / `resolveReference(reference, input, outputs)` —
   the three-shape reference language `with` speaks.
 - `REPAIR_TEMPLATE`, `REPAIR_TEMPLATE_ID`, `faultLine` — the built-in repair

@@ -3,17 +3,23 @@ import type {
   CalledTool,
   Harness,
   HarnessHost,
-  ResumeResult,
   SteerMessage,
-  SubmitInput,
   ToolInfo,
 } from "@missingstudio/eva-core"
-import { newSessionID } from "@missingstudio/eva-core"
-import type { Payload, SessionID, StopReason, TranscriptMessage } from "@missingstudio/eva-schema"
-import { instructionOf, type CatalogState, type Gap, type PromptInfo } from "@missingstudio/eva-sdk"
-import { Cause, Effect, Exit, Fiber, Stream } from "effect"
+import type { SessionID, TranscriptMessage } from "@missingstudio/eva-schema"
+import {
+  human,
+  instructionOf,
+  nativeHarness,
+  sayGap,
+  type CatalogState,
+  type PromptInfo,
+  type Prompting,
+  type Steer,
+} from "@missingstudio/eva-sdk"
+import { Effect } from "effect"
 import { LOOP_TEMPLATE_ID } from "./prompt.js"
-import { human, offeredIn, stepMessages } from "./step.js"
+import { offeredIn, stepMessages } from "./step.js"
 
 // The row's id, and the name a person types after `eva run`.
 export const LOOP_HARNESS_ID = "eva.harness.loop"
@@ -49,20 +55,6 @@ export interface LoopDeps {
   readonly malformedSteps: number
 }
 
-/**
- * The loop takes text and answers a Stop Reason. It forks a Step, holds no
- * session state a resume needs, and speaks no MCP. Every field is optional and
- * absent means not supported, so this is honest rather than Degraded.
- */
-const CAPABILITIES = {}
-
-/**
- * One line a person typed while the loop was working, and the boundary it is
- * held for. `next-step` lands in the Prompt that is running; `next-run` is the
- * whole arc's boundary and waits for the next Prompt.
- */
-type Steer = Extract<SubmitInput, { readonly kind: "steer" }>
-
 // A steer as the record carries it. The payload kind is the schema's, and it
 // already names the boundary the words were held for.
 const messageOf = (steer: Steer): SteerMessage => ({
@@ -73,10 +65,6 @@ const messageOf = (steer: Steer): SteerMessage => ({
 
 // What the calls a steer left unstarted report.
 const SKIPPED = "a steer arrived and this call did not start"
-
-// A Gap said in one clause, the same words a failed Claim carries.
-const gapWord = (gap: Gap): string =>
-  `${gap.kind} ${gap.name}${gap.meant === undefined ? "" : `, did you mean ${gap.meant}`}`
 
 // Whether every call this Step proposed named a tool that is not there.
 const allUnknown = (called: readonly CalledTool[]): boolean =>
@@ -98,11 +86,6 @@ const allUnknown = (called: readonly CalledTool[]): boolean =>
  * because the Runs already carry the story up to the refusal.
  */
 export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
-  // Minted by createSession. The cwd is accepted and unused: the tools read
-  // the FileSystem slot, whose root is the workspace the build was given.
-  const minted = new Map<SessionID, string>()
-  const running = new Map<SessionID, Fiber.Fiber<StopReason>>()
-  const last = new Map<SessionID, StopReason>()
   /**
    * Steering that has not landed yet, per Session. The loop holds it because
    * only the loop knows where its next Step begins: a Session API that held it
@@ -141,28 +124,19 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
     (inbox.get(session) ?? []).some((one) => one.target === "next-step") ? SKIPPED : undefined
 
   const answer = Effect.fn("eva.harness.loop.answer")(function* (
+    prompting: Prompting,
     session: SessionID,
     intent: string,
   ) {
-    let ran = false
-
-    const close = (summary: string, stopReason: StopReason) => {
-      const finished: Payload = {
-        kind: "finished",
-        claim: { result: "failed", summary },
-        stopReason,
-      }
-      return host
-        .report(ran ? [finished] : [{ kind: "started", intent }, finished])
-        .pipe(Effect.as(stopReason))
-    }
-
     // Checked before the first Run, so a build that cannot answer refuses
     // before a Provider Turn is paid for.
     const catalog = yield* deps.catalog
     const model = catalog.default
     if (model === undefined) {
-      return yield* close("no model is named and the Catalog holds no default", "end_turn")
+      return yield* prompting.refuse(
+        "no model is named and the Catalog holds no default",
+        "end_turn",
+      )
     }
 
     /**
@@ -191,11 +165,14 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
       if (budget !== undefined) {
         const decision = yield* budget.check
         if (decision.kind === "exhausted") {
-          return yield* close(`the Budget is exhausted: ${decision.limit}`, "max_turn_requests")
+          return yield* prompting.refuse(
+            `the Budget is exhausted: ${decision.limit}`,
+            "max_turn_requests",
+          )
         }
       }
       if (step > deps.steps) {
-        return yield* close(
+        return yield* prompting.refuse(
           `the max-steps fuse stopped this Prompt after ${deps.steps} Steps`,
           "max_turn_requests",
         )
@@ -216,12 +193,14 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
 
       const filled = instructionOf(yield* deps.prompts, LOOP_TEMPLATE_ID, {})
       if (filled.kind === "refused") {
-        const said = filled.gaps.map(gapWord).join("; ")
-        return yield* close(`the loop cannot fill ${LOOP_TEMPLATE_ID}: ${said}`, "end_turn")
+        const said = filled.gaps.map(sayGap).join("; ")
+        return yield* prompting.refuse(
+          `the loop cannot fill ${LOOP_TEMPLATE_ID}: ${said}`,
+          "end_turn",
+        )
       }
 
-      ran = true
-      const result = yield* host.run({
+      const result = yield* prompting.run({
         session,
         spec: { intent },
         model,
@@ -254,7 +233,7 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
       malformed = allUnknown(result.calls) ? malformed + 1 : 0
       if (malformed > deps.malformedSteps) {
         const named = [...new Set(result.calls.map((one) => one.call.name))].join(", ")
-        return yield* close(
+        return yield* prompting.refuse(
           `no tool answered any call for ${malformed} Steps: ${named}`,
           "max_turn_requests",
         )
@@ -262,72 +241,20 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
     }
   })
 
-  const prompt = Effect.fn("eva.harness.loop.prompt")(function* (
-    session: SessionID,
-    input: SubmitInput,
-  ) {
-    /**
-     * A steer goes into the inbox and the current Stop Reason is the answer,
-     * because the Prompt it lands in is not this call's to wait for. A Workflow
-     * refuses one; the loop accepts it, and that is the difference between a
-     * declared list of Steps and an agent.
-     *
-     * `next-step` lands at the top of the Step loop above, which is reached
-     * once the Run has closed and its tool group has committed. `next-run` is
-     * the whole arc's boundary and waits for the next Prompt. Neither is an
-     * error, and a steer that arrives with no Prompt running waits for one.
-     */
-    if (input.kind === "steer") {
-      inbox.set(session, [...(inbox.get(session) ?? []), input])
-      return last.get(session) ?? ("end_turn" as const)
-    }
-
-    const stepping = yield* Effect.forkChild(answer(session, input.text))
-    running.set(session, stepping)
-    const exit = yield* Fiber.await(stepping)
-    running.delete(session)
-
-    // A Harness answers a Stop Reason, so an interrupt is classified here
-    // rather than thrown.
-    const reason = Exit.isSuccess(exit)
-      ? exit.value
-      : Cause.hasInterruptsOnly(exit.cause)
-        ? ("cancelled" as const)
-        : yield* Effect.failCause(exit.cause)
-    last.set(session, reason)
-    return reason
-  })
-
-  return {
-    id: LOOP_HARNESS_ID,
-    capabilities: CAPABILITIES,
-    // The loop negotiates nothing: it answers its own capabilities unchanged
-    // and keeps the client half without ever calling it. A permission reaches
-    // a person through the tool execution's own gate, which is the Run's.
-    initialize: () => Effect.succeed(CAPABILITIES),
-    createSession: (cwd) =>
-      Effect.sync(() => {
-        const session = newSessionID()
-        minted.set(session, cwd)
-        return session
-      }),
-    // Never `undetectable`: a native harness always knows what it holds. The
-    // loop keeps no state between Prompts, so a resume is the next Prompt.
-    resumeSession: (id) =>
-      Effect.sync(
-        (): ResumeResult =>
-          minted.has(id)
-            ? { kind: "resumed", session: id }
-            : { kind: "rejected", reason: `${LOOP_HARNESS_ID} did not open ${id}` },
-      ),
-    prompt,
-    cancel: (id) =>
-      Effect.gen(function* () {
-        const stepping = running.get(id)
-        if (stepping !== undefined) yield* Fiber.interrupt(stepping)
-      }),
-    // A native harness has no wire; every payload goes through core's one Run
-    // path.
-    updates: Stream.empty,
+  /**
+   * A steer goes into the inbox and the current Stop Reason answers the
+   * caller, because the Prompt it lands in is not that call's to wait for.
+   * The loop accepts one; a Workflow refuses one, and that is the difference
+   * between a declared list of Steps and an agent.
+   *
+   * `next-step` lands at the top of the Step loop above, which is reached once
+   * the Run has closed and its tool group has committed. `next-run` is the
+   * whole arc's boundary and waits for the next Prompt. Neither is an error,
+   * and a steer that arrives with no Prompt running waits for one.
+   */
+  const steer = (session: SessionID, arrived: Steer): void => {
+    inbox.set(session, [...(inbox.get(session) ?? []), arrived])
   }
+
+  return nativeHarness(host, { id: LOOP_HARNESS_ID, answer, steer })
 }

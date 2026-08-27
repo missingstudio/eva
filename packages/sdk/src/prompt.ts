@@ -22,6 +22,14 @@ export interface Gap {
 }
 
 /**
+ * One Gap in one clause, which is the shape a failed Claim's summary wants.
+ * Every Harness that fills a Template says a refused fill the same way, so the
+ * words a person reads do not depend on which one refused.
+ */
+export const sayGap = (gap: Gap): string =>
+  `${gap.kind} ${gap.name}${gap.meant === undefined ? "" : `, did you mean ${gap.meant}`}`
+
+/**
  * What asking for an Instruction came to. There is no third answer, so a
  * caller cannot forget a case. No throw and no error channel: the caller owns
  * the Run and is the only thing that can decide what a refusal is recorded as.

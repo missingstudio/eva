@@ -376,6 +376,13 @@ which has no agency at all. Every one is a plugin, and Eva's own holds no
 privileged position.
 _Avoid_: Orchestrator, engine, backend
 
+**Prompting**:
+What the body of one Prompt is handed: a Run, a group of records outside one,
+and a refusal. It is the Harness host with the Run bookkeeping already done, so
+a Harness says what it wants and never what a refusal looks like — and every
+native Harness leaves the same records when it gives up.
+_Avoid_: Prompt (that is what a person asks), context, host
+
 **Workflow**:
 A declared list of Steps, each one Instruction and one model request, where the
 code owns the control flow and the model fills the slots. It has no agency:

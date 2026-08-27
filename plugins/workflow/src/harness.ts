@@ -1,22 +1,18 @@
-import type {
-  Budget,
-  Harness,
-  HarnessHost,
-  ModelRef,
-  ResumeResult,
-  SubmitInput,
-  Validator,
-} from "@missingstudio/eva-core"
-import { formatModelRef, newSessionID } from "@missingstudio/eva-core"
-import type { Payload, SessionID, StopReason, TranscriptMessage } from "@missingstudio/eva-schema"
+import type { Budget, Harness, HarnessHost, ModelRef, Validator } from "@missingstudio/eva-core"
+import { formatModelRef } from "@missingstudio/eva-core"
+import type { SessionID, TranscriptMessage } from "@missingstudio/eva-schema"
 import {
+  agent,
+  human,
   instructionOf,
+  nativeHarness,
   nearest,
+  sayGap,
   type CatalogState,
-  type Gap,
   type PromptInfo,
+  type Prompting,
 } from "@missingstudio/eva-sdk"
-import { Cause, Effect, Exit, Fiber, Stream } from "effect"
+import { Effect } from "effect"
 import type { ReadWorkflow, Step } from "./document.js"
 import { resolveReference } from "./reference.js"
 import { faultLine, REPAIR_TEMPLATE_ID } from "./repair.js"
@@ -37,25 +33,6 @@ export interface WorkflowDeps {
   readonly repairs: number
 }
 
-// A Workflow takes text, holds no session state, forks nothing, and speaks
-// no MCP. Every field is optional and absent means not supported, so this is
-// honest rather than Degraded.
-const CAPABILITIES = {}
-
-const human = (text: string): TranscriptMessage => ({
-  author: "human",
-  blocks: [{ type: "content", block: 0, content: { type: "text", text } }],
-})
-
-const agent = (text: string): TranscriptMessage => ({
-  author: "agent",
-  blocks: [{ type: "content", block: 0, content: { type: "text", text } }],
-})
-
-// A Gap said in one clause, the same words a failed Claim carries.
-const gapWord = (gap: Gap): string =>
-  `${gap.kind} ${gap.name}${gap.meant === undefined ? "" : `, did you mean ${gap.meant}`}`
-
 /**
  * `eva.workflow`'s Harness: a declared list of Steps answers a Prompt. The
  * file owns the control flow and the model fills the slots. Each Step is one
@@ -68,26 +45,15 @@ const gapWord = (gap: Gap): string =>
  * because the Runs already carry the story up to the failure.
  */
 export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harness => {
-  // Minted by createSession. The cwd is accepted and unused: a Workflow
-  // reads no files, because there is no FileSystem slot until Stage 2.
-  const minted = new Map<SessionID, string>()
-  const running = new Map<SessionID, Fiber.Fiber<StopReason>>()
-  const last = new Map<SessionID, StopReason>()
-
-  const answer = Effect.fn("eva.workflow.answer")(function* (session: SessionID, intent: string) {
-    let ran = false
-
-    const close = (summary: string) => {
-      const finished: Payload = { kind: "finished", claim: { result: "failed", summary } }
-      return host
-        .report(ran ? [finished] : [{ kind: "started", intent }, finished])
-        .pipe(Effect.as("end_turn" as const))
-    }
-
+  const answer = Effect.fn("eva.workflow.answer")(function* (
+    prompting: Prompting,
+    session: SessionID,
+    intent: string,
+  ) {
     const workflow = deps.document.workflow
     if (workflow === undefined) {
       const said = deps.document.problems.join("; ")
-      return yield* close(`workflow ${deps.document.id} cannot run: ${said}`)
+      return yield* prompting.refuse(`workflow ${deps.document.id} cannot run: ${said}`)
     }
 
     // The second pass, before the first model call: every template, model
@@ -138,12 +104,14 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
       const template = rows.some((row) => row.id === named) ? named : REPAIR_TEMPLATE_ID
       const dry = instructionOf(rows, template, { instruction: "", faults: "" })
       if (dry.kind === "refused") {
-        problems.push(`the Repair cannot fill ${template}: ${dry.gaps.map(gapWord).join("; ")}`)
+        problems.push(`the Repair cannot fill ${template}: ${dry.gaps.map(sayGap).join("; ")}`)
       }
     }
 
     if (problems.length > 0) {
-      return yield* close(`workflow ${deps.document.id} cannot run: ${problems.join("; ")}`)
+      return yield* prompting.refuse(
+        `workflow ${deps.document.id} cannot run: ${problems.join("; ")}`,
+      )
     }
 
     const outputs = new Map<string, unknown>()
@@ -158,13 +126,13 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
         else holes.push(`${name}: ${resolved.why}`)
       }
       if (holes.length > 0) {
-        return yield* close(`step ${step.id} cannot bind: ${holes.join("; ")}`)
+        return yield* prompting.refuse(`step ${step.id} cannot bind: ${holes.join("; ")}`)
       }
 
       const filled = instructionOf(yield* deps.prompts, step.template, variables)
       if (filled.kind === "refused") {
-        const said = filled.gaps.map(gapWord).join("; ")
-        return yield* close(`step ${step.id} cannot fill ${step.template}: ${said}`)
+        const said = filled.gaps.map(sayGap).join("; ")
+        return yield* prompting.refuse(`step ${step.id} cannot fill ${step.template}: ${said}`)
       }
 
       const ceiling = step.repairs ?? deps.repairs
@@ -181,12 +149,11 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
         if (budget !== undefined) {
           const decision = yield* budget.check
           if (decision.kind === "exhausted") {
-            return yield* close(`the Budget is exhausted: ${decision.limit}`)
+            return yield* prompting.refuse(`the Budget is exhausted: ${decision.limit}`)
           }
         }
 
-        ran = true
-        const result = yield* host.run({
+        const result = yield* prompting.run({
           session,
           spec: { intent: instruction },
           model,
@@ -210,7 +177,7 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
         const validator = yield* deps.validator
         if (validator === undefined) {
           // Degrade, never refuse: the answer still arrives, marked.
-          yield* host.report([
+          yield* prompting.report([
             { kind: "degraded", missing: ["Validator"] },
             { kind: "verdict", step: step.id, verdict: "unchecked", attempt, faults: [] },
           ])
@@ -227,10 +194,10 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
           )
         // The schema faulted mid-run, not the Candidate; nothing was judged.
         if (judged.verdict === "unreadable") {
-          return yield* close(`step ${step.id}: ${judged.message}`)
+          return yield* prompting.refuse(`step ${step.id}: ${judged.message}`)
         }
 
-        yield* host.report([
+        yield* prompting.report([
           {
             kind: "verdict",
             step: step.id,
@@ -247,7 +214,7 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
 
         if (attempt > ceiling) {
           const said = judged.faults.map(faultLine).join("; ")
-          return yield* close(
+          return yield* prompting.refuse(
             `step ${step.id}: the Candidate did not conform after ${attempt} attempts: ${said}`,
           )
         }
@@ -262,8 +229,8 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
           faults: judged.faults.map(faultLine).join("\n"),
         })
         if (repair.kind === "refused") {
-          const said = repair.gaps.map(gapWord).join("; ")
-          return yield* close(`step ${step.id} cannot fill ${template}: ${said}`)
+          const said = repair.gaps.map(sayGap).join("; ")
+          return yield* prompting.refuse(`step ${step.id} cannot fill ${template}: ${said}`)
         }
         history = [human(filled.text), agent(result.text), human(repair.text)]
         instruction = repair.text
@@ -276,59 +243,11 @@ export const makeWorkflowHarness = (host: HarnessHost, deps: WorkflowDeps): Harn
     return "end_turn" as const
   })
 
-  const prompt = Effect.fn("eva.workflow.prompt")(function* (
-    session: SessionID,
-    input: SubmitInput,
-  ) {
-    // Steering is refused, not recorded and ignored: a Workflow's Steps are
-    // the file's, so a delivery record would assert something false. The
-    // current Stop Reason is the whole answer.
-    if (input.kind === "steer") return last.get(session) ?? ("end_turn" as const)
-
-    const stepping = yield* Effect.forkChild(answer(session, input.text))
-    running.set(session, stepping)
-    const exit = yield* Fiber.await(stepping)
-    running.delete(session)
-
-    const reason = Exit.isSuccess(exit)
-      ? exit.value
-      : Cause.hasInterruptsOnly(exit.cause)
-        ? ("cancelled" as const)
-        : yield* Effect.failCause(exit.cause)
-    last.set(session, reason)
-    return reason
-  })
-
-  return {
-    id: deps.document.id,
-    capabilities: CAPABILITIES,
-    // A Workflow negotiates nothing: it answers its own capabilities
-    // unchanged and keeps the client half without ever calling it.
-    initialize: () => Effect.succeed(CAPABILITIES),
-    createSession: (cwd) =>
-      Effect.sync(() => {
-        const session = newSessionID()
-        minted.set(session, cwd)
-        return session
-      }),
-    // Never `undetectable`: a native harness always knows what it holds.
-    // Re-running from the top is what a resume means, because there is no
-    // state between Runs.
-    resumeSession: (id) =>
-      Effect.sync(
-        (): ResumeResult =>
-          minted.has(id)
-            ? { kind: "resumed", session: id }
-            : { kind: "rejected", reason: `workflow ${deps.document.id} did not open ${id}` },
-      ),
-    prompt,
-    cancel: (id) =>
-      Effect.gen(function* () {
-        const stepping = running.get(id)
-        if (stepping !== undefined) yield* Fiber.interrupt(stepping)
-      }),
-    // A native harness has no wire; every payload goes through core's one
-    // Run path.
-    updates: Stream.empty,
-  }
+  /**
+   * No `steer`: a Workflow's Steps are the file's, so a line a person says
+   * while one runs is refused rather than recorded and ignored — a delivery
+   * record would assert something false. The current Stop Reason is the whole
+   * answer, which the shared body gives.
+   */
+  return nativeHarness(host, { id: deps.document.id, answer })
 }

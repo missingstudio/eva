@@ -208,7 +208,11 @@ of its own.
 
 - `harnessLoop` — the plugin definition, id `eva.harness.loop`.
 - `makeLoopHarness(host, deps): Harness` — the loop itself, over a
-  `HarnessHost` and a `LoopDeps`.
+  `HarnessHost` and a `LoopDeps`. What is here is the loop: the Step cycle, the
+  two ceilings, and the steering inbox. The session mint, the fiber map, the
+  interrupt classification and the refusal group are `nativeHarness` in
+  [@missingstudio/eva-sdk](../../packages/sdk/README.md), which every native
+  Harness shares.
 - `LOOP_HARNESS_ID`, `LOOP_TEMPLATE_ID`, `LOOP_TEMPLATE` — the row id and the
   built-in system prompt.
 - `offeredIn(rows)`, `stepMessages(text, called)`, `proposalLine(call)`,
