@@ -9,7 +9,8 @@ import {
 import type { ActorKind, TranscriptMessage } from "@missingstudio/eva-schema"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
-import { BlockView, hunkText, Turns } from "./blocks.js"
+import { hunkText } from "@missingstudio/eva-session-view"
+import { BlockView, Turns } from "./blocks.js"
 
 /**
  * Rendered to a string rather than into a document, because a browser is what

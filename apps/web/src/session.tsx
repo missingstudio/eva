@@ -1,12 +1,6 @@
 import type { ClientState } from "@missingstudio/eva-client-runtime"
 import type { SessionHeader } from "@missingstudio/eva-core"
-import {
-  spendOf,
-  toUsd,
-  type CostSummary,
-  type Cursor,
-  type Spend,
-} from "@missingstudio/eva-schema"
+import { spendOf, spendText, type CostSummary, type Cursor } from "@missingstudio/eva-schema"
 import { askingOf, type Asking, type Turn } from "@missingstudio/eva-session-view"
 import { Turns } from "./blocks.js"
 import {
@@ -106,23 +100,6 @@ export const Notice = ({ pipe }: { readonly pipe: Pipe }) => {
  * It is drawn anyway, because a page that dropped the arm would be a page
  * that shows an estimate as a reported figure the day a Catalog arrives.
  */
-const dollars = (ticks: number): string => {
-  const usd = toUsd(ticks)
-  return `$${usd >= 1 ? usd.toFixed(2) : usd.toFixed(4)}`
-}
-
-const money = (spend: Spend): string => {
-  switch (spend.kind) {
-    case "none":
-      return "nothing spent yet"
-    case "reported":
-      return dollars(spend.ticks)
-    case "estimated":
-      return `~${dollars(spend.ticks)} est`
-    case "unreported":
-      return "cost unreported"
-  }
-}
 
 /**
  * What the Session cost, from the Transcript's own cost fold. `ran` is
@@ -135,7 +112,7 @@ const money = (spend: Spend): string => {
  */
 export const Cost = ({ cost, ran }: { readonly cost: CostSummary; readonly ran: boolean }) => (
   <Context cost={cost} className="mt-8">
-    <ContextContentHeader>{money(spendOf(cost, ran))}</ContextContentHeader>
+    <ContextContentHeader>{spendText(spendOf(cost, ran))}</ContextContentHeader>
     <ContextInputUsage />
     <ContextOutputUsage />
     <ContextReasoningUsage />

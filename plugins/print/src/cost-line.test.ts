@@ -1,6 +1,6 @@
 import type { CostSummary } from "@missingstudio/eva-schema"
 import { describe, expect, it } from "vitest"
-import { costLine, formatCost, formatCount } from "./cost-line.js"
+import { costLine, formatCount } from "./cost-line.js"
 
 const summary = (over: Partial<CostSummary> = {}): CostSummary => ({
   inputTokens: 1200,
@@ -24,18 +24,6 @@ describe("formatCount", () => {
     [1_250_000, "1250.0k"],
   ])("prints %i as %s", (value, expected) => {
     expect(formatCount(value)).toBe(expected)
-  })
-})
-
-describe("formatCost", () => {
-  it.each([
-    [0, "$0.0000"],
-    [51_000_000, "$0.0051"],
-    [9_999_999_999, "$1.0000"],
-    [10_000_000_000, "$1.00"],
-    [51_000_000_000, "$5.10"],
-  ])("prints %i ticks as %s", (ticks, expected) => {
-    expect(formatCost(ticks)).toBe(expected)
   })
 })
 

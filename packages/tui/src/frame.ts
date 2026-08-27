@@ -1,4 +1,4 @@
-import { blockFold, type Block } from "@missingstudio/eva-session-view"
+import { blockFold, hunkText, type Block } from "@missingstudio/eva-session-view"
 import type { Frame, Overlay, OverlayRow } from "@missingstudio/eva-tui-core"
 
 export interface Line {
@@ -171,17 +171,6 @@ export const panelWindow = (overlay: Overlay, limit = PANEL_ROWS): PanelWindow =
   const from = overlay.selected < limit ? 0 : overlay.selected - limit + 1
   return { rows: overlay.rows.slice(from, from + limit), from }
 }
-
-/**
- * How many hunks changed, in words. One is not "1 hunks", and a reader
- * counting the work does not want to read a number twice to find out.
- *
- * The page says it the same way under the same name. A renderer may not
- * import another renderer and neither may import an app, so the copy is
- * forced; a second name for it would not be, and a reader would take the two
- * for two rules.
- */
-const hunkText = (hunks: number): string => `${hunks} ${hunks === 1 ? "hunk" : "hunks"}`
 
 /**
  * One Block as terminal rows. What the Run did is settled before this is

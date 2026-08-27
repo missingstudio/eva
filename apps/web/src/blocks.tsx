@@ -1,6 +1,6 @@
 import { PERMISSION_OPTIONS } from "@missingstudio/eva-core"
 import type { ActorKind } from "@missingstudio/eva-schema"
-import type { Block, Turn } from "@missingstudio/eva-session-view"
+import { hunkText, type Block, type Turn } from "@missingstudio/eva-session-view"
 import { Button } from "@missingstudio/ui/components/button"
 import {
   CommitFile,
@@ -18,12 +18,6 @@ import {
   ReasoningTrigger,
 } from "./components/ai-elements/reasoning.js"
 import { Tool, ToolContent, ToolHeader } from "./components/ai-elements/tool.js"
-
-/**
- * How many hunks changed, in words. One is not "1 hunks", and a reader
- * counting files does not want to read a number twice to find out.
- */
-export const hunkText = (hunks: number): string => `${hunks} ${hunks === 1 ? "hunk" : "hunks"}`
 
 /**
  * What a Block's disclosure is called, on the panel and on the control that
