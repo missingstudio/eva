@@ -62,7 +62,7 @@ const loop = (host: HarnessHost, over: Partial<LoopDeps> = {}) =>
     catalog: Effect.succeed(CATALOG),
     budget: Effect.succeed(undefined),
     steps: 4,
-    repairs: 1,
+    malformedSteps: 1,
     ...over,
   })
 
@@ -196,7 +196,7 @@ describe("a call naming a tool that is not there", () => {
         acting("reed", "unknown_tool", "no tool named reed is registered"),
         acting("reed", "unknown_tool", "no tool named reed is registered"),
       ],
-      { repairs: 1 },
+      { malformedSteps: 1 },
     )
 
     expect(reason).toBe("max_turn_requests")
