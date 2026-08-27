@@ -405,8 +405,10 @@ commit inside the Run that proposed them.
 _Avoid_: Agent loop, ReAct, engine, REPL
 
 **Tool**:
-A named action a model may call: an id, a description, a JSON Schema for its
-input, and the behaviour that runs it. It is a row in the tool domain, so what a
+A named action a model may call: an id, a description, a declaration of the
+arguments it takes, and the behaviour that runs it. The declaration answers
+both audiences from one statement — the JSON Schema a model is shown, and the
+reader the tool takes the call with. It is a row in the tool domain, so what a
 Session may call is what the domain holds at the moment of the call.
 _Avoid_: Function, action, capability, Command (that is what a person types)
 

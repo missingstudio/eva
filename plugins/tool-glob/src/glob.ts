@@ -1,18 +1,13 @@
 import { toolText, type ToolInfo } from "@missingstudio/eva-core"
-import { overFiles, textIn, type FileDeps } from "@missingstudio/eva-sdk"
+import { overFiles, takes, type FileDeps } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 
-const INPUT = {
-  type: "object",
-  properties: {
-    pattern: {
-      type: "string",
-      description: "A glob, matched against paths relative to the workspace root.",
-    },
+const TAKES = takes({
+  pattern: {
+    shape: "string",
+    description: "A glob, matched against paths relative to the workspace root.",
   },
-  required: ["pattern"],
-  additionalProperties: false,
-}
+})
 
 /**
  * Names the files a glob matches, one per line. The paths are relative to the
@@ -24,14 +19,13 @@ export const globTool = (deps: FileDeps): ToolInfo => ({
   id: "glob",
   kind: "search",
   description: "Name the files under the workspace root that a glob matches.",
-  input: INPUT,
+  input: TAKES.schema,
   // A listing changes nothing, so two listings may run at once.
   parallelSafe: () => true,
   execute: (input) => {
-    const pattern = textIn(input, "pattern")
-    if (pattern === undefined) {
-      return Effect.succeed(toolText("failed", "glob wants a `pattern` string"))
-    }
+    const found = TAKES.of("glob", input)
+    if (found.kind === "refused") return Effect.succeed(found.result)
+    const { pattern } = found.args
     return overFiles(deps, (files) =>
       Effect.map(files.glob(pattern), (found) =>
         found.length === 0

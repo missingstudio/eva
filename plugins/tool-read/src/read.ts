@@ -1,18 +1,10 @@
 import { toolText, type ToolInfo } from "@missingstudio/eva-core"
-import { overFiles, textIn, type FileDeps } from "@missingstudio/eva-sdk"
+import { overFiles, takes, type FileDeps } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 
-const INPUT = {
-  type: "object",
-  properties: {
-    path: {
-      type: "string",
-      description: "The file to read, relative to the workspace root.",
-    },
-  },
-  required: ["path"],
-  additionalProperties: false,
-}
+const TAKES = takes({
+  path: { shape: "string", description: "The file to read, relative to the workspace root." },
+})
 
 /**
  * Reads one file, whole. The content reaches the model as it is on the disk:
@@ -23,12 +15,14 @@ export const readTool = (deps: FileDeps): ToolInfo => ({
   id: "read",
   kind: "read",
   description: "Read a file under the workspace root and answer its content.",
-  input: INPUT,
+  input: TAKES.schema,
   // A read changes nothing, so two reads may run at once.
   parallelSafe: () => true,
   execute: (input) => {
-    const path = textIn(input, "path")
-    if (path === undefined) return Effect.succeed(toolText("failed", "read wants a `path` string"))
-    return overFiles(deps, (files) => Effect.map(files.read(path), (text) => toolText("ok", text)))
+    const found = TAKES.of("read", input)
+    if (found.kind === "refused") return Effect.succeed(found.result)
+    return overFiles(deps, (files) =>
+      Effect.map(files.read(found.args.path), (text) => toolText("ok", text)),
+    )
   },
 })

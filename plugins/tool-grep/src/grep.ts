@@ -1,25 +1,18 @@
 import { toolText, type ToolInfo } from "@missingstudio/eva-core"
-import { overFiles, textIn, type FileDeps } from "@missingstudio/eva-sdk"
+import { overFiles, takes, type FileDeps } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 
 // Every file under the root, when the call names no glob.
 const EVERY = "**/*"
 
-const INPUT = {
-  type: "object",
-  properties: {
-    pattern: {
-      type: "string",
-      description: "A regular expression, matched against each line.",
-    },
-    glob: {
-      type: "string",
-      description: `Which files to search. Defaults to \`${EVERY}\`.`,
-    },
+const TAKES = takes({
+  pattern: { shape: "string", description: "A regular expression, matched against each line." },
+  glob: {
+    shape: "string",
+    optional: true,
+    description: `Which files to search. Defaults to \`${EVERY}\`.`,
   },
-  required: ["pattern"],
-  additionalProperties: false,
-}
+})
 
 // The compiled pattern, or nothing when the model wrote one no engine reads.
 const matcherOf = (pattern: string): RegExp | undefined => {
@@ -45,14 +38,13 @@ export const grepTool = (deps: FileDeps): ToolInfo => ({
   id: "grep",
   kind: "search",
   description: "Search the content of files under the workspace root.",
-  input: INPUT,
+  input: TAKES.schema,
   // A search changes nothing, so two searches may run at once.
   parallelSafe: () => true,
   execute: (input) => {
-    const pattern = textIn(input, "pattern")
-    if (pattern === undefined) {
-      return Effect.succeed(toolText("failed", "grep wants a `pattern` string"))
-    }
+    const taken = TAKES.of("grep", input)
+    if (taken.kind === "refused") return Effect.succeed(taken.result)
+    const { pattern } = taken.args
 
     const matcher = matcherOf(pattern)
     if (matcher === undefined) {
@@ -62,7 +54,7 @@ export const grepTool = (deps: FileDeps): ToolInfo => ({
     return overFiles(deps, (files) =>
       Effect.gen(function* () {
         const found: string[] = []
-        for (const path of yield* files.glob(textIn(input, "glob") ?? EVERY))
+        for (const path of yield* files.glob(taken.args.glob ?? EVERY))
           found.push(...hits(path, yield* files.read(path), matcher))
 
         return found.length === 0
