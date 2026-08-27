@@ -1,16 +1,21 @@
 import type { Kernel } from "@missingstudio/eva-boot"
-import type { Command, Process, ToolResult } from "@missingstudio/eva-core"
+import type { Command, ToolResult } from "@missingstudio/eva-core"
 import { diff } from "@missingstudio/eva-diff"
 import type { Payload } from "@missingstudio/eva-schema"
-import { define, type Plugin } from "@missingstudio/eva-sdk"
-import { calling, CALLING_SESSION, virtualFileSystem, withKernel } from "@missingstudio/eva-testkit"
+import {
+  calling,
+  CALLING_SESSION,
+  spyingSandbox,
+  virtualFileSystem,
+  withKernel,
+} from "@missingstudio/eva-testkit"
 import { toolBash } from "@missingstudio/eva-tool-bash"
 import { toolEdit } from "@missingstudio/eva-tool-edit"
 import { toolPolicy } from "@missingstudio/eva-tool-policy"
 import { toolRead } from "@missingstudio/eva-tool-read"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
-import { Effect, Stream } from "effect"
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 
 /**
@@ -26,34 +31,6 @@ import { describe, expect, it } from "vitest"
  * asked to run and runs nothing, so a gate that regressed is caught by an empty
  * record rather than by a machine that lost a directory.
  */
-
-const NOTHING: Process = {
-  output: Stream.empty,
-  exit: Effect.succeed({ code: 0, signal: null }),
-  kill: Effect.void,
-}
-
-const SPY = "test.sandbox.spy"
-
-// The commands the Sandbox was asked to run, and the plugin that fills the
-// slot with something that only remembers them.
-const spying = (): { readonly plugin: Plugin; readonly asked: readonly Command[] } => {
-  const asked: Command[] = []
-  const plugin = define({
-    id: SPY,
-    effect: Effect.fn(SPY)(function* (ctx) {
-      yield* ctx.slot.sandbox.provide(SPY, {
-        run: (command) =>
-          Effect.sync(() => {
-            asked.push(command)
-            return NOTHING
-          }),
-        capabilities: Effect.succeed({ enforces: [] }),
-      })
-    }),
-  })
-  return { plugin, asked }
-}
 
 // A profile that allows every command these tests name. It is here so the
 // refusals below are proven against a rule set that wanted to allow them.
@@ -76,7 +53,7 @@ const bench = <A>(
   config: Record<string, unknown> = {},
 ): Promise<A> => {
   const virtual = virtualFileSystem(seed)
-  const sandbox = spying()
+  const sandbox = spyingSandbox()
 
   return withKernel(
     [
