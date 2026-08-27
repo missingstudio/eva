@@ -344,7 +344,9 @@ against no rule and failed closed.
 the deciding boundary. The gate answers in the Agent Client Protocol's four
 options, one call asks one person once whichever hook asked, and
 `allow_always` writes a rule into the person's own config and never the
-repo's. A mode change is a `mode` payload on the Trace.
+repo's. A mode change is a `mode` payload on the Trace. The question about a
+write carries the write: the arguments are the Edit, so the gate resolves the
+same preview the tool would and shows a bounded diff of it.
 
 **The schedule** ships as `eva.sched`. A group of calls is split into windows:
 consecutive parallel-safe calls run together under a bound, and every other

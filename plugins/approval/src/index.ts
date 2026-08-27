@@ -13,9 +13,11 @@ import {
   type Mode,
   type ModeInfo,
 } from "./mode.js"
+import { previewed } from "./preview.js"
 
 export * from "./grant.js"
 export * from "./mode.js"
+export * from "./preview.js"
 
 // The slash command a person names a mode with.
 export const MODE_COMMAND = "mode"
@@ -106,6 +108,13 @@ export const approval = define({
     })
 
     /**
+     * What a preview is resolved over. Both are slot reads and never values,
+     * so a question is drawn against whatever fills the slots at the moment a
+     * person is asked.
+     */
+    const ground = { files: ctx.slot.fileSystem.peek, applier: ctx.slot.diffApplier.peek }
+
+    /**
      * The mandate. The row is read at the moment of use, so a rebuilt tool
      * domain is judged on the next call, and a name with no row is judged as
      * a kind nothing reads — the execution refuses that call anyway.
@@ -140,9 +149,18 @@ export const approval = define({
          * `allow_always` written into the profile stop the asking — and a
          * mandate still outranks a rule that would widen it, because the
          * strictest decision wins.
+         *
+         * A question about a write shows the write. The arguments are the
+         * Edit, so the preview is resolved here from the two slots and the
+         * tool is asked nothing — a person answers about a change rather than
+         * about a tool's name.
          */
-        if (wanted.kind === "ask") event.otherwise(wanted)
-        else event.decide(wanted)
+        if (wanted.kind !== "ask") {
+          event.decide(wanted)
+          return
+        }
+        const question = yield* previewed(ground, event.name, event.args.get())
+        event.otherwise(question === undefined ? wanted : { ...wanted, question })
       }),
     )
 
