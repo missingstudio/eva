@@ -41,12 +41,12 @@ export interface LoopDeps {
    */
   readonly steps: number
   /**
-   * The ceiling on consecutive Steps in which no proposed call ran. A call
-   * that ran and failed is an answer the model can act on; a call naming a
-   * tool that is not there is a malformed proposal, and a model repeating one
-   * would otherwise spend the whole fuse on it.
+   * The ceiling on consecutive Steps in which every proposed call named a tool
+   * that is not there. A call that ran and failed is an answer the model can
+   * act on; a call naming a tool nothing holds is a malformed proposal, and a
+   * model repeating one would otherwise spend the whole fuse on it.
    */
-  readonly repairs: number
+  readonly malformedSteps: number
 }
 
 /**
@@ -79,7 +79,7 @@ const gapWord = (gap: Gap): string =>
   `${gap.kind} ${gap.name}${gap.meant === undefined ? "" : `, did you mean ${gap.meant}`}`
 
 // Whether every call this Step proposed named a tool that is not there.
-const noneRan = (called: readonly CalledTool[]): boolean =>
+const allUnknown = (called: readonly CalledTool[]): boolean =>
   called.every((one) => one.result.disposition === "unknown_tool")
 
 /**
@@ -172,7 +172,7 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
     // Steering the next Run records. A Recorder holds one open Run, so the
     // words land inside a Run and never in a commit of their own.
     let pending: readonly SteerMessage[] = opening.map(messageOf)
-    // Consecutive Steps in which nothing the model proposed could run.
+    // Consecutive Steps in which every call named a tool that is not there.
     let malformed = 0
 
     for (let step = 1; ; step += 1) {
@@ -246,8 +246,8 @@ export const makeLoopHarness = (host: HarnessHost, deps: LoopDeps): Harness => {
 
       history = [...history, ...stepMessages(result.text, result.calls)]
 
-      malformed = noneRan(result.calls) ? malformed + 1 : 0
-      if (malformed > deps.repairs) {
+      malformed = allUnknown(result.calls) ? malformed + 1 : 0
+      if (malformed > deps.malformedSteps) {
         const named = [...new Set(result.calls.map((one) => one.call.name))].join(", ")
         return yield* close(
           `no tool answered any call for ${malformed} Steps: ${named}`,

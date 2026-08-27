@@ -68,8 +68,9 @@ plugins:
     options:
       # The max-steps fuse: Steps in one Prompt. 32 by default.
       steps: 32
-      # Consecutive Steps in which no proposed call could run. 2 by default.
-      repairs: 2
+      # Consecutive Steps in which every call named a tool that is not
+      # there. 2 by default.
+      malformedSteps: 2
 ```
 
 The system prompt is a Template row, so a person replaces it by naming the
@@ -122,15 +123,16 @@ A Budget the response itself exhausted stops that response's own calls: each
 one is `budget_denied` on the Trace with the same three records a call that ran
 leaves, and the Prompt closes at the top of the next Step.
 
-## A malformed call repairs
+## A malformed call is asked again
 
 Every ending of a tool call is a Disposition, and the loop reads it as data. A
 call naming a tool that is not registered answers `unknown_tool`, the fault
 reaches the model in the next Step's history, and the next Step is the repair —
 the same shape a refused Candidate takes in a Workflow. A model that does not
-recover is stopped by the `repairs` ceiling, which counts **consecutive Steps
-in which no call ran at all**. A call that ran and failed is an answer the
-model can act on, so it never counts against the ceiling.
+recover is stopped by the `malformedSteps` ceiling, which counts **consecutive
+Steps in which every call named a tool that is not there**. A call that ran and
+failed is an answer the model can act on, so it never counts against the
+ceiling.
 
 A denial counts against nothing either. A denial is observed, not fatal.
 

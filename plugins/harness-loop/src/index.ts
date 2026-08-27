@@ -8,22 +8,23 @@ export * from "./prompt.js"
 export * from "./step.js"
 
 /**
- * `steps` is the max-steps fuse: the ceiling on Steps in one Prompt. `repairs`
- * is the ceiling on consecutive Steps in which no proposed call could run.
+ * `steps` is the max-steps fuse: the ceiling on Steps in one Prompt.
+ * `malformedSteps` is the ceiling on consecutive Steps in which every proposed
+ * call named a tool that is not there.
  *
  * Neither is the Budget's. A Budget is one accumulator for the process and its
  * counters never reset, so a `steps` limit there bounds the whole run of Eva
  * and not one Prompt. Both stop a Prompt the same way, and they measure
  * different spans.
  */
-const OPTIONS = declare({ steps: "number", repairs: "number" })
+const OPTIONS = declare({ steps: "number", malformedSteps: "number" })
 
 // Thirty-two Steps is a ceiling and not a target. A three-file refactor reads,
 // greps, edits three times and re-reads, which is well inside it.
 const DEFAULT_STEPS = 32
 
 // Two malformed Steps in a row is enough to see the model is not recovering.
-const DEFAULT_REPAIRS = 2
+const DEFAULT_MALFORMED = 2
 
 /**
  * Eva's own propose → act → observe loop: the harness domain's second row, and
@@ -46,7 +47,10 @@ export const harnessLoop = define({
   takes: OPTIONS.shapes,
   effect: Effect.fn(LOOP_HARNESS_ID)(function* (ctx) {
     const steps = Math.max(1, OPTIONS.read(ctx.options, "steps", DEFAULT_STEPS))
-    const repairs = Math.max(0, OPTIONS.read(ctx.options, "repairs", DEFAULT_REPAIRS))
+    const malformedSteps = Math.max(
+      0,
+      OPTIONS.read(ctx.options, "malformedSteps", DEFAULT_MALFORMED),
+    )
 
     // The built-in system prompt, as a prompt row so a person replaces it by
     // config. An id a row already holds is left alone, so the person's row
@@ -72,7 +76,7 @@ export const harnessLoop = define({
               catalog: ctx.catalog.get,
               budget: ctx.slot.budget.peek,
               steps,
-              repairs,
+              malformedSteps,
             }),
           ),
       })
