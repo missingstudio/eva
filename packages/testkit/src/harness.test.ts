@@ -77,7 +77,6 @@ describe("openRow", () => {
               Effect.succeed({
                 id: "echo",
                 capabilities: {},
-                initialize: () => Effect.succeed({}),
                 createSession: () => Effect.succeed(SESSION),
                 resumeSession: (id) => Effect.succeed({ kind: "resumed", session: id } as const),
                 prompt: () => host.report([said]).pipe(Effect.as("end_turn" as const)),

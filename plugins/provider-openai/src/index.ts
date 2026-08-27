@@ -12,7 +12,8 @@ const OPTIONS = declare({ maxTokens: "number" })
 
 // No catalog transform: `eva.catalog.models` seeds the `openai` provider row
 // and its models, and `ProviderInfo` has no field for whether a provider
-// reports cost, so there is nothing truthful for one to write.
+// reports cost, so there is nothing truthful for one to write. This plugin used
+// to export a `REPORTS_COST` constant saying so, which nothing read.
 export const providerOpenAI = define({
   id: "eva.provider.openai",
   takes: OPTIONS.shapes,

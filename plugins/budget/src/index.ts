@@ -1,10 +1,18 @@
 import type { Budget, BudgetLimits, BudgetState, Usage } from "@missingstudio/eva-core"
-import { estimating, spendIn, type PriceLookup } from "@missingstudio/eva-schema"
+import { estimating, spendIn, toTicks, type PriceLookup } from "@missingstudio/eva-schema"
 import { declare, define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 
 // Zero, or absent, means no limit of that kind.
-const OPTIONS = declare({ tokens: "number", minutes: "number", steps: "number" })
+const OPTIONS = declare({
+  tokens: "number",
+  minutes: "number",
+  steps: "number",
+  // In dollars, because that is the unit a person sets a ceiling in. Ticks are
+  // what a Cost is counted in, and the conversion belongs here rather than in
+  // the file somebody writes.
+  costUsd: "number",
+})
 
 export interface BudgetDeps {
   readonly limits: BudgetLimits
@@ -105,10 +113,15 @@ export const budget = define({
       return found > 0 ? { [key]: found } : {}
     }
 
+    const dollars = OPTIONS.read(ctx.options, "costUsd", 0)
     const limits: BudgetLimits = {
       ...limit("tokens"),
       ...limit("minutes"),
       ...limit("steps"),
+      // The contract has always enforced this and no key reached it, so the
+      // one limit a person is most likely to want was the one only a direct
+      // caller could set.
+      ...(dollars > 0 ? { costTicks: toTicks(dollars) } : {}),
     }
     const made = yield* makeBudget({ limits, prices: ctx.prices })
     yield* ctx.slot.budget.provide(ctx.id, made)

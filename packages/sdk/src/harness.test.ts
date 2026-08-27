@@ -71,11 +71,9 @@ describe("the session a native Harness mints", () => {
     })
   })
 
-  it("negotiates nothing and has no wire", async () => {
+  it("negotiates nothing and has no wire", () => {
     const harness = over(recording().host, () => Effect.succeed("end_turn"))
-
     expect(harness.capabilities).toEqual({})
-    expect(await Effect.runPromise(harness.initialize({} as never))).toEqual({})
   })
 })
 

@@ -80,10 +80,10 @@ same rule:
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `extension.ts`   | The extension-point shapes: `Domain`, `Slot`, `Hooks`, `Broadcast`, `Registration`, the `Row` draft                                                      |
 | `contracts.ts`   | What fills the slots: `Recorder`, `TraceSink`, `SessionStore`, `CredentialStore`, `Budget`, `Validator`, `FileSystem`, `Shell`, `Sandbox`, `DiffApplier` |
-| `spec.ts`        | The work: `Spec`, `Outcome`, the budget shapes, `ModelRef`, `Usage`                                                                                      |
+| `spec.ts`        | The work: `Spec`, the budget shapes, `ModelRef`, `Usage`                                                                                                 |
 | `transcript.ts`  | `Session`, `Transcript`, and `foldTranscript`                                                                                                            |
 | `provider.ts`    | The `Provider`: one `turn` method that begins a provider turn                                                                                            |
-| `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                                                                              |
+| `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes: `Harness`, `HarnessHost`, `ResumeResult`                                                    |
 | `session-api.ts` | The whole of what a surface may do to Eva                                                                                                                |
 | `session.ts`     | `submit`, the one-Run mechanism                                                                                                                          |
 | `deciding.ts`    | The words a gate reasons in: `ToolCall`, `ToolDecision`, `strictest`, `settled`, the four options, `editOf`                                              |

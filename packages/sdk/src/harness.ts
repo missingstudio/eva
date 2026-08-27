@@ -103,9 +103,9 @@ export interface NativeSpec {
 /**
  * A Harness takes text and answers a Stop Reason. Every capability field is
  * optional and absent means not supported, so a native Harness answering none
- * of them is honest rather than Degraded: it negotiates nothing, holds the
- * client half without ever calling it, and speaks no MCP. A permission reaches
- * a person through the tool execution's own gate, which is the Run's.
+ * of them is honest rather than Degraded: it negotiates nothing and speaks no
+ * MCP. A permission reaches a person through the tool execution's own gate,
+ * which is the Run's.
  */
 const CAPABILITIES = {}
 
@@ -179,7 +179,6 @@ export const nativeHarness = (host: HarnessHost, spec: NativeSpec): Harness => {
   return {
     id: spec.id,
     capabilities: CAPABILITIES,
-    initialize: () => Effect.succeed(CAPABILITIES),
     createSession: (cwd) =>
       Effect.sync(() => {
         const session = newSessionID()

@@ -19,7 +19,6 @@ export const NAMESPACE = "anthropic"
 
 // Anthropic reports token counts and never a request cost, so `costTicks`
 // stays absent and the Run reports the gap rather than computing a figure.
-export const REPORTS_COST = false
 const DEFAULT_MAX_TOKENS = 64_000
 
 // The Anthropic SDK's failure, read into the one wire table. `billing_error`

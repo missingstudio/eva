@@ -1,6 +1,6 @@
 import { declare, define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-import { NAMESPACE, REPORTS_COST, makeAnthropicProvider } from "./provider.js"
+import { NAMESPACE, makeAnthropicProvider } from "./provider.js"
 
 /**
  * The constructor and the plugin, and not the dialect.
@@ -40,14 +40,17 @@ export const providerAnthropic = define({
       }),
     )
 
-    // Anthropic does not report a request cost, and a Run says so rather
-    // than computing one from tokens times a rate.
-    if (!REPORTS_COST) {
-      yield* ctx.catalog.transform((catalog) => {
-        catalog.provider.update(NAMESPACE, (provider) => {
-          provider.name = "Anthropic"
-        })
+    /**
+     * The Catalog row's display name. It was guarded by `if (!REPORTS_COST)`,
+     * where `REPORTS_COST` was `const false` — a condition that could not be
+     * anything else, standing in front of a line that sets a name. `ProviderInfo`
+     * has no field for whether a provider reports cost, so the fact had nowhere
+     * to land and the guard said nothing.
+     */
+    yield* ctx.catalog.transform((catalog) => {
+      catalog.provider.update(NAMESPACE, (provider) => {
+        provider.name = "Anthropic"
       })
-    }
+    })
   }),
 })

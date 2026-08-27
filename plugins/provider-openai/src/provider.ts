@@ -18,9 +18,6 @@ export const PROVIDER_ID = "eva.provider.openai"
 export const NAMESPACE = "openai"
 
 // OpenAI reports token counters and never a request cost, so `costTicks`
-// stays absent and the Run reports the gap rather than computing a figure.
-export const REPORTS_COST = false
-
 /**
  * The OpenAI SDK's failure, read into the one wire table. `insufficient_quota`
  * arrives as HTTP 429, and reading the status alone would classify a dead
