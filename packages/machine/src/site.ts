@@ -7,7 +7,7 @@ export const entity = {
     name: "Eva",
     // The tagline. README.md and docs/product.md carry the same words.
     // Changing it here alone makes the site disagree with the repository.
-    tagline: "an open-source autonomous software factory.",
+    tagline: "An open-source autonomous software factory.",
     description:
       "Eva is an open-source, autonomous software factory. It runs coding work end to end, from a spec a machine can check to evidence that it was done.",
   },

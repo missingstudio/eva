@@ -10,7 +10,8 @@ import type { Prose } from "./prose.js"
 export const about: Prose = {
   title: "About",
   description: `Who publishes ${entity.product.name}, what it does today, and what it does not do yet.`,
-  lede: `${entity.product.name} is ${entity.product.tagline}`,
+  // The tagline starts a sentence of its own. Here it continues one.
+  lede: `${entity.product.name} is ${entity.product.tagline.replace(/^./, (c) => c.toLowerCase())}`,
   sections: [
     {
       heading: "What Eva is",
