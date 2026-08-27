@@ -8,11 +8,13 @@ import {
   PERMISSION_OPTIONS,
   providerTurn,
   type ModelRef,
+  type ProposedCall,
   type Provider,
   type SessionAPI,
   type ToolResult,
 } from "@missingstudio/eva-core"
 import { diff } from "@missingstudio/eva-diff"
+import { harnessLoop, LOOP_HARNESS_ID } from "@missingstudio/eva-harness-loop"
 import type { Event, Payload } from "@missingstudio/eva-schema"
 import { define, type Frontend, type Plugin, type SurfaceInfo } from "@missingstudio/eva-sdk"
 import {
@@ -24,8 +26,11 @@ import {
   scripted,
   virtualFileSystem,
   withKernel,
+  type ScriptedTurn,
 } from "@missingstudio/eva-testkit"
+import { sched } from "@missingstudio/eva-sched"
 import { toolEdit } from "@missingstudio/eva-tool-edit"
+import { toolRead } from "@missingstudio/eva-tool-read"
 import { toolPolicy } from "@missingstudio/eva-tool-policy"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
@@ -304,5 +309,91 @@ describe("a permission answered through each door", () => {
 
     expect(over.result).toEqual(direct.result)
     expect(over.held).toBe(direct.held)
+  })
+})
+
+const fakeCatalog = define({
+  id: "test.catalog.fake",
+  effect: Effect.fn("test.catalog.fake")(function* (ctx) {
+    yield* ctx.catalog.transform((draft) => {
+      draft.model.update("fake", "model", () => {})
+      draft.model.default.set(MODEL)
+    })
+  }),
+})
+
+/**
+ * The stage's own machinery through each door: the loop proposes a group, the
+ * gate judges it, the schedule orders it, and the write tool changes a file.
+ *
+ * The clauses above drive one write each. This one drives the whole stage
+ * through the socket, because that is the claim the surface line rests on —
+ * every tool, gate and mode exercised through two doors rather than one. It is
+ * one test and not a second suite: the door is the only variable, and a
+ * decision that could tell which door asked would fail here.
+ */
+describe("a Run that calls tools, through each door", () => {
+  const SCRIPT: readonly ScriptedTurn[] = [
+    {
+      payloads: [text("Reading, then renaming.")],
+      toolCalls: [
+        { id: "call_1", name: "read", args: { path: "one.md" } },
+        { id: "call_2", name: "edit", args: EDIT },
+        {
+          id: "call_3",
+          name: "edit",
+          args: { path: ".mcp.json", hunks: [{ find: "{}", replace: '{ "acme": {} }' }] },
+        },
+      ] satisfies readonly ProposedCall[],
+    },
+    { payloads: [text("Renamed it.")] },
+  ]
+
+  const drove = (door: Door) => {
+    const virtual = virtualFileSystem({ "one.md": "before\n", ".mcp.json": "{}" })
+    return writing(
+      door,
+      [
+        trace,
+        traceMemory,
+        virtual.plugin,
+        diff,
+        toolRead,
+        toolEdit,
+        sched,
+        toolPolicy,
+        fakeCatalog,
+        scripted(SCRIPT).plugin,
+        harnessLoop,
+      ],
+      (writes, api, kernel) =>
+        Effect.gen(function* () {
+          const session = yield* api.session.create("/here")
+          yield* writes.submit(session, {
+            kind: "prompt",
+            text: "rename it",
+            harness: LOOP_HARNESS_ID,
+          })
+          return { said: payloadsOf(yield* committed(kernel)), held: virtual.files() }
+        }),
+    )
+  }
+
+  it("runs the group, and the gate refuses the protected path", async () => {
+    const found = await drove(overWire)
+
+    expect(
+      found.said.flatMap((one) => (one.kind === "tool_result" ? [one.disposition] : [])),
+    ).toEqual(["ok", "ok", "denied"])
+    expect(found.held["one.md"]).toBe("after\n")
+    expect(found.held[".mcp.json"]).toBe("{}")
+  })
+
+  it("leaves the same record whichever door drove the tools", async () => {
+    const direct = await drove(inProcess)
+    const over = await drove(overWire)
+
+    expect(over.said).toEqual(direct.said)
+    expect(over.held).toEqual(direct.held)
   })
 })

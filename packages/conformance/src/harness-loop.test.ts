@@ -639,3 +639,90 @@ describe("a steer while the loop works", () => {
     ).toHaveLength(1)
   })
 })
+
+/**
+ * A cancel while a tool works. `SessionAPI.cancel` interrupts the fiber the
+ * Prompt runs on, so interrupting that fiber is the same path a person's stop
+ * takes.
+ *
+ * A barrier is where a stop can orphan a record: it emits straight through,
+ * while a parallel window holds its records back and commits none of them when
+ * it dies. So the tool here claims nothing and the group runs it alone.
+ */
+describe("a cancel while a tool works", () => {
+  const parking = (reached: Deferred.Deferred<void>) =>
+    define({
+      id: "test.tool.park",
+      effect: Effect.fn("test.tool.park")(function* (ctx) {
+        yield* ctx.tool.transform((draft) => {
+          draft.set({
+            id: "park",
+            description: "never answers",
+            kind: "execute",
+            input: { type: "object", properties: {} },
+            execute: () => Effect.andThen(Deferred.succeed(reached, undefined), Effect.never),
+          })
+        })
+      }),
+    })
+
+  const cancelling = (script: readonly ScriptedTurn[]) => {
+    const virtual = virtualFileSystem(TREE)
+    const fake = scripted(script)
+    const reached = Deferred.makeUnsafe<void>()
+
+    return withKernel(
+      [
+        trace,
+        traceMemory,
+        virtual.plugin,
+        diff,
+        toolRead,
+        toolEdit,
+        parking(reached),
+        sched,
+        toolPolicy,
+        approval,
+        fakeCatalog,
+        fake.plugin,
+        harnessLoop,
+      ],
+      (kernel: Kernel, scope) =>
+        Effect.gen(function* () {
+          const opened = yield* openRow(kernel, scope, LOOP_HARNESS_ID, SESSION)
+          const prompting = yield* Effect.forkChild(
+            opened.harness.prompt(SESSION, { kind: "prompt", text: RENAME }),
+          )
+          yield* Deferred.await(reached)
+          yield* Fiber.interrupt(prompting)
+          return { files: virtual.files(), record: yield* committed(kernel) }
+        }),
+      { config: { approval: { mode: "autonomous" } } },
+    )
+  }
+
+  const SCRIPT: readonly ScriptedTurn[] = [
+    step("Running it.", [{ id: "call_1", name: "park", args: {} }]),
+  ]
+
+  it("closes the call it opened, and the Trace folds clean", async () => {
+    const found = await cancelling(SCRIPT)
+
+    const ids = (kind: "tool_call" | "tool_result") =>
+      found.record.flatMap((event) => (event.payload.kind === kind ? [event.payload.id] : []))
+    expect(ids("tool_call")).toEqual(["call_1"])
+    expect(ids("tool_result")).toEqual(["call_1"])
+    expect(dispositions(found.record)).toEqual(["cancelled"])
+    expect(lastFinished(found.record)).toMatchObject({
+      claim: { result: "failed", summary: "cancelled" },
+      stopReason: "cancelled",
+    })
+
+    // The fold is the test of "nothing is orphaned": a call with no result
+    // shows as one that never ended, and a result with no call is dropped.
+    const tools = foldTranscript(SESSION, found.record)
+      .messages()
+      .flatMap((message) => message.blocks.filter((block) => block.type === "tool"))
+    expect(tools.map((block) => block.disposition)).toEqual(["cancelled"])
+  })
+})
