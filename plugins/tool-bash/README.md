@@ -94,10 +94,10 @@ const running = runCommand(
   `stopped by SIGTERM` for one a signal ended. The disposition is `ok`,
   because how a command ended is data the model reads rather than a failure of
   the call.
-- **A stop is `cancelled`, and a timeout is `failed`.** Both kill the process.
-  The stop is not waited out: a process that ignored the signal would hold the
-  Run open for as long as it liked, and the fact worth reporting is why the
-  command was stopped rather than which signal ended it.
+- **A timeout is `failed`, and it kills the process.** The kill is not waited
+  out: a process that ignored the signal would hold the Run open for as long
+  as it liked, and the fact worth reporting is that the command ran too long
+  rather than which signal ended it.
 - **An interruption still closes the record.** A cancelled Run interrupts the
   fiber, which closes the Scope and kills the process. There is no result to
   answer with, so one last `tool_update` keeps the Trace from reading
@@ -141,7 +141,7 @@ never this tool's.
   and `maxOutput`, and registers one tool row.
 - `runCommand(deps, call)` — the tool, for a caller that wants it without a
   kernel. `deps` is `{ sandbox, timeout, maxOutput }`, where `sandbox` is the
-  **read** of the slot; `call` is `{ id, args, emit, stop? }`.
+  **read** of the slot; `call` is `{ id, args, emit }`.
 - `readInput(args)` — the arguments, read, or nothing when they name no
   command.
 - `commandTool(deps)` — the tool row `toolBash` registers.
