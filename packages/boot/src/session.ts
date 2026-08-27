@@ -2,6 +2,7 @@ import {
   byRecency,
   foldTranscript,
   newSessionID,
+  recordRun,
   ResumeTooFarBehind,
   submit,
   WATCH_REPLAY_BOUND,
@@ -84,27 +85,22 @@ export const harnessHost = (
    * such gap and this order is safe.
    */
   report: Effect.fn("session.report")(function* (payloads: readonly Payload[]) {
-    for (const payload of payloads) yield* emit(payload)
     const recorder = yield* kernel.slot.recorder.peek
-    if (recorder === undefined) return
 
     /**
      * A group that opens with `started` is a whole Run of its own: the
      * refusal a Harness reports before its first Run. It goes through the
      * Recorder's open and close like every Run, because before the first
      * Run the Recorder has none open and a bare commit has no Run to land
-     * in — the record would lose the refusal.
+     * in — the record would lose the refusal. `recordRun` is that act, and
+     * it is the one that marks an empty Recorder slot Degraded.
      */
     if (payloads[0]?.kind === "started") {
-      yield* recorder.open(session)
-      yield* recorder.commit(payloads.filter((payload) => payload.kind !== "finished"))
-      const finished = payloads.find(
-        (payload): payload is Extract<Payload, { kind: "finished" }> => payload.kind === "finished",
-      )
-      if (finished !== undefined) yield* recorder.close(finished.claim, finished.stopReason)
-      return
+      return yield* recordRun(recorder, session, payloads, emit)
     }
 
+    for (const payload of payloads) yield* emit(payload)
+    if (recorder === undefined) return
     yield* recorder.commit(payloads)
   }),
 })
@@ -146,23 +142,15 @@ const refuse = Effect.fn("session.refuse")(function* (
   emit: (payload: Payload) => Effect.Effect<void>,
 ) {
   const recorder = yield* kernel.slot.recorder.peek
-  if (recorder !== undefined) yield* recorder.open(session)
-
-  // A Run that could not record says so, which is the rule `submit` follows.
-  const opened: readonly Payload[] =
-    recorder === undefined
-      ? [
-          { kind: "started", intent },
-          { kind: "degraded", missing: ["Recorder"] },
-        ]
-      : [{ kind: "started", intent }]
-
-  for (const payload of opened) yield* emit(payload)
-  if (recorder !== undefined) yield* recorder.commit(opened)
-
-  yield* emit({ kind: "finished", claim })
-  // The Recorder writes the closing record, so nothing else may.
-  if (recorder !== undefined) yield* recorder.close(claim)
+  yield* recordRun(
+    recorder,
+    session,
+    [
+      { kind: "started", intent },
+      { kind: "finished", claim },
+    ],
+    emit,
+  )
 })
 
 // The record is the source of the history, so a resumed Session sees exactly

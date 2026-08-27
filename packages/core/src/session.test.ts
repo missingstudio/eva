@@ -17,7 +17,7 @@ import {
   type Provider,
   type ProviderRequest,
 } from "./provider.js"
-import { submit, type RunDeps, type RunInput } from "./session.js"
+import { recordRun, submit, type RunDeps, type RunInput } from "./session.js"
 import type { BudgetState } from "./spec.js"
 import { toolText, type ToolGroupDeps, type ToolInfo } from "./tool.js"
 
@@ -523,5 +523,71 @@ describe("a response a cap cut short", () => {
 
     expect(result.calls[0]?.result.disposition).toBe("unknown_tool")
     expect(result.stopReason).toBeUndefined()
+  })
+})
+
+/**
+ * A whole Run, opened and closed in one act. Three callers spelled this — the
+ * refusal a Harness reports, a Prompt that named a Harness which cannot
+ * answer, and the record `/mode` leaves — and one of them lost the refusal
+ * when nothing filled the Recorder slot.
+ */
+describe("a Run recorded in one act", () => {
+  const claim: Claim = { result: "failed", summary: "nothing could answer" }
+  const group: readonly Payload[] = [
+    { kind: "started", intent: "refuse me" },
+    { kind: "mode", mode: "plan", reason: "a person named it" },
+    { kind: "finished", claim, stopReason: "max_turn_requests" },
+  ]
+
+  const emitting = () => {
+    const seen: Payload[] = []
+    return { seen, emit: (payload: Payload) => Effect.sync(() => void seen.push(payload)) }
+  }
+
+  it("opens, commits what is between, and closes with the Claim", async () => {
+    const recorder = fakeRecorder()
+    const said = emitting()
+
+    await Effect.runPromise(recordRun(recorder, sessionID("sess_act"), group, said.emit))
+
+    // The Recorder writes the closing record, so the group it was handed
+    // holds everything but that.
+    expect(recorder.groups[0]).toEqual([group[0], group[1]])
+    expect(recorder.closed).toEqual([claim])
+    expect(said.seen).toEqual(group)
+  })
+
+  // Eva never drops a record in silence.
+  it("says the Recorder is missing rather than recording nothing quietly", async () => {
+    const said = emitting()
+
+    await Effect.runPromise(recordRun(undefined, sessionID("sess_act"), group, said.emit))
+
+    expect(said.seen).toEqual([
+      group[0],
+      { kind: "degraded", missing: ["Recorder"] },
+      group[1],
+      group[2],
+    ])
+  })
+
+  /**
+   * A Command holds no live stream: its records reach a surface through the
+   * Recorder's own publish. With no Recorder there is nowhere to say the
+   * shortfall, so nothing is recorded and nothing fails.
+   */
+  it("records nothing and does not fail for a caller with no stream", async () => {
+    await Effect.runPromise(recordRun(undefined, sessionID("sess_act"), group))
+  })
+
+  it("leaves the Run open when the group names no close", async () => {
+    const recorder = fakeRecorder()
+
+    await Effect.runPromise(
+      recordRun(recorder, sessionID("sess_act"), [{ kind: "started", intent: "held open" }]),
+    )
+
+    expect(recorder.closed).toEqual([])
   })
 })

@@ -805,6 +805,35 @@ describe("harnessHost", () => {
     expect(seen.closed).toEqual([claim])
   })
 
+  /**
+   * The case that used to lose a refusal. A group opening with `started` is a
+   * whole Run, and this branch returned before it said anything at all when
+   * nothing filled the Recorder slot — so a Harness that refused before its
+   * first Run left no record and no marker. Eva never drops one in silence.
+   */
+  it("marks a refusal degraded when the Recorder slot is empty", async () => {
+    const claim: Claim = { result: "failed", summary: "workflow w cannot run" }
+    const said = await wired({ recorder: false }, (wiring) =>
+      Effect.gen(function* () {
+        const seen: Payload[] = []
+        yield* harnessHost(wiring.kernel, sessionID("sess_refused"), (payload) =>
+          Effect.sync(() => void seen.push(payload)),
+        ).report([
+          { kind: "started", intent: "refuse me" },
+          { kind: "finished", claim },
+        ])
+        return { seen, groups: wiring.recorder.groups }
+      }),
+    )
+
+    expect(said.seen).toEqual([
+      { kind: "started", intent: "refuse me" },
+      { kind: "degraded", missing: ["Recorder"] },
+      { kind: "finished", claim },
+    ])
+    expect(said.groups).toEqual([])
+  })
+
   // Stage 0's exit test says disabling the trace plugin degrades rather than
   // crashing. This is that rule one level up.
   it("commits nothing and still emits when the Recorder slot is empty", async () => {

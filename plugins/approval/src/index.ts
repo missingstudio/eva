@@ -1,3 +1,4 @@
+import { recordRun } from "@missingstudio/eva-core"
 import { define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import {
@@ -192,15 +193,14 @@ export const approval = define({
           // `tool.updated` by itself. There is no second broadcast for a mode.
           yield* ctx.tool.reload
 
-          const recorder = yield* ctx.slot.recorder.peek
-          if (recorder !== undefined) {
-            yield* recorder.open(command.session)
-            yield* recorder.commit([
-              { kind: "started", intent: `/${MODE_COMMAND} ${next.id}` },
-              { kind: "mode", mode: next.id, reason: "a person named it" },
-            ])
-            yield* recorder.close({ result: "done" })
-          }
+          // A mode a person named is a whole Run: it opens with the line they
+          // typed and closes with a Claim, so `/mode` is on the Trace the same
+          // way every other Run is.
+          yield* recordRun(yield* ctx.slot.recorder.peek, command.session, [
+            { kind: "started", intent: `/${MODE_COMMAND} ${next.id}` },
+            { kind: "mode", mode: next.id, reason: "a person named it" },
+            { kind: "finished", claim: { result: "done" } },
+          ])
           command.write(`mode: ${next.id}`)
         }),
       })
