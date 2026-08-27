@@ -175,7 +175,7 @@ export const BUILT_IN: readonly Plugin[] = [
   toolWeb,
   toolBash,
   // After the tools, because it narrows the rows they registered: a build
-  // that forces a tool serial edits a row that is already there.
+  // that makes a tool a barrier edits a row that is already there.
   sched,
   // After the tools it gates, which is how the table reads rather than how the
   // gate works: a hook decides wherever it registered, and the strictest

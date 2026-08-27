@@ -3,7 +3,7 @@ import { define } from "@missingstudio/eva-sdk"
 import { calling, withPlugin } from "@missingstudio/eva-testkit"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { sched, serialNames } from "./index.js"
+import { barrierNames, sched } from "./index.js"
 
 /**
  * Which calls had committed when each tool started. A call that names the one
@@ -68,7 +68,7 @@ describe("the scheduler plugin", () => {
    * policy narrows, and this is the shape of that promise.
    */
   it("offers one option, and it only takes safety away", () => {
-    expect(Object.keys(sched.takes ?? {})).toEqual(["serial"])
+    expect(Object.keys(sched.takes ?? {})).toEqual(["barrier"])
   })
 
   it("leaves a tool's own claim alone when it is named in nothing", async () => {
@@ -81,7 +81,7 @@ describe("the scheduler plugin", () => {
 
   it("makes a named tool run alone, whatever the tool claims", async () => {
     const at = board()
-    const results = await scheduling(at, { serial: ["grep"] })
+    const results = await scheduling(at, { barrier: ["grep"] })
 
     expect(results.map((result) => result.disposition)).toEqual(["ok", "ok"])
     expect(at.marks.map((mark) => mark)).toEqual([
@@ -93,7 +93,7 @@ describe("the scheduler plugin", () => {
   it("takes the claim off the row, so the row reads as unclassified", async () => {
     const rows = await withPlugin(sched, (kernel) => kernel.domains.tool.get, {
       before: [claiming(board())],
-      options: { serial: ["grep"] },
+      options: { barrier: ["grep"] },
     })
 
     expect(rows.map((row) => [row.id, row.parallelSafe === undefined])).toEqual([
@@ -112,25 +112,25 @@ describe("the scheduler plugin", () => {
           yield* kernel.runtime.remove("eva.sched")
           return yield* kernel.domains.tool.get
         }),
-      { before: [claiming(board())], options: { serial: ["grep"] } },
+      { before: [claiming(board())], options: { barrier: ["grep"] } },
     )
 
     expect(rows.every((row) => row.parallelSafe !== undefined)).toBe(true)
   })
 })
 
-describe("the names a build forces serial", () => {
+describe("the names a build makes barriers", () => {
   it("are nothing when the option is absent", () => {
-    expect(serialNames({})).toEqual([])
+    expect(barrierNames({})).toEqual([])
   })
 
   // A list is written by a person, so an entry that is not a name is dropped
   // rather than read as one.
   it("drop an entry that is not a name", () => {
-    expect(serialNames({ serial: ["bash", 7, "", null, "edit"] })).toEqual(["bash", "edit"])
+    expect(barrierNames({ barrier: ["bash", 7, "", null, "edit"] })).toEqual(["bash", "edit"])
   })
 
   it("are nothing when the option is written as another shape", () => {
-    expect(serialNames({ serial: "bash" })).toEqual([])
+    expect(barrierNames({ barrier: "bash" })).toEqual([])
   })
 })
