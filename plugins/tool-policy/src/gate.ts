@@ -23,6 +23,9 @@ export interface JudgedCall {
 }
 
 /**
+ * Every path a call would change. `path` is the field a tool that names one
+ * file uses, and a call that only looks names none of them here.
+ *
  * A read is not gated at a protected path. Reading a dependency manifest is
  * most of what an agent does first, and the rule the roadmap states is about
  * writes: a write there is a delayed-action shell command, and a read there is
@@ -31,11 +34,6 @@ export interface JudgedCall {
  * Which kinds only look is `looksOnly` in
  * [`@missingstudio/eva-core`](../../../packages/core/README.md), because a
  * permission mode asks the same question about the tools it reaches.
- */
-
-/**
- * Every path a call would change. `path` is the field a tool that names one
- * file uses, and a call that only looks names none of them here.
  */
 export const writtenIn = (call: JudgedCall): readonly string[] => {
   if (looksOnly(call.kind)) return []
