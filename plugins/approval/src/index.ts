@@ -24,7 +24,7 @@ export const MODE_COMMAND = "mode"
  * Named permission modes, and the mandate half of the four-option gate.
  *
  * A mode is capability selection plus a mandate. Selection rebuilds the tool
- * domain, so the agent sees a different registry rather than a filtered one —
+ * domain, so the agent sees a different domain rather than a filtered one —
  * a filter at call time is a list the model was shown and then refused from,
  * and a rebuild is a list that never held the row. The mandate is a decision
  * at `tool.execute.before`, beside the deterministic gate's.
@@ -68,9 +68,9 @@ export const approval = define({
     /**
      * The modes in play: the ones Sessions have named, or the default while no
      * Session has named one. A Session that never named a mode runs under the
-     * default, and its registry may therefore be narrower than its mandate —
-     * which is the fail-closed direction, and the only one worth being wrong
-     * in.
+     * default, and the tools it is shown may therefore be narrower than its
+     * mandate — which is the fail-closed direction, and the only one worth
+     * being wrong in.
      */
     const live = (): readonly ModeInfo[] =>
       sessions.size === 0 ? [modeFor("")] : [...sessions.keys()].map((session) => modeFor(session))
@@ -78,8 +78,7 @@ export const approval = define({
     /**
      * Capability selection. The transform is registered once and replayed on
      * every rebuild, so it reads the modes in play at replay time — which is
-     * how `/mode read-only` rebuilds the registry with no second
-     * registration.
+     * how `/mode read-only` rebuilds the domain with no second registration.
      */
     yield* ctx.tool.transform((draft) => {
       const reach = widest(live())
@@ -167,7 +166,7 @@ export const approval = define({
           }
 
           sessions.set(command.session, next.id)
-          // The registry the agent sees is rebuilt, which publishes
+          // The domain the agent sees is rebuilt, which publishes
           // `tool.updated` by itself. There is no second broadcast for a mode.
           yield* ctx.tool.reload
 

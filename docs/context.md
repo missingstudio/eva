@@ -539,7 +539,7 @@ _Avoid_: Token, key, secret
 
 **Mode**:
 A named set of permissions a Session runs under: `read-only`, `supervised`,
-`autonomous`, or `plan`. It selects which tools the registry holds and states a
+`autonomous`, or `plan`. It selects which tools the tool domain holds and states
 mandate at the deciding boundary, so a Mode narrows and never widens. A change
 emits a `mode` payload, so which one is open is a fact on the Trace.
 _Avoid_: Permission level, policy (a Rule Set is the policy), profile

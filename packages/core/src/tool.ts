@@ -510,7 +510,7 @@ export const executeToolGroup = Effect.fn("core.tool.group")(function* (
 
   /**
    * One call of a parallel window, with its records held back. It runs the
-   * row that classified it, so a registry rebuilt while the window is open
+   * row that classified it, so a domain rebuilt while the window is open
    * cannot put a tool it now calls unsafe beside another one.
    */
   const held = ({ call, tool }: Admitted) => {

@@ -297,7 +297,7 @@ describe("every Step's calls pass the gate", () => {
   /**
    * A mode is capability selection first. `read-only` rebuilds the tool domain
    * without the rows that change anything, so the Step is offered no `edit`
-   * and a call to it can only answer `unknown_tool` — the registry never held
+   * and a call to it can only answer `unknown_tool` — the domain never held
    * the row.
    */
   it("a mode the Step is offered no write tool in answers unknown_tool", async () => {

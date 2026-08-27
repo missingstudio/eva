@@ -115,7 +115,7 @@ describe("a Step that proposed calls", () => {
     })
   })
 
-  // Every Step is offered the registry as it stands, so a mode that rebuilt
+  // Every Step is offered the domain as it stands, so a mode that rebuilt
   // the tool domain between two Steps is what the second Step is shown.
   it("shows the model the tools the domain holds at that Step", async () => {
     let rows: readonly ToolInfo[] = [READ]

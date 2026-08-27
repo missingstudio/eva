@@ -16,7 +16,7 @@ import type { ContentBlock, TranscriptMessage } from "@missingstudio/eva-schema"
  * run, and the model may not be offered one of those.
  *
  * The list is read per Step rather than once, so a permission mode that
- * rebuilt the registry is what the next Step offers.
+ * rebuilt the domain is what the next Step offers.
  */
 export const offeredIn = (rows: readonly ToolInfo[]): readonly ToolDefinition[] =>
   rows

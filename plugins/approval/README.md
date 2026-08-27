@@ -80,7 +80,7 @@ does not know is treated as one that changes something.
 ## A mode is capability selection, not a filter
 
 Changing the mode **rebuilds the tool domain**. The agent is shown a different
-registry rather than the same registry with rows refused at call time: a filter
+domain rather than the same domain with rows refused at call time: a filter
 is a list the model was offered and then denied from, and a rebuild is a list
 that never held the row. A call naming a row the mode removed is
 `unknown_tool`, which is the execution's own refusal and not this plugin's.
@@ -89,11 +89,11 @@ The rebuild publishes `tool.updated` by itself, so a mode needs no broadcast of
 its own.
 
 **One honest limit.** A domain is process-wide and a mode is per Session. With
-two Sessions open in one process the registry is built to the widest live mode,
+two Sessions open in one process the domain is built to the widest live mode,
 and each Session's own **mandate** is what refuses — so a `read-only` Session
 beside an `autonomous` one may be _shown_ a tool it can never _run_. The strict
 side is at the gate, where it decides. With one Session, which is the
-interactive case, the registry is exactly that Session's mode.
+interactive case, the domain is exactly that Session's mode.
 
 ## Per-tool overrides narrow, and never widen
 
