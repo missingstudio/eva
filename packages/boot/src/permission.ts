@@ -5,18 +5,25 @@ import {
   type RequestID,
 } from "@missingstudio/eva-core"
 import type { Frontend, SurfaceInfo } from "@missingstudio/eva-sdk"
-import { Effect } from "effect"
+import { Deferred, Effect } from "effect"
 import type { Kernel } from "./boot.js"
 
 /**
- * How a tool call's `ask` reaches a person, and how the answer comes back.
+ * The permission request, whole: how a tool call's `ask` opens one, how the
+ * two doors answer it, and how it retires.
  *
  * There are two doors and one request. `Frontend.ask` is the direct call to
  * the surface that holds a person, and it already carries what an ask needs:
  * the request id and the question. `SessionAPI.answer` is the other door — a
  * surface at the end of a socket cannot have a method called on it, so it
  * answers by naming the request. Both are answers to the same request, so
- * this races them and the first one wins.
+ * `overSurface` races them and the first one wins.
+ *
+ * The lifecycle is `makeAsking`'s: a request is open exactly while somebody
+ * waits on it, the first answer settles it, and it retires however the wait
+ * ends — so the door that lost the race is interrupted, a stale answer lands
+ * on nothing, and each door's only obligations are the two `Frontend.ask`
+ * states.
  *
  * The request id is the tool call's id. One call is one request, the record
  * that named the call landed before the ask, and a surface that answers over
@@ -29,8 +36,57 @@ export interface Asked {
    * surface is started, stopped, and started again.
    */
   readonly frontend: Effect.Effect<Frontend | undefined>
-  // Opens the request and waits for an answer. `Api.request` is this.
+  // Opens the request and waits for an answer. `Asking.request` is this.
   readonly request: (id: RequestID) => Effect.Effect<FrontendAnswer>
+}
+
+/**
+ * The socket door's half of one request: `request` waits on an answer that
+ * `answer` lands by naming it. `Api.request` and `SessionAPI.answer` are the
+ * two, so what a surface across a socket reaches is exactly this pair.
+ */
+export interface Asking {
+  // Opens the request and waits. However the wait ends, the request retires.
+  readonly request: (id: RequestID) => Effect.Effect<FrontendAnswer>
+  // An answer to a request that is not open is dropped. A surface that
+  // reconnects and replays a stale answer must not stop Eva.
+  readonly answer: (id: RequestID, given: FrontendAnswer) => Effect.Effect<void>
+}
+
+export const makeAsking = (): Asking => {
+  const pending = new Map<RequestID, Deferred.Deferred<FrontendAnswer>>()
+
+  return {
+    /**
+     * The request is open exactly while somebody is waiting on it. A tool
+     * call's `ask` races this door against the surface Eva can call, so the
+     * door that loses is interrupted — and a request left open by the loser
+     * would take a later answer and give it to nobody.
+     *
+     * This is what makes the first answer the only answer: once one has
+     * landed, from either door, the request is no longer open and the second
+     * one is refused as already answered. The guard on the delete keeps a
+     * retiring request from closing the next one of the same id — a call id
+     * repeats across Runs.
+     */
+    request: (id: RequestID): Effect.Effect<FrontendAnswer> => {
+      const waiting = Deferred.makeUnsafe<FrontendAnswer>()
+      pending.set(id, waiting)
+      return Effect.ensuring(
+        Deferred.await(waiting),
+        Effect.sync(() => {
+          if (pending.get(id) === waiting) pending.delete(id)
+        }),
+      )
+    },
+
+    answer: Effect.fn("boot.asking.answer")(function* (id: RequestID, given: FrontendAnswer) {
+      const waiting = pending.get(id)
+      if (waiting === undefined) return
+      pending.delete(id)
+      yield* Deferred.succeed(waiting, given)
+    }),
+  }
 }
 
 const refused = (reason: string) => Effect.succeed({ kind: "reject_once", reason } as const)

@@ -98,6 +98,13 @@ request over a socket. Both are answers to one question, so the first one wins
 and the other door closes at once. A person who answers at a terminal leaves no
 card still offering four buttons on a page.
 
+The request lifecycle is `makeAsking`'s, in `permission.ts` beside the race: a
+request is open exactly while somebody waits on it, the first answer settles
+it, and it retires however the wait ends. So the door that lost is
+interrupted, a stale answer lands on nothing, and a door's whole obligation is
+the two `Frontend.ask` states — resolve with the answer, or retire what an
+interrupt ends.
+
 **A known limit, and closing it changes a contract.** The request id is the
 tool call's id. That is what lets a surface pair a question with the
 `tool_call` record it already drew, and it is why the request carries nothing
@@ -128,6 +135,9 @@ ships no plugins.
   hook and both budget and recorder slots wired.
 - `makeSessionAPI(kernel, model, scope)` — core's `SessionAPI` over this
   kernel, plus `request` for a question a surface must answer.
+- `makeAsking()` — the permission request lifecycle: `request` opens one and
+  waits, `answer` settles it by naming it, and a request retires however its
+  wait ends.
 - `overSurface(kernel, doors)` — the `Approving` a tool call asks through: the
   surface's own `ask` raced against an answer that names the request.
 - `harnessHost(kernel, session, emit)` — the `HarnessHost` a native Harness
