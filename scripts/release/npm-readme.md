@@ -1,6 +1,6 @@
 # Eva
 
-An AI-native software factory.
+an open-source autonomous software factory.
 
 Eva runs coding work end to end — from a spec a machine can check, through a
 harness that does the work, to evidence that it was done. It runs on your

@@ -7,9 +7,9 @@ export const entity = {
     name: "Eva",
     // The tagline. README.md and docs/product.md carry the same words.
     // Changing it here alone makes the site disagree with the repository.
-    tagline: "An AI-native software factory.",
+    tagline: "an open-source autonomous software factory.",
     description:
-      "Eva is an open-source, AI-native software factory. It runs coding work end to end, from a spec a machine can check to evidence that it was done.",
+      "Eva is an open-source, autonomous software factory. It runs coding work end to end, from a spec a machine can check to evidence that it was done.",
   },
   company: {
     name: "missing studio",
@@ -98,7 +98,8 @@ export const titleTemplate = {
   // product. The title is where a reader learns which of the two names they
   // are looking at.
   docs: (page: string) => `${page} — Eva docs`,
-  web: (page?: string) => (page ? `${page} — Eva` : "Eva — An AI-native software factory"),
+  web: (page?: string) =>
+    page ? `${page} — Eva` : "Eva — an open-source autonomous software factory",
 } as const
 
 export const ogSiteName = {

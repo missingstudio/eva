@@ -1,6 +1,6 @@
 # @missingstudio/eva
 
-Eva is an open-source, AI-native software factory: a terminal client that
+Eva is an open-source, autonomous software factory: a terminal client that
 runs coding work end to end, from a prompt or a checkable Workflow to a
 traced, verifiable answer. It is built on a plugin kernel — every capability
 is a plugin — and this package is the CLI itself and the composition root

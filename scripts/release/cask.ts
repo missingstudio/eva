@@ -34,7 +34,7 @@ const cask = `cask "eva" do
 
   url "https://github.com/${REPO}/releases/download/v#{version}/eva-darwin-#{arch}.zip"
   name "Eva"
-  desc "An AI-native software factory"
+  desc "an open-source autonomous software factory"
   homepage "https://github.com/${REPO}"
 
   binary "eva"

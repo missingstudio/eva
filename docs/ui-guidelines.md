@@ -50,16 +50,16 @@ cost of conforming instead — or resolved in favour of the house rule.
 
 ## 1. Context and goals
 
-| Item                 | Value                                                               |
-| -------------------- | ------------------------------------------------------------------- |
-| Product              | Eva, an AI-native software factory for human and agent teams        |
-| Publisher            | missing studio                                                      |
-| Surfaces             | `missing.studio` (marketing), `docs.missing.studio` (documentation) |
-| Stack                | TanStack Start, Tailwind v4, shared `@missingstudio/ui`             |
-| Documentation layer  | Fumadocs 16, notebook layout                                        |
-| Audience             | Developers and technical teams                                      |
-| Accessibility target | WCAG 2.2 AA                                                         |
-| Style                | Structured, tokenized, content-first, dark only                     |
+| Item                 | Value                                                                     |
+| -------------------- | ------------------------------------------------------------------------- |
+| Product              | Eva, an open-source autonomous software factory for human and agent teams |
+| Publisher            | missing studio                                                            |
+| Surfaces             | `missing.studio` (marketing), `docs.missing.studio` (documentation)       |
+| Stack                | TanStack Start, Tailwind v4, shared `@missingstudio/ui`                   |
+| Documentation layer  | Fumadocs 16, notebook layout                                              |
+| Audience             | Developers and technical teams                                            |
+| Accessibility target | WCAG 2.2 AA                                                               |
+| Style                | Structured, tokenized, content-first, dark only                           |
 
 Goals, in priority order:
 
@@ -345,7 +345,7 @@ Rules:
 - No hyphen may appear inside a sentence, a heading or a label. Rewrite the
   phrase. This governs copy rendered on either site. It does not govern this
   file, code identifiers, CSS property names, or command syntax. One exemption
-  is on the record: `AI-native`, in the product tagline and wherever the
+  is on the record: `autonomous`, in the product tagline and wherever the
   product is described. Recorded in [decisions.md](decisions.md); no second
   exemption without one.
 - No word may sit alone on the last line. Headings set `text-wrap: balance`;

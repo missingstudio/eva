@@ -1,6 +1,6 @@
 # Eva
 
-`Eva` is an open-source, AI-native software factory.
+`Eva` is an open-source, autonomous software factory.
 The workers of this factory are harnesses.
 
 ## Agent skills

@@ -1,6 +1,6 @@
 # What Eva is for
 
-Eva is an open-source, AI-native software factory. It runs coding work end to
+Eva is an open-source, autonomous software factory. It runs coding work end to
 end — from a spec a machine can check, through a harness that does the work, to
 evidence that it was done — across the harnesses you already pay for.
 

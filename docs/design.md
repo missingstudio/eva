@@ -2,7 +2,7 @@
 version: alpha
 name: Eva
 description: >-
-  Eva is an AI-native software factory whose product is a terminal program.
+  Eva is an open-source, autonomous software factory whose product is a terminal program.
   Every surface it owns — the terminal, the product app, the marketing site,
   the documentation — is one dark instrument panel: a near-black canvas, a
   sans that carries prose and a mono that carries machine output, and one
@@ -330,7 +330,7 @@ components:
 
 ## Overview
 
-Eva is an open-source, AI-native software factory. It runs coding work end to
+Eva is an open-source, autonomous software factory. It runs coding work end to
 end, from a spec a machine can check to evidence that it was done. The design
 brief is the line the product prints in its own banner — **evidence, not
 claims** — and the surface is the instrument that prints it: a near-black

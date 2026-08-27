@@ -251,7 +251,7 @@ ambient reach the World exists to close. Two calls redirect them.
 ```ts
 const program = (world: World, record: (invocation: Invocation) => void): Command => {
   const root = new Command("eva")
-    .description("Eva is an open-source, AI-native software factory")
+    .description("Eva is an open-source, autonomous software factory")
     .exitOverride()
     .configureOutput({
       writeOut: world.out,

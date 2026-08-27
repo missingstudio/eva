@@ -1,6 +1,6 @@
 # Eva
 
-Eva is an open-source, AI-native software factory. It is plugin-first: a small
+Eva is an open-source, autonomous software factory. It is plugin-first: a small
 kernel loads plugins, and every capability is a plugin — the model, the tools,
 the harness, the session store, the sandbox, the agent loop, and every user
 interface.

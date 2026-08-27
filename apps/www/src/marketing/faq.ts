@@ -3,7 +3,7 @@
 // its own.
 export const faq = [
   {
-    question: "What is an AI-native software factory?",
+    question: "What is an open-source autonomous software factory?",
     answer:
       "A system that runs coding work from a spec a machine can check to evidence that it was done, with one contract over every harness, one trace of what they did, one verifier that decides whether the work passed, and one bill that prices it. Eva is an open-source implementation of that category.",
   },
