@@ -12,10 +12,14 @@ export const entity = {
       "Eva is an open-source, autonomous software factory. It runs coding work end to end, from a spec a machine can check to evidence that it was done.",
   },
   company: {
-    name: "missing studio",
+    name: "Missing studio",
     // A company sentence, not a product sentence. It names no capability
     // and no category, so nothing reads the company as a piece of software.
     description: "The company behind Eva.",
+    // The country the company declares on its own GitHub organisation
+    // profile. It is the whole address, because a street nobody publishes is
+    // not a fact this repository holds.
+    country: "IN",
   },
 } as const
 
@@ -34,6 +38,15 @@ export const external = {
   org: "https://github.com/missingstudio",
   npm: "https://www.npmjs.com/package/@missingstudio/eva",
   license: "https://opensource.org/licenses/MIT",
+  // Where a question is answered. There is no support address, so the issue
+  // tracker is the contact channel, and it answers in public.
+  issues: "https://github.com/missingstudio/eva/issues",
+  releases: "https://github.com/missingstudio/eva/releases",
+  tap: "https://github.com/missingstudio/homebrew-tap",
+  // Every profile here is one the company publishes on its own organisation
+  // profile, and each one resolves. An unverified profile in `sameAs` teaches
+  // an answer engine to distrust the rest of the list.
+  x: "https://x.com/madebymissing",
 } as const
 
 /**

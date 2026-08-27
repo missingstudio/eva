@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./serve": "./src/serve.ts",
     "./tokens.css": "./src/styles/tokens.css",
     "./shadcn.css": "./src/styles/shadcn.css",
     "./globals.css": "./src/styles/globals.css",

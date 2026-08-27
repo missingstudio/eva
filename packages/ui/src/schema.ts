@@ -7,6 +7,7 @@ const id = {
   company: `${origin.web}/#organization`,
   product: `${origin.web}/#eva`,
   website: `${origin.web}/#website`,
+  docs: `${origin.docs}/#website`,
 } as const
 
 type Node = Record<string, unknown>
@@ -20,7 +21,27 @@ export const companyNode = (): Node => ({
   // The organisation points at the GitHub org. The product points at the
   // repository and the package. Pointing both at the same URLs is what
   // merges a company into its product.
-  sameAs: [external.org],
+  sameAs: [external.org, external.x],
+  /*
+   * How to reach a person, and where the company is. Both are answers an
+   * engine gives when it is asked whether a publisher is real.
+   *
+   * There is no support address, so the contact point carries a URL rather
+   * than an invented mailbox, and the address carries the country the company
+   * publishes and nothing it does not. A field filled with a placeholder is
+   * worse than an absent field: the absent one says "not stated" and the
+   * placeholder says something false.
+   */
+  contactPoint: {
+    "@type": "ContactPoint",
+    contactType: "technical support",
+    url: external.issues,
+    availableLanguage: "English",
+  },
+  address: {
+    "@type": "PostalAddress",
+    addressCountry: entity.company.country,
+  },
 })
 
 export const productNode = (version?: string): Node => ({
@@ -72,9 +93,36 @@ export const docPageGraph = (page: {
   description: page.description,
   url: page.url,
   ...(page.modified ? { dateModified: page.modified } : {}),
-  isPartOf: { "@type": "WebSite", name: "Eva documentation", url: origin.docs },
+  isPartOf: { "@id": id.docs },
   about: { "@id": id.product },
   publisher: { "@id": id.company },
+})
+
+export const docsSiteNode = (): Node => ({
+  "@type": "WebSite",
+  "@id": id.docs,
+  name: "Eva documentation",
+  url: origin.docs,
+  about: { "@id": id.product },
+  publisher: { "@id": id.company },
+})
+
+/**
+ * The nodes a documentation page's own references point at.
+ *
+ * `docPageGraph` names the company and the product by id, and those ids are
+ * apex URLs. That is correct JSON-LD — an id is a name, not a location — but a
+ * reader that fetches one page and no other is handed two references it cannot
+ * resolve. Declaring the nodes beside the page costs a few hundred bytes and
+ * makes every documentation page answer "who publishes this" on its own.
+ *
+ * `docPageGraphs` emits this beside the page graph, which is the only way the
+ * two are meant to be used. It stays exported for the test that reads the
+ * nodes on their own.
+ */
+export const docPageEntities = (version?: string) => ({
+  "@context": "https://schema.org",
+  "@graph": [companyNode(), productNode(version), docsSiteNode()],
 })
 
 /**
@@ -125,5 +173,72 @@ export const faqGraph = (entries: { question: string; answer: string }[]) => ({
     acceptedAnswer: { "@type": "Answer", text: entry.answer },
   })),
 })
+
+/**
+ * A page that says who publishes this and how to reach them. `AboutPage` and
+ * `ContactPage` are the two types an engine looks for when it checks whether a
+ * publisher is a real one, and each node points back at the same company by
+ * id rather than restating it.
+ *
+ * Nothing here invents a rating. `AggregateRating` would need reviews Eva has
+ * not collected, and a fabricated score is the one schema error that cannot be
+ * corrected later.
+ */
+export const trustPageGraph = (page: {
+  type: "AboutPage" | "ContactPage"
+  title: string
+  description: string
+  url: string
+}) => ({
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": page.type,
+      name: page.title,
+      description: page.description,
+      url: page.url,
+      isPartOf: { "@id": id.website },
+      about: { "@id": id.company },
+      publisher: { "@id": id.company },
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: entity.product.name, item: origin.web },
+        { "@type": "ListItem", position: 2, name: page.title, item: page.url },
+      ],
+    },
+  ],
+})
+
+/**
+ * Everything a documentation page states about itself, as one closed set.
+ *
+ * The page graph names the company, the product, and the site by id, so the
+ * nodes those ids name have to travel with it. That pairing used to be the
+ * caller's to remember: two exports emitted next to each other, with a comment
+ * saying why. A page that emitted one and not the other made references a
+ * reader could not resolve, and nothing said so.
+ *
+ * The optional parts are the ones a page has or does not: a trail of one is
+ * not a trail, a page with no terms declares no glossary, and only the
+ * troubleshooting page publishes questions.
+ */
+export const docPageGraphs = (page: {
+  title: string
+  description: string
+  url: string
+  modified?: string
+  version?: string
+  trail?: readonly { name: string; url: string }[]
+  terms?: readonly { term: string; definition: string }[]
+  questions?: readonly { question: string; answer: string }[]
+}) => [
+  docPageEntities(page.version),
+  docPageGraph(page),
+  ...(page.trail && page.trail.length > 1 ? [breadcrumbGraph([...page.trail])] : []),
+  ...(page.terms ? [glossaryGraph({ title: page.title, url: page.url }, [...page.terms])] : []),
+  ...(page.questions ? [faqGraph([...page.questions])] : []),
+]
 
 export const schemaIds = id
