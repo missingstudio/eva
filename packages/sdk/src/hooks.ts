@@ -91,6 +91,10 @@ export interface ToolExecuteBefore {
   /**
    * The strictest decision wins, and a boundary nobody decided at allows. An
    * `ask` that reaches the tool still unanswered is a denial.
+   *
+   * `settled` in `@missingstudio/eva-core` is the precedence itself, so what
+   * this paragraph promises a plugin author and what a driver of the boundary
+   * performs are one rule.
    */
   decide(decision: ToolDecision): void
   /**

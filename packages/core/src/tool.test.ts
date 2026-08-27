@@ -283,7 +283,7 @@ describe("the deciding boundary", () => {
     })
 
     expect(result.disposition).toBe("denied")
-    expect(result.content).toEqual([{ type: "text", text: "nobody answered: read one.md?" }])
+    expect(result.content).toEqual([{ type: "text", text: "nobody could be asked: read one.md?" }])
   })
 
   it("runs the tool on an allow, with the arguments the boundary settled", async () => {

@@ -1,5 +1,5 @@
 import {
-  strictest,
+  settled,
   type Approving,
   type Decided,
   type ModelRef,
@@ -101,11 +101,13 @@ export const runDeps = (
  * The dependencies one tool call reads, built from the kernel. The tool
  * domain answers which tool a name names, and the three tool hooks run here.
  *
- * `tool.execute.before` is a deciding boundary, so this is where its answer
- * is read: a hook that threw denies the call it was deciding, because a gate
- * that fails open because a plugin threw is not a gate. The kernel stops at
- * the failure and no later hook runs, so the denial joins the decisions the
- * hooks before it made and the strictest of them wins.
+ * `tool.execute.before` is a deciding boundary, so this is where its hooks are
+ * gathered: what they decided, what they stated as a baseline, and the hook
+ * that died. The kernel stops at a failure and no later hook runs. What those
+ * three settle into is `settled` in
+ * [`@missingstudio/eva-core`](../../core/README.md), because every driver of
+ * this boundary settles the same way and a precedence spelled at each of them
+ * is a precedence to keep in step.
  *
  * `approving` is how an `ask` reaches a person. It is handed in rather than
  * built here: the surface that holds a person and the rule language that
@@ -142,18 +144,17 @@ export const toolDeps = (
       decide: (decision) => void decisions.push(decision),
       otherwise: (decision) => void baselines.push(decision),
     })
-    if (failure !== undefined)
-      decisions.push({
-        kind: "reject_once",
-        reason: `the ${failure.hook} hook of ${failure.owner} failed`,
-      })
-
     /**
-     * A baseline is read only when nothing decided. So specific standing
-     * authority — a rule a person wrote — is never asked about again, and a
-     * mode that supervises still asks about everything no rule named.
+     * What the boundary settled, and why, is `settled`'s. This gathers the
+     * hooks and performs what one answer says; the precedence among a
+     * decision, a baseline and a hook that died belongs to one module every
+     * driver of this boundary reads.
      */
-    const decision = strictest(decisions) ?? strictest(baselines)
+    const decision = settled({
+      decisions,
+      baselines,
+      ...(failure === undefined ? {} : { failure }),
+    })
     return {
       args: args.read(),
       ...(decision === undefined ? {} : { decision }),
