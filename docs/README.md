@@ -31,6 +31,7 @@ Then, as you need them:
 | Type a command or a flag    | [reference/command-line.md](reference/command-line.md)       |
 | Build or test the repo      | [reference/toolchain.md](reference/toolchain.md)             |
 | Ship a release, install Eva | [reference/ci-cd.md](reference/ci-cd.md)                     |
+| Deploy a website            | [reference/hosting.md](reference/hosting.md)                 |
 | Know why something is so    | `adr/` — decision records, local to a checkout               |
 | Know what Eva is for        | [product.md](product.md)                                     |
 
@@ -50,7 +51,8 @@ docs/
     ├── writing-plugins.md the authoring walkthrough
     ├── command-line.md    every command and flag, and how they are parsed
     ├── toolchain.md       Vite+, Bun, TypeScript, CI, day-to-day commands
-    └── ci-cd.md           the workflow fleet, the release, every install channel
+    ├── ci-cd.md           the workflow fleet, the release, every install channel
+    └── hosting.md         the two websites, and how each one is deployed
 ```
 
 ## Conventions

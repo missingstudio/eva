@@ -31,6 +31,7 @@ docs/adr
 # Website build output
 apps/*/.output/
 apps/*/.tanstack/
+apps/*/.vercel/
 
 # Agent settings are per-person; the launch configurations are not
 .claude/settings.local.json

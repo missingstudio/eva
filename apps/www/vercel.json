@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "bun install --frozen-lockfile",
+  "buildCommand": "bun run build",
+  "outputDirectory": "dist/client",
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "cache-control", "value": "public, max-age=31536000, immutable" }]
+    }
+  ]
+}
