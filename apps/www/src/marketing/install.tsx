@@ -105,7 +105,7 @@ export function Install({ version }: { version: string }) {
               onClick={() => setActive(c.id)}
               // The selected channel is carried by an underline as well as by
               // colour, because colour alone fails SC 1.4.1.
-              className={`border-b-2 px-3 py-2 text-xs font-semibold tracking-[0.04em] uppercase ${
+              className={`border-b-2 px-3 py-2 text-[13px] tracking-label uppercase ${
                 selected ? "border-bone text-bone" : "text-mist hover:text-bone border-transparent"
               }`}
             >

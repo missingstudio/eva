@@ -23,7 +23,7 @@ export function SkipLink() {
   return (
     <a
       href="#main"
-      className="btn-ghost sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
+      className="btn-secondary sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
     >
       Skip to content
     </a>
@@ -229,8 +229,8 @@ export function Screenshot({ src }: { src: string }) {
         <img
           src={src}
           alt="Eva answering a question in the terminal"
-          width={2400}
-          height={1400}
+          width={1824}
+          height={1234}
           className="image-edge w-full rounded-lg"
         />
       </div>
@@ -273,7 +273,7 @@ export function Today() {
             className="card-hairline reveal group block p-6"
             style={step(index)}
           >
-            <h3 className="text-lg font-semibold tracking-tight">{row.title}</h3>
+            <h3 className="d-3">{row.title}</h3>
             <p className="text-muted-foreground mt-2 text-sm">{row.body}</p>
             <span className="text-muted-foreground group-hover:text-bone mt-4 inline-block text-xs">
               Read →

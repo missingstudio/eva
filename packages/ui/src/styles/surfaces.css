@@ -42,10 +42,6 @@
       border-color: var(--color-smoke);
     }
   }
-  .card-hairline:active {
-    transform: scale(0.98);
-  }
-
   /*
      The editorial card's category mark: a 2px solid ember left border running
      full height — the only colour in the card.
@@ -149,13 +145,20 @@
     }
   }
 
-  /* Physical feedback, and distinct from hover. */
-  .btn-primary:active,
-  .btn-secondary:active,
-  .btn-ghost:active,
-  .btn-header:active,
-  .btn-icon:active {
-    transform: scale(0.98);
+  /* Physical feedback, and distinct from hover. A press is a transform, so a
+     reader who asked for less motion gets the colour change alone. */
+  @media (prefers-reduced-motion: no-preference) {
+    .btn-primary:active,
+    .btn-secondary:active,
+    .btn-ghost:active,
+    .btn-header:active,
+    .btn-icon:active {
+      transform: scale(0.98);
+    }
+
+    .card-hairline:active {
+      transform: scale(0.98);
+    }
   }
 
   /*
@@ -197,6 +200,13 @@
   }
   .hamburger span:last-child {
     top: 0.6875rem;
+  }
+  /* The morph is the whole affordance, so it stays under reduced motion; only
+     the animation between the two states is dropped. */
+  @media (prefers-reduced-motion: reduce) {
+    .hamburger span {
+      transition: none;
+    }
   }
   [aria-expanded="true"] .hamburger span:first-child {
     transform: translateY(0.1875rem) rotate(45deg);

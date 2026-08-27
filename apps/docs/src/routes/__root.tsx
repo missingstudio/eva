@@ -47,7 +47,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         {/* The first focusable element on the page. */}
         <a
           href="#nd-page"
-          className="btn-ghost sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
+          className="btn-secondary sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
         >
           Skip to content
         </a>

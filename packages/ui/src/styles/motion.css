@@ -87,7 +87,7 @@
     @starting-style {
       .js .menu-item {
         opacity: 0;
-        transform: translateY(3rem);
+        transform: translateY(1.5rem);
       }
     }
   }

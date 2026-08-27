@@ -38,7 +38,7 @@ export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & 
 export const ReasoningTrigger = ({ className, children, ...props }: ReasoningTriggerProps) => (
   <CollapsibleTrigger
     className={cn(
-      "flex w-full items-center gap-2 text-muted-foreground text-xs uppercase tracking-[0.06em] transition-colors hover:text-bone",
+      "flex w-full items-center gap-2 text-muted-foreground text-[13px] uppercase tracking-label transition-colors hover:text-bone",
       className,
     )}
     {...props}
