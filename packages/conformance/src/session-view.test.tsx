@@ -280,9 +280,12 @@ describe("what the two renderings agree the Run did", () => {
    * fewer Blocks than the page. That is a renderer that renders less, and the
    * page is where the record stays whole.
    *
-   * The permission Block is the same case for a different reason: the four
-   * options are a choice a person moves through, so the terminal asks in its
-   * Overlay and draws no row in the scroll-back.
+   * The permission Block is a different case. The terminal draws no row for it
+   * and has no Overlay for it either — the Overlay's Intents are `command` and
+   * `pick`, and the roadmap puts the permission one at C1. What it does today
+   * is show the question as a Note and say `ASKING` on its status line, which
+   * is not a Block and not held against the page's card. So this clause records
+   * a shape one surface ignores, and not a second way of drawing it.
    */
   it("draws no row for the Blocks the terminal has none for, and the page draws them", () => {
     const undrawn = blocks.filter((block) => rowsFor(block) === "")

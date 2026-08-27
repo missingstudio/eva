@@ -67,8 +67,15 @@ export type Block =
    * A permission request nobody has answered. It is the one Block that is not
    * on the record, and it cannot be: a request a person has answered is the
    * Disposition of the call it gated, and one nobody has answered is a thing
-   * that is still happening. It is a Block anyway, so that both surfaces draw
-   * one question the same way and neither invents a shape of its own.
+   * that is still happening.
+   *
+   * **One surface draws it today: the page.** The terminal shows the question
+   * as a Note and says `ASKING` on its status line, because a `Frame` carries
+   * the record and a standing request is not on the record. The roadmap puts
+   * the terminal's permission Overlay at C1, and that is where the two start
+   * drawing one question the same way. Until then this is a shape one of the
+   * two ignores, which is a cost worth naming rather than a claim worth
+   * repeating.
    *
    * `request` is the id an answer names, which is the id of the tool call the
    * question is about — so the card the record drew for that call is the card
@@ -186,6 +193,17 @@ const blockOf = (key: string, block: TranscriptBlock): Block => {
  * a fold of its own — two folds would disagree, and a person comparing two
  * screens would find the disagreement.
  */
+/**
+ * How many hunks changed, in words. One is not "1 hunks", and a reader
+ * counting files does not want to read a number twice to find out.
+ *
+ * It is here because both surfaces say it. A renderer may not import another
+ * renderer and neither may import an app, so the two spelled it character for
+ * character and the terminal's copy carried a note calling the copy forced.
+ * The fold both of them already read is where it stops being forced.
+ */
+export const hunkText = (hunks: number): string => `${hunks} ${hunks === 1 ? "hunk" : "hunks"}`
+
 export const blockFold = (messages: readonly TranscriptMessage[]): readonly Turn[] =>
   messages.map((message, index) => ({
     key: `${index}`,

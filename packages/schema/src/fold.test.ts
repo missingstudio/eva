@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest"
 import { toTicks } from "./cost.js"
 import { foldKeys, type Event } from "./event.js"
 import { eventID, runID, sessionID } from "./id.js"
-import { answerFold, costFold, mergeText, transcriptFold, validityOf, verdictFold } from "./fold.js"
+import {
+  answerFold,
+  costFold,
+  mergeText,
+  spendText,
+  transcriptFold,
+  validityOf,
+  verdictFold,
+} from "./fold.js"
 import type { Payload, Verdict } from "./payload.js"
 import { samples } from "./samples.js"
 
@@ -474,5 +482,35 @@ describe("answerFold", () => {
       claim: { result: "failed", summary: "the workflow cannot run" },
       text: "",
     })
+  })
+})
+
+/**
+ * A Spend in words, wherever there is room for them. Two surfaces spelled
+ * this character for character and neither could import the other, so the
+ * rounding table lived beside one of them.
+ */
+describe("spendText", () => {
+  it.each([
+    [0, "$0.0000"],
+    [51_000_000, "$0.0051"],
+    [9_999_999_999, "$1.0000"],
+    [10_000_000_000, "$1.00"],
+    [51_000_000_000, "$5.10"],
+  ])("prints %i reported ticks as %s", (ticks, expected) => {
+    expect(spendText({ kind: "reported", ticks })).toBe(expected)
+  })
+
+  // An estimate wears `~` and the word, because a figure Eva worked out is
+  // never shown as one a Provider gave.
+  it("marks an estimate rather than showing it as a bill", () => {
+    expect(spendText({ kind: "estimated", ticks: 51_000_000 })).toBe("~$0.0051 est")
+  })
+
+  it.each([
+    [{ kind: "none" } as const, "nothing spent yet"],
+    [{ kind: "unreported" } as const, "cost unreported"],
+  ])("says %o in words", (spend, expected) => {
+    expect(spendText(spend)).toBe(expected)
   })
 })

@@ -947,6 +947,7 @@
         "@missingstudio/eva-core": "workspace:*",
         "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
+        "@missingstudio/eva-session-view": "workspace:*",
         "@missingstudio/eva-tui-core": "workspace:*",
         "effect": "catalog:",
       },

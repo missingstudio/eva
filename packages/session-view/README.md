@@ -103,8 +103,13 @@ would need a record change and a decision to go with it.
 
 The `permission` Block is the one Block that is not on the record, and it
 cannot be: a request a person has answered is the Disposition of the call it
-gated, and one nobody has answered is a thing that is still happening. It is a
-Block anyway, so both surfaces draw one question the same way. It carries no
+gated, and one nobody has answered is a thing that is still happening.
+
+One surface draws it today: the page. The terminal shows the question as a Note
+and says `ASKING` on its status line, because a `Frame` carries the record and a
+standing request is not on the record. The roadmap puts the terminal's
+permission Overlay at C1, and that is where the two start drawing one question
+the same way — this file used to say they already did. It carries no
 option list — the options are `PERMISSION_OPTIONS` in `packages/core`, the same
 four every time, and a Block that carried them would give a renderer two places
 to read the labels from.

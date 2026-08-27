@@ -1,4 +1,4 @@
-import { estimateTicks, type Counted, type PriceLookup } from "./cost.js"
+import { estimateTicks, toUsd, type Counted, type PriceLookup } from "./cost.js"
 import { sameFoldKeys, type Event } from "./event.js"
 import type { ActorKind } from "./id.js"
 import type { Claim, ContentBlock, Disposition, ToolKind, ToolStatus, Verdict } from "./payload.js"
@@ -106,6 +106,41 @@ export const spendIn = (ran: boolean, reported: number | null, estimated: number
 
 export const spendOf = (summary: CostSummary, ran: boolean): Spend =>
   spendIn(ran, summary.costTicks, summary.estimatedCostTicks)
+
+/**
+ * A figure in dollars. Under a dollar wants four places, because a Run that
+ * cost a third of a cent is the ordinary case and `$0.00` says nothing.
+ */
+const dollars = (ticks: number): string => {
+  const usd = toUsd(ticks)
+  return `$${usd >= 1 ? usd.toFixed(2) : usd.toFixed(4)}`
+}
+
+/**
+ * A Spend in words, wherever there is room for them.
+ *
+ * An estimate wears `~` and the word, because a figure Eva worked out is never
+ * shown as one a Provider gave: reading an estimate as a bill is the mistake
+ * the pair exists to prevent. A Session that has not run says so rather than
+ * printing a zero nobody reported.
+ *
+ * Two surfaces spelled this, character for character, and neither could import
+ * the other. A narrow bar phrases the same four values in fewer characters —
+ * `costText` in the renderer contract — and that is a second phrasing on
+ * purpose rather than a second rule.
+ */
+export const spendText = (spend: Spend): string => {
+  switch (spend.kind) {
+    case "none":
+      return "nothing spent yet"
+    case "reported":
+      return dollars(spend.ticks)
+    case "estimated":
+      return `~${dollars(spend.ticks)} est`
+    case "unreported":
+      return "cost unreported"
+  }
+}
 
 /**
  * The estimate, accumulated: what the counters come to at catalog rates.

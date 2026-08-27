@@ -17,6 +17,13 @@ export interface Frame {
    * The fold of the record, and nothing else. Nothing a surface says of its
    * own reaches here — a line the record cannot rebuild is not the record,
    * and a pipe that writes this writes what a Run actually said.
+   *
+   * It carries the record's Messages and not the Turns a fold answers with,
+   * because this contract imports schema alone — the layer rule in
+   * [vite.config.ts](../../../vite.config.ts) says so, and a fold that reached
+   * this far down would put the shape a renderer draws below the record it is
+   * drawn from. So the renderer folds, and `session-view` holds the phrasings
+   * a Block needs said.
    */
   readonly session: readonly TranscriptMessage[]
   /**
