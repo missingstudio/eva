@@ -80,7 +80,7 @@ same rule:
 | `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                                                                              |
 | `session-api.ts` | The whole of what a surface may do to Eva                                                                                                                |
 | `session.ts`     | `submit`, the one-Run mechanism                                                                                                                          |
-| `deciding.ts`    | The words a gate reasons in: `ToolCall`, `ToolDecision`, `strictest`, the four options, `editOf`                                                         |
+| `deciding.ts`    | The words a gate reasons in: `ToolCall`, `ToolDecision`, `strictest`, `settled`, the four options, `editOf`                                              |
 | `invocation.ts`  | What a call would run, in the one reading every gate takes: `Invocation`, `argvOf`, `invocationsIn`, `grantableWords`                                    |
 | `tool.ts`        | One tool call and one group of them: the execution and the schedule                                                                                      |
 | `sink.ts`        | `sinkOf`, the one store-to-sink entry, over the `sequenced` and `numbered` seams                                                                         |

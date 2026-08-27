@@ -203,39 +203,13 @@ describe("tool.execute.before", () => {
     expect(seen).toEqual([])
   })
 
-  // Many plugins register the same hook and the strictest decision wins, so
-  // the deterministic gate and the mode cannot be widened by load order.
-  it("takes the strictest decision two plugins made", async () => {
-    const allow = define({
-      id: "acme.allow",
-      effect: Effect.fn("acme.allow")(function* (ctx) {
-        yield* ctx.toolHooks["tool.execute.before"]((event) => {
-          event.decide({ kind: "allow_always" })
-        })
-      }),
-    })
-    const deny = define({
-      id: "acme.deny",
-      effect: Effect.fn("acme.deny")(function* (ctx) {
-        yield* ctx.toolHooks["tool.execute.before"]((event) => {
-          event.decide({ kind: "reject_always", reason: "a mandate" })
-        })
-      }),
-    })
-
-    const ran = await calling([registering(reading("hello")), allow, deny])
-
-    expect(ran.disposition).toBe("denied")
-    expect(ran.text).toBe("a mandate")
-  })
-
   /**
-   * A baseline is what happens when nothing decided. It is what a permission
-   * mode supervises with: a rule a person already wrote is standing authority
-   * and must not be asked about again, and reading that off another plugin's
-   * decision would make this boundary order-dependent.
+   * The wiring, and only the wiring: both halves of the boundary reach the
+   * settlement from real plugins, and what it answered is what the call did.
+   * The precedence among a decision, a baseline and a hook that died is
+   * `settled`'s, and its table is in `@missingstudio/eva-core`.
    */
-  it("reads a baseline only when nothing decided", async () => {
+  it("carries a decision and a baseline from two plugins to the settlement", async () => {
     const supervising = define({
       id: "acme.mode",
       effect: Effect.fn("acme.mode")(function* (ctx) {
@@ -252,46 +226,28 @@ describe("tool.execute.before", () => {
         })
       }),
     })
-
-    const asked = await calling([registering(reading("hello")), supervising])
-    expect(asked.disposition).toBe("denied")
-    expect(asked.text).toBe("nobody answered: may it?")
-
-    // Either order, because a baseline is not a decision and so cannot win a
-    // tie with one.
-    for (const order of [
-      [allow, supervising],
-      [supervising, allow],
-    ]) {
-      const ran = await calling([registering(reading("hello")), ...order])
-      expect(ran.disposition).toBe("ok")
-    }
-  })
-
-  // A mandate is a decision, so it still outranks an allow that would widen it.
-  it("keeps a decision above every baseline", async () => {
-    const mode = define({
-      id: "acme.mode",
-      effect: Effect.fn("acme.mode")(function* (ctx) {
+    const deny = define({
+      id: "acme.deny",
+      effect: Effect.fn("acme.deny")(function* (ctx) {
         yield* ctx.toolHooks["tool.execute.before"]((event) => {
           event.decide({ kind: "reject_always", reason: "a mandate" })
         })
       }),
     })
-    const allow = define({
-      id: "acme.rule",
-      effect: Effect.fn("acme.rule")(function* (ctx) {
-        yield* ctx.toolHooks["tool.execute.before"]((event) => {
-          event.decide({ kind: "allow_always" })
-          event.otherwise({ kind: "allow_always" })
-        })
-      }),
-    })
 
-    const ran = await calling([registering(reading("hello")), allow, mode])
+    // A baseline nothing decided against is what the call answers to.
+    const asked = await calling([registering(reading("hello")), supervising])
+    expect(asked.disposition).toBe("denied")
+    expect(asked.text).toBe("nobody could be asked: may it?")
 
+    // A decision outranks every baseline, and the strictest decision wins.
+    const ran = await calling([registering(reading("hello")), supervising, allow, deny])
     expect(ran.disposition).toBe("denied")
     expect(ran.text).toBe("a mandate")
+
+    // With nothing to deny it, the rule's own decision runs the call.
+    const went = await calling([registering(reading("hello")), supervising, allow])
+    expect(went.disposition).toBe("ok")
   })
 
   it("hands the tool the arguments a hook left", async () => {

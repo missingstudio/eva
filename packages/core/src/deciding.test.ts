@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   editOf,
+  settled,
   looksOnly,
   optionFor,
   PERMISSION_OPTIONS,
@@ -80,6 +81,67 @@ describe("a tool kind that only looks", () => {
 
   it.each(["edit", "execute", "other"] as const)("says %s may change something", (kind) => {
     expect(looksOnly(kind)).toBe(false)
+  })
+})
+
+/**
+ * What one deciding boundary settled. Every clause here once cost a booted
+ * kernel and a hook plugin per case; the precedence is data in and data out,
+ * so it is a table.
+ */
+describe("what a deciding boundary settled", () => {
+  const deny = { kind: "reject_always", reason: "a mandate" } as const
+  const ask = { kind: "ask", question: "may it?" } as const
+  const allow = { kind: "allow_once" } as const
+  const failure = { hook: "tool.execute.before", owner: "acme.broken" }
+
+  it("settles nothing when no hook decided, so the call runs", () => {
+    expect(settled({ decisions: [], baselines: [] })).toBeUndefined()
+  })
+
+  it("takes the strictest of the decisions", () => {
+    expect(settled({ decisions: [{ kind: "allow_always" }, deny], baselines: [] })).toEqual(deny)
+  })
+
+  // A rule a person wrote is standing authority, so a mode that supervises
+  // does not ask about it again.
+  it("reads a baseline only when nothing decided", () => {
+    expect(settled({ decisions: [allow], baselines: [ask] })).toEqual(allow)
+    expect(settled({ decisions: [], baselines: [ask] })).toEqual(ask)
+  })
+
+  it("takes the strictest of the baselines among themselves", () => {
+    expect(settled({ decisions: [], baselines: [allow, ask] })).toEqual(ask)
+  })
+
+  // A gate that fails open because a plugin threw is not a gate.
+  it("denies when a hook died", () => {
+    expect(settled({ decisions: [], baselines: [], failure })).toEqual({
+      kind: "reject_once",
+      reason: "the tool.execute.before hook of acme.broken failed",
+    })
+  })
+
+  /**
+   * The failure joins the decisions rather than replacing them, so a hook
+   * that decided before the one that died still carries its own reason — and
+   * a hook that died can never widen what an earlier one settled.
+   */
+  it("keeps a stricter decision an earlier hook made", () => {
+    expect(settled({ decisions: [deny], baselines: [], failure })).toEqual(deny)
+    expect(settled({ decisions: [allow], baselines: [], failure })).toEqual({
+      kind: "reject_once",
+      reason: "the tool.execute.before hook of acme.broken failed",
+    })
+  })
+
+  // A hook that died outranks every baseline, because a baseline is only read
+  // when nothing decided and a death decides.
+  it("keeps a hook that died above a baseline", () => {
+    expect(settled({ decisions: [], baselines: [{ kind: "allow_always" }], failure })).toEqual({
+      kind: "reject_once",
+      reason: "the tool.execute.before hook of acme.broken failed",
+    })
   })
 })
 

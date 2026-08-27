@@ -86,6 +86,61 @@ export const strictest = (decisions: readonly ToolDecision[]): ToolDecision | un
   )
 
 /**
+ * What the hooks at a deciding boundary left: what they decided, what they
+ * stated as a baseline, and the hook that died if one did.
+ */
+export interface Settling {
+  readonly decisions: readonly ToolDecision[]
+  readonly baselines: readonly ToolDecision[]
+  // A hook that dies at a deciding boundary is a denial, because a gate that
+  // fails open because a plugin threw is not a gate.
+  readonly failure?: { readonly hook: string; readonly owner: string }
+}
+
+/**
+ * What one deciding boundary settled, or nothing when it settled nothing and
+ * the call runs.
+ *
+ * The whole precedence is here rather than at the caller that gathers the
+ * hooks. Every driver of the boundary settles the same way — the Session API
+ * today, and the Agent Client Protocol client half later — and a precedence
+ * spelled at each of them is a precedence to keep in step.
+ *
+ * A hook that died joins the decisions rather than replacing them, so a
+ * stricter decision an earlier hook made still carries its own reason. A
+ * baseline is read only when nothing decided at all: specific standing
+ * authority — a rule a person wrote — is never asked about again, and a mode
+ * that supervises still asks about everything no rule named.
+ */
+export const settled = ({ decisions, baselines, failure }: Settling): ToolDecision | undefined => {
+  const decided =
+    failure === undefined
+      ? decisions
+      : [
+          ...decisions,
+          {
+            kind: "reject_once",
+            reason: `the ${failure.hook} hook of ${failure.owner} failed`,
+          } as const,
+        ]
+  return strictest(decided) ?? strictest(baselines)
+}
+
+/**
+ * The two ways an `ask` ends with no answer, said in one place because they
+ * are two different facts that once shared a sentence.
+ *
+ * `unaskable` is a build with nothing that can reach a person: the `ask`
+ * arrives at the tool still an `ask`, and a permission request with nobody to
+ * answer it is a denial. `unanswered` is a person who was asked and named none
+ * of the four options — they cancelled, or they typed something else. Both
+ * deny the call, and a Trace says which happened.
+ */
+export const unaskable = (question: string): string => `nobody could be asked: ${question}`
+
+export const unanswered = (question: string): string => `nobody answered: ${question}`
+
+/**
  * The options a person is offered, and the only ones. ACP carries an option
  * list per request because a foreign agent may offer a subset; Eva's gate
  * offers all four of them every time, so the list is a constant here rather

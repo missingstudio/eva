@@ -1,5 +1,6 @@
 import {
   optionFor,
+  unanswered,
   type Approving,
   type FrontendAnswer,
   type RequestID,
@@ -128,7 +129,7 @@ const outcomeOf = (answer: FrontendAnswer, question: string) => {
     case "reject_always":
       return { kind, reason: `a person refused: ${question}` } as const
     case undefined:
-      return { kind: "reject_once", reason: `nobody answered: ${question}` } as const
+      return { kind: "reject_once", reason: unanswered(question) } as const
   }
 }
 

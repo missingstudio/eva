@@ -76,7 +76,9 @@ Hook that dies at a **deciding** boundary is a denial, because a gate that
 fails open when a plugin throws is not a gate; one that dies at an
 **observing** boundary is reported through `plugin.failed` and the Run goes on.
 The boundary declares which it is, because only the caller of the Hooks knows
-what they decide.
+what they decide. What a deciding boundary settled — the strictest decision,
+the baseline nothing decided against, the Hook that died — is one rule in one
+place, so every driver of a boundary settles it the same way.
 _Avoid_: Hook kind, hook type, deciding hook (a boundary decides, not a Hook)
 
 **Broadcast**:

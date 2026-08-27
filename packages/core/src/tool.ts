@@ -8,6 +8,7 @@ import type {
 import { Effect } from "effect"
 import {
   PERMISSION_OPTIONS,
+  unaskable,
   type Approving,
   type Decided,
   type ToolCall,
@@ -91,7 +92,8 @@ const denial = (decision: ToolDecision | undefined): string | undefined => {
     case "allow_always":
       return undefined
     case "ask":
-      return `nobody answered: ${decision.question}`
+      // Still an `ask` at the tool means no adapter could reach a person.
+      return unaskable(decision.question)
     case "reject_once":
     case "reject_always":
       return decision.reason

@@ -352,7 +352,7 @@ describe("a supervised call with nobody to answer it", () => {
           const result = yield* found.call("edit", EDIT)
 
           expect(result.disposition).toBe("denied")
-          expect(textOf(result)).toBe(`nobody answered: ${ASKED}`)
+          expect(textOf(result)).toBe(`nobody could be asked: ${ASKED}`)
           expect(found.held()["one.md"]).toBe("before\n")
           expect(
             payloadsOf(yield* found.record).find((one) => one.kind === "tool_result"),
