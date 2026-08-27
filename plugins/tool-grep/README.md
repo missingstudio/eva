@@ -80,9 +80,9 @@ fewer files than every file:
 
 - `toolGrep` — the plugin definition, id `eva.tool.grep`. It registers the
   `grep` row in the `tool` domain.
-- `grepTool(deps: GrepDeps): ToolInfo` — the row, for a suite that wants the
-  tool without a kernel. `GrepDeps` is the _read_ of the `FileSystem` slot,
-  never a `FileSystem`.
+- `grepTool(deps: FileDeps): ToolInfo` — the row, for a suite that wants the
+  tool without a kernel. `FileDeps` is the sdk's shape for the _read_ of the
+  `FileSystem` slot, never a `FileSystem`.
 
 ## Development
 

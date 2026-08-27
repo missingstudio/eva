@@ -75,9 +75,9 @@ The model calls it `glob` and hands it one field:
 
 - `toolGlob` — the plugin definition, id `eva.tool.glob`. It registers the
   `glob` row in the `tool` domain.
-- `globTool(deps: GlobDeps): ToolInfo` — the row, for a suite that wants the
-  tool without a kernel. `GlobDeps` is the _read_ of the `FileSystem` slot,
-  never a `FileSystem`.
+- `globTool(deps: FileDeps): ToolInfo` — the row, for a suite that wants the
+  tool without a kernel. `FileDeps` is the sdk's shape for the _read_ of the
+  `FileSystem` slot, never a `FileSystem`.
 
 ## Development
 

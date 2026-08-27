@@ -77,9 +77,9 @@ The model calls it `read` and hands it one field:
 
 - `toolRead` — the plugin definition, id `eva.tool.read`. It registers the
   `read` row in the `tool` domain.
-- `readTool(deps: ReadDeps): ToolInfo` — the row, for a suite that wants the
-  tool without a kernel. `ReadDeps` is the _read_ of the `FileSystem` slot,
-  never a `FileSystem`.
+- `readTool(deps: FileDeps): ToolInfo` — the row, for a suite that wants the
+  tool without a kernel. `FileDeps` is the sdk's shape for the _read_ of the
+  `FileSystem` slot, never a `FileSystem`.
 
 ## Development
 
