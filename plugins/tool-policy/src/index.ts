@@ -43,19 +43,13 @@ export const toolPolicy = define({
     }
 
     /**
-     * The row is read at the moment of use, never captured, so a rebuilt tool
-     * domain is judged on the next call. What a call may change is the row's
-     * `kind`, and a name with no row is judged as a kind nothing reads — the
-     * execution refuses that call anyway, and failing closed is what a gate
-     * does.
+     * The kind is the boundary's: the execution resolved this call's row and
+     * the event carries what it is, so the gate judges the row that will run
+     * and reads the domain no second time.
      */
-    yield* ctx.toolHooks["tool.execute.before"]((event) =>
-      Effect.gen(function* () {
-        const rows = yield* ctx.tool.get
-        const kind = rows.find((row) => row.id === event.name)?.kind ?? "other"
-        const decision = judge(set.rules, { kind, args: event.args.get() })
-        if (decision !== undefined) event.decide(decision)
-      }),
-    )
+    yield* ctx.toolHooks["tool.execute.before"]((event) => {
+      const decision = judge(set.rules, { kind: event.kind, args: event.args.get() })
+      if (decision !== undefined) event.decide(decision)
+    })
   }),
 })

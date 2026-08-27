@@ -9,7 +9,7 @@ import type {
   ToolInfo,
   ToolResult,
 } from "@missingstudio/eva-core"
-import type { Payload, SessionID } from "@missingstudio/eva-schema"
+import type { Payload, SessionID, ToolKind } from "@missingstudio/eva-schema"
 
 // A hook changes an operation through purpose-built methods, never a field.
 export interface ModelResolve {
@@ -75,6 +75,14 @@ export interface ToolResolve {
 
 export interface ToolExecuteBefore {
   readonly name: string
+  /**
+   * What the named tool is. The caller of this boundary resolved the row this
+   * call runs — the boundary stands in front of a tool that exists, so a name
+   * nothing answers never reaches it — and every gate here judges that row's
+   * kind rather than reading the domain a second time. One read, so two gates
+   * cannot disagree about what a call is.
+   */
+  readonly kind: ToolKind
   readonly session: SessionID
   readonly args: {
     get(): unknown
