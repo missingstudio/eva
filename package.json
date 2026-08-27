@@ -12,6 +12,7 @@
       "@cloudflare/vite-plugin": "1.52.0",
       "@tanstack/react-router": "1.170.27",
       "@tanstack/react-start": "1.168.44",
+      "@tanstack/start-static-server-functions": "1.167.27",
       "@types/mdx": "2.0.14",
       "@types/node": "22.20.1",
       "@types/react": "19.2.18",

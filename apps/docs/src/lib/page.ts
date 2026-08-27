@@ -1,6 +1,7 @@
 import { entity, ogSiteName, origin, titleTemplate } from "@missingstudio/machine"
 import { notFound } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
+import { staticFunctionMiddleware } from "@tanstack/start-static-server-functions"
 import { glossaryTerms } from "./glossary.js"
 import { modifiedOn } from "./modified.js"
 import { asksQuestions, questionsIn } from "./questions.js"
@@ -27,7 +28,17 @@ const trailOf = (url: string, title: string) => {
   return trail
 }
 
+/**
+ * What a page is, read once at build time.
+ *
+ * The middleware makes this a static function: the prerender runs it for every
+ * page and writes the answer beside the markup, and a click in the browser
+ * reads that file. Without it the browser calls the function over the network,
+ * and this site deploys no server to answer, so every click failed while a
+ * reload of the same URL worked.
+ */
 export const loadPage = createServerFn({ method: "GET" })
+  .middleware([staticFunctionMiddleware])
   .validator((slugs: string[]) => slugs)
   .handler(async ({ data: slugs }) => {
     const page = source.getPage(slugs)

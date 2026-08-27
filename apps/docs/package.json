@@ -14,6 +14,7 @@
     "@missingstudio/ui": "workspace:*",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",
+    "@tanstack/start-static-server-functions": "catalog:",
     "dedent": "^1.7.2",
     "fumadocs-core": "16.14.3",
     "fumadocs-mdx": "15.2.3",
