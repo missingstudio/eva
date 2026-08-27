@@ -2,6 +2,23 @@
   "name": "@missingstudio/eva-sdk",
   "version": "0.0.0",
   "private": true,
+  "description": "The programmatic surface for Eva, an open-source autonomous software factory.",
+  "keywords": [
+    "agent",
+    "ai",
+    "coding-agent",
+    "eva",
+    "sdk"
+  ],
+  "homepage": "https://evafactory.co",
+  "bugs": {
+    "url": "https://github.com/missingstudio/eva/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/missingstudio/eva.git"
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

@@ -2,6 +2,27 @@
   "name": "@missingstudio/eva",
   "version": "0.2.0",
   "private": true,
+  "description": "An open-source, autonomous software factory. Runs coding work end to end from the command line.",
+  "keywords": [
+    "agent",
+    "ai",
+    "anthropic",
+    "cli",
+    "coding-agent",
+    "developer-tools",
+    "llm",
+    "openai",
+    "software-factory"
+  ],
+  "homepage": "https://evafactory.co",
+  "bugs": {
+    "url": "https://github.com/missingstudio/eva/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/missingstudio/eva.git"
+  },
   "bin": {
     "eva": "./bin/eva.mjs"
   },
