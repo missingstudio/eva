@@ -1,4 +1,5 @@
 import type { ToolInfo } from "@missingstudio/eva-core"
+import { takes } from "@missingstudio/eva-sdk"
 import { runCommand, type CommandDeps } from "./command.js"
 
 const DESCRIPTION = [
@@ -10,28 +11,28 @@ const DESCRIPTION = [
   "failure: read the exit code and carry on.",
 ].join(" ")
 
-// What the model is told it may send, which is the shape `readInput` reads.
-const INPUT = {
-  type: "object",
-  properties: {
-    command: {
-      type: "array",
-      minItems: 1,
-      items: { type: "string" },
-      description: "The program and its arguments, already split into words.",
-    },
-    cwd: {
-      type: "string",
-      description: "The directory to run in. It defaults to where Eva runs.",
-    },
-    timeout: {
-      type: "number",
-      description: "Seconds the command may run. It may only shorten the limit this Eva allows.",
-    },
+/**
+ * What the model is told it may send. Only the schema half is taken from the
+ * declaration: `readInput` keeps its own reading because it does more than
+ * read a shape — a timeout that is not a positive finite number is dropped
+ * rather than refused, so a model that wrote one still runs its command.
+ */
+const TAKES = takes({
+  command: {
+    shape: "words",
+    description: "The program and its arguments, already split into words.",
   },
-  required: ["command"],
-  additionalProperties: false,
-}
+  cwd: {
+    shape: "string",
+    optional: true,
+    description: "The directory to run in. It defaults to where Eva runs.",
+  },
+  timeout: {
+    shape: "number",
+    optional: true,
+    description: "Seconds the command may run. It may only shorten the limit this Eva allows.",
+  },
+})
 
 /**
  * The name a model calls, against the plugin id `eva.tool.bash`.
@@ -44,7 +45,7 @@ export const commandTool = (deps: CommandDeps): ToolInfo => ({
   id: "bash",
   description: DESCRIPTION,
   kind: "execute",
-  input: INPUT,
+  input: TAKES.schema,
   execute: (input, context) =>
     runCommand(deps, { id: context.id, args: input, emit: context.emit }),
 })

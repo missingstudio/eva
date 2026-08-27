@@ -1,4 +1,5 @@
 import { toolText, type ToolInfo } from "@missingstudio/eva-core"
+import { takes } from "@missingstudio/eva-sdk"
 import { Data, Effect } from "effect"
 
 // Nothing answered the address. What a server answers is a `Fetched`, however
@@ -23,26 +24,21 @@ export interface WebDeps {
   readonly get: Reading
 }
 
-const INPUT = {
-  type: "object",
-  properties: {
-    url: {
-      type: "string",
-      description: "An http or https address to read.",
-    },
-  },
-  required: ["url"],
-  additionalProperties: false,
-}
+const TAKES = takes({
+  url: { shape: "string", description: "An http or https address to read." },
+})
 
-// The address, or nothing when it is not one this tool reads. A scheme other
-// than http and https is refused here: `file:` and `data:` reach past the
-// workspace, and this tool is the one that leaves the machine.
+/**
+ * The address, or nothing when it is not one this tool reads. The declaration
+ * answers that the argument is a string; what it cannot answer is the scheme,
+ * so that stays here — `file:` and `data:` reach past the workspace, and this
+ * tool is the one that leaves the machine.
+ */
 const addressOf = (input: unknown): string | undefined => {
-  const asked = (input as { url?: unknown } | undefined)?.url
-  if (typeof asked !== "string" || !URL.canParse(asked)) return undefined
-  const parsed = new URL(asked)
-  return parsed.protocol === "http:" || parsed.protocol === "https:" ? asked : undefined
+  const found = TAKES.of("web", input)
+  if (found.kind === "refused" || !URL.canParse(found.args.url)) return undefined
+  const parsed = new URL(found.args.url)
+  return parsed.protocol === "http:" || parsed.protocol === "https:" ? found.args.url : undefined
 }
 
 /**
@@ -54,7 +50,7 @@ export const webTool = (deps: WebDeps): ToolInfo => ({
   id: "web",
   kind: "fetch",
   description: "Read an http or https address and answer what it holds.",
-  input: INPUT,
+  input: TAKES.schema,
   // Reading an address changes nothing here, so two reads may run at once.
   parallelSafe: () => true,
   execute: (input) =>

@@ -1,21 +1,27 @@
 import { editOf, toolText, type ToolInfo, type ToolResult } from "@missingstudio/eva-core"
 import type { ToolKind } from "@missingstudio/eva-schema"
-import type { PluginContext } from "@missingstudio/eva-sdk"
+import { takes, type PluginContext } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { makeEditTool, type EditOutcome, type EditTool } from "./tool.js"
 
-// What the model is told it may send.
-export const EDIT_TOOL_INPUT = {
-  type: "object",
-  properties: {
-    path: {
-      type: "string",
-      description: "The file to edit. It is relative to the workspace root, and it must exist.",
-    },
-    hunks: {
+/**
+ * What the model is told it may send. Only the schema half is taken from the
+ * declaration: an Edit is read by `editOf` in
+ * [`@missingstudio/eva-core`](../../../packages/core/README.md), because the
+ * approval gate previews the same Edit this tool applies and two readers of
+ * one argument would be two answers to keep in step.
+ */
+export const EDIT_TOOL_INPUT = takes({
+  path: {
+    shape: "string",
+    description: "The file to edit. It is relative to the workspace root, and it must exist.",
+  },
+  hunks: {
+    shape: "shaped",
+    description: "The replacements to land, in order.",
+    schema: {
       type: "array",
       minItems: 1,
-      description: "The replacements to land, in order.",
       items: {
         type: "object",
         properties: {
@@ -28,13 +34,13 @@ export const EDIT_TOOL_INPUT = {
         required: ["find", "replace"],
       },
     },
-    dryRun: {
-      type: "boolean",
-      description: "Answer what the edit would write, and write nothing.",
-    },
   },
-  required: ["path", "hunks"],
-}
+  dryRun: {
+    shape: "boolean",
+    optional: true,
+    description: "Answer what the edit would write, and write nothing.",
+  },
+}).schema
 
 /**
  * The outcome, as the result the model reads. Every ending is a result, so a

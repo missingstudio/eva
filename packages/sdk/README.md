@@ -126,6 +126,13 @@ rather than coercing one written in another shape — `"8"` is not a number.
 - `offering(id, row)` — a plugin whose whole effect is offering one row to the
   tool domain. The id stays the plugin's own; a plugin that also registers a
   Command or reads options writes its own effect.
+- `takes(args)` — a tool-argument declaration: `schema` is what the model is
+  shown, `of(id, input)` reads every argument or answers the refusal a call
+  gets when one the tool requires is absent or was written in another shape.
+  One statement for both audiences, as `declare` is for config keys. It does
+  not say which argument names a file: the deterministic gate reads a call's
+  `path` and is handed the arguments rather than the row, so that link is
+  still to be made.
 - `nativeHarness(host, spec)` — the body every native Harness shares: the
   session mint, the fiber map, the interrupt classification, the refusal
   group, and the no-wire answers. A plugin states its `id`, what one Prompt
@@ -134,7 +141,7 @@ rather than coercing one written in another shape — `"8"` is not a number.
   and history shapes it shares with them.
 - Types: `Plugin`, `PluginContext`, `Slots`, `RowInfos`, `Domains`,
   `ProviderHookSpec`, `BroadcastMap`, `Frontend`, `FileDeps`, `NativeSpec`,
-  `Prompting`, `Steer`.
+  `Prompting`, `Steer`, `Argument`, `Arguments`, `Taken`.
 
 ## Development
 
