@@ -2,7 +2,17 @@ import { declare, define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { NAMESPACE, REPORTS_COST, makeAnthropicProvider } from "./provider.js"
 
-export * from "./provider.js"
+/**
+ * The constructor and the plugin, and not the dialect.
+ *
+ * `classify`, `toStopReason`, `offering`, `proposedIn` and the rest are how
+ * this wire's events become Eva's payloads. They are internal seams with their
+ * own suite, and publishing them made this package's interface as wide as its
+ * implementation — a reader could not tell the contract from the vocabulary.
+ * Every rule this Provider shares with the others is held to one contract in
+ * `packages/conformance`, driven through `turn`.
+ */
+export { makeAnthropicProvider, NAMESPACE, type AnthropicOptions } from "./provider.js"
 
 // Zero leaves the provider's own ceiling in place.
 const OPTIONS = declare({ maxTokens: "number" })

@@ -282,6 +282,19 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
     })
   }
 
+  /**
+   * A Run that offered tools to a Provider carrying none is incomplete work,
+   * and it says so on the record. Without this the Turn proposes no calls,
+   * which is exactly what a model that wanted none answers — so a Harness read
+   * the silence as the answer and ended its Prompt at the first Step with
+   * nothing to say why.
+   */
+  if ((input.tools?.length ?? 0) > 0 && !resolution.provider.carriesTools) {
+    degraded.push("tools")
+    yield* report({ kind: "degraded", missing: ["tools"] })
+    yield* flush()
+  }
+
   const requested: ProviderRequest = {
     model: resolution.model,
     messages: input.history,

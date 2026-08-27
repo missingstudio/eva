@@ -168,6 +168,7 @@ describe("cancelling mid-stream", () => {
       providing({
         id: "eva.provider.hanging",
         available: () => true,
+        carriesTools: true,
         turn: () =>
           providerTurn(
             Stream.fromIterable([text("par"), text("tial")]).pipe(

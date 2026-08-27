@@ -146,6 +146,7 @@ const provider = (
   streamingProvider<string>({
     id: "eva.provider.example",
     available: () => true,
+    carriesTools: true,
     clientFor: clientFor ?? (() => Effect.succeed("client")),
     classify: () => "rate_limit",
     start: (_client, _request, emit) => {
@@ -227,6 +228,7 @@ describe("streamingProvider", () => {
     const turn = streamingProvider<string>({
       id: "eva.provider.example",
       available: () => false,
+      carriesTools: true,
       clientFor: () => Effect.fail(missingCredential("eva.provider.example", "example")),
       classify: () => "other",
       start: () => {

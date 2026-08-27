@@ -117,6 +117,9 @@ export interface TurnEmitter {
 export interface StreamingSpec<C> {
   readonly id: string
   readonly available: () => boolean
+  // Whether `start` puts the request's tools on the wire. A dialect that does
+  // not read `request.tools` says `false`, and a Run that offered some says so.
+  readonly carriesTools: boolean
   /**
    * The client, per attempt and never captured: a session outlives a
    * credential, so a client built once would send a stale secret for the
@@ -139,6 +142,7 @@ export interface StreamingSpec<C> {
 export const streamingProvider = <C>(spec: StreamingSpec<C>): Provider => ({
   id: spec.id,
   available: spec.available,
+  carriesTools: spec.carriesTools,
 
   turn: (request: ProviderRequest) => {
     // Set when the stream settles. Both are read after the drain; an early

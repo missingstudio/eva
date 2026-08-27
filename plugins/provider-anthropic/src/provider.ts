@@ -87,6 +87,9 @@ export const makeAnthropicProvider = (options: AnthropicOptions): Provider =>
   streamingProvider<Anthropic>({
     id: PROVIDER_ID,
     available: () => options.client !== undefined || options.credential !== undefined,
+    // `start` puts `request.tools` on the wire, so a Run's tools reach the
+    // model.
+    carriesTools: true,
     classify,
 
     clientFor: Effect.fn("eva.provider.anthropic.client")(function* () {

@@ -90,13 +90,17 @@ the estimate belongs to the catalog's prices, not here.
 - `makeAnthropicProvider(options: AnthropicOptions): Provider` — builds the
   provider directly. Options: `credential`, `maxTokens`, and an injectable
   `client` for tests.
-- `PROVIDER_ID`, `NAMESPACE` — `"eva.provider.anthropic"` and `"anthropic"`.
-  The first names the plugin in a `ProviderError`; the second appears in a
-  model reference, the `usage.model` prefix, and as the credential id.
-- `classify(cause): ErrorClass` — maps an SDK failure to one error class.
-- `toStopReason(reason)` — maps Anthropic's stop reason to Eva's.
-- `toMessages(history)` — folds transcript messages into API messages.
-- `REPORTS_COST` — `false`: Anthropic reports counters, never a request cost.
+- `NAMESPACE` — `"anthropic"`: what appears in a model reference, in the
+  `usage.model` prefix, and as the credential id.
+
+The dialect is not published. `classify`, `toStopReason`, `toMessages`,
+`offering`, `proposedIn`, `PROVIDER_ID` and `REPORTS_COST` are how this wire's
+events become Eva's payloads: internal seams with their own suite in
+[src/provider.test.ts](src/provider.test.ts). Publishing them made this
+package's interface as wide as its implementation, and a reader could not tell
+the contract from the vocabulary. What every Provider shares is held to one
+contract in [packages/conformance](../../packages/conformance/README.md),
+driven through `turn`.
 
 ## Development
 

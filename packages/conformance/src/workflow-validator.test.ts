@@ -201,6 +201,7 @@ describe("a refused Candidate over a live kernel", () => {
       const provider: Provider = {
         id: "eva.provider.fake",
         available: () => true,
+        carriesTools: true,
         turn: (request) => {
           seen.push(request)
           const gone = seen.length === 2
@@ -241,6 +242,7 @@ describe("a cancelled Workflow", () => {
           providing({
             id: "eva.provider.fake",
             available: () => true,
+            carriesTools: true,
             turn: () => providerTurn(Stream.never),
           }),
         )

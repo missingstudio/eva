@@ -202,6 +202,7 @@ describe("watch", () => {
 const parked = (reached: Deferred.Deferred<void>, release: Deferred.Deferred<void>): Provider => ({
   id: FAKE_PROVIDER,
   available: () => true,
+  carriesTools: true,
   turn: () =>
     providerTurn(
       Stream.concat(

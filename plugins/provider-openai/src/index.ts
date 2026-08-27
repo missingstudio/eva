@@ -2,7 +2,10 @@ import { declare, define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { NAMESPACE, makeOpenAIProvider } from "./provider.js"
 
-export * from "./provider.js"
+// The constructor and the plugin, and not the dialect: that is an internal
+// seam with its own suite, and every rule this Provider shares with the others
+// is held to one contract in `packages/conformance`, driven through `turn`.
+export { makeOpenAIProvider, NAMESPACE, type OpenAIOptions } from "./provider.js"
 
 // Zero leaves the provider's own ceiling in place.
 const OPTIONS = declare({ maxTokens: "number" })

@@ -57,6 +57,7 @@ const provider = (turns: readonly Stream.Stream<Payload, ProviderError>[]): Prov
   return {
     id: "eva.provider.fake",
     available: () => true,
+    carriesTools: true,
     turn: () => providerTurn(turns[Math.min(index++, turns.length - 1)] ?? Stream.empty),
   }
 }
@@ -78,6 +79,7 @@ describe("provider.request.before", () => {
     const one: Provider = {
       id: "eva.provider.fake",
       available: () => true,
+      carriesTools: true,
       turn: (request) => {
         seen.push(request)
         return providerTurn(Stream.fromIterable([text("hi")]))

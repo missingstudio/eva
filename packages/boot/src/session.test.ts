@@ -60,6 +60,7 @@ const fakeRecorder = (): FakeRecorder => {
 const countingProvider = (calls: { count: number }, said = "answered"): Provider => ({
   id: "eva.provider.counting",
   available: () => true,
+  carriesTools: true,
   turn: () => {
     calls.count += 1
     return providerTurn(Stream.fromIterable([text(said)]), "end_turn")
