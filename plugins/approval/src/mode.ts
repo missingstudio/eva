@@ -18,7 +18,7 @@ export interface ModeInfo {
   readonly id: Mode
   // What the mode tells the model it is there to do.
   readonly prompt: string
-  // Which kinds are in the registry this mode builds.
+  // Which kinds are in the domain this mode builds.
   readonly reach: "everything" | "looking"
   // What the mode decides about a call that may change something.
   readonly changing: "refuse" | "ask" | "allow"
@@ -61,7 +61,7 @@ export const modeInfo = (id: string): ModeInfo | undefined => MODES.find((one) =
 
 export const isMode = (id: string): id is Mode => modeInfo(id) !== undefined
 
-// Whether a registry built to this reach holds a tool of this kind.
+// Whether a domain built to this reach holds a tool of this kind.
 export const reaches = (reach: ModeInfo["reach"], kind: ToolKind): boolean =>
   reach === "everything" || looksOnly(kind)
 
@@ -70,8 +70,8 @@ export const reaches = (reach: ModeInfo["reach"], kind: ToolKind): boolean =>
  * built to.
  *
  * A domain is process-wide and a mode is per Session, so the two cannot be the
- * same statement when two Sessions are open. The registry is what the model is
- * shown and the mandate is what runs, so the registry holds the widest live
+ * same statement when two Sessions are open. The domain is what the model is
+ * shown and the mandate is what runs, so the domain holds the widest live
  * mode's tools and each Session's own mandate refuses what that Session may
  * not run. Fail-closed sits at the gate, where it decides.
  */

@@ -93,7 +93,7 @@ const names = (config: Record<string, unknown>): Promise<readonly string[]> =>
   )
 
 describe("capability selection", () => {
-  // A mode decides which registry the agent sees, and that is a rebuild of the
+  // A mode decides which tools the agent sees, and that is a rebuild of the
   // tool domain rather than a filter at call time.
   it("holds no changing row in read-only mode", async () => {
     expect(await names({ approval: { mode: "read-only" } })).toEqual(["read", "grep", "web"])
@@ -109,7 +109,7 @@ describe("capability selection", () => {
     ])
   })
 
-  // A row that is not in the registry is not a tool the model may call, so the
+  // A row the domain does not hold is not a tool the model may call, so the
   // execution refuses the name outright.
   it("refuses a call naming a row the mode removed", async () => {
     const { result } = await running({ approval: { mode: "read-only" } }, "edit", {

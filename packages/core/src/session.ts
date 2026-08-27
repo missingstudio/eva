@@ -44,7 +44,7 @@ export interface RunDeps {
    * It takes the emit rather than holding one, because the Run owns where a
    * record goes and the caller owns which tools answer.
    *
-   * Absent is a build with no tool domain, and it reads as a registry that
+   * Absent is a build with no tool domain, and it reads as a domain that
    * holds nothing rather than as a proposal quietly dropped: every call then
    * answers `unknown_tool`, which is on the record and is something the model
    * can act on.

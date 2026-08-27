@@ -130,7 +130,7 @@ somebody looked at. A command is judged by its words because the gate cannot
 know which of them a program writes.
 
 The kind is read off the tool domain at the moment of the call and never
-captured, so a rebuilt registry is judged on the next call.
+captured, so a rebuilt domain is judged on the next call.
 
 ### One opaque invocation
 

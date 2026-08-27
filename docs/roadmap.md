@@ -281,7 +281,7 @@ where it moves when the loop becomes a host of plugins.
 
 **Approval.** Named permission modes — `read-only`, `supervised`, `autonomous`,
 `plan` — with per-tool overrides inside a mode. Modes are **capability
-selection** plus mandate gates. Capability selection decides which tool registry
+selection** plus mandate gates. Capability selection decides which tools
 the agent sees, and that is a rebuild of the tool domain, not a filter at call
 time.
 

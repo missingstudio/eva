@@ -330,7 +330,7 @@ redirection, a substitution or a variable is one Opaque Invocation, matched
 against no rule and failed closed.
 
 **Named permission modes** ship as `eva.approval`: `read-only`, `supervised`,
-`autonomous` and `plan`, each a rebuild of the tool registry plus a mandate at
+`autonomous` and `plan`, each a rebuild of the tool domain plus a mandate at
 the deciding boundary. The gate answers in the Agent Client Protocol's four
 options, one call asks one person once whichever hook asked, and
 `allow_always` writes a rule into the person's own config and never the

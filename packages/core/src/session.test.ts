@@ -310,7 +310,7 @@ describe("the calls a response proposed", () => {
     execute: (given) => Effect.succeed(toolText("ok", `read ${JSON.stringify(given)}`)),
   }
 
-  const registry =
+  const holding =
     (rows: readonly ToolInfo[]) =>
     (into: (payload: Payload) => Effect.Effect<void>): ToolGroupDeps => ({
       tool: (call) => Effect.succeed(rows.find((row) => row.id === call.name)),
@@ -321,7 +321,7 @@ describe("the calls a response proposed", () => {
     const recorder = fakeRecorder()
     const wiring = deps(recorder, proposing([{ id: "call_1", name: "read", args: { path: "a" } }]))
     const result = await Effect.runPromise(
-      submit({ ...wiring, tools: registry([READ]) }, { ...input, tools: [] }),
+      submit({ ...wiring, tools: holding([READ]) }, { ...input, tools: [] }),
     )
 
     expect(result.calls).toHaveLength(1)
@@ -343,7 +343,7 @@ describe("the calls a response proposed", () => {
     ])
   })
 
-  // A build with no tool domain is a registry that holds nothing, never a
+  // A build with no tool domain is a domain that holds nothing, never a
   // proposal quietly dropped: the model reads `unknown_tool` and can act.
   it("answers unknown_tool when the build holds no tool domain", async () => {
     const recorder = fakeRecorder()
@@ -373,7 +373,7 @@ describe("the calls a response proposed", () => {
     }
     const result = await Effect.runPromise(
       submit(
-        { ...wiring, budget: Effect.succeed(spent), tools: registry([READ]) },
+        { ...wiring, budget: Effect.succeed(spent), tools: holding([READ]) },
         { ...input, tools: [] },
       ),
     )
@@ -443,7 +443,7 @@ describe("the calls a response proposed", () => {
     )
     const result = await Effect.runPromise(
       submit(
-        { ...wiring, tools: registry([READ]) },
+        { ...wiring, tools: holding([READ]) },
         { ...input, tools: [], stop: Effect.succeed("a steer arrived") },
       ),
     )

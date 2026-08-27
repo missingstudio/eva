@@ -198,7 +198,7 @@ export const BUILT_IN: readonly Plugin[] = [
   workflow,
   // After `prompt` for the same reason, and after the tools and both gates:
   // the loop reads the tool domain at every Step, so what it offers a model
-  // is the registry the mode built.
+  // is the domain the mode built.
   harnessLoop,
   config,
   print,

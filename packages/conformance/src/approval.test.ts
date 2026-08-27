@@ -185,7 +185,7 @@ describe("changing a live session from autonomous to read-only", () => {
             path: "one.md",
             hunks: [{ find: "after", replace: "again" }],
           })
-          // The row left the registry, so the execution refuses the name. A
+          // The row left the domain, so the execution refuses the name. A
           // mode is capability selection and not a filter at call time.
           expect(after.disposition).toBe("unknown_tool")
           expect(found.held()["one.md"]).toBe("after\n")

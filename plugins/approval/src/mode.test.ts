@@ -64,7 +64,7 @@ describe("the four modes", () => {
 })
 
 /**
- * A domain is process-wide and a mode is per Session. The registry is built to
+ * A domain is process-wide and a mode is per Session. The domain is built to
  * the widest live mode, and each Session's mandate is what refuses — so the
  * strict side is at the gate, where it decides.
  */

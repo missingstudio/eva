@@ -390,9 +390,9 @@ somebody listed its name, and a name list beside that rule would be a second
 statement of it that goes stale on the next load.
 
 The selection itself is a `tool` transform that **removes** the rows the mode
-does not reach, so a mode change rebuilds the registry rather than filtering it
+does not reach, so a mode change rebuilds the domain rather than filtering it
 at call time; and `/mode` is a `command` row. A domain is process-wide and a
-mode is per Session, so the registry is built to the widest mode any Session
+mode is per Session, so the domain is built to the widest mode any Session
 has named and each Session's own mandate at `tool.execute.before` is what
 refuses. The strict side is at the gate, where it decides.
 
