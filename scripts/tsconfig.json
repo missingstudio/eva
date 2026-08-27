@@ -1,5 +1,15 @@
 {
   "extends": "../tsconfig.base.json",
-  "compilerOptions": { "types": ["node", "bun"] },
-  "include": ["release", "site-data.ts"]
+  "compilerOptions": {
+    "types": ["node", "bun"]
+  },
+  "include": [
+    "agent-ready.ts",
+    "release",
+    "serve-static.ts",
+    "site-data.ts",
+    "skills.test.ts",
+    "vercel-config.test.ts",
+    "vercel-config.ts"
+  ]
 }

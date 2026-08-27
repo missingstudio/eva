@@ -228,5 +228,19 @@ export default defineConfig({
 
   staged: {
     "*.{ts,tsx,js,json}": "vp check --fix",
+    /*
+      `vercel.json` is generated from the sites' own lists, and Vercel reads it
+      before it runs the build — so it cannot be a build output and has to be
+      committed.
+
+      This refuses the commit rather than fixing it. `vp staged` runs a task
+      against a temporary index and discards what the task stages, so a
+      `git add` from in here does not survive: the file would be rewritten on
+      disk, left unstaged, and the commit would carry the stale one anyway.
+      Refusing is the honest half — it says the same thing the suite says, a
+      minute earlier.
+    */
+    "{apps/www/src/lib/pages.ts,apps/docs/src/lib/twins.ts,packages/machine/src/site.ts,packages/machine/src/serve.ts,scripts/vercel-config.ts}":
+      "bun scripts/vercel-config.ts --check",
   },
 })

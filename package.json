@@ -42,6 +42,7 @@
     "test:watch": "vp test watch",
     "dev": "vp run -r dev",
     "build": "vp run -r build",
+    "edge": "bun scripts/vercel-config.ts",
     "pack": "vp run -r pack",
     "hooks:setup": "vp config",
     "eva": "bun apps/cli/src/eva.ts",
