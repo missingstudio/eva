@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { boot } from "@missingstudio/eva-boot"
 import {
   PERMISSION_OPTIONS,
@@ -47,6 +50,8 @@ const withKernel = <A>(
 
       const started: Started = {
         kernel,
+        // The environment this run was given, as every door hands it on.
+        env: {},
         config: { plugins: [], raw: {}, origin: {} },
         model: { provider: "fake", model: "model" },
       }
@@ -93,15 +98,28 @@ describe("the gate every door runs under", () => {
     session: GATED,
   }
 
+  // A call the rule language can grant: a grant is written over the words a
+  // command would run, and an Edit names none.
+  const RAN: ToolCall = {
+    id: "call_2",
+    name: "bash",
+    args: { command: ["git", "status"] },
+    session: GATED,
+  }
+
   const answering = (answer: FrontendAnswer): Frontend => ({
     id: "eva.tui",
     ask: () => Effect.succeed(answer),
     done: Effect.void,
   })
 
-  const asking = (surface: Frontend | undefined) =>
+  const asking = (
+    surface: Frontend | undefined,
+    env: NodeJS.ProcessEnv = {},
+    call: ToolCall = CALL,
+  ) =>
     withKernel([row({ id: "eva.tui", interactive: true })], (started) =>
-      gateFor(started.kernel, () => surface)(() => Effect.never)(ASKED, CALL),
+      gateFor(started.kernel, () => surface, env)(() => Effect.never)(ASKED, call),
     )
 
   it("carries a person's answer back as the option they named", async () => {
@@ -121,5 +139,31 @@ describe("the gate every door runs under", () => {
     expect(Exit.isSuccess(outcome) && "reason" in outcome.value && outcome.value.reason).toContain(
       "nobody is there to answer",
     )
+  })
+
+  /**
+   * The one write in the whole permission lifecycle, through the gate every
+   * door composes. It lands where the World this run was given says, and
+   * never where the process does — a suite handed a scratch directory for
+   * exactly this reason must not write into the person's own home.
+   */
+  it("writes an allow_always into the config the World names", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "eva-gate-"))
+    const path = join(directory, "config.yaml")
+
+    const outcome = await asking(
+      answering({ kind: "permission", optionId: "allow_always" }),
+      { EVA_CONFIG: path },
+      RAN,
+    )
+
+    expect(outcome).toStrictEqual(Exit.succeed({ kind: "allow_always" }))
+    // The rule language is the policy plugin's and its shape is proven where
+    // the two plugins meet. What this door owes is the path: the file is the
+    // one the World named, and it holds a rule over the words the gate judged.
+    const held = readFileSync(path, "utf8")
+    expect(held).toContain("policy:")
+    expect(held).toContain("git")
+    expect(held).toContain("status")
   })
 })

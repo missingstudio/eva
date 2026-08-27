@@ -95,6 +95,20 @@ chord means: rebind `session.submit` and plain enter is released with it. A
 paste lands as text and never reaches the keymap, so a newline in a paste
 never submits.
 
+## A question a person is looking at
+
+Eva may ask more than one question at a time — one tool group can hold two
+calls that both need a person — and each ask is answered on its own. This
+terminal shows one line at a time, so it holds the questions that stand by
+their id: the first one is the one on the screen, a line a person types settles
+that one, and the next is shown in its place. The others wait behind it rather
+than replacing it.
+
+The obligation is the `Frontend.ask` contract's, in
+[@missingstudio/eva-sdk](../../packages/sdk/README.md), because the page keeps
+it too — a page shows them all at once. What no surface may do is let one
+answer settle a question it was not given for.
+
 ## What it does not do
 
 It ships no Renderer — the composition root hands one in. It ships no key
