@@ -119,8 +119,12 @@ rather than coercing one written in another shape — `"8"` is not a number.
   command rows, and prints what they offer.
 - `priceLookup(state)` — the Catalog's rates; a dated model id falls back to
   its undated row.
+- `overFiles(deps, use)` / `textIn(input, key)` — one call of a tool that
+  reads the `FileSystem` slot, and one string argument of that call. Every
+  file tool answers the same sentence for an empty slot and the same
+  Disposition for a path the file system refused.
 - Types: `Plugin`, `PluginContext`, `Slots`, `RowInfos`, `Domains`,
-  `ProviderHookSpec`, `BroadcastMap`, `Frontend`.
+  `ProviderHookSpec`, `BroadcastMap`, `Frontend`, `FileDeps`.
 
 ## Development
 

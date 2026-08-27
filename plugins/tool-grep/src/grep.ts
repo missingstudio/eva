@@ -1,14 +1,6 @@
-import { toolText, type FileSystem, type ToolInfo } from "@missingstudio/eva-core"
+import { toolText, type ToolInfo } from "@missingstudio/eva-core"
+import { overFiles, textIn, type FileDeps } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-
-export interface GrepDeps {
-  /**
-   * The read of the `FileSystem` slot, not a `FileSystem`. The tool reads it
-   * at the moment of use, so a build that swapped the filler reads through
-   * the new one on the next call.
-   */
-  readonly files: Effect.Effect<FileSystem | undefined>
-}
 
 // Every file under the root, when the call names no glob.
 const EVERY = "**/*"
@@ -28,14 +20,6 @@ const INPUT = {
   required: ["pattern"],
   additionalProperties: false,
 }
-
-interface Asked {
-  readonly pattern?: unknown
-  readonly glob?: unknown
-}
-
-const stringOf = (found: unknown): string | undefined =>
-  typeof found === "string" && found !== "" ? found : undefined
 
 // The compiled pattern, or nothing when the model wrote one no engine reads.
 const matcherOf = (pattern: string): RegExp | undefined => {
@@ -57,35 +41,34 @@ const hits = (path: string, content: string, matcher: RegExp): readonly string[]
  * than a search program, so the same call answers the same lines over a disk
  * and over a map.
  */
-export const grepTool = (deps: GrepDeps): ToolInfo => ({
+export const grepTool = (deps: FileDeps): ToolInfo => ({
   id: "grep",
   kind: "search",
   description: "Search the content of files under the workspace root.",
   input: INPUT,
   // A search changes nothing, so two searches may run at once.
   parallelSafe: () => true,
-  execute: (input) =>
-    Effect.gen(function* () {
-      const asked = (input ?? {}) as Asked
-      const pattern = stringOf(asked.pattern)
-      if (pattern === undefined) return toolText("failed", "grep wants a `pattern` string")
+  execute: (input) => {
+    const pattern = textIn(input, "pattern")
+    if (pattern === undefined) {
+      return Effect.succeed(toolText("failed", "grep wants a `pattern` string"))
+    }
 
-      const matcher = matcherOf(pattern)
-      if (matcher === undefined) return toolText("failed", `${pattern} is not a regular expression`)
+    const matcher = matcherOf(pattern)
+    if (matcher === undefined) {
+      return Effect.succeed(toolText("failed", `${pattern} is not a regular expression`))
+    }
 
-      const files = yield* deps.files
-      if (files === undefined) return toolText("failed", "the FileSystem slot is empty")
+    return overFiles(deps, (files) =>
+      Effect.gen(function* () {
+        const found: string[] = []
+        for (const path of yield* files.glob(textIn(input, "glob") ?? EVERY))
+          found.push(...hits(path, yield* files.read(path), matcher))
 
-      const found: string[] = []
-      for (const path of yield* files.glob(stringOf(asked.glob) ?? EVERY))
-        found.push(...hits(path, yield* files.read(path), matcher))
-
-      return found.length === 0
-        ? toolText("ok", `nothing matches ${pattern}`)
-        : toolText("ok", found.join("\n"))
-    }).pipe(
-      Effect.catchTag("FileSystemError", (fault) =>
-        Effect.succeed(toolText("failed", `${fault.path}: ${fault.message}`)),
-      ),
-    ),
+        return found.length === 0
+          ? toolText("ok", `nothing matches ${pattern}`)
+          : toolText("ok", found.join("\n"))
+      }),
+    )
+  },
 })
