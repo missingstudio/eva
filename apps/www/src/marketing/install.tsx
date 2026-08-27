@@ -1,25 +1,6 @@
+import { installChannels as channels } from "@missingstudio/ui"
 import { useId, useRef, useState } from "react"
 import { SteadyLabel } from "./steady-label.js"
-
-const channels = [
-  {
-    id: "brew",
-    label: "Homebrew",
-    command: "brew install --cask missingstudio/tap/eva",
-  },
-  {
-    id: "script",
-    label: "Script",
-    command:
-      "curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/install.sh | sh",
-  },
-  { id: "npm", label: "npm", command: "npm i -g @missingstudio/eva" },
-  {
-    id: "source",
-    label: "Source",
-    command: "git clone git@github.com:missingstudio/eva.git && bun install",
-  },
-] as const
 
 type ChannelId = (typeof channels)[number]["id"]
 

@@ -1,6 +1,7 @@
-import { entity, faqGraph, homeGraph, ogSiteName, origin, titleTemplate } from "@missingstudio/ui"
+import { entity, faqGraph, homeGraph } from "@missingstudio/ui"
 import { createFileRoute } from "@tanstack/react-router"
 import screenshot from "../../../../assets/eva-cli.png"
+import { pageHead } from "../lib/head.js"
 import { siteData } from "../lib/site.js"
 import { faq } from "../marketing/faq.js"
 import {
@@ -15,19 +16,7 @@ import {
 } from "../marketing/sections.js"
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: titleTemplate.web() },
-      { name: "description", content: entity.product.description },
-      { property: "og:title", content: titleTemplate.web() },
-      { property: "og:description", content: entity.product.description },
-      { property: "og:url", content: origin.web },
-      { property: "og:type", content: "website" },
-      { property: "og:site_name", content: ogSiteName.web },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-    links: [{ rel: "canonical", href: origin.web }],
-  }),
+  head: () => pageHead({ description: entity.product.description, path: "" }),
   component: Home,
 })
 

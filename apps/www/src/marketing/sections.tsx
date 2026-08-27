@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
 import { faq } from "./faq.js"
 import { Install } from "./install.js"
 import { armReveals } from "./reveal.js"
+import { lede, openSource, today } from "../content/home.js"
 import { site, siteData } from "../lib/site.js"
 import backdrop from "../../../../assets/sea.webp"
 
@@ -218,10 +219,7 @@ export function Hero() {
           ))}
         </h1>
 
-        <p className="lede reveal max-w-measure mt-6">
-          A local-first control center for coding agents. They run in parallel, and they ship
-          without losing context.
-        </p>
+        <p className="lede reveal max-w-measure mt-6">{lede}</p>
 
         <div className="reveal mt-10">
           <Install version={siteData.version} />
@@ -264,29 +262,6 @@ export function Screenshot({ src }: { src: string }) {
     </Section>
   )
 }
-
-const today = [
-  {
-    title: "Every capability is a plugin",
-    body: "A small kernel loads plugins. The model, the surface, the trace, the themes — each one is a plugin, and any of them can be replaced or switched off.",
-    slug: "extend/how-plugins-work" as DocSlug,
-  },
-  {
-    title: "A session survives kill -9",
-    body: "Everything Eva shows is folded from a durable trace on disk. There is no in-memory state a crash could lose, because there is none that matters.",
-    slug: "use/sessions" as DocSlug,
-  },
-  {
-    title: "You can see what a run cost",
-    body: "Eva records what the provider said a request cost, in integer ticks. It marks an estimate as an estimate, and never multiplies tokens by a rate and calls it a cost.",
-    slug: "use/cost" as DocSlug,
-  },
-  {
-    title: "A repository earns its trust",
-    body: "Eva reads a project's .eva directory only after you run eva trust there. The grant is a verb you type, not a file a repository can ship.",
-    slug: "configure/trust" as DocSlug,
-  },
-]
 
 export function Today() {
   return (
@@ -365,19 +340,13 @@ export function OpenSource() {
   return (
     <Section label="Local-first, and open" beat="section-y-lg">
       <div className="grid gap-10 sm:grid-cols-2">
-        <h2 className="d-2 reveal">
-          Your key never reaches a settings file, a log, or the session record.
-        </h2>
+        <h2 className="d-2 reveal">{openSource.heading}</h2>
         <div className="reveal space-y-4">
-          <p className="text-muted-foreground max-w-measure text-sm">
-            Eva reads a repository&rsquo;s configuration only after you grant it. Everything runs on
-            your machine.
-          </p>
-          <p className="text-muted-foreground max-w-measure text-sm">
-            Eva is MIT licensed and the whole tree is public. {entity.company.name} is the company
-            behind it, and its first product is Eva as a managed service — the same tree, operated
-            for you. Self-hosting is not a downgrade path.
-          </p>
+          {openSource.body.map((paragraph) => (
+            <p key={paragraph} className="text-muted-foreground max-w-measure text-sm">
+              {paragraph}
+            </p>
+          ))}
         </div>
       </div>
     </Section>

@@ -1,38 +1,24 @@
-import { entity, external, ogSiteName, origin, titleTemplate } from "@missingstudio/ui"
 import { createFileRoute } from "@tanstack/react-router"
+import { changelog } from "../content/changelog.js"
+import { pageHead } from "../lib/head.js"
 import { Page } from "../marketing/sections.js"
 
-const description = `Every ${entity.product.name} release, and what changed in it.`
-const url = `${origin.web}/changelog`
-
 export const Route = createFileRoute("/changelog")({
-  head: () => ({
-    meta: [
-      { title: titleTemplate.web("Changelog") },
-      { name: "description", content: description },
-      { property: "og:title", content: titleTemplate.web("Changelog") },
-      { property: "og:description", content: description },
-      { property: "og:url", content: url },
-      { property: "og:type", content: "website" },
-      { property: "og:site_name", content: ogSiteName.web },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-    links: [{ rel: "canonical", href: url }],
-  }),
+  head: () =>
+    pageHead({ title: changelog.title, description: changelog.description, path: "/changelog" }),
   component: Changelog,
 })
 
+// This page keeps its own markup: it is a heading, a sentence, and a link
+// rather than a document, so the prose renderer would set it wrongly.
 function Changelog() {
   return (
     <Page className="max-w-page mx-auto px-6 pt-24 pb-20">
-      <h1 className="d-1">Changelog</h1>
-      <p className="text-muted-foreground max-w-measure mt-4">
-        Every release is published on GitHub with its notes, its checksums, and a provenance
-        attestation.
-      </p>
+      <h1 className="d-1">{changelog.title}</h1>
+      <p className="text-muted-foreground max-w-measure mt-4">{changelog.lede}</p>
       <p className="mt-8 text-sm">
-        <a className="text-bone underline underline-offset-4" href={`${external.repo}/releases`}>
-          View releases on GitHub →
+        <a className="text-bone underline underline-offset-4" href={changelog.link.href}>
+          {changelog.link.label} →
         </a>
       </p>
     </Page>

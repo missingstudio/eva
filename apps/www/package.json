@@ -13,6 +13,7 @@
     "@missingstudio/ui": "workspace:*",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",
+    "dedent": "^1.7.2",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

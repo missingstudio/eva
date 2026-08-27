@@ -1,9 +1,14 @@
+import { origin } from "@missingstudio/ui"
 import { Page } from "./sections.js"
 import { site } from "../lib/site.js"
 
 /**
  * The page a wrong URL lands on. It says what happened and offers the way
  * back, because a dead end with no exit is the same defect as a dead link.
+ *
+ * The second list is the way back for a reader that is not a person. An agent
+ * that follows a stale link has one question — where is the index — and three
+ * absolute paths answer it without a second request.
  */
 export function NotFound() {
   return (
@@ -22,6 +27,28 @@ export function NotFound() {
           Search the documentation
         </a>
       </div>
+
+      <h2 className="eyebrow mt-16 mb-4">Where the indexes are</h2>
+      <ul className="text-muted-foreground max-w-measure space-y-2 text-sm">
+        <li>
+          <a className="link-rule hover:text-bone" href="/llms.txt">
+            {origin.web}/llms.txt
+          </a>{" "}
+          — every page and every capability, as one markdown index.
+        </li>
+        <li>
+          <a className="link-rule hover:text-bone" href="/sitemap.xml">
+            {origin.web}/sitemap.xml
+          </a>{" "}
+          — every URL this site serves.
+        </li>
+        <li>
+          <a className="link-rule hover:text-bone" href={`${origin.docs}/llms.txt`}>
+            {origin.docs}/llms.txt
+          </a>{" "}
+          — every documentation page, as markdown.
+        </li>
+      </ul>
     </Page>
   )
 }
