@@ -27,6 +27,10 @@ export const Route = createRootRoute({
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/site.webmanifest" },
+      // Agentic Resource Discovery asks a consumer to honour this link as well
+      // as the well-known path. A search result lands an agent on a page
+      // rather than on a site root, so every page names the catalog.
+      { rel: "ard", href: `${origin.docs}/.well-known/ard.json` },
     ],
   }),
   component: RootComponent,
@@ -57,8 +61,14 @@ function RootDocument({ children }: { children: ReactNode }) {
           Skip to content
         </a>
         {/* The theme is not a choice: dark is the system, so the provider's
-            own switching is disabled and the class above is the record. */}
-        <RootProvider theme={{ enabled: false }}>{children}</RootProvider>
+            own switching is disabled and the class above is the record.
+
+            Search reads the index as a file rather than asking a server for
+            each query, because this site is static files and there is no
+            server to ask. `api/search` writes that file. */}
+        <RootProvider theme={{ enabled: false }} search={{ options: { type: "static" } }}>
+          {children}
+        </RootProvider>
         <Scripts />
       </body>
     </html>

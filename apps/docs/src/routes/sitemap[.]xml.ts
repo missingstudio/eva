@@ -1,6 +1,8 @@
 import { origin } from "@missingstudio/ui"
+import { xml } from "@missingstudio/ui/serve"
 import { createFileRoute } from "@tanstack/react-router"
-import { lastModifiedOf, source } from "../lib/source.js"
+import { modifiedOn } from "../lib/modified.js"
+import { source } from "../lib/source.js"
 
 const body = () => {
   const entries = source.getPages().map((page) => {
@@ -15,14 +17,15 @@ const body = () => {
     // lastmod comes from git, never from the build clock. A sitemap that
     // claims every page changed on every deploy teaches a crawler to ignore
     // its own dates.
-    const modified = lastModifiedOf(page.data)
-    const lastmod = modified
-      ? `\n    <lastmod>${new Date(modified).toISOString().slice(0, 10)}</lastmod>`
-      : ""
+    const modified = modifiedOn(page.url)
+    const lastmod = modified ? `\n    <lastmod>${modified}</lastmod>` : ""
 
     return `  <url>\n    <loc>${origin.docs}${path}</loc>${lastmod}\n  </url>`
   })
 
+  // Flush left on purpose. `dedent` measures the static lines and leaves an
+  // interpolated block alone, so indenting this template would strip the
+  // entries' own indentation off every line after the first.
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${entries.join("\n")}
@@ -31,12 +34,5 @@ ${entries.join("\n")}
 }
 
 export const Route = createFileRoute("/sitemap.xml")({
-  server: {
-    handlers: {
-      GET: () =>
-        new Response(body(), {
-          headers: { "content-type": "application/xml; charset=utf-8" },
-        }),
-    },
-  },
+  server: { handlers: { GET: () => xml(body()) } },
 })

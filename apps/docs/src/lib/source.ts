@@ -3,9 +3,14 @@ import { defineDocs } from "fumadocs-mdx/macro"
 
 // `async` keeps each page's compiled body out of the entry bundle and gives
 // the load/preload pair the routes use.
+//
+// The collection carried `lastModified: true` and it resolved to nothing for
+// every page, so the sitemap shipped without a single date. `modified.ts` asks
+// git directly instead, and the option is gone rather than left declaring
+// something that did not happen.
 export const docs = defineDocs({
   dir: "content/docs",
-  docs: { async: true, lastModified: true },
+  docs: { async: true },
 })
 
 // The documentation is at the root of its own domain, so there is no /docs
@@ -14,9 +19,3 @@ export const source = loader({
   baseUrl: "/",
   source: docs.toFumadocsSource(),
 })
-
-// `lastModified` is added by the collection flag above, but the conditional
-// type that carries it does not survive inference through the loader. It is
-// optional either way: git metadata is absent until a file is committed.
-export const lastModifiedOf = (data: unknown): Date | undefined =>
-  (data as { lastModified?: Date }).lastModified

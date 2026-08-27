@@ -1,0 +1,56 @@
+---
+title: Contact
+description: Which channel answers what about Eva — questions, bugs, security reports, and patches — and what to include so the answer comes back once.
+source: docs/about/contact.md
+---
+
+Every question about Eva is answered in public, on the issue tracker. There is
+no support mailbox, and this page does not offer one: a published address that
+bounces is worse for a reader than a page that says where the real door is.
+
+## Questions, bugs, and requests
+
+Open an issue at
+[github.com/missingstudio/eva/issues](https://github.com/missingstudio/eva/issues).
+
+A question answered in public is answered once, and the next person who asks it
+finds the answer instead of asking again. That is why there is an issue tracker
+and not a private queue.
+
+Include four things, and the first reply can be the answer rather than a request
+for detail:
+
+- The version, from `eva --version`.
+- The command you ran, in full.
+- What happened instead of what you expected.
+- **stderr as well as stdout.** Eva reports a Finding on stderr without
+  changing the exit code, so the explanation is often there and only there.
+
+## Security
+
+There is no separate security mailbox. Report a suspected vulnerability as an
+issue that says what the impact is and which code path reaches it, and leave a
+working exploit out of the first message.
+
+If the finding needs to stay private until it is fixed, say so in the first line
+rather than in the detail, and a private channel will be opened before anything
+more is written down.
+
+## Patches
+
+The source takes patches. Read [contributing](/about/contributing) first: it
+names the commit format, the branch naming, and the one command that runs every
+check CI runs. A change that passes locally passes in CI, because it is the same
+command.
+
+Releases, with notes, checksums, and a provenance attestation, are at
+[github.com/missingstudio/eva/releases](https://github.com/missingstudio/eva/releases).
+
+## The company
+
+missing studio publishes Eva. Its other work is on the same GitHub
+organisation, [github.com/missingstudio](https://github.com/missingstudio), and
+it posts as [@madebymissing](https://x.com/madebymissing).
+
+Eva is MIT licensed and the whole tree is public. There is no paid tier that
+unlocks capability, and self-hosting is not a downgrade path.

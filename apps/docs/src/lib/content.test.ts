@@ -1,4 +1,4 @@
-import { docSlugs, entity, movedDocSlugs, titleTemplate } from "@missingstudio/ui"
+import { docSlugs, entity, titleTemplate } from "@missingstudio/ui"
 import { readdirSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
@@ -52,12 +52,17 @@ describe("the marketing site's links", () => {
     }
   })
 
-  test("every moved slug points at a page that exists", () => {
-    for (const [from, to] of Object.entries(movedDocSlugs)) {
-      expect(
-        () => readFileSync(slugToFile(to)),
-        `${from} redirects to a missing ${to}`,
-      ).not.toThrow()
+  /*
+    The other direction. `docSlugs` is what the build reads to decide which
+    markdown twins to write, so a page missing from it is a page with no twin —
+    served as HTML, advertised nowhere, and invisible to an agent that only
+    reads markdown.
+  */
+  test("every page is declared as a DocSlug", () => {
+    const declared = new Set<string>(docSlugs)
+
+    for (const page of pages()) {
+      expect(declared, `${page.slug || "the home page"} is not in docSlugs`).toContain(page.slug)
     }
   })
 })

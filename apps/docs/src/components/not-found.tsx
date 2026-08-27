@@ -1,7 +1,13 @@
+import { origin } from "@missingstudio/ui"
+
 /**
  * The page a wrong documentation URL lands on. It says what happened and
  * offers the way back, because a dead end with no exit is the same defect as
  * a dead link.
+ *
+ * The second list is the way back for a reader that is not a person. An agent
+ * that followed a stale link has one question — where is the index — and these
+ * answer it without a second guess.
  */
 export function NotFound() {
   return (
@@ -17,6 +23,31 @@ export function NotFound() {
           Go to the documentation home
         </a>
       </div>
+
+      <h2 className="eyebrow mt-16 mb-4">Where the indexes are</h2>
+      <ul className="text-muted-foreground max-w-measure space-y-2 text-sm">
+        <li>
+          <a className="link-rule hover:text-bone" href="/llms.txt">
+            {origin.docs}/llms.txt
+          </a>{" "}
+          — every documentation page, as markdown.
+        </li>
+        <li>
+          <a className="link-rule hover:text-bone" href="/sitemap.xml">
+            {origin.docs}/sitemap.xml
+          </a>{" "}
+          — every URL this site serves.
+        </li>
+        <li>
+          <a className="link-rule hover:text-bone" href={`${origin.web}/llms.txt`}>
+            {origin.web}/llms.txt
+          </a>{" "}
+          — what Eva is, and when to reach for it.
+        </li>
+      </ul>
+      <p className="text-muted-foreground max-w-measure mt-4 text-sm">
+        Every page here is also served as markdown at the same path with <code>.md</code> appended.
+      </p>
     </main>
   )
 }

@@ -4,10 +4,223 @@
   "installCommand": "bun install --frozen-lockfile",
   "buildCommand": "bun run build",
   "outputDirectory": "dist/client",
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown\\s*;\\s*q=0(\\.0+)?([,;].*)?$"
+        }
+      ],
+      "destination": "/index.html"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown.*"
+        }
+      ],
+      "destination": "/index.md"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "mode",
+          "value": "agent"
+        }
+      ],
+      "destination": "/index.md"
+    },
+    {
+      "source": "/:page(install|connect-a-model|first-run|concepts|software-factory)",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown\\s*;\\s*q=0(\\.0+)?([,;].*)?$"
+        }
+      ],
+      "destination": "/:page/index.html"
+    },
+    {
+      "source": "/:page(install|connect-a-model|first-run|concepts|software-factory)",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown.*"
+        }
+      ],
+      "destination": "/:page.md"
+    },
+    {
+      "source": "/:page(install|connect-a-model|first-run|concepts|software-factory)",
+      "has": [
+        {
+          "type": "query",
+          "key": "mode",
+          "value": "agent"
+        }
+      ],
+      "destination": "/:page.md"
+    },
+    {
+      "source": "/:section(use|configure|extend|reference|about)/:page",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown\\s*;\\s*q=0(\\.0+)?([,;].*)?$"
+        }
+      ],
+      "destination": "/:section/:page/index.html"
+    },
+    {
+      "source": "/:section(use|configure|extend|reference|about)/:page",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown.*"
+        }
+      ],
+      "destination": "/:section/:page.md"
+    },
+    {
+      "source": "/:section(use|configure|extend|reference|about)/:page",
+      "has": [
+        {
+          "type": "query",
+          "key": "mode",
+          "value": "agent"
+        }
+      ],
+      "destination": "/:section/:page.md"
+    },
+    {
+      "source": "/raw",
+      "destination": "/index.md"
+    },
+    {
+      "source": "/raw/:page",
+      "destination": "/:page.md"
+    },
+    {
+      "source": "/raw/:section/:page",
+      "destination": "/:section/:page.md"
+    }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",
-      "headers": [{ "key": "cache-control", "value": "public, max-age=31536000, immutable" }]
+      "headers": [
+        {
+          "key": "cache-control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*).md",
+      "headers": [
+        {
+          "key": "content-type",
+          "value": "text/markdown; charset=utf-8"
+        },
+        {
+          "key": "vary",
+          "value": "Accept, Accept-Encoding"
+        },
+        {
+          "key": "access-control-allow-origin",
+          "value": "*"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)llms.txt",
+      "headers": [
+        {
+          "key": "content-type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "access-control-allow-origin",
+          "value": "*"
+        }
+      ]
+    },
+    {
+      "source": "/api/search",
+      "headers": [
+        {
+          "key": "content-type",
+          "value": "application/json; charset=utf-8"
+        },
+        {
+          "key": "access-control-allow-origin",
+          "value": "*"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/(.*).json",
+      "headers": [
+        {
+          "key": "content-type",
+          "value": "application/json; charset=utf-8"
+        },
+        {
+          "key": "access-control-allow-origin",
+          "value": "*"
+        }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "vary",
+          "value": "Accept, Accept-Encoding"
+        },
+        {
+          "key": "link",
+          "value": "</sitemap.xml>; rel=\"sitemap\", </index.md>; rel=\"alternate\"; type=\"text/markdown\", </llms.txt>; rel=\"describedby\"; type=\"text/plain\", </.well-known/ard.json>; rel=\"ard\"; type=\"application/json\""
+        }
+      ]
+    },
+    {
+      "source": "/:page(install|connect-a-model|first-run|concepts|software-factory)",
+      "headers": [
+        {
+          "key": "vary",
+          "value": "Accept, Accept-Encoding"
+        },
+        {
+          "key": "link",
+          "value": "</sitemap.xml>; rel=\"sitemap\", </:page.md>; rel=\"alternate\"; type=\"text/markdown\""
+        }
+      ]
+    },
+    {
+      "source": "/:section(use|configure|extend|reference|about)/:page",
+      "headers": [
+        {
+          "key": "vary",
+          "value": "Accept, Accept-Encoding"
+        },
+        {
+          "key": "link",
+          "value": "</sitemap.xml>; rel=\"sitemap\", </:section/:page.md>; rel=\"alternate\"; type=\"text/markdown\", </:section/llms.txt>; rel=\"describedby\"; type=\"text/plain\""
+        }
+      ]
     }
   ]
 }

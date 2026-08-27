@@ -80,13 +80,14 @@ export const docSlugs = [
   "about/troubleshooting",
   "about/roadmap",
   "about/contributing",
+  // The pages a reader checks before trusting a publisher. They live on the
+  // documentation origin as well as on the marketing one, because an origin is
+  // read, and scored, on its own.
+  "about/contact",
+  "about/privacy",
 ] as const
 
 export type DocSlug = (typeof docSlugs)[number]
-
-// A renamed page keeps its old URL alive. A moved URL that 301s keeps the
-// links and the citations that point at it; one that vanishes does not.
-export const movedDocSlugs: Record<string, DocSlug> = {}
 
 export const links = (dev = false) => {
   const web = dev ? devOrigin.web : origin.web

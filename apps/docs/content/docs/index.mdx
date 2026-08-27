@@ -72,3 +72,25 @@ harness.
   />
   <Card title="Concepts" href="/concepts" description="The words Eva uses for its own machinery." />
 </Cards>
+
+## If you are an agent
+
+Every page here is also served as markdown: append `.md` to any path, so
+`/install` is also [`/install.md`](/install.md). Each page's HTML advertises its
+own twin with `<link rel="alternate" type="text/markdown">`, and asking for
+`Accept: text/markdown` returns the twin as well.
+
+- [llms.txt](/llms.txt) — every page as one index, with what Eva is for and
+  when to reach for it.
+- [llms-full.txt](/llms-full.txt) — every page's markdown, concatenated, for
+  reading the whole manual in one fetch.
+- [auth.md](/auth.md) — how to obtain a credential, which is by not needing
+  one. There is no Eva account and no Eva API key.
+- [pricing.md](/pricing.md) — zero, and what you do pay for.
+- [CLI reference](/reference/cli) — every command and every global flag.
+  `eva -p "<prompt>"` is the whole scriptable surface.
+
+A scoped index exists per area — [use](/use/llms.txt),
+[configure](/configure/llms.txt), [extend](/extend/llms.txt),
+[reference](/reference/llms.txt), [about](/about/llms.txt) — for taking one
+area into context instead of the manual.

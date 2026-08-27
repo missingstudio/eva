@@ -53,6 +53,40 @@ export function baseOptions(): Omit<DocsLayoutProps, "tree"> {
         text: "Roadmap",
         url: "/about/roadmap",
       },
+      // The developer surface, named where a reader and a crawler both find
+      // it. The resource discoverability check searches by name, and a page
+      // nothing links to is a page a search engine ranks last.
+      {
+        type: "menu",
+        text: "For agents",
+        items: [
+          {
+            text: "CLI reference",
+            description: "Every command and every global flag.",
+            url: "/reference/cli",
+          },
+          {
+            text: "This site as markdown",
+            description: "Every page, as one index an agent can fetch.",
+            url: "/llms.txt",
+          },
+          {
+            text: "This page as markdown",
+            description: "Any page, with .md appended to its path.",
+            url: "/index.md",
+          },
+          {
+            text: "Authentication",
+            description: "Why there is no credential to obtain.",
+            url: "/auth.md",
+          },
+          {
+            text: "Pricing",
+            description: "Zero, and what you do pay for.",
+            url: "/pricing.md",
+          },
+        ],
+      },
     ],
   }
 }

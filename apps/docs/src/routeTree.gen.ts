@@ -11,11 +11,19 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
+import { Route as R404RouteImport } from './routes/404'
+import { Route as AuthDotmdRouteImport } from './routes/auth[.]md'
+import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
+import { Route as PricingDotmdRouteImport } from './routes/pricing[.]md'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SectionLlmsDottxtRouteImport } from './routes/$section.llms[.]txt'
+import { Route as DotwellKnownAiCatalogDotjsonRouteImport } from './routes/[.]well-known.ai-catalog[.]json'
+import { Route as DotwellKnownArdDotjsonRouteImport } from './routes/[.]well-known.ard[.]json'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as RawSplatRouteImport } from './routes/raw/$'
+import { Route as DotwellKnownAgentSkillsIndexDotjsonRouteImport } from './routes/[.]well-known.agent-skills.index[.]json'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -27,9 +35,29 @@ const SplatRoute = SplatRouteImport.update({
   path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const R404Route = R404RouteImport.update({
+  id: '/404',
+  path: '/404',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthDotmdRoute = AuthDotmdRouteImport.update({
+  id: '/auth.md',
+  path: '/auth.md',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
+  id: '/llms-full.txt',
+  path: '/llms-full.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
   id: '/llms.txt',
   path: '/llms.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingDotmdRoute = PricingDotmdRouteImport.update({
+  id: '/pricing.md',
+  path: '/pricing.md',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -42,6 +70,22 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SectionLlmsDottxtRoute = SectionLlmsDottxtRouteImport.update({
+  id: '/$section/llms.txt',
+  path: '/$section/llms.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DotwellKnownAiCatalogDotjsonRoute =
+  DotwellKnownAiCatalogDotjsonRouteImport.update({
+    id: '/.well-known/ai-catalog.json',
+    path: '/.well-known/ai-catalog.json',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownArdDotjsonRoute = DotwellKnownArdDotjsonRouteImport.update({
+  id: '/.well-known/ard.json',
+  path: '/.well-known/ard.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSearchRoute = ApiSearchRouteImport.update({
   id: '/api/search',
   path: '/api/search',
@@ -52,73 +96,135 @@ const RawSplatRoute = RawSplatRouteImport.update({
   path: '/raw/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotwellKnownAgentSkillsIndexDotjsonRoute =
+  DotwellKnownAgentSkillsIndexDotjsonRouteImport.update({
+    id: '/.well-known/agent-skills/index.json',
+    path: '/.well-known/agent-skills/index.json',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/404': typeof R404Route
+  '/auth.md': typeof AuthDotmdRoute
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
+  '/pricing.md': typeof PricingDotmdRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/$section/llms.txt': typeof SectionLlmsDottxtRoute
+  '/.well-known/ai-catalog.json': typeof DotwellKnownAiCatalogDotjsonRoute
+  '/.well-known/ard.json': typeof DotwellKnownArdDotjsonRoute
   '/api/search': typeof ApiSearchRoute
   '/raw/$': typeof RawSplatRoute
+  '/.well-known/agent-skills/index.json': typeof DotwellKnownAgentSkillsIndexDotjsonRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/404': typeof R404Route
+  '/auth.md': typeof AuthDotmdRoute
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
+  '/pricing.md': typeof PricingDotmdRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/$section/llms.txt': typeof SectionLlmsDottxtRoute
+  '/.well-known/ai-catalog.json': typeof DotwellKnownAiCatalogDotjsonRoute
+  '/.well-known/ard.json': typeof DotwellKnownArdDotjsonRoute
   '/api/search': typeof ApiSearchRoute
   '/raw/$': typeof RawSplatRoute
+  '/.well-known/agent-skills/index.json': typeof DotwellKnownAgentSkillsIndexDotjsonRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/404': typeof R404Route
+  '/auth.md': typeof AuthDotmdRoute
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
+  '/pricing.md': typeof PricingDotmdRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/$section/llms.txt': typeof SectionLlmsDottxtRoute
+  '/.well-known/ai-catalog.json': typeof DotwellKnownAiCatalogDotjsonRoute
+  '/.well-known/ard.json': typeof DotwellKnownArdDotjsonRoute
   '/api/search': typeof ApiSearchRoute
   '/raw/$': typeof RawSplatRoute
+  '/.well-known/agent-skills/index.json': typeof DotwellKnownAgentSkillsIndexDotjsonRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/$'
+    | '/404'
+    | '/auth.md'
+    | '/llms-full.txt'
     | '/llms.txt'
+    | '/pricing.md'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/$section/llms.txt'
+    | '/.well-known/ai-catalog.json'
+    | '/.well-known/ard.json'
     | '/api/search'
     | '/raw/$'
+    | '/.well-known/agent-skills/index.json'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$'
+    | '/404'
+    | '/auth.md'
+    | '/llms-full.txt'
     | '/llms.txt'
+    | '/pricing.md'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/$section/llms.txt'
+    | '/.well-known/ai-catalog.json'
+    | '/.well-known/ard.json'
     | '/api/search'
     | '/raw/$'
+    | '/.well-known/agent-skills/index.json'
   id:
     | '__root__'
     | '/'
     | '/$'
+    | '/404'
+    | '/auth.md'
+    | '/llms-full.txt'
     | '/llms.txt'
+    | '/pricing.md'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/$section/llms.txt'
+    | '/.well-known/ai-catalog.json'
+    | '/.well-known/ard.json'
     | '/api/search'
     | '/raw/$'
+    | '/.well-known/agent-skills/index.json'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
+  R404Route: typeof R404Route
+  AuthDotmdRoute: typeof AuthDotmdRoute
+  LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
+  PricingDotmdRoute: typeof PricingDotmdRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  SectionLlmsDottxtRoute: typeof SectionLlmsDottxtRoute
+  DotwellKnownAiCatalogDotjsonRoute: typeof DotwellKnownAiCatalogDotjsonRoute
+  DotwellKnownArdDotjsonRoute: typeof DotwellKnownArdDotjsonRoute
   ApiSearchRoute: typeof ApiSearchRoute
   RawSplatRoute: typeof RawSplatRoute
+  DotwellKnownAgentSkillsIndexDotjsonRoute: typeof DotwellKnownAgentSkillsIndexDotjsonRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -137,11 +243,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/404': {
+      id: '/404'
+      path: '/404'
+      fullPath: '/404'
+      preLoaderRoute: typeof R404RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth.md': {
+      id: '/auth.md'
+      path: '/auth.md'
+      fullPath: '/auth.md'
+      preLoaderRoute: typeof AuthDotmdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/llms-full.txt': {
+      id: '/llms-full.txt'
+      path: '/llms-full.txt'
+      fullPath: '/llms-full.txt'
+      preLoaderRoute: typeof LlmsFullDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/llms.txt': {
       id: '/llms.txt'
       path: '/llms.txt'
       fullPath: '/llms.txt'
       preLoaderRoute: typeof LlmsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing.md': {
+      id: '/pricing.md'
+      path: '/pricing.md'
+      fullPath: '/pricing.md'
+      preLoaderRoute: typeof PricingDotmdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -158,6 +292,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$section/llms.txt': {
+      id: '/$section/llms.txt'
+      path: '/$section/llms.txt'
+      fullPath: '/$section/llms.txt'
+      preLoaderRoute: typeof SectionLlmsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/ai-catalog.json': {
+      id: '/.well-known/ai-catalog.json'
+      path: '/.well-known/ai-catalog.json'
+      fullPath: '/.well-known/ai-catalog.json'
+      preLoaderRoute: typeof DotwellKnownAiCatalogDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/ard.json': {
+      id: '/.well-known/ard.json'
+      path: '/.well-known/ard.json'
+      fullPath: '/.well-known/ard.json'
+      preLoaderRoute: typeof DotwellKnownArdDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/search': {
       id: '/api/search'
       path: '/api/search'
@@ -172,17 +327,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RawSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.well-known/agent-skills/index.json': {
+      id: '/.well-known/agent-skills/index.json'
+      path: '/.well-known/agent-skills/index.json'
+      fullPath: '/.well-known/agent-skills/index.json'
+      preLoaderRoute: typeof DotwellKnownAgentSkillsIndexDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
+  R404Route: R404Route,
+  AuthDotmdRoute: AuthDotmdRoute,
+  LlmsFullDottxtRoute: LlmsFullDottxtRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
+  PricingDotmdRoute: PricingDotmdRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  SectionLlmsDottxtRoute: SectionLlmsDottxtRoute,
+  DotwellKnownAiCatalogDotjsonRoute: DotwellKnownAiCatalogDotjsonRoute,
+  DotwellKnownArdDotjsonRoute: DotwellKnownArdDotjsonRoute,
   ApiSearchRoute: ApiSearchRoute,
   RawSplatRoute: RawSplatRoute,
+  DotwellKnownAgentSkillsIndexDotjsonRoute:
+    DotwellKnownAgentSkillsIndexDotjsonRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

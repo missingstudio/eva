@@ -1,0 +1,51 @@
+---
+title: Privacy
+description: What this documentation site stores, what Eva itself writes to disk, and where a request goes when you follow a link off this page.
+source: docs/about/privacy.md
+---
+
+This site stores nothing, sends nothing to a third party, and has no analytics.
+The same policy covers the marketing site at
+[evafactory.co/privacy](https://evafactory.co/privacy); this page states it for
+the domain you are reading.
+
+## No cookies
+
+This site sets no cookie and writes nothing to your browser's storage. There is
+no theme control because there is no theme to record: the site is dark only,
+the same surface the program itself draws.
+
+Search is the one thing that reads a file. It downloads an index once and
+searches it in your browser, so a query never reaches a server and no record of
+what you searched for exists anywhere.
+
+## What this site does not do
+
+- No analytics, no tracking pixel, and no session recording.
+- No advertising, and no data sold or shared with an advertiser.
+- No account, and no form that asks for a name or an address.
+- No third-party fonts or scripts. The typeface is served from this origin, so
+  no other company sees your request.
+
+## Where a request does leave
+
+Links to GitHub, npm, and the license text go to those companies, and their own
+policies apply once you follow one. Nothing is sent to them until you do.
+
+This site is served by a CDN, which processes the request in order to answer it.
+
+## Eva, the program
+
+Eva runs on your machine. It writes its sessions to disk under your home
+directory, and it reads a repository's configuration only after you grant it
+with [`eva trust`](/configure/trust).
+
+Your model provider's key is read from the environment and never reaches a
+config file, a log, or the session record — see [keys](/use/keys). Eva sends
+requests to the provider you configured and to nobody else. It does not proxy
+that key, resell access to it, or report your usage anywhere.
+
+## Questions
+
+missing studio publishes this site. Open an issue on the repository and it will
+be answered in public — see [contact](/about/contact).
