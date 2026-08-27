@@ -1119,7 +1119,7 @@ next to the claim it supports, never only at the bottom of the page.
 - A number must come from a measurement. `Fast` is a claim; `120ms at p50` is
   evidence.
 - The product tagline is one string in
-  [packages/ui/src/site.ts](../packages/ui/src/site.ts). Neither surface
+  [packages/machine/src/site.ts](../packages/machine/src/site.ts). Neither surface
   may restate it in its own words.
 
 ### 5.6 Ship requirements
