@@ -173,7 +173,10 @@ _Avoid_: Cost, rate card, tariff
 What a Run's counters come to at Catalog Prices. It is a projection, folded
 from the Trace and never written to it, so it moves when a vendor reprices. It
 is shown marked, because an Estimate read as a Cost is the mistake the pair
-exists to prevent, and one record that cannot be priced leaves it absent.
+exists to prevent, and one record that cannot be priced leaves it absent — a
+partial Estimate misleads exactly as a partial sum does. One accumulator
+answers that for every reader, because a Budget that kept the partial sum
+enforced a limit against a figure nobody measured.
 _Avoid_: Cost, derived cost, approximate cost
 
 **Edit**:

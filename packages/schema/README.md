@@ -52,15 +52,15 @@ const cost = costFold(own)
 
 ## What each family is for
 
-| Module       | What it holds                                                                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `payload.ts` | The sealed `Payload` union: twenty-one kinds, closed, so a `switch` over `kind` with no `default` is exhaustive                                         |
-| `event.ts`   | The envelope: `Event`, `SCHEMA_VERSION`, `seq`, and the Fold Keys every projection groups by                                                            |
-| `id.ts`      | The branded ids: `EventID`, `RunID`, `SessionID`, `TenantID`                                                                                            |
-| `codec.ts`   | The wire: `decodeLine` and `encodeLine`, one strict zod body per kind, tied to the union at compile time                                                |
-| `cost.ts`    | The unit: Ticks, integers of 1e-10 USD — `toTicks`, `toUsd`, `estimateTicks`, `ModelPrice`, `PriceLookup`                                               |
-| `fold.ts`    | The projections: `mergeText`, `transcriptFold`, `costFold`, `headerFold`, `verdictFold`, `answerFold`, and the display rules `spendOf` and `validityOf` |
-| `samples.ts` | One populated sample payload per kind, for tests                                                                                                        |
+| Module       | What it holds                                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `payload.ts` | The sealed `Payload` union: twenty-one kinds, closed, so a `switch` over `kind` with no `default` is exhaustive                                                                                  |
+| `event.ts`   | The envelope: `Event`, `SCHEMA_VERSION`, `seq`, and the Fold Keys every projection groups by                                                                                                     |
+| `id.ts`      | The branded ids: `EventID`, `RunID`, `SessionID`, `TenantID`                                                                                                                                     |
+| `codec.ts`   | The wire: `decodeLine` and `encodeLine`, one strict zod body per kind, tied to the union at compile time                                                                                         |
+| `cost.ts`    | The unit: Ticks, integers of 1e-10 USD — `toTicks`, `toUsd`, `estimateTicks`, `ModelPrice`, `PriceLookup`                                                                                        |
+| `fold.ts`    | The projections: `mergeText`, `transcriptFold`, `costFold`, `headerFold`, `verdictFold`, `answerFold`; the accumulator `estimating`; and the display rules `spendIn`, `spendOf` and `validityOf` |
+| `samples.ts` | One populated sample payload per kind, for tests                                                                                                                                                 |
 
 An update the schema does not define lands in `unknown` and is preserved,
 never dropped. The codec refuses every schema version but its own, so a
@@ -101,6 +101,14 @@ reader only when a stored record outlives a schema change.
 - `mergeText(events)` — the Trace's text-coalescing rule.
 - `transcriptFold`, `costFold`, `headerFold`, `verdictFold`, `answerFold` —
   one session's events folded into a projection.
+- `estimating()` — the estimate, accumulated: one exchange priced at the rates
+  the caller holds now, and one record nothing could price nulls the whole
+  estimate. A fold over the Trace and the Budget both charge through it,
+  because they used to disagree about exactly that record — and the Budget
+  enforced a limit against the partial sum it kept.
+- `spendIn(ran, reported, estimated)` — which of the two figures a reader is
+  shown, in the four values `Spend` names. The one selection every reader of a
+  spend takes.
 - `spendOf(summary, ran)` / `validityOf(summary)` — the display rules over a
   cost and a verdict summary.
 - `foldKeys(event)` / `sameFoldKeys(a, b)` — the keys a projection groups by.

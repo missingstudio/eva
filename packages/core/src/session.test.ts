@@ -24,7 +24,7 @@ import { toolText, type ToolGroupDeps, type ToolInfo } from "./tool.js"
 // What a Budget with nothing left says about itself.
 const SPENT: BudgetState = {
   tokens: 14,
-  costTicks: null,
+  spend: { kind: "none" },
   milliseconds: 0,
   steps: 1,
   limits: { tokens: 10 },

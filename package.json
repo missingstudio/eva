@@ -46,7 +46,7 @@
     "pack": "vp run -r pack",
     "hooks:setup": "vp config",
     "eva": "bun apps/cli/src/eva.ts",
-    "design:lint": "bunx @google/design.md@0.4.0 lint DESIGN.md",
+    "design:lint": "bunx @google/design.md@0.4.0 lint docs/design.md",
     "rehearse": "bun scripts/release/snapshot.ts",
     "verify": "vp check && vp test && vp run -r pack && bun audit --audit-level=high"
   },

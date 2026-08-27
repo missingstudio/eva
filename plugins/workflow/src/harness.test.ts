@@ -38,7 +38,13 @@ const judging = (answers: readonly Judged[]): Validator => {
   }
 }
 
-const STATE: BudgetState = { tokens: 0, costTicks: null, milliseconds: 0, steps: 0, limits: {} }
+const STATE: BudgetState = {
+  tokens: 0,
+  spend: { kind: "none" },
+  milliseconds: 0,
+  steps: 0,
+  limits: {},
+}
 
 const countingBudget = (
   exhaustedAt?: number,
