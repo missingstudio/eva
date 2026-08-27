@@ -2,28 +2,23 @@ import type {
   Applied,
   DiffApplier,
   DiffRefused,
+  EditInput,
   FileSystem,
   FileSystemError,
-  Hunk,
   Recorder,
 } from "@missingstudio/eva-core"
 import type { Payload } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 
 /**
- * What the tool is asked to do: an Edit, and whether to stop at the Preview.
- *
- * The input is an Edit and nothing more, so anything that holds the two slots
- * can compute the same Preview from the arguments alone. That is how a gate
- * shows a person the change before this tool runs — the tool hands out no
- * preview handle, because a handle would be a second way to reach one.
+ * The input is `EditInput`, core's own reading of the arguments: an Edit, and
+ * whether to stop at the Preview. It is an Edit and nothing more, so anything
+ * that holds the two slots can compute the same Preview from the arguments
+ * alone. That is how a gate shows a person the change before this tool runs —
+ * the tool hands out no preview handle, and `editOf` is the one reader, so the
+ * gate's question and this tool's write cannot disagree about what the
+ * arguments mean.
  */
-export interface EditInput {
-  readonly path: string
-  readonly hunks: readonly Hunk[]
-  // A dry run: the Preview is answered and nothing is written.
-  readonly dryRun?: boolean
-}
 
 /**
  * Why a write did not happen. Every reason belongs to a boundary that refused

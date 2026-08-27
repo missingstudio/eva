@@ -8,6 +8,7 @@ import type {
   ToolStatus,
 } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
+import type { Edit, Hunk } from "./contracts.js"
 
 /**
  * ACP's permission types, re-exported: `Approving` names both in its own
@@ -198,6 +199,56 @@ export const argvOf = (args: unknown): readonly string[] | undefined => {
     command.every((one) => typeof one === "string")
     ? (command as readonly string[])
     : undefined
+}
+
+/**
+ * What a call that names an Edit is asked to do: the Edit, and whether the
+ * call stops at the Preview.
+ */
+export interface EditInput extends Edit {
+  // A dry run: the Preview is answered and nothing is written.
+  readonly dryRun?: boolean
+}
+
+const hunkOf = (found: unknown): Hunk | undefined => {
+  if (typeof found !== "object" || found === null || Array.isArray(found)) return undefined
+  const { find, replace } = found as Record<string, unknown>
+  return typeof find === "string" && typeof replace === "string" ? { find, replace } : undefined
+}
+
+// Every Hunk, or nothing when one of them is not a Hunk. A part of an Edit is
+// not an Edit: the applier lands all of them or none.
+const hunksOf = (listed: readonly unknown[]): readonly Hunk[] | undefined => {
+  const hunks: Hunk[] = []
+  for (const one of listed) {
+    const hunk = hunkOf(one)
+    if (hunk === undefined) return undefined
+    hunks.push(hunk)
+  }
+  return hunks
+}
+
+/**
+ * The Edit a call's arguments name, or nothing when they name none. It reads
+ * the shape and never the tool's name, so a second write tool that takes an
+ * Edit is read the same way.
+ *
+ * It is here for the reason `argvOf` is: the write tool runs this Edit and the
+ * approval gate previews it, and two readers of one argument would be two
+ * answers to keep in step — a flag one reader carries and the other drops is a
+ * question that misstates the call it is about.
+ */
+export const editOf = (args: unknown): EditInput | undefined => {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return undefined
+  const asked = args as Record<string, unknown>
+  const path = asked["path"]
+  const listed = asked["hunks"]
+  if (typeof path !== "string" || path === "" || !Array.isArray(listed)) return undefined
+
+  const hunks = hunksOf(listed)
+  if (hunks === undefined || hunks.length === 0) return undefined
+
+  return { path, hunks, ...(asked["dryRun"] === true ? { dryRun: true } : {}) }
 }
 
 // Why the boundary denied, or nothing when the call may run.

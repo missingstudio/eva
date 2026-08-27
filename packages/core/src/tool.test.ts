@@ -2,6 +2,7 @@ import { sessionID, type Payload } from "@missingstudio/eva-schema"
 import { Deferred, Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 import {
+  editOf,
   executeTool,
   executeToolGroup,
   optionFor,
@@ -118,6 +119,52 @@ describe("the strictest decision", () => {
         { kind: "reject_once", reason: "second" },
       ]),
     ).toEqual({ kind: "reject_once", reason: "first" })
+  })
+})
+
+/**
+ * The one reader of an Edit's arguments. The write tool runs what it answers
+ * and the approval gate previews it, so this table is the whole of what
+ * "the arguments name an Edit" means — there is no second table to agree with.
+ */
+describe("the arguments read as an Edit", () => {
+  it("reads a path and its hunks", () => {
+    expect(editOf({ path: "one.md", hunks: [{ find: "a", replace: "b" }] })).toEqual({
+      path: "one.md",
+      hunks: [{ find: "a", replace: "b" }],
+    })
+  })
+
+  // The flag rides along, so a gate asked about a dry run knows it is one.
+  it("carries the dry-run flag", () => {
+    expect(editOf({ path: "one.md", hunks: [{ find: "a", replace: "b" }], dryRun: true })).toEqual({
+      path: "one.md",
+      hunks: [{ find: "a", replace: "b" }],
+      dryRun: true,
+    })
+  })
+
+  // Only `true` is a dry run. A flag in another shape is not half an Edit.
+  it("drops a dry-run flag that is not true", () => {
+    expect(editOf({ path: "one.md", hunks: [{ find: "a", replace: "b" }], dryRun: "yes" })).toEqual(
+      { path: "one.md", hunks: [{ find: "a", replace: "b" }] },
+    )
+  })
+
+  it.each([
+    ["nothing", undefined],
+    ["a list", [1, 2]],
+    ["no path", { hunks: [{ find: "a", replace: "b" }] }],
+    ["an empty path", { path: "", hunks: [{ find: "a", replace: "b" }] }],
+    ["no hunks", { path: "one.md" }],
+    ["an empty hunk list", { path: "one.md", hunks: [] }],
+    ["a hunk that is not one", { path: "one.md", hunks: [{ find: "a" }] }],
+    [
+      "one good hunk and one that is not",
+      { path: "one.md", hunks: [{ find: "a", replace: "b" }, 1] },
+    ],
+  ])("names no Edit when the arguments are %s", (_case, args) => {
+    expect(editOf(args)).toBeUndefined()
   })
 })
 
