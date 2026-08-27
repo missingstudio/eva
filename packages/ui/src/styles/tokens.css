@@ -132,12 +132,17 @@
   --text-code--line-height: 1.6;
 
   /*
-     Tracking, on Linear's discipline: about -0.011em at reading sizes,
-     tightening to -0.022em at display sizes, because tracking that is right
-     at 56px closes the letters up at 16px. The mono never tracks negative.
+     Tracking, on Linear's discipline: it eases off as the size comes down,
+     because tracking that is right at 56px closes the letters up at 20px.
+     One token per step, so docs/design.md's per-step letterSpacing is what
+     ships. The mono never tracks negative; the label opens instead.
   */
-  --tracking-reading: -0.011em;
   --tracking-display: -0.022em;
+  --tracking-heading-lg: -0.022em;
+  --tracking-heading: -0.02em;
+  --tracking-heading-sm: -0.014em;
+  --tracking-subheading: -0.012em;
+  --tracking-reading: -0.011em;
   --tracking-label: 0.06em;
 
   /*

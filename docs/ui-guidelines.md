@@ -268,8 +268,7 @@ derived, not tokenized:
 
 ```css
 /* Colour change only, and it adds no token. */
-background: color-mix(in oklch, var(--color-paper) 6%, transparent); /* hover */
-background: color-mix(in oklch, var(--color-paper) 10%, transparent); /* active */
+background: color-mix(in oklch, var(--color-bone) 6%, transparent); /* hover */
 ```
 
 A token belongs to one role. Reusing another role's token because it is the
@@ -278,9 +277,10 @@ this element changes with it and nobody knows why. Add a token for the new
 role instead, or read the one that names what this element is.
 
 Shadows do not carry depth. Depth is a hairline and a tonal step — void to
-carbon to graphite. The one shadow the system carries,
-`rgba(0, 0, 0, 0.05) 0 1px 2px`, is a hairline's worth of grounding under a
-small control, and nothing else may cast.
+carbon to obsidian. The one shadow the system carries,
+`rgba(8, 9, 10, 0.6) 0 4px 32px`, belongs to an element that genuinely
+detaches from the page — a popover or a menu over content. A card never casts,
+and no shadow is ever used to make a flat surface look raised.
 
 ### 2.4 Typography
 
@@ -312,20 +312,28 @@ defects.
 | `text-[15px]`         | 15px | 400    | 1.5         | Sans | Dense UI, nav, buttons, web rows       |
 | `text-base`           | 16px | 400    | 1.6         | Sans | Body — the reading size                |
 | `text-lg`             | 18px | 400    | 1.6         | Sans | Lede                                   |
-| `--text-subheading`   | 20px | 500    | 1.4         | Sans | Card headline — `.d-3`                 |
-| `--text-heading-sm`   | 24px | 500    | 1.25        | Sans | Docs h2, panel title — `.d-2`          |
-| `--text-heading`      | 32px | 500    | 1.15        | Sans | Docs h1, sub-section — `.d-1`          |
-| `--text-heading-lg`   | 40px | 500    | 1.1         | Sans | Section headline                       |
+| `--text-subheading`   | 20px | 500    | 1.4         | Sans | Card headline (`.d-3` below 768px)     |
+| `--text-heading-sm`   | 24px | 500    | 1.25        | Sans | Docs h2, panel title — `.d-3`          |
+| `--text-heading`      | 32px | 500    | 1.15        | Sans | Docs h1, card headline — `.d-2`        |
+| `--text-heading-lg`   | 40px | 500    | 1.1         | Sans | Section headline — `.d-1`              |
 | `--text-display`      | 56px | 500    | 1.05        | Sans | Marketing hero — `.d-hero`             |
 
 **Body is 16px at 1.6.** It is the one value in this system chosen purely for
 long-form legibility. Dense product surfaces step down to 15px; nothing goes
 below 13px anywhere.
 
-Tracking is two tokens, not a per-step value: `--tracking-reading` at
--0.011em for every size up to the lede, and `--tracking-display` at -0.022em
-for every heading. The mono never tracks negative — `--tracking-label` opens
-it to +0.06em. A literal `letter-spacing` in `typography.css` fails the build.
+The four `.d-*` classes are the display scale, and each opens **one step down**
+below 768px and climbs at the breakpoint — so `.d-1` is 32px on a phone and
+40px on a desktop. Fluidity is responsive steps, never a clamp.
+
+Tracking is one token per step, because it has to ease off as the size comes
+down: `--tracking-display` -0.022em at 56px, `--tracking-heading-lg` -0.022em,
+`--tracking-heading` -0.02em, `--tracking-heading-sm` -0.014em,
+`--tracking-subheading` -0.012em, and `--tracking-reading` -0.011em for every
+size up to the lede. Tracking travels with the size, so a step that changes
+size at a breakpoint changes tracking with it. The mono never tracks negative —
+`--tracking-label` opens it to +0.06em. A literal `letter-spacing` fails the
+build, and so does a size declared without its tracking beside it.
 
 Rules:
 
@@ -472,8 +480,9 @@ default curve. `tokens.css` re-points `--default-transition-duration` and
 interaction may run at `instant`, but never below 150ms.
 
 **Scroll reveal.** An element entering the viewport moves from
-`translate-y-16 blur-md opacity-0` to `translate-y-0 blur-0 opacity-100` over
-`duration-reveal` or longer. Siblings stagger by `--stagger`.
+`translate-y-6 opacity-0` to `translate-y-0 opacity-100` over
+`duration-reveal`. Siblings stagger by `--stagger`. There is no blur: a blur is
+a filter, and only `transform` and `opacity` may animate.
 
 Rules:
 
@@ -501,8 +510,9 @@ Rules:
   costs a paint per frame per row.
 - `will-change` names only `transform`, `opacity` or `filter`, and only while
   the property is actually about to change.
-- **Cross-fade an icon that swaps.** The entering icon runs scale 0.25 to 1,
-  opacity 0 to 1 and blur 4px to 0; the leaving one runs the same in reverse.
+- **Cross-fade an icon that swaps.** The entering icon runs scale 0.25 to 1
+  and opacity 0 to 1; the leaving one runs the same in reverse. No blur — a
+  filter is not one of the two properties that may animate.
   A control whose two states are one shape moving — the menu button — morphs
   instead, which is better still.
 
@@ -524,7 +534,7 @@ One focus treatment, both surfaces, every component:
   defect. There are no exceptions.
 - The 2px offset must not be clipped. An ancestor with `overflow: hidden` and
   a focusable descendant at its edge is a defect.
-- The ring measures 5.55:1 against the void, above the 3:1 that SC 1.4.11
+- The ring measures 6.00:1 against the void, above the 3:1 that SC 1.4.11
   requires.
 
 It is authored once, in
@@ -554,9 +564,9 @@ not centred by what a reader sees. A play triangle, a glyph with a long
 descender, an icon with more mass on one side: each needs a nudge the maths
 does not ask for. Centre by eye and keep the nudge.
 
-**Sharp corners meet sharp corners.** Everything is 2px, so nested shapes do
-not negotiate radii — the inner shape stays square. The one curve in the
-system is the icon badge's circle, and nothing sits inside one.
+**Radii are concentric.** A shape inside another follows
+`inner = outer − gap`, so the two curves stay parallel. The formula is in 2.6,
+and below 2px the inner shape stays square.
 
 **An image carries its own edge.** A dark capture on the void merges into it.
 Give it a 1px outline offset by `-1px` — white at 8% — which draws inside the
@@ -656,16 +666,16 @@ not depend on hover to reveal a label.
 
 | Variant      | Surface   | Treatment                                                               |
 | ------------ | --------- | ----------------------------------------------------------------------- |
-| Inline prose | Both      | `paper`, 1px underline, no weight change                                |
-| Navigation   | Both      | `fog`, underline on hover                                               |
+| Inline prose | Both      | `bone`, 1px underline, no weight change                                 |
+| Navigation   | Both      | `mist`, brightens to `bone` on hover                                    |
 | Rule link    | Marketing | Underline grows from 0% to 100% width on hover, drawn in `currentColor` |
-| Chevron link | Both      | Underlined `paper` followed by `→` in the same colour                   |
-| Sidebar leaf | Docs      | `text-xs`, `ash`; current page in `paper` with an ember left rule       |
-| TOC          | Docs      | `text-sm`, `ash`; active heading in `paper`                             |
+| Chevron link | Both      | Underlined `bone` followed by `→` in the same colour                    |
+| Sidebar leaf | Docs      | 13px, `fog`; current page in `bone` with an ember left rule             |
+| TOC          | Docs      | 13px, `fog`; active heading in `bone`                                   |
 | External     | Both      | Inline treatment, plus icon and `rel="noreferrer"`                      |
 
-**States.** Hover underlines, grows the rule to full width, or brightens fog
-to paper. Focus-visible paints the ring. Active drops to 80% opacity.
+**States.** Hover underlines, grows the rule to full width, or brightens mist
+to bone. Focus-visible paints the ring. Active drops to 80% opacity.
 Disabled is not a link; render text. Loading is a prefetch in flight and must
 produce no visual change. Error means the target 404s, which the router must
 resolve to the custom 404 page.

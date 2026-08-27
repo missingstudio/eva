@@ -20,8 +20,9 @@
        .d-2     heading     32px / 1.15   docs page title, sub-section
        .d-3     heading-sm  24px / 1.25   docs h2, panel title
 
-     All at weight 500, tracking -0.022em. Weight punctuates inline; it never
-     carries a heading past 500.
+     All at weight 500. Tracking travels with the size, so it moves at the
+     breakpoint with it. Weight punctuates inline; it never carries a heading
+     past 500.
   */
   .d-hero,
   .d-1,
@@ -29,7 +30,6 @@
   .d-3 {
     font-family: var(--font-sans);
     font-weight: 500;
-    letter-spacing: var(--tracking-display);
     text-wrap: balance;
   }
 
@@ -37,36 +37,44 @@
   .d-hero {
     font-size: var(--text-heading-lg);
     line-height: var(--text-heading-lg--line-height);
+    letter-spacing: var(--tracking-heading-lg);
   }
   .d-1 {
     font-size: var(--text-heading);
     line-height: var(--text-heading--line-height);
+    letter-spacing: var(--tracking-heading);
   }
   .d-2 {
     font-size: var(--text-heading-sm);
     line-height: var(--text-heading-sm--line-height);
+    letter-spacing: var(--tracking-heading-sm);
   }
   .d-3 {
     font-size: var(--text-subheading);
     line-height: var(--text-subheading--line-height);
+    letter-spacing: var(--tracking-subheading);
   }
 
   @media (width >= 48rem) {
     .d-hero {
       font-size: var(--text-display);
       line-height: var(--text-display--line-height);
+      letter-spacing: var(--tracking-display);
     }
     .d-1 {
       font-size: var(--text-heading-lg);
       line-height: var(--text-heading-lg--line-height);
+      letter-spacing: var(--tracking-heading-lg);
     }
     .d-2 {
       font-size: var(--text-heading);
       line-height: var(--text-heading--line-height);
+      letter-spacing: var(--tracking-heading);
     }
     .d-3 {
       font-size: var(--text-heading-sm);
       line-height: var(--text-heading-sm--line-height);
+      letter-spacing: var(--tracking-heading-sm);
     }
   }
 

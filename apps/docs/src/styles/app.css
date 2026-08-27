@@ -37,13 +37,6 @@
   --color-fd-muted: var(--color-obsidian);
   --color-fd-accent: var(--color-obsidian);
   --color-fd-accent-foreground: var(--color-bone);
-
-  /*
-    One shape across every surface. Fumadocs sizes its own radius from this,
-    so the preset's controls land on the same 6px the marketing site uses
-    rather than on the preset's default.
-  */
-  --radius: 0.375rem;
 }
 
 /*
@@ -171,4 +164,15 @@
 [role="dialog"] input[type="search"],
 [role="dialog"] input[type="text"] {
   border-color: var(--color-ash);
+}
+
+/*
+  The search dialog is modal, and its field is the only thing in it that takes
+  typing, so the caret already says where the keys land. The system outline
+  draws a square ember rectangle the width of that field, inside the dialog's
+  own rounded edge, which reads as an alarm and not as a position. Fumadocs
+  asks for no outline on this input, and this is what lets that stand.
+*/
+[role="dialog"] input:focus-visible {
+  outline: none;
 }

@@ -166,7 +166,7 @@ export const BlockView = ({
           className="rounded-md border border-ember bg-card px-3 py-2"
           role="group"
         >
-          <p className="text-muted-foreground text-xs uppercase tracking-[0.06em]">
+          <p className="text-muted-foreground text-[13px] uppercase tracking-label">
             permission · call <code>{block.request}</code>
           </p>
           <p className="mt-1 whitespace-pre-wrap">{block.question}</p>
@@ -238,7 +238,7 @@ export const Turns = ({
       {turns.map((turn) => (
         <li key={turn.key}>
           <Message from={turn.author}>
-            <p className="text-muted-foreground text-xs uppercase tracking-[0.06em]">
+            <p className="text-muted-foreground text-[13px] uppercase tracking-label">
               {turn.author}
             </p>
             <MessageContent>

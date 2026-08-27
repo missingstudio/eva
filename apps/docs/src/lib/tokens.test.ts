@@ -11,6 +11,7 @@ const ui = fileURLToPath(new URL("../../../../packages/ui/", import.meta.url))
 const tokens = readFileSync(`${ui}src/styles/tokens.css`, "utf8")
 const motion = readFileSync(`${ui}src/styles/motion.css`, "utf8")
 const typography = readFileSync(`${ui}src/styles/typography.css`, "utf8")
+const surfaces = readFileSync(`${ui}src/styles/surfaces.css`, "utf8")
 
 describe("the two typefaces", () => {
   // A font from someone else's origin costs the privacy claim and the
@@ -22,6 +23,17 @@ describe("the two typefaces", () => {
     expect(urls.length).toBeGreaterThan(0)
     for (const url of urls) {
       expect(url.startsWith("../../fonts/"), `${url} is not a local file`).toBe(true)
+    }
+  })
+
+  // A `url()` is not the only way to reach a CDN. An `@import` of someone
+  // else's stylesheet costs the same privacy claim, and the check above never
+  // sees it.
+  test("no stylesheet is imported from a third-party origin", () => {
+    for (const css of [tokens, typography, surfaces, motion]) {
+      for (const match of css.matchAll(/@import\s+["']([^"']+)/g)) {
+        expect(match[1]!.startsWith("./"), `${match[1]} is not a local import`).toBe(true)
+      }
     }
   })
 
@@ -82,9 +94,13 @@ describe("the motion contract", () => {
     expect(motion).toContain("prefers-reduced-motion")
   })
 
+  // Every surface draws from the token table, not only the reveal system:
+  // surfaces.css carries more transitions than motion.css does.
   test("no animation invents a duration or an easing", () => {
     const values = [...motion.matchAll(/(?:transition|animation)[^;]*;/g)].map((m) => m[0])
-    expect(values.length).toBeGreaterThan(0)
+    const more = [...surfaces.matchAll(/(?:transition|animation)[^;]*;/g)].map((m) => m[0])
+    values.push(...more)
+    expect(more.length).toBeGreaterThan(0)
 
     for (const value of values) {
       if (/\d+m?s/.test(value)) {
@@ -123,8 +139,27 @@ describe("the display scale", () => {
   })
 
   test("no display step invents a literal tracking", () => {
-    for (const value of typography.matchAll(/letter-spacing:\s*([^;]+);/g)) {
-      expect(value[1]!, `a literal tracking: ${value[0]}`).toContain("var(--tracking-")
+    for (const css of [typography, surfaces]) {
+      for (const value of css.matchAll(/letter-spacing:\s*([^;]+);/g)) {
+        expect(value[1]!.trim(), `a literal tracking: ${value[0]}`).toMatch(
+          /^(var\(--tracking-|normal$)/,
+        )
+      }
+    }
+  })
+
+  // Tracking travels with the size: a step that changes size at a breakpoint
+  // and keeps the tracking of the step it left is the defect this catches.
+  test("every display step carries its own tracking beside its size", () => {
+    const blocks = [...typography.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+
+    for (const block of blocks) {
+      if (!/\.d-(hero|1|2|3)(?![\w-])/.test(block[1]!)) continue
+      if (!block[2]!.includes("font-size")) continue
+      expect(
+        block[2]!.includes("letter-spacing"),
+        `a size without its tracking: ${block[1]!.trim()}`,
+      ).toBe(true)
     }
   })
 })
