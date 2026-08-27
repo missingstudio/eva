@@ -1,5 +1,6 @@
 import type { CalledTool, ProposedCall, ToolDefinition, ToolInfo } from "@missingstudio/eva-core"
 import type { ContentBlock, TranscriptMessage } from "@missingstudio/eva-schema"
+import { agent, human } from "@missingstudio/eva-sdk"
 
 /**
  * The pure half of a Step: which tools the model is shown, and how the calls
@@ -45,13 +46,6 @@ export const answerLine = (called: CalledTool): string => {
   return said === "" ? head : `${head}\n${said}`
 }
 
-const message = (author: "human" | "agent", text: string): TranscriptMessage => ({
-  author,
-  blocks: [{ type: "content", block: 0, content: { type: "text", text } }],
-})
-
-export const human = (text: string): TranscriptMessage => message("human", text)
-
 /**
  * What one Step adds to the history: what the model said and asked for, then
  * what the tools answered.
@@ -69,5 +63,5 @@ export const stepMessages = (
 ): readonly TranscriptMessage[] => {
   const proposals = called.map((one) => proposalLine(one.call))
   const said = [text.trim(), ...proposals].filter((line) => line !== "").join("\n")
-  return [message("agent", said), message("human", called.map(answerLine).join("\n"))]
+  return [agent(said), human(called.map(answerLine).join("\n"))]
 }

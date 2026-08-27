@@ -126,8 +126,15 @@ rather than coercing one written in another shape — `"8"` is not a number.
 - `offering(id, row)` — a plugin whose whole effect is offering one row to the
   tool domain. The id stays the plugin's own; a plugin that also registers a
   Command or reads options writes its own effect.
+- `nativeHarness(host, spec)` — the body every native Harness shares: the
+  session mint, the fiber map, the interrupt classification, the refusal
+  group, and the no-wire answers. A plugin states its `id`, what one Prompt
+  does, and what a steer does when one arrives; stating no `steer` refuses
+  steering. `sayGap(gap)`, `human(text)` and `agent(text)` are the sentences
+  and history shapes it shares with them.
 - Types: `Plugin`, `PluginContext`, `Slots`, `RowInfos`, `Domains`,
-  `ProviderHookSpec`, `BroadcastMap`, `Frontend`, `FileDeps`.
+  `ProviderHookSpec`, `BroadcastMap`, `Frontend`, `FileDeps`, `NativeSpec`,
+  `Prompting`, `Steer`.
 
 ## Development
 
