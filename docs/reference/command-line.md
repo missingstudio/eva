@@ -528,6 +528,7 @@ stderr, and the run continues.
 | `apps/cli/src/index.ts`     | `main`, one branch per invocation                              |
 | `apps/cli/src/run.ts`       | `resolveConfig` and `start`, both taking `Overlays`            |
 | `apps/cli/src/serve.ts`     | `runServe`, which starts the `eva.web` row by id               |
+| `apps/cli/src/surface.ts`   | `openClient` and `runSurface`: how every door opens a Session  |
 | `apps/cli/src/argv.test.ts` | the parse, the messages, and the `--without-plugin` regression |
 | `apps/cli/src/main.test.ts` | every branch of `main`, against a scratch directory            |
 

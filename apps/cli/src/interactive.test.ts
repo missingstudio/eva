@@ -1,15 +1,8 @@
-import {
-  PERMISSION_OPTIONS,
-  type FrontendAnswer,
-  type PermissionRequest,
-  type ToolCall,
-} from "@missingstudio/eva-core"
-import { sessionID } from "@missingstudio/eva-schema"
+import { boot } from "@missingstudio/eva-boot"
 import type { Frontend, SurfaceInfo } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Scope } from "effect"
 import { describe, expect, it } from "vitest"
-import { boot } from "@missingstudio/eva-boot"
-import { gateFor, interacted, NoSurfaceError, pickSurface, runInteractive } from "./interactive.js"
+import { interacted, NoSurfaceError, runInteractive } from "./interactive.js"
 import type { Started } from "./run.js"
 
 const row = (over: Partial<SurfaceInfo> & { id: string }): SurfaceInfo => ({
@@ -30,24 +23,6 @@ const startable = (id: string, ran: string[]): SurfaceInfo =>
         done: Effect.sync(() => void ran.push(id)),
       } satisfies Frontend),
   })
-
-describe("pickSurface", () => {
-  it("passes over a surface that cannot ask a person", () => {
-    const rows = [row({ id: "eva.print" }), startable("eva.tui", [])]
-    expect(pickSurface(rows)?.id).toBe("eva.tui")
-  })
-
-  // A row without `start` names a surface the build knows of but cannot run.
-  it("passes over an interactive row with nothing to start", () => {
-    expect(pickSurface([row({ id: "eva.tui", interactive: true })])).toBeUndefined()
-  })
-
-  it("takes the first that can run, so registration order decides", () => {
-    const ran: string[] = []
-    const rows = [startable("first", ran), startable("second", ran)]
-    expect(pickSurface(rows)?.id).toBe("first")
-  })
-})
 
 const withKernel = <A>(
   surfaces: readonly SurfaceInfo[],
@@ -167,48 +142,5 @@ describe("how an interactive run ends", () => {
     expect(stop.code).toBe(1)
     expect(stop.said).toContain("eva.print")
     expect(stop.helped).toBe(true)
-  })
-})
-
-/**
- * The gate is composed here and nowhere else, because this is the only place
- * an `Api` and a live `Frontend` both exist. Under it, a tool call's `ask`
- * reaches the person at this terminal.
- */
-describe("the gate an interactive run composes", () => {
-  const GATED = sessionID("sess_gate")
-  const ASKED: PermissionRequest = {
-    sessionId: GATED,
-    toolCall: { toolCallId: "call_1", title: "edit may change something. Run it?" },
-    options: PERMISSION_OPTIONS,
-  }
-  const CALL: ToolCall = {
-    id: "call_1",
-    name: "edit",
-    args: { path: "a.ts" },
-    session: GATED,
-  }
-
-  const answering = (answer: FrontendAnswer): Frontend => ({
-    id: "eva.tui",
-    ask: () => Effect.succeed(answer),
-    done: Effect.void,
-  })
-
-  const asking = (surface: Frontend | undefined) =>
-    withKernel([row({ id: "eva.tui", interactive: true })], (started) =>
-      gateFor(started.kernel, () => surface)(() => Effect.never)(ASKED, CALL),
-    )
-
-  it("carries a person's answer back as the option they named", async () => {
-    const outcome = await asking(answering({ kind: "permission", optionId: "allow_once" }))
-    expect(outcome).toStrictEqual(Exit.succeed({ kind: "allow_once" }))
-  })
-
-  // The surface starts after the API is built, so until it does an ask has
-  // nobody to reach — which is a denial and never a wait.
-  it("denies while no surface is running", async () => {
-    const outcome = await asking(undefined)
-    expect(Exit.isSuccess(outcome) && outcome.value.kind).toBe("reject_once")
   })
 })
