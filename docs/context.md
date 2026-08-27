@@ -579,6 +579,16 @@ states what it enforces, so a filler that contains nothing says so instead of
 looking like one that does.
 _Avoid_: Jail, container, Seatbelt (that is one filler of it)
 
+**Sandbox Policy**:
+What one command may reach while it runs: readable paths, writable paths, and
+the network. It is the second thing in Eva the word _policy_ names, and the
+only one: it is the term of art every containment tool uses, and a caller
+states one where a Rule Set is never in the room. So it is always spelled in
+full — the bare word `policy` is the Rule Set's config key, and a Mode's
+`_Avoid_` line holds it there.
+_Avoid_: Permissions, sandbox rules, Rule Set (that is what the gate judges a
+call against)
+
 ## Interfaces
 
 **Console**:

@@ -45,7 +45,7 @@ whatever they claim.
 plugins:
   - id: eva.sched
     options:
-      serial: [web]
+      barrier: [web]
 ```
 
 A name no row holds is reported as a missed edit through `tool.updated`, so a
@@ -62,7 +62,7 @@ The runtime then holds every group to four rules:
 - A row whose claim answers `false` for this call's arguments runs alone.
 - A row whose claim throws runs alone: a classifier that cannot answer has not
   said yes.
-- A row named in `serial` loses its claim, so it runs alone as well.
+- A row named in `barrier` loses its claim, so it runs alone as well.
 
 Nothing here makes a tool parallel-safe. There is no `parallel` option, and
 that is the point: a tool that shares state with its own next call is the only
@@ -104,9 +104,9 @@ so both are barriers.
 
 ## API
 
-- `sched` — the plugin definition, id `eva.sched`. With no `serial` option it
+- `sched` — the plugin definition, id `eva.sched`. With no `barrier` option it
   registers nothing and every tool's own claim stands.
-- `serialNames(options): readonly string[]` — the names the option holds, for a
+- `barrierNames(options): readonly string[]` — the names the option holds, for a
   suite that wants the reading without a kernel.
 
 ## Development
