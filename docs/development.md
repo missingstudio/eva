@@ -257,14 +257,14 @@ Factory and surface stages both belong here, and this table is the only place
 in `docs/` that says done — every other document describes the work, and none
 of them tracks it.
 
-| Stage                      | State       | What is left |
-| -------------------------- | ----------- | ------------ |
-| 0 — Wire                   | done        | nothing      |
-| 1 — Workflow               | done        | nothing      |
-| C0 — Console               | done        | nothing      |
-| W0 — Client runtime        | done        | nothing      |
-| W1 — The wire and the page | done        | nothing      |
-| 2 — Tools and the loop     | in progress | 14 tickets   |
+| Stage                      | State | What is left |
+| -------------------------- | ----- | ------------ |
+| 0 — Wire                   | done  | nothing      |
+| 1 — Workflow               | done  | nothing      |
+| C0 — Console               | done  | nothing      |
+| W0 — Client runtime        | done  | nothing      |
+| W1 — The wire and the page | done  | nothing      |
+| 2 — Tools and the loop     | done  | nothing      |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
@@ -283,12 +283,11 @@ run and what a full measurement costs.
 W1's four paths — `packages/session-view`, the read half of `plugins/api`,
 `plugins/web`, and `apps/web` — all ship.
 
-**Stage 2 — Tools and the loop.** In progress. The stage plan is written: 14
-tickets in five waves, each with a priority, an effort, and what it depends
-on. The tickets build in dependency order, one commit each, and this row
-records the result as each lands.
-
-Six have landed, and the action surface is complete.
+**Stage 2 — Tools and the loop.** Done. Fourteen tickets landed in five waves,
+in dependency order. The stage exits on the deterministic gate in `verify`:
+every clause of the roadmap's exit test is proven with no model in the room,
+and `packages/conformance/src/stage-2-exit.test.ts` is the ledger that says
+where each one is proven and fails when a clause or a proof moves.
 
 The **hook failure rule** is in the kernel: a boundary declares whether its
 hooks decide or observe, a deciding hook that throws denies the call it was
@@ -321,5 +320,53 @@ a command inside whatever the Sandbox slot holds, reading that slot per call.
 A tool that works for a while says so while it works, through a context the
 pipeline hands it.
 
-What is left is the gate, the modes, the scheduler, the loop, the write half of
-`eva.api`, the Blocks on both surfaces, and the exit test.
+The **deterministic gate** ships as `eva.tool.policy`. A Rule Set under the
+`policy` config key allows, denies or asks over the words a command would run,
+and `eva policy check` reads the same file a Run reads, so CI and the gate
+cannot disagree. Protected paths are checked before the rules and are
+un-overridable by ordering rather than by a flag. A shell line with a
+redirection, a substitution or a variable is one Opaque Invocation, matched
+against no rule and failed closed.
+
+**Named permission modes** ship as `eva.approval`: `read-only`, `supervised`,
+`autonomous` and `plan`, each a rebuild of the tool registry plus a mandate at
+the deciding boundary. The gate answers in the Agent Client Protocol's four
+options, one call asks one person once whichever hook asked, and
+`allow_always` writes a rule into the person's own config and never the
+repo's. A mode change is a `mode` payload on the Trace.
+
+**The schedule** ships as `eva.sched`. A group of calls is split into windows:
+consecutive parallel-safe calls run together under a bound, and every other
+call is a Barrier. A parallel window's records are held back and committed in
+source order, so the Trace reads the same bytes whichever call answered first,
+and an unclassified tool runs alone.
+
+**The loop** ships as `eva.harness.loop`, the harness domain's second entry and
+the first with agency. One Step is one Run, so the calls a response proposed
+commit inside the Run that proposed them. It stops when the model asks for no
+more tools, when the Budget is exhausted, or at the max-steps fuse, and every
+ending is a Stop Reason the schema already carries.
+
+**Steering** landed with no plugin of its own and no new extension point,
+because only a Harness knows where its next Step begins. A `next-step` line
+stops the group before it opens another window; the window that was running
+commits whole and the calls that never started are `skipped`. `next-run` rides
+the next Prompt.
+
+**The write half of the Session API** ships as `eva.api`: `submit`, `cancel`,
+`answer` and setting the model, over the socket W1 opened. Sends carry a
+client-minted idempotency key, so a retry after a flaky reconnect is one Run.
+The contract suite crosses the wire for eight of the nine methods, and the
+records a Run leaves are the same whichever door drove it.
+
+**Both surfaces draw the stage's work.** The page answers a permission request
+over its own event stream, so the four options are reachable from a browser,
+and a mode change is a Block the terminal and the page both draw.
+
+Three limits are stated where a reader of that part looks, not here: a
+command's streamed output and the fact a call ran in parallel are on the Trace
+and on neither surface ([session-view](../packages/session-view/README.md));
+the OpenAI adapters carry no tools
+([provider-openai](../plugins/provider-openai/README.md)); and a permission
+request is named by a tool call id, which repeats across Runs
+([boot](../packages/boot/README.md)).
