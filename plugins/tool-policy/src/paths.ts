@@ -72,8 +72,6 @@ const SHELL_RC: readonly string[] = [
 // Protected by base name, wherever the file is.
 export const PROTECTED_FILES: readonly string[] = [...TOOLCHAIN, ...CI, ...MANIFESTS, ...SHELL_RC]
 
-export const PROTECTED_TREES: readonly string[] = TREES
-
 const segmentsOf = (path: string): readonly string[] =>
   path.split(/[/\\]+/).filter((segment) => segment !== "" && segment !== ".")
 
