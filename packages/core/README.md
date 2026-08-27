@@ -80,7 +80,8 @@ same rule:
 | `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                                                                              |
 | `session-api.ts` | The whole of what a surface may do to Eva                                                                                                                |
 | `session.ts`     | `submit`, the one-Run mechanism                                                                                                                          |
-| `tool.ts`        | One tool call and one group of them: the execution, the decisions, the schedule                                                                          |
+| `deciding.ts`    | The words a gate reasons in: `ToolCall`, `ToolDecision`, `strictest`, the four options, `argvOf`, `editOf`                                               |
+| `tool.ts`        | One tool call and one group of them: the execution and the schedule                                                                                      |
 | `sink.ts`        | `sinkOf`, the one store-to-sink entry, over the `sequenced` and `numbered` seams                                                                         |
 | `rows.ts`        | The row-shaped store both SQL sinks keep: columns, codec, head row, allocation                                                                           |
 | `glob.ts`        | `globMatcher`: what a glob pattern means, for every `FileSystem` filler                                                                                  |
