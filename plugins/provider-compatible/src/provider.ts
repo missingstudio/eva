@@ -161,6 +161,12 @@ export const makeCompatibleProvider = (options: CompatibleOptions): Provider =>
   streamingProvider<OpenAI>({
     id: options.id,
     available: () => options.client !== undefined || options.credential !== false,
+    /**
+     * The Chat Completions dialect can carry tools and this adapter does not
+     * put them on the wire yet, so it says so — a Run that offered some is
+     * Degraded rather than one whose model quietly proposed no calls.
+     */
+    carriesTools: false,
     classify,
 
     clientFor: Effect.fn("eva.provider.compatible.client")(function* () {

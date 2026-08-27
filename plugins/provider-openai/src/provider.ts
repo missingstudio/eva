@@ -138,6 +138,12 @@ export const makeOpenAIProvider = (options: OpenAIOptions): Provider =>
   streamingProvider<OpenAI>({
     id: PROVIDER_ID,
     available: () => options.client !== undefined || options.credential !== undefined,
+    /**
+     * The Responses dialect can carry tools and this adapter does not put them
+     * on the wire yet, so it says so — a Run that offered some is Degraded
+     * rather than one whose model quietly proposed no calls.
+     */
+    carriesTools: false,
     classify,
 
     clientFor: Effect.fn("eva.provider.openai.client")(function* () {

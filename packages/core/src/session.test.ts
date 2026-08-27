@@ -85,6 +85,7 @@ const fakeProvider = (
 ): Provider => ({
   id: "eva.provider.fake",
   available: () => available,
+  carriesTools: true,
   turn: () => providerTurn(stream, stopReason),
 })
 
@@ -298,6 +299,7 @@ describe("the calls a response proposed", () => {
   ): Provider => ({
     id: "eva.provider.fake",
     available: () => true,
+    carriesTools: true,
     turn: () => providerTurn(stream, "end_turn", calls),
   })
 
@@ -469,6 +471,7 @@ describe("the calls a response proposed", () => {
     const watching: Provider = {
       id: "eva.provider.fake",
       available: () => true,
+      carriesTools: true,
       turn: (request) => {
         seen.push(request)
         return providerTurn(Stream.empty, "end_turn")
@@ -489,6 +492,7 @@ describe("a response a cap cut short", () => {
   const truncated = (stopReason: StopReason): Provider => ({
     id: "eva.provider.fake",
     available: () => true,
+    carriesTools: true,
     turn: () =>
       providerTurn(Stream.fromIterable([text("half a call")]), stopReason, [
         { id: "call_1", name: "read", args: {} },
@@ -512,6 +516,7 @@ describe("a response a cap cut short", () => {
     const silent: Provider = {
       id: "eva.provider.fake",
       available: () => true,
+      carriesTools: true,
       turn: () =>
         providerTurn(Stream.fromIterable([text("working")]), undefined, [
           { id: "call_1", name: "read", args: {} },

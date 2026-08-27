@@ -87,6 +87,21 @@ export interface Provider {
   readonly id: string
   // Checked at construction, so a Run never starts against a dead provider.
   readonly available: () => boolean
+  /**
+   * Whether this Provider carries the tools a request offers.
+   *
+   * It is stated rather than inferred, for the reason a Sandbox states what it
+   * enforces: a filler that carries none should say so instead of looking like
+   * one that does. An adapter that shows a model no tools answers a Turn that
+   * proposed no calls — which is exactly what a model that wanted none
+   * answers — so a Run that could not tell the two apart ended its Prompt at
+   * the first Step with nothing on the Trace to say why.
+   *
+   * A Run that offers tools to a Provider carrying none is Degraded, and says
+   * so. This is not a promise that any particular tool is understood; it is a
+   * promise that the list reaches the model.
+   */
+  readonly carriesTools: boolean
   readonly turn: (request: ProviderRequest) => ProviderTurn
 }
 

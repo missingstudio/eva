@@ -60,6 +60,8 @@ const answering = (
   return {
     id,
     available: () => true,
+    // A script carries whatever a suite writes into it, tools included.
+    carriesTools: true,
     turn: (request) => {
       keep?.(request)
       const entry = turns[served]

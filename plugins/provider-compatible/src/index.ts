@@ -3,8 +3,12 @@ import { Effect } from "effect"
 import { endpointOf, readEntries } from "./entry.js"
 import { PLUGIN_ID, makeCompatibleProvider } from "./provider.js"
 
-export * from "./entry.js"
-export * from "./provider.js"
+// The constructor and the plugin, and not the dialect or the entry reader:
+// both are internal seams with their own suites, and every rule this Provider
+// shares with the others is held to one contract in `packages/conformance`,
+// driven through `turn`.
+export { endpointOf, readEntries, type CompatibleEntry } from "./entry.js"
+export { makeCompatibleProvider, PLUGIN_ID, type CompatibleOptions } from "./provider.js"
 
 // One declared key. The endpoint names inside it are the person's own, so
 // they are read one level down and never swept.

@@ -109,13 +109,18 @@ Carrying them is this plugin's own change and reaches no other.
 - `readEntries(providers)` — reads the raw `providers` mapping into
   `CompatibleEntry` values, one per namespace.
 - `PLUGIN_ID` — `"eva.provider.compatible"`, the prefix of every compound id.
-- `classify(cause): ErrorClass` — maps an SDK failure to one error class.
-- `toStopReason(reason)` — maps a `finish_reason` to Eva's stop reason.
-- `toUsage(namespace, model, usage)` — maps the API's counters to one usage
-  payload, cached tokens subtracted.
-- `toMessages(history)` — folds transcript messages into API messages.
-- `makeBlocks()` — numbers runs of one delta kind, because this wire carries
-  no block identity.
+- `endpointOf(entry, credential)` — one entry and what was found for it, as the
+  options one provider is built with.
+
+The dialect is not published. `classify`, `toStopReason`, `toUsage`,
+`toMessages` and `makeBlocks` are how this wire's events become Eva's payloads:
+internal seams with their own suite in
+[src/provider.test.ts](src/provider.test.ts). What every Provider shares is
+held to one contract in
+[packages/conformance](../../packages/conformance/README.md), driven through
+`turn` — including that this adapter states `carriesTools: false`, because it
+does not put a request's tools on the wire yet and a Run that offered some
+should say so rather than read the silence as an answer.
 
 ## Development
 

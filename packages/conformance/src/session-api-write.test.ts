@@ -164,6 +164,7 @@ describe("a Prompt, through each door", () => {
 const parked = (reached: Deferred.Deferred<void>): Provider => ({
   id: FAKE_PROVIDER,
   available: () => true,
+  carriesTools: true,
   turn: () =>
     providerTurn(
       Stream.concat(
