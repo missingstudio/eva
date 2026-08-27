@@ -2,6 +2,7 @@ import type { SessionAPI, SubmitInput } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import { Effect, Stream, SubscriptionRef } from "effect"
 import {
+  followSession,
   runPrompt,
   type ClientState,
   type RunOptions,
@@ -25,6 +26,18 @@ export interface Client {
     each: (signal: RunSignal) => void,
     options?: RunOptions,
   ) => Effect.Effect<RunOutcome>
+  /**
+   * One Session, watched rather than opened: fold, watch to the close of the
+   * Run that is open, fold again. It never ends on its own, so a caller stops
+   * it by interrupting.
+   *
+   * A surface that only reads a Session takes this instead of reaching past
+   * the handle to `api.attach` and `api.watch`. The refold rule is the
+   * runtime's — which positions are honest, what a refused Cursor means, when
+   * the pipe is worth mentioning — and a surface that spelled it again would
+   * be a second answer to keep in step.
+   */
+  readonly follow: (session: SessionID, each: (signal: RunSignal) => void) => Effect.Effect<void>
 }
 
 /**
@@ -56,24 +69,35 @@ export const makeClient = Effect.fn("eva.client")(function* (
     ),
   )
 
+  /**
+   * One reader of the Session, counted while it reads. A reader says for
+   * itself when it has caught up after a restore, so the health watcher above
+   * leaves the state alone while any of them is open — and the last one to
+   * finish gives the state back to the pipe.
+   */
+  const counted = <A>(reading: Effect.Effect<A>): Effect.Effect<A> =>
+    Effect.ensuring(
+      Effect.suspend(() => {
+        open += 1
+        return reading
+      }),
+      Effect.suspend(() => {
+        open -= 1
+        // The last reader is done, so what the pipe says now is the whole
+        // story again.
+        if (open > 0) return Effect.void
+        return Effect.flatMap(SubscriptionRef.get(transport.health), (health) =>
+          SubscriptionRef.set(state, health),
+        )
+      }),
+    )
+
   return {
     api: transport.api,
     state,
     run: (session, input, each, options) =>
-      Effect.ensuring(
-        Effect.suspend(() => {
-          open += 1
-          return runPrompt({ transport, state, session }, input, each, options)
-        }),
-        Effect.suspend(() => {
-          open -= 1
-          // The last Run is over, so what the pipe says now is the whole
-          // story again.
-          if (open > 0) return Effect.void
-          return Effect.flatMap(SubscriptionRef.get(transport.health), (health) =>
-            SubscriptionRef.set(state, health),
-          )
-        }),
-      ),
+      counted(Effect.suspend(() => runPrompt({ transport, state, session }, input, each, options))),
+    follow: (session, each) =>
+      counted(Effect.suspend(() => followSession({ transport, state, session }, each))),
   }
 })

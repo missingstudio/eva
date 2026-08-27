@@ -1,4 +1,4 @@
-import type { Client } from "@missingstudio/eva-client-runtime"
+import type { Client, RunSignal } from "@missingstudio/eva-client-runtime"
 import type { SessionHeader } from "@missingstudio/eva-core"
 import type { Payload, SessionID } from "@missingstudio/eva-schema"
 import { blocksOf } from "@missingstudio/eva-session-view"
@@ -29,48 +29,37 @@ export const tailOf = (said: string, payload: Payload): string =>
   payload.kind === "text" && payload.content.type === "text" ? said + payload.content.text : said
 
 /**
- * Attach, then watch from the fold's own position. The watch resumes from the
- * position the fold ended at, so nothing between the two calls is missed and
- * nothing already folded arrives twice.
+ * What one Run signal changes about what the page holds. A fold replaces the
+ * tail, so the tail goes with it; a payload of the live stream grows it.
  *
- * A watch that ends is answered by folding again, however it ended: the Run
- * closed, the pipe went, or the Cursor was refused. A refusal is a fact about
- * one subscription and not an event in the Session, so a fresh fold answers it
- * and there is no gap.
- *
- * Nothing here waits for the pipe. A call made while the pipe is down is
- * slower and never differently typed, so `attach` is the wait.
+ * The protocol behind the signals is the Client's: attach, watch from the
+ * fold's own position, and fold again however the watch ended — the Run
+ * closed, the pipe went, or the Cursor was refused. This page held a second
+ * spelling of that rule until `Client.follow` existed. What is here is the
+ * page's own: which Blocks it draws and what it prices.
+ */
+const readingOf =
+  (signal: RunSignal) =>
+  (was: Reading): Reading => {
+    if (signal.kind === "payload") return { ...was, said: tailOf(was.said, signal.payload) }
+    const folded: Folded = {
+      kind: "folded",
+      at: signal.transcript.at,
+      turns: blocksOf(signal.transcript),
+      cost: signal.transcript.cost(),
+    }
+    return { folded, said: "" }
+  }
+
+/**
+ * One Session, followed through the Client. It is the page's whole reading
+ * protocol: one call, and the signals it answers with.
  */
 export const follow = (
   one: Client,
   session: SessionID,
   each: (reading: (was: Reading) => Reading) => void,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const record = yield* Effect.scoped(one.api.attach(session))
-    const folded: Folded = {
-      kind: "folded",
-      at: record.at,
-      turns: blocksOf(record),
-      cost: record.cost(),
-    }
-    // The fold replaces the tail, so the tail goes with it.
-    each(() => ({ folded, said: "" }))
-
-    // A refused Cursor ends the watch. The fold below answers it.
-    const watching = Stream.catchTag(
-      one.api.watch(session, record.at),
-      "ResumeTooFarBehind",
-      () => Stream.empty,
-    )
-
-    yield* Stream.runForEach(
-      Stream.takeUntil(watching, (payload) => payload.kind === "finished"),
-      (payload) => Effect.sync(() => each((was) => ({ ...was, said: tailOf(was.said, payload) }))),
-    )
-
-    return yield* Effect.suspend(() => follow(one, session, each))
-  })
+): Effect.Effect<void> => one.follow(session, (signal) => each(readingOf(signal)))
 
 /**
  * Runs one read over the Client for as long as the component is drawn, and
