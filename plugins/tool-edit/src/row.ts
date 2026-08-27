@@ -1,8 +1,8 @@
-import { toolText, type Hunk, type ToolInfo, type ToolResult } from "@missingstudio/eva-core"
+import { editOf, toolText, type ToolInfo, type ToolResult } from "@missingstudio/eva-core"
 import type { ToolKind } from "@missingstudio/eva-schema"
 import type { PluginContext } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-import { makeEditTool, type EditInput, type EditOutcome, type EditTool } from "./tool.js"
+import { makeEditTool, type EditOutcome, type EditTool } from "./tool.js"
 
 // What the model is told it may send.
 export const EDIT_TOOL_INPUT = {
@@ -34,38 +34,6 @@ export const EDIT_TOOL_INPUT = {
     },
   },
   required: ["path", "hunks"],
-}
-
-const hunkOf = (found: unknown): Hunk | undefined => {
-  if (typeof found !== "object" || found === null) return undefined
-  const { find, replace } = found as Record<string, unknown>
-  return typeof find === "string" && typeof replace === "string" ? { find, replace } : undefined
-}
-
-// Every Hunk, or nothing when one of them is not a Hunk. A part of an Edit is
-// not an Edit: the applier lands all of them or none.
-const hunksOf = (listed: readonly unknown[]): readonly Hunk[] | undefined => {
-  const hunks: Hunk[] = []
-  for (const one of listed) {
-    const hunk = hunkOf(one)
-    if (hunk === undefined) return undefined
-    hunks.push(hunk)
-  }
-  return hunks
-}
-
-// The arguments, read as the Edit they are. Nothing means they name no edit.
-const editOf = (input: unknown): EditInput | undefined => {
-  if (typeof input !== "object" || input === null) return undefined
-  const asked = input as Record<string, unknown>
-  const path = asked["path"]
-  const listed = asked["hunks"]
-  if (typeof path !== "string" || path === "" || !Array.isArray(listed)) return undefined
-
-  const hunks = hunksOf(listed)
-  if (hunks === undefined || hunks.length === 0) return undefined
-
-  return { path, hunks, ...(asked["dryRun"] === true ? { dryRun: true } : {}) }
 }
 
 /**

@@ -1,5 +1,4 @@
-import type { DiffApplier, FileSystem, Hunk } from "@missingstudio/eva-core"
-import { readShape } from "@missingstudio/eva-sdk"
+import { editOf, type DiffApplier, type EditInput, type FileSystem } from "@missingstudio/eva-core"
 import { Effect } from "effect"
 
 /**
@@ -25,40 +24,6 @@ export interface Ground {
   readonly applier: Effect.Effect<DiffApplier | undefined>
 }
 
-interface Edited {
-  readonly path: string
-  readonly hunks: readonly Hunk[]
-}
-
-/**
- * The arguments read as the Edit they are, or nothing when they name none.
- *
- * It reads the shape and never the tool's name, so a second write tool that
- * takes an Edit is previewed the same way and one that takes something else is
- * left alone.
- */
-export const editIn = (args: unknown): Edited | undefined => {
-  const found = readShape(args, "mapping")
-  if (found === undefined) return undefined
-
-  const path = readShape(found["path"], "string")
-  const listed = readShape(found["hunks"], "list")
-  if (path === undefined || path === "" || listed === undefined || listed.length === 0) {
-    return undefined
-  }
-
-  const hunks: Hunk[] = []
-  for (const one of listed) {
-    const hunk = readShape(one, "mapping")
-    if (hunk === undefined) return undefined
-    const find = readShape(hunk["find"], "string")
-    const replace = readShape(hunk["replace"], "string")
-    if (find === undefined || replace === undefined) return undefined
-    hunks.push({ find, replace })
-  }
-  return { path, hunks }
-}
-
 /**
  * One side of one hunk, on one line and inside the bound. A side that is
  * whitespace alone is the mark by itself: there is nothing to read in it, and
@@ -70,7 +35,7 @@ const side = (mark: string, text: string): string => {
   return `${mark} ${flat.length > SIDE ? `${flat.slice(0, SIDE)}…` : flat}`
 }
 
-const shown = (edit: Edited): readonly string[] => [
+const shown = (edit: EditInput): readonly string[] => [
   ...edit.hunks.slice(0, HUNKS).flatMap((hunk) => [side("-", hunk.find), side("+", hunk.replace)]),
   ...(edit.hunks.length > HUNKS ? [`… and ${edit.hunks.length - HUNKS} more`] : []),
 ]
@@ -80,6 +45,11 @@ const counted = (hunks: number): string => `${hunks} hunk${hunks === 1 ? "" : "s
 /**
  * The question about a call that names an Edit, or nothing when the arguments
  * name none — a caller that gets nothing asks what it was going to ask.
+ *
+ * The arguments are read by `editOf`, the same reader the write tool runs, so
+ * the question and the write cannot disagree about what the call means — a dry
+ * run says it writes nothing, because a person asked about a write that is not
+ * one is answering the wrong question.
  *
  * The applier answers whether the change resolves, so a person is told when
  * the edit cannot land at all rather than approving a call that then fails.
@@ -91,7 +61,7 @@ export const previewed = Effect.fn("eva.approval.preview")(function* (
   name: string,
   args: unknown,
 ) {
-  const edit = editIn(args)
+  const edit = editOf(args)
   if (edit === undefined) return undefined
 
   const files = yield* ground.files
@@ -104,8 +74,10 @@ export const previewed = Effect.fn("eva.approval.preview")(function* (
         )
 
   const head =
-    refused === undefined
-      ? `${name} changes ${edit.path}, ${counted(edit.hunks.length)}:`
-      : `${name} cannot change ${edit.path} — ${refused}:`
+    refused !== undefined
+      ? `${name} cannot change ${edit.path} — ${refused}:`
+      : edit.dryRun === true
+        ? `${name} previews ${edit.path}, ${counted(edit.hunks.length)}, and writes nothing:`
+        : `${name} changes ${edit.path}, ${counted(edit.hunks.length)}:`
   return [head, ...shown(edit), "Run it?"].join("\n")
 })

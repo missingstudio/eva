@@ -174,6 +174,14 @@ is shown marked, because an Estimate read as a Cost is the mistake the pair
 exists to prevent, and one record that cannot be priced leaves it absent.
 _Avoid_: Cost, derived cost, approximate cost
 
+**Edit**:
+One file, and the Hunks to land in it, in order. It is what a write tool is
+asked to do and what a gate's question shows, read from a call's arguments by
+one reader — so the question a person answers and the write that follows
+cannot mean two different things.
+_Avoid_: Patch, change set, diff (a diff is what a person is shown; an Edit is
+what lands)
+
 **Hunk**:
 One replacement inside one file: the text to find, and the text that takes its
 place. A Hunk lands when its text appears exactly once in what the Hunks before
