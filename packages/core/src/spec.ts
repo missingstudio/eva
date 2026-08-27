@@ -1,18 +1,17 @@
-import type { Claim, ErrorClass, SessionID, Spend } from "@missingstudio/eva-schema"
+import type { Spend } from "@missingstudio/eva-schema"
 
-// A statement of intent whose acceptance criteria a machine can check.
+/**
+ * What a Run was asked to do.
+ *
+ * One field, because one field is what anything reads. It carried acceptance
+ * criteria and a Budget too — declared, never written by any caller and never
+ * read by any Run, so both were surface a reader had to learn and could not
+ * use. The stage that checks a Spec against criteria is the stage that adds
+ * them back, with a reader.
+ */
 export interface Spec {
   readonly intent: string
-  readonly criteria?: readonly string[]
-  readonly budget?: BudgetLimits
 }
-
-// What a Unit returns. Escalation to a human is an Outcome, not an error.
-export type Outcome =
-  | { readonly kind: "done"; readonly claim: Claim }
-  | { readonly kind: "failed"; readonly claim: Claim; readonly errorClass?: ErrorClass }
-  | { readonly kind: "needs_human"; readonly question: string; readonly session: SessionID }
-  | { readonly kind: "exhausted"; readonly spent: BudgetState }
 
 // One field of a Budget is a limit; the Budget is the whole set.
 export interface BudgetLimits {

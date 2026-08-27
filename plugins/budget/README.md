@@ -46,7 +46,7 @@ that kind:
 ```yaml
 plugins:
   - id: eva.budget
-    options: { tokens: 200000, minutes: 30, steps: 50 }
+    options: { tokens: 200000, minutes: 30, steps: 50, costUsd: 5 }
 ```
 
 | Option    | Type   | What it limits                              |
@@ -54,6 +54,7 @@ plugins:
 | `tokens`  | number | Input plus output tokens across the run     |
 | `minutes` | number | Wall-clock minutes since the run started    |
 | `steps`   | number | Steps — one per provider turn that answered |
+| `costUsd` | number | A ceiling in dollars, held as Ticks         |
 
 When a run reaches a limit, the next step does not start. The run ends with an
 `exhausted` outcome that names the limit it reached, and the partial work is
@@ -105,11 +106,15 @@ beside the catalog — [docs/decisions.md](../../docs/decisions.md) records why.
 - `makeBudget(deps: BudgetDeps): Effect<Budget>` — the implementation. The
   returned `Budget` has `charge(usage)`, `state`, and `check`.
 
-Config sets no cost limit: `BudgetLimits.costTicks` exists in the contract,
-and only a direct caller of `makeBudget` can set it. The plugin enforces
-nothing itself — `check` answers and the caller decides, and core keeps
-charging either way, so an exhausted budget stops the next step rather than
-the one in flight.
+`costUsd` is read in dollars and held as Ticks, because dollars are the unit a
+person sets a ceiling in and Ticks are what a Cost is counted in. It used to be
+that no key reached `BudgetLimits.costTicks` at all — the contract enforced it
+from the first day and only a direct caller of `makeBudget` could set it, so the
+limit most people want was the one they could not write down.
+
+The plugin enforces nothing itself — `check` answers and the caller decides, and
+core keeps charging either way, so an exhausted budget stops the next step
+rather than the one in flight.
 
 ## Development
 

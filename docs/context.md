@@ -131,7 +131,10 @@ _Avoid_: Worker (that is the machine), actor, executor
 
 **Outcome**:
 What a Unit returns: Done, Failed, NeedsHuman, or Exhausted. Escalation to a
-human is an Outcome, not an error.
+human is an Outcome, not an error. It is a word rather than a type: a Claim and
+a Stop Reason carry every one of the four today, and the type that named them
+was declared, filled by nothing and read by nothing until it was deleted. The
+stage that needs a fifth is the stage that mints it, with a reader.
 
 **Claim**:
 An assertion of success by whatever did the work. A Claim is never Evidence,

@@ -3,9 +3,27 @@ import { Effect } from "effect"
 import { judge } from "./gate.js"
 import { POLICY_KEYS, rulesOf, sayFault } from "./rules.js"
 
-export * from "./gate.js"
-export * from "./paths.js"
-export * from "./rules.js"
+/**
+ * The seam, and not the vocabulary.
+ *
+ * `judge`, the splitter's readings, `matches`, `protects`, the Mode table and
+ * the rest are how this gate reasons. Publishing them made this package's
+ * interface as wide as its implementation: a reader opening it saw twenty
+ * names and could not tell that three of them were the contract. Each is an
+ * internal seam with its own suite beside it.
+ *
+ * What is here is what a caller outside this plugin reaches: the plugin
+ * itself, and the three things `eva policy check` needs to read a person's
+ * file and say what is wrong with it.
+ */
+export {
+  checkRules,
+  sayFault,
+  unreachableIn,
+  type Fault,
+  type Rule,
+  type RuleSet,
+} from "./rules.js"
 
 /**
  * The deterministic gate. It decides at `tool.execute.before`, which is a

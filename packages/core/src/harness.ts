@@ -1,9 +1,4 @@
-import type {
-  AgentCapabilities,
-  ClientCapabilities,
-  PermissionOutcome,
-  PermissionRequest,
-} from "@missingstudio/eva-acp"
+import type { AgentCapabilities } from "@missingstudio/eva-acp"
 import type { Payload, SessionID, StopReason } from "@missingstudio/eva-schema"
 import type { Effect, Scope, Stream } from "effect"
 import type { SubmitInput } from "./session-api.js"
@@ -14,11 +9,18 @@ import type { RunInput, RunResult } from "./session.js"
  * of ACP lands with the row that needs it. It did not change when the harness
  * domain gained a runnable row — what Eva hands a native harness is
  * `HarnessHost`, not a second contract.
+ *
+ * `initialize` and the `HarnessClient` it took are gone. They were the ACP
+ * handshake, declared here early: nothing called `initialize`, both adapters
+ * answered it with their own capabilities unchanged, and `HarnessClient` had no
+ * filler at all. A permission reaches a person through `Approving` — the tool
+ * execution's own gate — which is where the protocol's client half is promised
+ * to arrive. The rest of ACP lands with the row that needs it, and that is what
+ * this paragraph has always said.
  */
 export interface Harness {
   readonly id: string
   readonly capabilities: AgentCapabilities
-  readonly initialize: (client: HarnessClient) => Effect.Effect<AgentCapabilities>
   readonly createSession: (cwd: string) => Effect.Effect<SessionID, never, Scope.Scope>
   readonly resumeSession: (id: SessionID) => Effect.Effect<ResumeResult>
   readonly prompt: (id: SessionID, input: SubmitInput) => Effect.Effect<StopReason>
@@ -61,13 +63,6 @@ export interface HarnessHost {
    * rule `submit` already follows.
    */
   readonly report: (payloads: readonly Payload[]) => Effect.Effect<void>
-}
-
-export interface HarnessClient {
-  readonly capabilities: ClientCapabilities
-  readonly requestPermission: (request: PermissionRequest) => Effect.Effect<PermissionOutcome>
-  // Lenient for the same reason `updates` is: this is the wire, not a record.
-  readonly sessionUpdate: (update: unknown) => Effect.Effect<void>
 }
 
 // `undetectable` is what keeps a resume honest: the adapter cannot tell.

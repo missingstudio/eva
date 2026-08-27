@@ -15,9 +15,21 @@ import {
 } from "./mode.js"
 import { previewed } from "./preview.js"
 
-export * from "./grant.js"
-export * from "./mode.js"
-export * from "./preview.js"
+/**
+ * The seam, and not the vocabulary.
+ *
+ * The Mode table, the mandate, the preview and the grant's own shapes are how
+ * this gate reasons. Publishing them made this package's interface as wide as
+ * its implementation: a reader opening it saw twenty-five names and could not
+ * tell that two of them were the contract, nor that the table, the mandate and
+ * the preview are one module with two doors. Each is an internal seam with its
+ * own suite beside it.
+ *
+ * What is here is what the composition root reaches: the plugin, and the half
+ * of the gate that remembers an answer saying "always".
+ */
+export { remembering } from "./grant.js"
+export type { Mode, ModeInfo } from "./mode.js"
 
 // The slash command a person names a mode with.
 export const MODE_COMMAND = "mode"

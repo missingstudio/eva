@@ -93,7 +93,6 @@ const spyHarness = (
 ): Harness => ({
   id: "acme.spy",
   capabilities: {} as Harness["capabilities"],
-  initialize: () => Effect.succeed({} as Harness["capabilities"]),
   createSession: (_cwd: string) => Effect.succeed(sessionID("sess_spy")),
   resumeSession: () => Effect.succeed({ kind: "undetectable" as const }),
   prompt: Effect.fn(function* (id: SessionID, input: SubmitInput) {
@@ -398,7 +397,6 @@ describe("a steer", () => {
   const holding = (seen: SubmitInput[], gate: Gate): Harness => ({
     id: "acme.held",
     capabilities: {} as Harness["capabilities"],
-    initialize: () => Effect.succeed({} as Harness["capabilities"]),
     createSession: () => Effect.succeed(sessionID("sess_held")),
     resumeSession: () => Effect.succeed({ kind: "undetectable" as const }),
     prompt: Effect.fn(function* (_id: SessionID, input: SubmitInput) {

@@ -2,7 +2,8 @@ import type { Usage } from "@missingstudio/eva-core"
 import { toTicks, type PriceLookup } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { makeBudget } from "./index.js"
+import { withPlugin } from "@missingstudio/eva-testkit"
+import { budget as budgetPlugin, makeBudget } from "./index.js"
 
 // $3/M in, $15/M out, $0.30/M cache read — the rate shape models.dev gives.
 const rates = Effect.succeed(() => ({
@@ -236,5 +237,42 @@ describe("a budget check", () => {
     expect(await Effect.runPromise(budget.check)).toEqual({ kind: "affordable" })
     clock = 5 * 60_000
     expect(await Effect.runPromise(budget.check)).toEqual({ kind: "exhausted", limit: "minutes" })
+  })
+})
+
+/**
+ * The limits config reaches. `costTicks` was in the contract and enforced from
+ * the first day, and no key set it — so the one limit a person is most likely
+ * to want was the one only a direct caller could reach.
+ */
+describe("the limits the plugin reads from config", () => {
+  const limitsOf = (options: Record<string, unknown>) =>
+    withPlugin(
+      budgetPlugin,
+      (kernel) =>
+        Effect.gen(function* () {
+          const found = yield* kernel.slot.budget.peek
+          expect(found).toBeDefined()
+          return (yield* (found as NonNullable<typeof found>).state).limits
+        }),
+      { options },
+    )
+
+  it("reads a cost ceiling in dollars and holds it in ticks", async () => {
+    expect(await limitsOf({ costUsd: 5 })).toEqual({ costTicks: toTicks(5) })
+  })
+
+  it("reads the other three as themselves", async () => {
+    expect(await limitsOf({ tokens: 200_000, minutes: 30, steps: 50 })).toEqual({
+      tokens: 200_000,
+      minutes: 30,
+      steps: 50,
+    })
+  })
+
+  // Zero is no limit, so a key written and left at zero is not a ceiling of
+  // nothing that stops the first Step.
+  it("sets no limit for a key written as zero", async () => {
+    expect(await limitsOf({ costUsd: 0, tokens: 0 })).toEqual({})
   })
 })
