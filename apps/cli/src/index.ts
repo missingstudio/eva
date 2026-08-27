@@ -193,8 +193,15 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       }
 
       // The same Session API a Console calls, driven by the command line
-      // instead of keys.
-      const api = yield* makeSessionAPI(started.kernel, started.model, scope)
+      // instead of keys — and answered by the same default harness, because a
+      // Prompt means the same thing whichever door it came through.
+      const harness = started.harness
+      const api = yield* makeSessionAPI(
+        started.kernel,
+        started.model,
+        scope,
+        harness === undefined ? {} : { harness },
+      )
       const client = yield* makeClient(yield* localTransport(api.session))
       const printed = yield* withSignals(
         runPrint(client, invocation.prompt, {
