@@ -110,8 +110,10 @@ const droppable = Effect.fn("test.droppable")(function* (wire: Transport) {
 
 /**
  * One Session, followed as the page follows it, with what the page held at
- * each step. `follow` is the page's own protocol and it is imported rather
- * than restated: a copy of it here would keep passing after the page moved.
+ * each step. `follow` is imported rather than restated: a copy of it here
+ * would keep passing after the page moved. The protocol under it is
+ * `Client.follow`, so what this suite proves about converging is proved about
+ * the runtime and not about one surface.
  */
 const opened = Effect.fn("test.opened")(function* (one: Client, session: SessionID) {
   const held: Reading[] = []
@@ -245,9 +247,12 @@ describe("the page, over the wire", () => {
      * not seen, and for nothing it had.
      */
     expect(found.resumed).toEqual([1, 3])
-    // What a reader was told, in order. A page frozen on a dead pipe reads as
-    // a Session that stopped, so the page says which of the two it is.
-    expect(steps(found.walked)).toEqual(["ready", "disconnected", "ready"])
+    /**
+     * What a reader was told, in order. A page frozen on a dead pipe reads as
+     * a Session that stopped, so the page says which of the two it is — and it
+     * says the catching up too, because the refold behind it is the Client's.
+     */
+    expect(steps(found.walked)).toEqual(["ready", "disconnected", "synchronizing", "ready"])
   })
 
   /**
@@ -417,6 +422,6 @@ describe("the page, over the wire", () => {
     // The word said while nothing was serving is on the page, from the fold
     // that followed the pipe coming back.
     expect(found.words).toBe("asksaid to nobody")
-    expect(steps(found.walked)).toEqual(["ready", "disconnected", "ready"])
+    expect(steps(found.walked)).toEqual(["ready", "disconnected", "synchronizing", "ready"])
   })
 })

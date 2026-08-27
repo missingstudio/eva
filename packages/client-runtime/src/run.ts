@@ -1,7 +1,7 @@
 import type { ResumeTooFarBehind, SubmitInput, Transcript } from "@missingstudio/eva-core"
 import type { Answer, Claim, Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
 import { Effect, Fiber, Stream, SubscriptionRef } from "effect"
-import { healthAt, type Transport } from "./transport.js"
+import type { Transport } from "./transport.js"
 
 /**
  * How long the drain may take after the Run it belongs to has closed. It is
@@ -77,43 +77,80 @@ const heard = (payload: Payload): RunSignal => ({ kind: "payload", payload })
 const live = (over: RunOver): Stream.Stream<RunSignal> =>
   Stream.concat(
     Stream.map(over.transport.api.watch(over.session), heard),
-    Stream.unwrap(dropped(over)),
+    // A live watch reads no close: the seam ends it only when the pipe goes.
+    Stream.suspend(() => again(over, false)),
   )
 
 /**
- * The committed groups after the fold, and the next drop behind them. It is
+ * The committed groups after the fold, and the next fold behind them. It is
  * not one function with `live` because the two differ in their error channel:
  * only a cursor watch can refuse, and a live one must not make a caller
  * handle a refusal that cannot arrive.
+ *
+ * The watch ends at the close of the Run it is reading, so what follows it is
+ * the fold that replaces that Run's stream. A caller reading one Run stops
+ * there; one following a Session folds and watches again.
  */
 const resumed = (over: RunOver, from: Cursor): Stream.Stream<RunSignal, ResumeTooFarBehind> =>
-  Stream.concat(
-    Stream.map(over.transport.api.watch(over.session, from), heard),
-    Stream.unwrap(dropped(over)),
+  Stream.unwrap(
+    Effect.sync(() => {
+      /**
+       * Whether the Run this watch was reading closed. It is read off what the
+       * watch delivered and never off the health of the pipe: a watch ends the
+       * moment the socket dies and the health that follows is a separate
+       * observation, so a pipe read here answers whichever won the race.
+       */
+      let closed = false
+      const watching = Stream.tap(over.transport.api.watch(over.session, from), (payload) =>
+        Effect.sync(() => {
+          if (payload.kind === "finished") closed = true
+        }),
+      )
+      return Stream.concat(
+        Stream.map(
+          Stream.takeUntil(watching, (payload) => payload.kind === "finished"),
+          heard,
+        ),
+        Stream.suspend(() => again(over, closed)),
+      )
+    }),
   )
 
-const dropped = (over: RunOver): Effect.Effect<Stream.Stream<RunSignal>> =>
-  Effect.gen(function* () {
-    // There is nothing to catch up on until the pipe is back.
-    yield* healthAt(over.transport.health, "ready")
-    return refolded(over)
-  })
+/**
+ * The fold after a watch ended, and whether it is a recovery.
+ *
+ * A Run that closed is the ordinary course, so the fold that replaces its
+ * stream says nothing about the pipe — a surface told it was synchronizing at
+ * the end of every Run would be told about a recovery that never happened. A
+ * watch that ended with no close ended because the pipe went, and the fold
+ * that follows is the catching up.
+ */
+const again = (over: RunOver, closed: boolean): Stream.Stream<RunSignal> => refolded(over, !closed)
 
 /**
  * Fold fresh, then watch from the fold's own position. Never a remembered
  * live position: a client that was reading live deltas holds no honest
  * cursor, and its only honest positions are folds. See
  * [decisions.md](../../../docs/decisions.md) for why.
+ *
+ * Nothing here waits on the health of the pipe. `attach` is the wait: a call
+ * made while the pipe is down is slower and never differently typed, and a
+ * transport whose health only comes back when a call succeeds would deadlock
+ * against a reader that waited for it first. So a recovery says
+ * `synchronizing` once the pipe has answered — which is also when it is true.
  */
-const refolded = (over: RunOver): Stream.Stream<RunSignal> =>
+const refolded = (over: RunOver, recovering: boolean): Stream.Stream<RunSignal> =>
   Stream.unwrap(
     Effect.gen(function* () {
-      yield* SubscriptionRef.set(over.state, "synchronizing")
       const transcript = yield* Effect.scoped(over.transport.api.attach(over.session))
+      if (recovering) yield* SubscriptionRef.set(over.state, "synchronizing")
       const queued: Stream.Stream<RunSignal, ResumeTooFarBehind> = Stream.concat(
         Stream.make(folded(transcript)),
         Stream.unwrap(
-          Effect.as(SubscriptionRef.set(over.state, "ready"), resumed(over, transcript.at)),
+          Effect.as(
+            recovering ? SubscriptionRef.set(over.state, "ready") : Effect.void,
+            resumed(over, transcript.at),
+          ),
         ),
       )
       /**
@@ -123,9 +160,26 @@ const refolded = (over: RunOver): Stream.Stream<RunSignal> =>
        * pull, so the state read `ready` for it and returns to `synchronizing`
        * here. The caller sees one more repaint, never the refusal.
        */
-      return Stream.catchTag(queued, "ResumeTooFarBehind", () => refolded(over))
+      return Stream.catchTag(queued, "ResumeTooFarBehind", () => refolded(over, true))
     }),
   )
+
+/**
+ * One Session, followed for as long as the caller wants it: fold, watch to the
+ * close of the Run that is open, fold again. It never ends on its own, so a
+ * caller stops it by interrupting.
+ *
+ * This is the same rule `runPrompt` reaches after a drop, and it is here
+ * rather than at a surface because it is the runtime's: which positions are
+ * honest, what a refused Cursor means, and when the pipe is worth mentioning.
+ * A surface that spelled it again would be a second answer to keep in step.
+ */
+export const followSession = Effect.fn("eva.client.follow")(function* (
+  over: RunOver,
+  each: (signal: RunSignal) => void,
+) {
+  yield* Stream.runForEach(refolded(over, false), (signal) => Effect.sync(() => each(signal)))
+})
 
 /**
  * One open Run, from the input that opens it to the record that replaces its

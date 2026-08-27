@@ -65,10 +65,10 @@ export interface Pipe {
  * words are about the pipe and never about the Run: the Session goes on
  * without this page, and the page catches up by Cursor when the pipe is back.
  *
- * `synchronizing` cannot arrive here. It is a Run refolding and this page
- * opens no Run — the one thing it writes is an answer to a permission
- * request. It is said anyway, because the three are a closed set and an arm
- * left off is a page that says nothing on the day a prompt lands.
+ * `synchronizing` arrives here whenever the pipe comes back: this page follows
+ * a Session through the Client, and the Client refolds after a drop. The arm
+ * used to be unreachable, because the page held a refold of its own that said
+ * nothing about the pipe.
  */
 export const noticeOf = (pipe: Pipe): string | undefined => {
   switch (pipe.at) {

@@ -67,6 +67,19 @@ const record =
   })
 ```
 
+A surface that only reads a Session takes `follow` instead. It answers the same
+two signals and never ends on its own, so a caller stops it by interrupting:
+
+```ts
+const following = yield * Effect.forkChild(client.follow(session, each))
+```
+
+`follow` folds, watches to the close of the Run that is open, and folds again —
+the same rule `run` reaches after a drop. It is here rather than at a surface
+because it is the runtime's: which positions are honest, what a refused Cursor
+means, and when the pipe is worth mentioning. A page that spelled it again
+could not say `synchronizing`, because only the runtime knows it is refolding.
+
 The four steps, and why each one is there:
 
 1. **Subscribe.** The watcher is forked before `submit`, so a Run that says
