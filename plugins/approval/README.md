@@ -95,6 +95,35 @@ beside an `autonomous` one may be _shown_ a tool it can never _run_. The strict
 side is at the gate, where it decides. With one Session, which is the
 interactive case, the domain is exactly that Session's mode.
 
+## The question shows the write
+
+A person is asked about a change, not about a tool's name:
+
+```
+edit changes src/user.ts, 3 hunks:
+- const svc = new UserSvc()
++ const service = new UserService()
+- import { UserSvc } from "./svc"
++ import { UserService } from "./svc"
+… and 1 more
+Run it?
+```
+
+Nothing is asked of the tool. A write tool's input **is** an Edit, so this
+plugin resolves the same preview the tool would from the arguments alone, over
+the `FileSystem` and `DiffApplier` slots it reads at the moment of the ask.
+There is no preview handle and no second way to reach one.
+
+The applier says whether the change resolves, so a change that cannot land says
+so — `edit cannot change src/user.ts — hunk_missing:` — and a person is not
+asked to approve a call that was going to fail.
+
+It is bounded: two hunks, each side one line of sixty characters, and a count
+of what is elided. A whole diff in a one-line prompt is its own defect, and the
+whole diff is on the Trace. A call whose arguments name no Edit — a command, or
+a write tool of another shape — is asked the standing question, because the
+preview reads the shape and never the tool's name.
+
 ## Per-tool overrides narrow, and never widen
 
 An override is `ask` or `deny`. There is no `allow`, and a config file that
@@ -183,11 +212,14 @@ standing grant, and a standing grant is a mode.
   says always. The composition root wraps boot's asker in this.
 - `writeGrant(path, rule)`, `grantedRule(words, why)` — the grant itself, for
   a suite or a tool that wants to read one.
+- `previewed(ground, name, args)` / `editIn(args)` — the question a write is
+  asked about, and the Edit its arguments name.
 
 ## Development
 
 Tests live beside the source: [src/mode.test.ts](src/mode.test.ts) holds the
 modes and the reader, [src/grant.test.ts](src/grant.test.ts) the grant on disk,
+[src/preview.test.ts](src/preview.test.ts) the question a write is asked about,
 and [src/index.test.ts](src/index.test.ts) the selection and the mandate through
 a live kernel. The two gates meet in
 [packages/conformance](../../packages/conformance/README.md). Run the suite from

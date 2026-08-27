@@ -161,6 +161,13 @@ const bench = <A>(
 
 const EDIT = { path: "one.md", hunks: [{ find: "before", replace: "after" }] }
 
+/**
+ * What a person is asked about that Edit. The question carries the change,
+ * because the arguments are the Edit and the gate holds the two slots that
+ * resolve it.
+ */
+const ASKED = ["edit changes one.md, 1 hunk:", "- before", "+ after", "Run it?"].join("\n")
+
 const textOf = (result: ToolResult): string =>
   result.content.map((block) => (block.type === "text" ? block.text : "")).join("\n")
 
@@ -247,7 +254,7 @@ describe("all four options, through the gate and the real write tool", () => {
       (found) =>
         Effect.gen(function* () {
           const result = yield* found.call("edit", EDIT)
-          expect(found.asked).toEqual(["edit may change something. Run it?"])
+          expect(found.asked).toEqual([ASKED])
           return { result, held: found.held()["one.md"] }
         }),
       {
@@ -276,6 +283,88 @@ describe("all four options, through the gate and the real write tool", () => {
 })
 
 /**
+ * The demo's own words: "every write previewed, y/n". The preview is in the
+ * question, resolved from the arguments over the real applier and the real
+ * file system — so what a person answers about is the change, and the tool is
+ * asked nothing.
+ */
+describe("the question about a write", () => {
+  const asking = (
+    args: unknown,
+    seed?: Readonly<Record<string, string>>,
+  ): Promise<{ readonly asked: readonly string[]; readonly held: string | undefined }> => {
+    const asked: string[] = []
+    return bench(
+      (found) =>
+        Effect.map(found.call("edit", args), () => ({
+          asked: found.asked,
+          held: found.held()["one.md"],
+        })),
+      {
+        config: { approval: { mode: "supervised" } },
+        approving: answering("reject_once", asked),
+        asked,
+        ...(seed === undefined ? {} : { seed }),
+      },
+    )
+  }
+
+  // Two hunks, each side one line: a whole diff in a prompt is its own
+  // defect, and the whole diff is on the Trace.
+  it("shows the change, on one line a side and bounded to two hunks", async () => {
+    const found = await asking(
+      {
+        path: "one.md",
+        hunks: [
+          { find: "alpha\nbeta", replace: "one\ntwo" },
+          { find: "gamma", replace: "three" },
+          { find: "two", replace: "2" },
+        ],
+      },
+      { "one.md": "alpha\nbeta\ngamma\n" },
+    )
+
+    expect(found.asked).toEqual([
+      [
+        "edit changes one.md, 3 hunks:",
+        "- alpha beta",
+        "+ one two",
+        "- gamma",
+        "+ three",
+        "… and 1 more",
+        "Run it?",
+      ].join("\n"),
+    ])
+  })
+
+  // A person told the change cannot land does not have to approve a call to
+  // find out. The applier answers that, and the words are still shown.
+  it("says when the change does not resolve", async () => {
+    const found = await asking({ path: "one.md", hunks: [{ find: "missing", replace: "after" }] })
+
+    expect(found.asked[0]).toContain("edit cannot change one.md — hunk_missing:")
+    expect(found.asked[0]).toContain("- missing")
+    expect(found.held).toBe("before\n")
+  })
+
+  // A call that names no Edit is asked about the way it always was: the
+  // preview reads the shape and never the tool's name.
+  it("asks the standing question about a call that names no edit", async () => {
+    const asked: string[] = []
+    const found = await bench(
+      (found) => Effect.map(found.call("bash", { command: ["ls"] }), () => found.asked),
+      {
+        config: { approval: { mode: "supervised" } },
+        approving: answering("reject_once", asked),
+        asked,
+      },
+    )
+
+    expect(found).toEqual(["bash may change something. Run it?"])
+  })
+})
+
+/**
  * A permission request with nobody to answer it is a denial. `overSurface`
  * covers the surface half — no surface, or one that takes no input; this is the
  * execution half, where a build wired no asker at all.
@@ -288,7 +377,7 @@ describe("a supervised call with nobody to answer it", () => {
           const result = yield* found.call("edit", EDIT)
 
           expect(result.disposition).toBe("denied")
-          expect(textOf(result)).toBe("nobody answered: edit may change something. Run it?")
+          expect(textOf(result)).toBe(`nobody answered: ${ASKED}`)
           expect(found.held()["one.md"]).toBe("before\n")
           expect(
             payloadsOf(yield* found.record).find((one) => one.kind === "tool_result"),
