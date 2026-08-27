@@ -1,6 +1,7 @@
 import type { Build } from "@missingstudio/eva-boot"
-import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
-import { nearest } from "@missingstudio/eva-sdk"
+import type { ConfigError } from "@missingstudio/eva-kernel"
+import type { Claim } from "@missingstudio/eva-schema"
+import { grantTrust, isTrusted, revokeTrust, type Overlays } from "@missingstudio/eva-kernel"
 import { checkRules, sayFault, unreachableIn } from "@missingstudio/eva-tool-policy"
 import { refusal } from "@missingstudio/eva-web"
 import { Effect, Exit, Scope } from "effect"
@@ -8,11 +9,18 @@ import { parseArgv, showHelp } from "./argv.js"
 import { BUILD, serving } from "./plugins.js"
 import { report } from "./report.js"
 import { showConfig } from "./show.js"
-import { interacted, runInteractive } from "./interactive.js"
+import { runInteractive } from "./interactive.js"
 import { runPrint } from "@missingstudio/eva-print"
-import { resolveConfig, runHarness, startFrom, withSignals } from "./run.js"
-import { runServe, served } from "./serve.js"
-import { openClient } from "./surface.js"
+import {
+  resolveConfig,
+  runHarness,
+  startFrom,
+  withSignals,
+  type ResolvedConfig,
+  type Started,
+} from "./run.js"
+import { runServe } from "./serve.js"
+import { closed, openClient } from "./surface.js"
 import { fromProcess, type World } from "./world.js"
 
 export * from "./argv.js"
@@ -25,6 +33,44 @@ export * from "./serve.js"
 export * from "./surface.js"
 export * from "./version.js"
 export * from "./world.js"
+
+/**
+ * One door, opened and closed.
+ *
+ * What every door that needs a kernel does before it does its own work: read
+ * the config the World names, say what the config sweep found, start the
+ * plugins the config resolved to, and own the scope they live in. Four arms
+ * spelled this and five of them closed the scope by hand — one of those on a
+ * refusal path, and none of them on a body that failed.
+ *
+ * The scope closes however the body ends, an interrupt included, because a
+ * surface is stopped by one and the plugins behind it still have to be let go.
+ */
+const door = <A>(
+  world: World,
+  overlays: Overlays,
+  build: Build,
+  body: (started: Started, settled: ResolvedConfig, scope: Scope.Scope) => Effect.Effect<A>,
+): Effect.Effect<A, ConfigError> =>
+  Effect.gen(function* () {
+    const settled = yield* resolveConfig(overlays, world)
+    report(settled, world)
+
+    const scope = yield* Scope.make()
+    const started = yield* startFrom(scope, settled, build, world.err)
+    return yield* Effect.ensuring(body(started, settled, scope), Scope.close(scope, Exit.void))
+  })
+
+/**
+ * What a Run that answered exits with. A Claim that failed says why on the
+ * error stream, because the Trace holds the reason and so must the terminal —
+ * a reader told only that something did not work has been told nothing.
+ */
+const exitOf = (claim: Claim, world: World): number => {
+  if (claim.result === "done") return 0
+  world.err(`${claim.summary}${claim.errorClass === undefined ? "" : ` (${claim.errorClass})`}\n`)
+  return 1
+}
 
 /**
  * The composition root. The parser answers with one invocation and this
@@ -105,51 +151,32 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
 
     // The verb carries the selection, so a Workflow is never selected by a
     // file the Run does not name.
-    case "run": {
-      const settled = yield* resolveConfig(invocation.overlays, world)
-      report(settled, world)
+    case "run":
+      /**
+       * A name no harness answers is refused by the Session API, with the near
+       * miss it already knows how to say. This door used to ask the same
+       * question first, so the two spellings drifted — one ended in a question
+       * mark and the other did not — and the only thing the second ask bought
+       * was a Run that never opened.
+       */
+      return yield* door(world, invocation.overlays, build, (started, settled, scope) =>
+        Effect.gen(function* () {
+          const client = yield* openClient(started, scope)
+          const answered = yield* withSignals(
+            runHarness(client, {
+              harness: invocation.harness,
+              text: invocation.input,
+              location: settled.location.directory,
+            }),
+          )
 
-      const scope = yield* Scope.make()
-      const started = yield* startFrom(scope, settled, build, world.err)
-
-      // Refused before a Run is spent. The kernel refuses the same id again
-      // as a failed Claim, so this check only buys the near miss.
-      const rows = yield* started.kernel.domains.harness.get
-      if (!rows.some((row) => row.id === invocation.harness)) {
-        const meant = nearest(
-          invocation.harness,
-          rows.map((row) => row.id),
-        )
-        world.err(
-          `eva: no harness answers ${invocation.harness}${meant === undefined ? "" : `, did you mean ${meant}?`}\n`,
-        )
-        yield* Scope.close(scope, Exit.void)
-        return 1
-      }
-
-      const client = yield* openClient(started, scope)
-      const answered = yield* withSignals(
-        runHarness(client, {
-          harness: invocation.harness,
-          text: invocation.input,
-          location: settled.location.directory,
+          // The last Run's text is the answer; the Runs before it are in the
+          // Trace. A failed Workflow did not answer, so nothing reaches the
+          // output stream a shell would read an artifact from.
+          if (answered.claim.result === "done") world.out(answered.text)
+          return exitOf(answered.claim, world)
         }),
       )
-      yield* Scope.close(scope, Exit.void)
-
-      // The last Run's text is the answer; the Runs before it are in the
-      // Trace. A failed Workflow did not answer, so nothing reaches the
-      // output stream a shell would read an artifact from.
-      if (answered.claim.result === "done") {
-        world.out(answered.text)
-        return 0
-      }
-      const { claim } = answered
-      world.err(
-        `${claim.summary}${claim.errorClass === undefined ? "" : ` (${claim.errorClass})`}\n`,
-      )
-      return 1
-    }
 
     /**
      * The verb names the surface, so the row is started by id rather than by
@@ -170,62 +197,47 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
         return 1
       }
 
-      const settled = yield* resolveConfig(invocation.overlays, world)
-      report(settled, world)
-
-      const scope = yield* Scope.make()
-      const started = yield* startFrom(
-        scope,
-        settled,
+      return yield* door(
+        world,
+        invocation.overlays,
         serving(build, invocation, world.out),
-        world.err,
+        (started) =>
+          Effect.map(Effect.exit(withSignals(runServe(started))), (outcome) =>
+            closed(outcome, world.err),
+          ),
       )
-      const outcome = yield* Effect.exit(withSignals(runServe(started)))
-      yield* Scope.close(scope, Exit.void)
-      return served(outcome, world.err)
     }
 
     case "interactive":
-    case "print": {
-      const settled = yield* resolveConfig(invocation.overlays, world)
-      report(settled, world)
-
-      const scope = yield* Scope.make()
-      const started = yield* startFrom(scope, settled, build, world.err)
-
       // No prompt means the interactive surface. A build with none says so
       // rather than printing help and exiting as though it had run.
-      if (invocation.kind === "interactive") {
-        const outcome = yield* Effect.exit(withSignals(runInteractive(started)))
-        yield* Scope.close(scope, Exit.void)
-        return interacted(outcome, world.err, () => showHelp(world))
-      }
+      return yield* door(world, invocation.overlays, build, (started) =>
+        Effect.map(Effect.exit(withSignals(runInteractive(started))), (outcome) =>
+          closed(outcome, world.err, () => showHelp(world)),
+        ),
+      )
 
-      // The same Session API a Console calls, driven by the command line
-      // instead of keys — and answered by the same default harness and the
-      // same gate, because a Prompt means the same thing whichever door it
-      // came through. Nothing here holds a person, so an `ask` is a denial
-      // that says nobody is there.
-      const client = yield* openClient(started, scope)
-      const printed = yield* withSignals(
-        runPrint(client, invocation.prompt, {
-          location: settled.location.directory,
-          write: world.out,
+    /**
+     * The same Session API a Console calls, driven by the command line instead
+     * of keys — and answered by the same default harness and the same gate,
+     * because a Prompt means the same thing whichever door it came through.
+     * Nothing here holds a person, so an `ask` is a denial that says nobody is
+     * there.
+     */
+    case "print":
+      return yield* door(world, invocation.overlays, build, (started, settled, scope) =>
+        Effect.gen(function* () {
+          const client = yield* openClient(started, scope)
+          const printed = yield* withSignals(
+            runPrint(client, invocation.prompt, {
+              location: settled.location.directory,
+              write: world.out,
+            }),
+          )
+          world.out(`\n${printed.costLine}\n`)
+          return exitOf(printed.claim, world)
         }),
       )
-      world.out(`\n${printed.costLine}\n`)
-      yield* Scope.close(scope, Exit.void)
-
-      const { claim } = printed
-      if (claim.result === "done") return 0
-
-      // The Trace holds why a Run failed. So must the terminal, or the reader is
-      // told only that something did not work.
-      world.err(
-        `${claim.summary}${claim.errorClass === undefined ? "" : ` (${claim.errorClass})`}\n`,
-      )
-      return 1
-    }
   }
 })
 

@@ -9,7 +9,8 @@ import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { assetRoot, BUILT_IN, serving } from "./plugins.js"
 import type { Started } from "./run.js"
-import { NoWebSurfaceError, runServe, served } from "./serve.js"
+import { NoWebSurfaceError, runServe } from "./serve.js"
+import { closed } from "./surface.js"
 
 const row = (over: Partial<SurfaceInfo> & { id: string }): SurfaceInfo => ({
   interactive: false,
@@ -106,7 +107,7 @@ describe("runServe", () => {
 describe("how a serve ends", () => {
   it("exits 0 when the surface stopped", async () => {
     const outcome = await withKernel([startable(WEB_SURFACE, [])], runServe)
-    expect(served(outcome, () => undefined)).toBe(0)
+    expect(closed(outcome, () => undefined)).toBe(0)
   })
 
   /**
@@ -118,7 +119,7 @@ describe("how a serve ends", () => {
     const lines: string[] = []
     const outcome = await Effect.runPromiseExit(Effect.interrupt)
 
-    expect(served(outcome, (text) => void lines.push(text))).toBe(0)
+    expect(closed(outcome, (text: string) => void lines.push(text))).toBe(0)
     expect(lines).toEqual([])
   })
 
@@ -126,7 +127,7 @@ describe("how a serve ends", () => {
     const lines: string[] = []
     const outcome = await withKernel([startable("eva.tui", [], true)], runServe)
 
-    expect(served(outcome, (text) => void lines.push(text))).toBe(1)
+    expect(closed(outcome, (text: string) => void lines.push(text))).toBe(1)
     expect(lines.join("")).toContain("eva.tui")
   })
 })

@@ -2,7 +2,8 @@ import { boot } from "@missingstudio/eva-boot"
 import type { Frontend, SurfaceInfo } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Scope } from "effect"
 import { describe, expect, it } from "vitest"
-import { interacted, NoSurfaceError, runInteractive } from "./interactive.js"
+import { NoSurfaceError, runInteractive } from "./interactive.js"
+import { closed } from "./surface.js"
 import type { Started } from "./run.js"
 
 const row = (over: Partial<SurfaceInfo> & { id: string }): SurfaceInfo => ({
@@ -105,9 +106,9 @@ describe("how an interactive run ends", () => {
   const ended = (outcome: Exit.Exit<unknown, unknown>) => {
     const said: string[] = []
     let helped = false
-    const code = interacted(
+    const code = closed(
       outcome,
-      (text) => void said.push(text),
+      (text: string) => void said.push(text),
       () => {
         helped = true
       },

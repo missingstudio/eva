@@ -316,7 +316,7 @@ export const makeSessionAPI = (
             summary:
               meant === undefined
                 ? `no harness answers ${wanted}`
-                : `no harness answers ${wanted}, did you mean ${meant}`,
+                : `no harness answers ${wanted}, did you mean ${meant}?`,
             errorClass: "other",
           },
           emit,

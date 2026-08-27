@@ -2,7 +2,7 @@ import { remembering } from "@missingstudio/eva-approval"
 import { makeSessionAPI, overSurface, type Gate, type Kernel } from "@missingstudio/eva-boot"
 import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 import type { Frontend, SurfaceInfo } from "@missingstudio/eva-sdk"
-import { Effect, Exit, Scope } from "effect"
+import { Cause, Effect, Exit, Scope } from "effect"
 import type { Started } from "./run.js"
 
 /**
@@ -89,3 +89,45 @@ export const runSurface = Effect.fn("cli.runSurface")(function* (
   yield* Effect.ensuring(frontend.done, Scope.close(scope, Exit.void))
   return chosen.id
 })
+
+/**
+ * Runs the surface this door names, whichever door named it.
+ *
+ * A door owns two things and nothing else: which row it wants, and what it
+ * says when this build has no such row. Everything after the choice — the
+ * `start`-is-absent refusal, the Client, the scope, the wait — is the same for
+ * every one of them, so `--acp` at a later stage adds a predicate rather than
+ * a third module.
+ */
+export const runDoor = Effect.fn("cli.runDoor")(function* (
+  started: Started,
+  choose: (rows: readonly SurfaceInfo[]) => SurfaceInfo | undefined,
+  refuse: (known: readonly string[]) => Error,
+) {
+  const rows = yield* started.kernel.domains.surface.get
+  const chosen = choose(rows)
+  if (chosen?.start === undefined) {
+    return yield* Effect.fail(refuse(rows.map((row) => row.id)))
+  }
+  return yield* runSurface(started, { ...chosen, start: chosen.start })
+})
+
+/**
+ * What a door that ran a surface exits with, and what it says on the way out.
+ *
+ * An interrupt is how a person stops a surface — a SIGTERM, or a surface whose
+ * `done` does not complete on its own — so the run exits 0 and says nothing. A
+ * failure is a different thing: this build has no such surface, and the door
+ * names what it does have. A door that offers help passes it, and the one that
+ * does not passes nothing.
+ */
+export const closed = (
+  outcome: Exit.Exit<unknown, unknown>,
+  err: (text: string) => void,
+  help?: () => void,
+): number => {
+  if (Exit.isSuccess(outcome) || Cause.hasInterruptsOnly(outcome.cause)) return 0
+  err(`${Cause.squash(outcome.cause) as Error}\n`)
+  help?.()
+  return 1
+}

@@ -11,6 +11,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
 import type { Payload } from "@missingstudio/eva-schema"
+import { define } from "@missingstudio/eva-sdk"
 import { scripted } from "@missingstudio/eva-testkit"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
@@ -477,6 +478,39 @@ workflows:
 
     expect(found.code).toBe(0)
     expect(found.outs).toEqual(["third said"])
+  })
+
+  /**
+   * The scope closes however the door's body ends. Four arms used to close it
+   * by hand and none of them closed it on a body that failed, so a plugin's
+   * finalizer was skipped on exactly the paths where it mattered most.
+   */
+  it("lets the plugins go when the body fails", async () => {
+    const directory = scratch()
+    // The plugin has to be one the config resolves to, or the kernel never
+    // loads it and there is no finalizer to skip. `contained` ends inside the
+    // plugins list, so this is a third entry of it.
+    write(directory, "user.yaml", `${contained(directory)}  - id: acme.watching\n`)
+    const gone: string[] = []
+
+    const watching = define({
+      id: "acme.watching",
+      effect: Effect.fn("acme.watching")(function* () {
+        yield* Effect.addFinalizer(() => Effect.sync(() => void gone.push("let go")))
+      }),
+    })
+
+    // A harness no build answers: the Session API refuses it, the Run closes
+    // failed, and this door exits 1.
+    const found = await ran(
+      ["run", "nothing-answers-this"],
+      directory,
+      {},
+      { build: buildOf([...BUILT_IN, ...OPTIONAL, watching]) },
+    )
+
+    expect(found.code).toBe(1)
+    expect(gone).toEqual(["let go"])
   })
 
   it("prints a near miss over the row ids when nothing answers the name", async () => {
