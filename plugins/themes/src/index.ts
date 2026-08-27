@@ -12,10 +12,13 @@ export const THEMES: readonly ThemeInfo[] = [
     id: "default",
     name: "Default",
     colors: {
-      foreground: "#e6e6e6",
-      muted: "#8a8a94",
-      accent: "#7aa2f7",
-      warning: "#e0af68",
+      // docs/design.md's terminal contract: bone, fog, ember — and teal
+      // under the contract's `warning` key, because tool output is machine
+      // data rather than an alarm.
+      foreground: "#e5e5e6",
+      muted: "#8a8f98",
+      accent: "#ee6018",
+      warning: "#02b8cc",
     },
   },
   {

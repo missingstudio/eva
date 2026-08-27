@@ -304,7 +304,7 @@ describe("the panel", () => {
 })
 
 describe("the screen's colors", () => {
-  const DUSK = { foreground: "#eee", muted: "#888", accent: "#7aa2f7", warning: "#e0af68" }
+  const DUSK = { foreground: "#eee", muted: "#888", accent: "#8888ff", warning: "#ffcc00" }
 
   it("are a fact of the Frame, so a renderer draws what was chosen", () => {
     const themed = apply(start, { kind: "themed", colors: DUSK })

@@ -8,7 +8,7 @@ export const site = links(import.meta.env.DEV)
 function Wordmark() {
   return (
     <span className="flex items-center gap-2">
-      <img src="/brand/monogram.svg" alt="" width={18} height={16} className="dark:invert" />
+      <img src="/brand/monogram.svg" alt="" width={18} height={16} className="invert" />
       <span className="text-[0.95rem] font-medium tracking-tight">
         {entity.product.name} <span className="text-muted-foreground font-normal">Docs</span>
       </span>
@@ -43,9 +43,9 @@ export function baseOptions(): Omit<DocsLayoutProps, "tree"> {
     sidebar: { role: "navigation", "aria-label": "Documentation" },
     githubUrl: external.repo,
     searchToggle: { enabled: true },
-    // Three states, not two. A binary switch cannot say "follow the system",
-    // and once a reader has touched it, it never can again.
-    themeSwitch: { mode: "light-dark-system" },
+    // No theme control. The system is dark only, so a control that offers a
+    // choice which does not exist is a defect rather than a courtesy.
+    themeSwitch: { enabled: false },
     links: [
       { type: "main", text: "Website", url: site.web, external: true },
       {

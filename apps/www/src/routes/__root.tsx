@@ -1,4 +1,3 @@
-import { themeScript } from "@missingstudio/ui"
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import appCss from "../styles/app.css?url"
@@ -8,10 +7,9 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      // The browser chrome takes the page's own ground, per scheme. One value
-      // would paint the chrome of one of the two schemes wrong.
-      { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#fafafa" },
-      { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#000000" },
+      // The browser chrome takes the page's own ground. The system is dark
+      // only, so one value is the whole answer.
+      { name: "theme-color", content: "#000000" },
       { property: "og:image", content: "https://missing.studio/brand/og.png" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
@@ -38,13 +36,13 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    // The `dark` class is pinned: the system is dark only, and the class is
+    // what keeps the components' `dark:` utilities live.
+    <html lang="en" className="dark">
       <head>
         <HeadContent />
-        {/* Before paint, so the page never renders in the wrong scheme. */}
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="bg-bg text-ink font-sans antialiased">
+      <body>
         {children}
         <Scripts />
       </body>

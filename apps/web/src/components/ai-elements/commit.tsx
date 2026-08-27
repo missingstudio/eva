@@ -19,7 +19,7 @@ export type CommitFileProps = HTMLAttributes<HTMLDivElement>
 export const CommitFile = ({ className, children, ...props }: CommitFileProps) => (
   <div
     className={cn(
-      "flex items-center justify-between gap-2 rounded border border-rule px-2 py-1 text-sm",
+      "flex items-center justify-between gap-2 rounded border border-graphite px-2 py-1 text-sm",
       className,
     )}
     {...props}

@@ -84,7 +84,7 @@ export const noticeOf = (pipe: Pipe): string | undefined => {
 export const Notice = ({ pipe }: { readonly pipe: Pipe }) => {
   const said = noticeOf(pipe)
   return said === undefined ? null : (
-    <p className="mt-3 rounded-md border border-warning bg-card px-3 py-2 text-sm" role="status">
+    <p className="mt-3 rounded-md border border-ember bg-card px-3 py-2 text-sm" role="status">
       {said}
     </p>
   )

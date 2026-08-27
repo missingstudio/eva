@@ -19,7 +19,7 @@ import { titleLine } from "./title.js"
  * is resolved on the load the anchor makes.
  */
 const Row = ({ session }: { readonly session: SessionHeader }) => (
-  <li className="flex flex-wrap items-baseline gap-2 border-rule border-t py-2.5">
+  <li className="flex flex-wrap items-baseline gap-2 border-graphite border-t py-2.5">
     <a className="flex-[1_1_12rem] truncate" href={sessionHref(session.id)} title={session.title}>
       {titleLine(session.title)}
     </a>

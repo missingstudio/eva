@@ -1,8 +1,6 @@
-import { themeScript } from "@missingstudio/ui"
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import { RootProvider } from "fumadocs-ui/provider/tanstack"
 import type { ReactNode } from "react"
-import { ThemeBridge } from "../components/theme-bridge.js"
 import appCss from "../styles/app.css?url"
 
 export const Route = createRootRoute({
@@ -10,10 +8,9 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      // The browser chrome takes the page's own ground, per scheme. One value
-      // would paint the chrome of one of the two schemes wrong.
-      { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#fafafa" },
-      { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#000000" },
+      // The browser chrome takes the page's own ground. The system is dark
+      // only, so one value is the whole answer.
+      { name: "theme-color", content: "#000000" },
       { property: "og:image", content: "https://missing.studio/brand/og.png" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
@@ -40,29 +37,23 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    // The `dark` class is pinned: the system is dark only, and the class is
+    // what keeps the components' `dark:` utilities live.
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <HeadContent />
-        {/*
-          Before paint, so the page never renders in the wrong scheme. It also
-          seeds the key next-themes reads, so the two agree from the start
-          rather than fighting on hydration — the cookie is what crosses the
-          origin between this site and the marketing one.
-        */}
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="flex min-h-dvh flex-col">
         {/* The first focusable element on the page. */}
         <a
           href="#nd-page"
-          className="btn-secondary sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
+          className="btn-ghost sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
         >
           Skip to content
         </a>
-        <RootProvider>
-          <ThemeBridge />
-          {children}
-        </RootProvider>
+        {/* The theme is not a choice: dark is the system, so the provider's
+            own switching is disabled and the class above is the record. */}
+        <RootProvider theme={{ enabled: false }}>{children}</RootProvider>
         <Scripts />
       </body>
     </html>

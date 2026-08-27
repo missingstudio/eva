@@ -4,269 +4,319 @@ name: Eva
 description: >-
   Eva is an AI-native software factory whose product is a terminal program.
   Every surface it owns — the terminal, the product app, the marketing site,
-  the documentation — is the same instrument read at a different distance, so
-  they share one design system and differ only by an overlay.
+  the documentation — is one dark instrument panel: a near-black canvas, a
+  sans that carries prose and a mono that carries machine output, and one
+  ember signal doing all the chromatic work.
 colors:
-  primary: "#7aa2f7"
-  on-primary: "#0a0a0a"
-  mark: "#7aa2f7"
+  void: "#08090a"
+  carbon: "#0f1011"
+  obsidian: "#161718"
+  graphite: "#23252a"
+  smoke: "#383b3f"
+  ash: "#62666d"
+  fog: "#8a8f98"
+  mist: "#d0d6e0"
+  bone: "#e5e5e6"
+  paper: "#ffffff"
 
-  canvas: "#0a0a0a"
-  canvas-sunken: "#060606"
-  canvas-raised: "#161616"
-  canvas-overlay: "#1c1c1c"
-  canvas-panel: "#101010"
-  hairline: "#232323"
-  hairline-strong: "#2e2e2e"
-  edge: "#747474"
-  grid: "#1b1b1b"
+  primary: "#ee6018"
+  teal: "#02b8cc"
+  green: "#27a644"
+  red: "#eb5757"
 
-  ink: "#f2f2f2"
-  body: "#b4b4b4"
-  mute: "#8a8a8a"
-  heading: "#ffffff"
-
-  warning: "#e0af68"
-  success: "#4cc38a"
-  danger: "#f2555a"
-
-  terminal-fg: "#e6e6e6"
-  terminal-muted: "#8a8a94"
-  terminal-accent: "#7aa2f7"
-  terminal-warning: "#e0af68"
+  terminal-fg: "#e5e5e6"
+  terminal-muted: "#8a8f98"
+  terminal-accent: "#ee6018"
+  terminal-warning: "#02b8cc"
 typography:
-  display-xl:
+  display:
     fontFamily: Geist, system-ui, sans-serif
-    fontSize: 4.5rem
-    fontWeight: 500
-    lineHeight: 1.05
-    letterSpacing: -0.025em
-  display-lg:
-    fontFamily: Geist, system-ui, sans-serif
-    fontSize: 3.75rem
+    fontSize: 3.5rem
     fontWeight: 500
     lineHeight: 1.05
     letterSpacing: -0.022em
-  display-md:
+  heading-lg:
     fontFamily: Geist, system-ui, sans-serif
-    fontSize: 3rem
+    fontSize: 2.5rem
     fontWeight: 500
     lineHeight: 1.1
-    letterSpacing: -0.02em
-  display-sm:
+    letterSpacing: -0.022em
+  heading:
     fontFamily: Geist, system-ui, sans-serif
-    fontSize: 1.875rem
+    fontSize: 2rem
     fontWeight: 500
-    lineHeight: 2.25rem
-    letterSpacing: -0.012em
-  title:
+    lineHeight: 1.15
+    letterSpacing: -0.02em
+  heading-sm:
+    fontFamily: Geist, system-ui, sans-serif
+    fontSize: 1.5rem
+    fontWeight: 500
+    lineHeight: 1.25
+    letterSpacing: -0.014em
+  subheading:
     fontFamily: Geist, system-ui, sans-serif
     fontSize: 1.25rem
     fontWeight: 500
-    lineHeight: 1.75rem
-    letterSpacing: -0.006em
+    lineHeight: 1.4
+    letterSpacing: -0.012em
   body-lg:
     fontFamily: Geist, system-ui, sans-serif
     fontSize: 1.125rem
     fontWeight: 400
-    lineHeight: 1.75rem
-  body-md:
+    lineHeight: 1.6
+    letterSpacing: -0.011em
+  body:
     fontFamily: Geist, system-ui, sans-serif
     fontSize: 1rem
     fontWeight: 400
-    lineHeight: 1.5rem
-  body-md-strong:
+    lineHeight: 1.6
+    letterSpacing: -0.011em
+  body-strong:
     fontFamily: Geist, system-ui, sans-serif
     fontSize: 1rem
     fontWeight: 500
-    lineHeight: 1.5rem
+    lineHeight: 1.6
+    letterSpacing: -0.011em
   body-sm:
     fontFamily: Geist, system-ui, sans-serif
-    fontSize: 0.875rem
+    fontSize: 0.9375rem
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: -0.011em
+  button:
+    fontFamily: Geist, system-ui, sans-serif
+    fontSize: 0.9375rem
+    fontWeight: 500
+    lineHeight: 1.25rem
+    letterSpacing: -0.011em
+  nav:
+    fontFamily: Geist, system-ui, sans-serif
+    fontSize: 0.9375rem
     fontWeight: 400
     lineHeight: 1.25rem
-  body-sm-strong:
-    fontFamily: Geist, system-ui, sans-serif
-    fontSize: 0.875rem
-    fontWeight: 500
-    lineHeight: 1.25rem
-  button-md:
-    fontFamily: Geist, system-ui, sans-serif
-    fontSize: 0.875rem
-    fontWeight: 500
-    lineHeight: 1.25rem
-  button-sm:
-    fontFamily: Geist, system-ui, sans-serif
-    fontSize: 0.75rem
-    fontWeight: 500
-    lineHeight: 1rem
+    letterSpacing: -0.011em
   caption:
     fontFamily: Geist, system-ui, sans-serif
-    fontSize: 0.75rem
+    fontSize: 0.8125rem
     fontWeight: 400
-    lineHeight: 1rem
+    lineHeight: 1.4
   label:
     fontFamily: Geist Mono, ui-monospace, monospace
-    fontSize: 0.75rem
+    fontSize: 0.8125rem
     fontWeight: 400
-    lineHeight: 1rem
-    letterSpacing: 0.08em
+    lineHeight: 1.4
+    letterSpacing: 0.06em
   code:
     fontFamily: Geist Mono, ui-monospace, monospace
-    fontSize: 0.875rem
+    fontSize: 0.8125rem
     fontWeight: 400
-    lineHeight: 1.25rem
+    lineHeight: 1.6
     fontFeature: "'tnum', 'zero'"
 rounded:
-  none: 0px
-  xxs: 0.125rem
-  xs: 0.25rem
-  sm: 0.375rem
-  md: 0.5rem
+  sm: 0.125rem
+  md: 0.375rem
   lg: 0.75rem
   xl: 1rem
-  pill: 9999px
+  full: 9999px
 spacing:
-  xxs: 0.125rem
-  xs: 0.25rem
-  sm: 0.5rem
-  md: 0.75rem
-  lg: 1rem
-  xl: 1.5rem
-  2xl: 2rem
-  3xl: 2.5rem
-  4xl: 3rem
-  5xl: 4rem
-  6xl: 5rem
-  7xl: 6rem
-  gutter: 1.5rem
+  "4": 0.25rem
+  "8": 0.5rem
+  "12": 0.75rem
+  "16": 1rem
+  "20": 1.25rem
+  "24": 1.5rem
+  "32": 2rem
+  "40": 2.5rem
+  "48": 3rem
+  "64": 4rem
+  "80": 5rem
+  "96": 6rem
+  "128": 8rem
   container: 75rem
   measure: 42.5rem
-  grid-cell: 1.5rem
 components:
   button-primary:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.canvas}"
-    typography: "{typography.button-md}"
-    rounded: "{rounded.sm}"
-    padding: "{spacing.sm} {spacing.md}"
-  button-accent:
     backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.button-md}"
-    rounded: "{rounded.sm}"
-    padding: "{spacing.sm} {spacing.md}"
-  button-secondary:
-    backgroundColor: "{colors.canvas-raised}"
-    textColor: "{colors.ink}"
-    typography: "{typography.button-md}"
-    rounded: "{rounded.sm}"
-    padding: "{spacing.sm} {spacing.md}"
-  button-quiet:
-    textColor: "{colors.body}"
-    typography: "{typography.button-md}"
-    rounded: "{rounded.sm}"
-    padding: "{spacing.sm} {spacing.md}"
-  button-icon:
-    textColor: "{colors.mute}"
-    rounded: "{rounded.sm}"
-    size: "{spacing.xl}"
-  card:
-    backgroundColor: "{colors.canvas-raised}"
-    textColor: "{colors.ink}"
-    typography: "{typography.body-md}"
-    rounded: "{rounded.lg}"
-    padding: "{spacing.xl}"
-  card-panel:
-    backgroundColor: "{colors.canvas-panel}"
-    textColor: "{colors.ink}"
-    typography: "{typography.code}"
-    rounded: "{rounded.lg}"
-    padding: "{spacing.lg}"
-  callout-warning:
-    backgroundColor: "{colors.canvas-raised}"
-    textColor: "{colors.warning}"
-    typography: "{typography.body-md}"
+    textColor: "{colors.void}"
+    typography: "{typography.button}"
     rounded: "{rounded.md}"
-    padding: "{spacing.lg}"
-  stage-tag:
-    textColor: "{colors.mute}"
-    typography: "{typography.label}"
-    rounded: "{rounded.pill}"
-    padding: "{spacing.xs} {spacing.sm}"
-  stage-tag-shipping:
-    textColor: "{colors.primary}"
-  text-input:
-    backgroundColor: "{colors.canvas-raised}"
-    textColor: "{colors.ink}"
-    typography: "{typography.body-md}"
-    rounded: "{rounded.sm}"
-    padding: "{spacing.sm} {spacing.md}"
+    padding: "{spacing.8} {spacing.16}"
+  button-secondary:
+    backgroundColor: "{colors.obsidian}"
+    textColor: "{colors.bone}"
+    typography: "{typography.button}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.8} {spacing.16}"
+  button-ghost:
+    textColor: "{colors.mist}"
+    typography: "{typography.button}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.8} {spacing.16}"
+  button-icon:
+    textColor: "{colors.fog}"
+    rounded: "{rounded.md}"
+    size: "{spacing.32}"
   nav-bar:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.body}"
-    typography: "{typography.body-sm-strong}"
-    padding: "{spacing.md} {spacing.xl}"
+    backgroundColor: "{colors.void}"
+    textColor: "{colors.mist}"
+    typography: "{typography.nav}"
+    padding: "{spacing.12} {spacing.24}"
   nav-link:
-    textColor: "{colors.body}"
-    typography: "{typography.body-sm-strong}"
-    rounded: "{rounded.sm}"
-    padding: "{spacing.xs} {spacing.md}"
-  footer:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.mute}"
+    textColor: "{colors.mist}"
+    typography: "{typography.nav}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.8} {spacing.12}"
+  announcement:
+    backgroundColor: "{colors.carbon}"
+    textColor: "{colors.mist}"
+    typography: "{typography.caption}"
+    padding: "{spacing.8} {spacing.16}"
+  card:
+    backgroundColor: "{colors.carbon}"
+    textColor: "{colors.bone}"
+    typography: "{typography.body}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.24}"
+  card-elevated:
+    backgroundColor: "{colors.obsidian}"
+    textColor: "{colors.bone}"
+    typography: "{typography.body}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.24}"
+  card-feature:
+    backgroundColor: "{colors.carbon}"
+    textColor: "{colors.bone}"
+    typography: "{typography.body}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.32}"
+  case-mark:
+    backgroundColor: "{colors.primary}"
+    width: 2px
+  quote-block:
+    backgroundColor: "{colors.carbon}"
+    textColor: "{colors.fog}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.16}"
+  avatar:
+    backgroundColor: "{colors.obsidian}"
+    textColor: "{colors.mist}"
+    rounded: "{rounded.full}"
+    size: "{spacing.32}"
+  text-input:
+    backgroundColor: "{colors.carbon}"
+    textColor: "{colors.bone}"
     typography: "{typography.body-sm}"
-    padding: "{spacing.3xl} {spacing.xl}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.8} {spacing.12}"
   hero-band:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    typography: "{typography.display-xl}"
-    padding: "{spacing.7xl} {spacing.xl}"
+    backgroundColor: "{colors.void}"
+    textColor: "{colors.bone}"
+    typography: "{typography.display}"
+    padding: "{spacing.96} {spacing.24}"
   content-band:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    typography: "{typography.display-lg}"
-    padding: "{spacing.5xl} {spacing.xl}"
+    backgroundColor: "{colors.void}"
+    textColor: "{colors.bone}"
+    typography: "{typography.heading-lg}"
+    padding: "{spacing.80} {spacing.24}"
+  footer:
+    backgroundColor: "{colors.void}"
+    textColor: "{colors.fog}"
+    typography: "{typography.nav}"
+    padding: "{spacing.64} {spacing.24}"
+  hero-prompt:
+    textColor: "{colors.fog}"
+    typography: "{typography.label}"
   hero-heading:
-    textColor: "{colors.heading}"
-    typography: "{typography.display-xl}"
+    textColor: "{colors.paper}"
+    typography: "{typography.display}"
     width: "{spacing.measure}"
-  hero-subheading:
-    textColor: "{colors.body}"
+  hero-lede:
+    textColor: "{colors.mist}"
     typography: "{typography.body-lg}"
     width: "{spacing.measure}"
-  tagline-reveal:
-    textColor: "{colors.ink}"
-    typography: "{typography.display-md}"
-    width: "{spacing.measure}"
+  section-heading:
+    textColor: "{colors.bone}"
+    typography: "{typography.heading-lg}"
+    padding: "{spacing.40} 0"
+  page-heading:
+    textColor: "{colors.bone}"
+    typography: "{typography.heading}"
+  panel-heading:
+    textColor: "{colors.bone}"
+    typography: "{typography.heading-sm}"
+  card-heading:
+    textColor: "{colors.bone}"
+    typography: "{typography.subheading}"
+  body-secondary:
+    textColor: "{colors.fog}"
+    typography: "{typography.body}"
+  body-emphasis:
+    textColor: "{colors.paper}"
+    typography: "{typography.body-strong}"
+  body-dense:
+    textColor: "{colors.mist}"
+    typography: "{typography.body-sm}"
+  caption-note:
+    textColor: "{colors.fog}"
+    typography: "{typography.caption}"
   eyebrow:
-    textColor: "{colors.mute}"
+    textColor: "{colors.fog}"
     typography: "{typography.label}"
-  eyebrow-index:
-    textColor: "{colors.mark}"
+  tab-active:
+    textColor: "{colors.bone}"
+    typography: "{typography.nav}"
+  tab-inactive:
+    textColor: "{colors.ash}"
+    typography: "{typography.nav}"
+  stage-tag:
+    textColor: "{colors.fog}"
     typography: "{typography.label}"
-  rule:
-    backgroundColor: "{colors.hairline}"
+    rounded: "{rounded.full}"
+    padding: "{spacing.4} {spacing.8}"
+  stage-tag-shipping:
+    textColor: "{colors.primary}"
+    typography: "{typography.label}"
+  status-ok:
+    textColor: "{colors.green}"
+    typography: "{typography.label}"
+  status-fail:
+    textColor: "{colors.red}"
+    typography: "{typography.label}"
+  status-running:
+    textColor: "{colors.teal}"
+    typography: "{typography.label}"
+  link-inline:
+    textColor: "{colors.bone}"
+    typography: "{typography.body}"
     height: 1px
-  rule-hover:
-    backgroundColor: "{colors.hairline-strong}"
+  code-inline:
+    backgroundColor: "{colors.obsidian}"
+    textColor: "{colors.mist}"
+    typography: "{typography.code}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.4}"
+  code-comment:
+    textColor: "{colors.fog}"
+    typography: "{typography.code}"
+  rule:
+    backgroundColor: "{colors.graphite}"
+    height: 1px
+  rule-strong:
+    backgroundColor: "{colors.smoke}"
     height: 1px
   rule-control:
-    backgroundColor: "{colors.edge}"
+    backgroundColor: "{colors.ash}"
     height: 1px
-  grid-surface:
-    backgroundColor: "{colors.grid}"
-    size: "{spacing.grid-cell}"
-  link-inline:
-    textColor: "{colors.primary}"
-    height: 1px
-  code-comment:
-    textColor: "{colors.mute}"
-    typography: "{typography.code}"
+  log-bar:
+    backgroundColor: "{colors.teal}"
+    height: 6px
   terminal-transcript:
-    backgroundColor: "{colors.canvas-panel}"
+    backgroundColor: "{colors.carbon}"
     textColor: "{colors.terminal-fg}"
     typography: "{typography.code}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.16}"
   terminal-thought:
     textColor: "{colors.terminal-muted}"
     typography: "{typography.code}"
@@ -282,330 +332,242 @@ components:
 
 Eva is an open-source, AI-native software factory. It runs coding work end to
 end, from a spec a machine can check to evidence that it was done. The design
-brief is still the line the product prints in its own banner: **evidence, not
-claims**. What changes in this revision is the hand the evidence is written
-in.
+brief is the line the product prints in its own banner — **evidence, not
+claims** — and the surface is the instrument that prints it: a near-black
+panel, quiet neutrals, and one ember signal spent only where something is
+actually happening.
 
-The previous system spoke in a display serif on a pure black poster. This one
-speaks the way the product does: a sans for prose and a mono for anything the
-machine said. It is the language of the instruments Eva sits beside — Axiom's
-near-black readout with one signal colour, Warp's work-order rows set in
-lowercase mono, Factory's industrial surfaces and numbered mono labels — and
-it drops nothing Eva already owned: the flat ground, the hairline rules, the
-measurement grid, the periwinkle the terminal paints with.
+The system was assembled from five references — Linear, Axiom, Warp, Basedash
+and Factory — and every contested value was settled by measurement rather than
+by taste. Where they disagreed, the number in [Colors](#colors) decided it.
 
 **Key characteristics:**
 
-- One chromatic signal, `{colors.primary}` `#7aa2f7`, the accent the terminal
-  already paints with. The genre reached for orange (Axiom, Factory); keeping
-  the terminal's own periwinkle is both distinct in that landscape and honest
-  to the product, because the hero image on every surface is the real program.
-- A near-black canvas, `{colors.canvas}` `#0a0a0a`, instead of pure `#000000`.
-  Pure black haloes on OLED and crushes the tonal steps above it; `#0a0a0a`
-  leaves room for a sunken step below the page.
-- Two faces: **Geist** for display, body and controls; **Geist Mono** for
-  everything that is evidence — code, transcripts, labels, timestamps,
-  metadata. The mono is a voice, not a decoration: if the machine produced
-  the text, the mono sets it.
-- Depth is a hairline and a tonal step. No shadow anywhere, no gradient
-  anywhere — the previous system's one hero-text gradient is gone.
-- A 24 px **dot grid** is the only texture, replacing the 48 px line grid.
-  Dots read as graph paper — a field you measure on — where lines read as a
-  cage.
-- Terminal imagery is the one decorative system, and it is the real program.
-
-## One system, four surfaces
-
-Eva has four interfaces: the **cli** (the product, a terminal program), the
-**web** app (the product's browser surface), **www** (marketing), and
-**docs** (documentation). The question this document settles: they get **one
-design system, not four** — a single token source in `packages/ui`, and a
-thin overlay per surface.
-
-The reasoning is short. The surfaces differ by _distance_, not by _identity_:
-marketing is the instrument seen across the room, docs is the instrument's
-manual, web is the instrument's panel, cli is the instrument itself. Four
-systems would mean four palettes to keep in contrast-checked agreement and
-four places for the accent to drift. One system means a token changes once
-and every surface follows.
-
-What each surface may vary is written into its overlay, and only these axes:
-
-| Axis          | www            | docs                | web                 | cli             |
-| ------------- | -------------- | ------------------- | ------------------- | --------------- |
-| Scheme        | dark only      | light + dark        | dark first          | terminal themes |
-| Density       | expressive     | reading             | dense               | character grid  |
-| Display scale | full, to 72 px | capped at 30 px     | capped at 20 px     | none            |
-| Motion        | full contract  | instant + fast only | instant + fast only | none            |
-| Texture       | dot grid       | none                | none                | none            |
-
-An overlay may **remap semantic tokens** (a different default scheme, a
-tighter control height, a narrower measure). It may never introduce a new
-colour, face, radius or duration. A raw value in an app stylesheet is a
-defect wherever it appears.
-
-## CSS architecture
-
-Everything below is the target state. Nothing here is built yet; the plan to
-get there is in [Implementation plan](#implementation-plan).
-
-### The layers
-
-Four layers, each of which may only reference the layer beneath it:
-
-1. **Primitives** — the raw ladders: the neutral scale, the accent scale, the
-   type scale, spacing, radius, durations and easings. Scheme-free. No
-   component and no app reads a primitive directly.
-2. **Semantic roles** — the names this document uses: `canvas`, `ink`,
-   `hairline`, `edge`, `primary`. Defined twice, once per scheme, as CSS
-   custom properties. This is the only layer where light and dark exist.
-3. **Components** — buttons, cards, inputs, the shadcn variable mapping. Set
-   entirely in semantic roles, so a component is scheme-blind and
-   surface-blind by construction.
-4. **Surface overlays** — one small file per app that remaps semantic tokens
-   for that surface's distance. Ten to thirty lines each, no literals.
-
-### The files
-
-```
-packages/ui/src/styles/
-  tokens.css        @font-face (Geist, Geist Mono, self-hosted)
-                    + primitives + semantic roles
-                    (:root is dark; [data-theme="light"] is light)
-  typography.css    display, body, label and code classes
-  surfaces.css      dot grid, panel, cards, buttons, rules
-  motion.css        the reveal system and the motion contract
-  shadcn.css        semantic roles mapped onto shadcn/Base UI variables
-  globals.css       entry point: base layer, resets, imports
-
-apps/www/src/styles/app.css    imports ui, then the www overlay
-apps/docs/src/styles/app.css   imports ui, then the docs overlay
-apps/web/src/styles.css        imports ui, then the web overlay
-packages/tui                   theme.ts mirrors the terminal contract
-```
-
-So: **separate themes, consolidated files** — the common CSS is the whole of
-`packages/ui/src/styles`, the "separate theme" per interface is one overlay
-file that remaps roles and nothing else. The scheme dimension lives in
-`tokens.css` alone; an overlay picks a default scheme, it never defines one.
-
-The terminal takes the same system through a different pipe: the renderer
-contract names four colours (see [Terminal](#terminal)), and
-`packages/tui`'s default theme carries the same hex values the frontmatter
-does. A conformance test pins the two sources to each other, since the
-terminal reads TypeScript, not CSS.
-
-### Rules that hold the layers
-
-- An app stylesheet contains no colour literal, no font-family, no
-  `@font-face`. A test greps the three app entry files for hex, `rgb(`,
-  `oklch(` and `@font-face` and fails on any hit.
-- A component style reads only semantic roles. Primitives are private to
-  `tokens.css`.
-- The existing tests in `apps/docs/src/lib/tokens.test.ts` keep holding the
-  font line: exactly two families, both self-hosted, no third-party origin.
-- The theme cookie (`packages/ui/src/theme.ts`) remains the cross-origin
-  source of truth for scheme preference between docs and web. www no longer
-  participates: it is dark only.
+- **Dark only.** There is no light scheme, no theme toggle, no scheme cookie.
+- **Near-black, not black.** The canvas is `{colors.void}` `#08090a`. Pure
+  `#000000` reaches 21:1 against white, and that much contrast haloes on OLED
+  and smears text in motion. `#08090a` gives up 1.1 points of contrast and
+  buys back a surface a reader can hold for an hour.
+- **Two faces, one rule.** Geist carries prose and UI; Geist Mono carries
+  anything a machine produced — code, transcripts, labels, metadata. They are
+  one family, so their metrics agree.
+- **Ink is `{colors.bone}` `#e5e5e6`, not white.** Paper white is reserved for
+  the hero and inline emphasis. Full-strength white as the default ink is the
+  same halation problem as a pure black ground, from the other side.
+- **One chromatic signal**, `{colors.primary}` `#ee6018`, plus three states
+  that only ever report a machine outcome: `{colors.teal}`, `{colors.green}`,
+  `{colors.red}`.
+- **Depth is a tonal step and a hairline.** Void to carbon to obsidian,
+  separated by graphite. No shadow carries elevation.
+- **The product is the hero.** Terminal captures and log-bar patterns are the
+  only imagery.
 
 ## Colors
 
-### How the palette is built
+Ten neutrals, one accent, three states, and the four names the terminal
+contract reads. Every ratio below is measured, not estimated.
 
-Underneath the semantic names sits a 12-step neutral ladder in the Radix
-manner — steps 1–2 are grounds, 3–5 are raised fills, 6–8 are borders, 9–10
-are solid fills, 11–12 are text. The ladder itself is a primitive; nothing
-outside `tokens.css` ever names a step. The tokens below are the semantic
-layer, and they are the only names this document, the components and the
-apps use. The dark scheme is normative in the frontmatter; the light scheme
-is the table at the end of this section.
+### Why these neutrals
 
-### Brand & Accent
+Linear's ladder was taken over Axiom's and Factory's because it is the only
+one of the five with a genuinely distinct step at every job — two grounds, two
+borders and four inks — and because its neutrals carry a faint blue cast that
+keeps a large dark field from reading brown. The values are unchanged from the
+reference.
 
-- **Periwinkle** (`{colors.primary}` — `#7aa2f7`): the single signal, the
-  exact accent the terminal paints with. It carries links, the shipping stage
-  tag, the eyebrow index and the focus ring. On the canvas it measures
-  **7.86:1**.
-- **On Primary** (`{colors.on-primary}` — `#0a0a0a`): the ink on a periwinkle
-  fill, at the same 7.86:1.
-- **Mark** (`{colors.mark}` — `#7aa2f7`): the graphics-only accent for painted
-  shapes. A separate token because the light scheme darkens
-  `{colors.primary}` for legibility but leaves the mark alone. Text set in
-  the mark on a light ground measures 2.41:1 and is a defect.
+### Surfaces
 
-### Surface
+- **Void** (`{colors.void}` — `#08090a`): the page, the nav, the footer.
+- **Carbon** (`{colors.carbon}` — `#0f1011`): the raised surface — cards, the
+  transcript panel, code blocks, the announcement strip.
+- **Obsidian** (`{colors.obsidian}` — `#161718`): the elevated surface —
+  popovers, menus, secondary buttons, inline code, avatars.
 
-- **Canvas** (`{colors.canvas}` — `#0a0a0a`): the page.
-- **Canvas Sunken** (`{colors.canvas-sunken}` — `#060606`): the step below
-  the page — a well an embedded capture sits in, the track behind a filled
-  control.
-- **Canvas Raised** (`{colors.canvas-raised}` — `#161616`): cards, tiles,
-  secondary buttons, inputs.
-- **Canvas Overlay** (`{colors.canvas-overlay}` — `#1c1c1c`): popovers,
-  menus, tooltips — the one step that floats, and it still casts no shadow.
-- **Canvas Panel** (`{colors.canvas-panel}` — `#101010`): code blocks and the
-  terminal panel. Dark in _both_ schemes, because the program it stands for
-  is; its ink is pinned, not flipped.
-- **Hairline** (`{colors.hairline}` — `#232323`): the 1 px divider.
-- **Hairline Strong** (`{colors.hairline-strong}` — `#2e2e2e`): the same edge
-  under hover or focus.
-- **Edge** (`{colors.edge}` — `#747474`): the boundary that identifies a
-  control, at **4.24:1** on the canvas. A hairline may bound a card; only
-  edge may be the sole thing that says "this is an input".
-- **Grid** (`{colors.grid}` — `#1b1b1b`): the dot-grid ink.
+### Lines
+
+- **Graphite** (`{colors.graphite}` — `#23252a`): the hairline, at 1.30:1 on
+  void. Separation between two static surfaces, and never the thing that
+  identifies a control.
+- **Smoke** (`{colors.smoke}` — `#383b3f`): the same edge under hover or
+  focus, at 1.77:1.
+- **Ash** (`{colors.ash}` — `#62666d`): the control boundary, at **3.45:1** —
+  the only line in the ladder that clears the 3:1 SC 1.4.11 asks of a non-text
+  edge. As text it **fails at 3.45:1**, so ash marks an inactive tab or a
+  disabled label and nothing that has to be read.
 
 ### Text
 
-- **Ink** (`{colors.ink}` — `#f2f2f2`): default text, at **17.68:1**.
-- **Body** (`{colors.body}` — `#b4b4b4`): secondary copy and lede, at
-  **9.55:1**.
-- **Mute** (`{colors.mute}` — `#8a8a8a`): captions, timestamps, labels and
-  fine print, at **5.73:1** on the canvas and **5.24:1** on a raised fill.
-  This is the floor; nothing quieter may be added.
-- **Heading** (`{colors.heading}` — `#ffffff`): the hero headline, flat. The
-  previous system's heading gradient is retired; there is now no gradient
-  anywhere.
+- **Bone** (`{colors.bone}` — `#e5e5e6`): the default ink, at **15.83:1** on
+  void, 15.13:1 on carbon, 14.26:1 on obsidian.
+- **Mist** (`{colors.mist}` — `#d0d6e0`): bright secondary — navigation links,
+  dense UI rows, inline code, the hero lede — at **13.64:1**.
+- **Fog** (`{colors.fog}` — `#8a8f98`): secondary prose, captions, eyebrows
+  and metadata, at **6.13:1** on void and 5.52:1 on obsidian. **Fog is the
+  text floor.** Nothing quieter may carry text.
+- **Paper** (`{colors.paper}` — `#ffffff`): the hero headline and inline
+  emphasis only, at 19.93:1. It is a highlight, not a default.
 
-### Semantic status
+### The accent
 
-- **Warning** (`{colors.warning}` — `#e0af68`): the amber the terminal uses
-  for tool output — **9.90:1** on the canvas.
-- **Success** (`{colors.success}` — `#4cc38a`): a passing check, a clean
-  diff — **8.94:1**. New in this revision; the web app reports runs and
-  cannot say "passed" in the accent without spending it.
-- **Danger** (`{colors.danger}` — `#f2555a`): a failing check, a destructive
-  action — **5.87:1**.
+- **Ember** (`{colors.primary}` — `#ee6018`): Factory's signal orange, taken
+  over Axiom's `#da5c2c` on the measurement — **6.00:1** against void where
+  Axiom's reaches 5.27:1, and the same 6.00:1 for the ink sitting on the fill.
+- **The ink on an ember fill is `{colors.void}`.** Bone on ember measures
+  **2.64:1** and fails outright; void measures 6.00:1. Every reference in the
+  set puts a light ink on its orange, and every one of them is wrong.
+- Ember fills the primary CTA, draws the 2 px editorial case mark, colours the
+  shipping stage tag and the transcript's turn marker, and paints the focus
+  ring. **Nothing else.** Scattered onto ordinary text, icons or borders it
+  stops meaning "here".
 
-Status colour never carries meaning alone; the text names the state.
+### States
 
-### The light scheme
+These report what a machine did, and only that. They never decorate chrome.
 
-The light scheme exists for docs and web only (www is dark only). The
-frontmatter format carries no scheme dimension, so these values are normative
-here:
+- **Teal** (`{colors.teal}` — `#02b8cc`): running, in progress, and the
+  log-bar histogram — at **8.29:1**, the most legible data colour in the five
+  references.
+- **Green** (`{colors.green}` — `#27a644`): a passing check, a clean diff, at
+  **6.29:1**.
+- **Red** (`{colors.red}` — `#eb5757`): a failing check, a destructive action,
+  at **5.73:1**.
 
-| Role            | Dark      | Light     | Light contrast (on its ground) |
-| --------------- | --------- | --------- | ------------------------------ |
-| canvas          | `#0a0a0a` | `#fcfcfc` | —                              |
-| canvas-sunken   | `#060606` | `#f5f5f5` | —                              |
-| canvas-raised   | `#161616` | `#ffffff` | —                              |
-| canvas-overlay  | `#1c1c1c` | `#ffffff` | —                              |
-| canvas-panel    | `#101010` | `#101010` | pinned dark in both schemes    |
-| hairline        | `#232323` | `#e5e5e5` | —                              |
-| hairline-strong | `#2e2e2e` | `#d9d9d9` | —                              |
-| edge            | `#747474` | `#8d8d8d` | 3.24:1                         |
-| grid            | `#1b1b1b` | `#e8e8e8` | —                              |
-| ink             | `#f2f2f2` | `#171717` | 17.47:1                        |
-| body            | `#b4b4b4` | `#4d4d4d` | 8.24:1                         |
-| mute            | `#8a8a8a` | `#6e6e6e` | 4.97:1                         |
-| heading         | `#ffffff` | `#171717` | 17.47:1                        |
-| primary         | `#7aa2f7` | `#3d63dd` | 5.08:1                         |
-| on-primary      | `#0a0a0a` | `#fcfcfc` | 5.08:1                         |
-| mark            | `#7aa2f7` | `#7aa2f7` | graphics only, never text      |
-| warning         | `#e0af68` | `#ad5700` | 4.94:1                         |
-| success         | `#4cc38a` | `#18794e` | 5.27:1                         |
-| danger          | `#f2555a` | `#ce2c31` | 5.08:1                         |
+Status colour never carries meaning alone; the text names the state and a
+symbol confirms it.
 
-The one standing trap carries over: `{colors.canvas-panel}` stays dark on a
-light page, so the panel's ink is pinned (`terminal-*` tokens), and the
-scheme-aware accent is never set on the panel — in light it would land at
-3.11:1 and fail.
+### Terminal contract
+
+The renderer contract names four colours, and a theme fills every one and no
+more. They are the same values the rest of the system uses:
+
+- `{colors.terminal-fg}` `#e5e5e6` — a person's words and the agent's words.
+- `{colors.terminal-muted}` `#8a8f98` — reasoning and anything secondary.
+- `{colors.terminal-accent}` `#ee6018` — the bar beside a person's turn.
+- `{colors.terminal-warning}` `#02b8cc` — tool output. The contract's key is
+  named `warning` for historical reasons; the colour is teal, because tool
+  output is machine data rather than an alarm.
+
+### Measured contrast
+
+| Ink                  | on void | on carbon | on obsidian | Verdict                      |
+| -------------------- | ------- | --------- | ----------- | ---------------------------- |
+| `paper` `#ffffff`    | 19.93   | 19.05     | 17.95       | Emphasis only                |
+| `bone` `#e5e5e6`     | 15.83   | 15.13     | 14.26       | The default ink              |
+| `mist` `#d0d6e0`     | 13.64   | 13.04     | 12.29       | Bright secondary             |
+| `fog` `#8a8f98`      | 6.13    | 5.86      | 5.52        | The text floor               |
+| `ash` `#62666d`      | 3.45    | 3.30      | 3.11        | **Never text.** Borders only |
+| `smoke` `#383b3f`    | 1.77    | 1.69      | 1.59        | Line                         |
+| `graphite` `#23252a` | 1.30    | 1.24      | 1.17        | Hairline                     |
+| `primary` `#ee6018`  | 6.00    | 5.73      | —           | The accent                   |
+| `teal` `#02b8cc`     | 8.29    | 7.92      | —           | Running, log bars            |
+| `green` `#27a644`    | 6.29    | 6.01      | —           | Passed                       |
+| `red` `#eb5757`      | 5.73    | 5.47      | —           | Failed                       |
+| `void` on ember      | 6.00    | —         | —           | The CTA ink                  |
+| `bone` on ember      | 2.64    | —         | —           | **A defect. Never.**         |
 
 ## Typography
 
 ### Font Family
 
-Two faces, both self-hosted in `packages/ui`, both under the SIL Open Font
-License. A test fails the build if a third is declared or if any face loads
-from a third-party origin.
+Two faces, both self-hosted in `packages/ui` as variable fonts, both under the
+SIL Open Font License:
 
-1. **Geist** for display, body, controls and navigation. Variable, 400 and
-   500 are the working weights. Display sits at 500 — the weight the whole
-   genre reads at — never bolder.
-2. **Geist Mono** for code, transcripts, labels, eyebrows, timestamps,
-   stage tags and tabular data, with `tnum` and a slashed zero.
+1. **Geist** for display, body, controls and navigation.
+2. **Geist Mono** for code, transcripts, labels, eyebrows, timestamps and
+   tabular data, with `tnum` and a slashed zero.
 
-Instrument Serif and Space Grotesk are retired. The rule that replaces them
-is worth the trade: **if a machine produced the text, it is set in the mono;
-if a person is being spoken to, it is set in the sans.** That one rule styles
-the transcript, the metadata row, the eyebrow and the code block without a
-per-case decision.
+They are one family, so their metrics, x-height and letterforms agree — a
+command set in the mono beside a sentence in the sans reads as one system
+rather than two.
+
+**The rule that decides every case: if a machine produced the text, it is set
+in the mono; if a person is being spoken to, it is set in the sans.** That one
+line styles the transcript, the metadata row, the eyebrow and the code block
+without a per-case decision.
+
+An earlier revision of this system set _everything_ in the mono, following
+Axiom. That is the one place Axiom is measurably wrong: a monospaced face
+slows continuous reading, and Eva's documentation is continuous reading. Every
+other reference in the set — Linear, Warp, Factory, Basedash — pairs a sans
+with a mono, and so does this one.
+
+Weights: **400** for prose, **500** for headings, buttons and emphasis. Never
+above 600, and never italic.
 
 ### Hierarchy
 
-| Token                         | Size | Weight | Line height | Tracking | Face       | Use                                       |
-| ----------------------------- | ---- | ------ | ----------- | -------- | ---------- | ----------------------------------------- |
-| `{typography.display-xl}`     | 72px | 500    | 1.05        | -0.025em | Geist      | Hero headline (www only).                 |
-| `{typography.display-lg}`     | 60px | 500    | 1.05        | -0.022em | Geist      | Section headline (www).                   |
-| `{typography.display-md}`     | 48px | 500    | 1.1         | -0.02em  | Geist      | Tagline reveal, sub-section.              |
-| `{typography.display-sm}`     | 30px | 500    | 36px        | -0.012em | Geist      | Card heading, docs h1.                    |
-| `{typography.title}`          | 20px | 500    | 28px        | -0.006em | Geist      | Panel title, web app h1.                  |
-| `{typography.body-lg}`        | 18px | 400    | 28px        | 0        | Geist      | Lede paragraph.                           |
-| `{typography.body-md}`        | 16px | 400    | 24px        | 0        | Geist      | Default body.                             |
-| `{typography.body-md-strong}` | 16px | 500    | 24px        | 0        | Geist      | Bold inline body.                         |
-| `{typography.body-sm}`        | 14px | 400    | 20px        | 0        | Geist      | Secondary body, footer.                   |
-| `{typography.body-sm-strong}` | 14px | 500    | 20px        | 0        | Geist      | Navigation links.                         |
-| `{typography.button-md}`      | 14px | 500    | 20px        | 0        | Geist      | Button label.                             |
-| `{typography.button-sm}`      | 12px | 500    | 16px        | 0        | Geist      | Compact chrome (web app).                 |
-| `{typography.caption}`        | 12px | 400    | 16px        | 0        | Geist      | Captions, fine print.                     |
-| `{typography.label}`          | 12px | 400    | 16px        | 0.08em   | Geist Mono | Eyebrow, stage tag, metadata — uppercase. |
-| `{typography.code}`           | 14px | 400    | 20px        | 0        | Geist Mono | Code, transcript, tables.                 |
+Tracking follows Linear's discipline: about **-0.011em** at reading sizes,
+tightening to **-0.022em** at display sizes, because tracking that is right at
+56 px closes the letters up at 16 px. The mono never tracks negative;
+`{typography.label}` tracks _open_ at +0.06em.
 
-Buttons drop from the old 16 px/600 to 14 px/500: at instrument density a
-bold 16 px label is a poster, and every reference in the genre sits at
-13–14 px medium.
+| Token                      | Size | Weight | Line height | Tracking | Face       | Use                                 |
+| -------------------------- | ---- | ------ | ----------- | -------- | ---------- | ----------------------------------- |
+| `{typography.display}`     | 56px | 500    | 1.05        | -0.022em | Geist      | Hero headline (www).                |
+| `{typography.heading-lg}`  | 40px | 500    | 1.1         | -0.022em | Geist      | Section headline.                   |
+| `{typography.heading}`     | 32px | 500    | 1.15        | -0.02em  | Geist      | Docs page title.                    |
+| `{typography.heading-sm}`  | 24px | 500    | 1.25        | -0.014em | Geist      | Docs h2, panel title.               |
+| `{typography.subheading}`  | 20px | 500    | 1.4         | -0.012em | Geist      | Card headline.                      |
+| `{typography.body-lg}`     | 18px | 400    | 1.6         | -0.011em | Geist      | Lede.                               |
+| `{typography.body}`        | 16px | 400    | 1.6         | -0.011em | Geist      | Default prose.                      |
+| `{typography.body-strong}` | 16px | 500    | 1.6         | -0.011em | Geist      | Inline emphasis.                    |
+| `{typography.body-sm}`     | 15px | 400    | 1.5         | -0.011em | Geist      | Dense UI, web app rows.             |
+| `{typography.button}`      | 15px | 500    | 20px        | -0.011em | Geist      | Every button label.                 |
+| `{typography.nav}`         | 15px | 400    | 20px        | -0.011em | Geist      | Navigation, footer links.           |
+| `{typography.caption}`     | 13px | 400    | 1.4         | 0        | Geist      | Captions, fine print.               |
+| `{typography.label}`       | 13px | 400    | 1.4         | +0.06em  | Geist Mono | Eyebrow, tag, metadata — uppercase. |
+| `{typography.code}`        | 13px | 400    | 1.6         | 0        | Geist Mono | Code, transcript, tables.           |
+
+**Body is 16 px at a 1.6 ratio.** That is the reading size, and it is the one
+value here chosen purely for long-form legibility: Axiom's 14 px and Linear's
+15 px are UI sizes, and Eva's documentation is prose. Dense product surfaces
+step down to `{typography.body-sm}` 15 px.
+
+Code is 13 px at 1.6. A monospaced face renders optically larger than a sans
+at the same pixel size, so code set one step below body reads level with it.
 
 ### Principles
 
-- **Display at weight 500, never bolder.** Hierarchy comes from size, leading
-  and tracking, not weight.
-- **Negative tracking is part of the voice**, from -0.025em at 72 px easing
-  off through the steps. The mono is never tracked negative; `{typography.label}`
-  tracks _open_ at 0.08em, uppercase.
-- **Every size lands on a Tailwind scale step and takes that step's line
-  height.** No fluid clamp, no arbitrary value. A hero reads
-  `text-4xl md:text-6xl lg:text-7xl`.
+- **Every size lands on the scale above and takes that step's line height.**
+  No fluid clamp, no arbitrary value.
+- Headings are sentence case. Uppercase belongs to `{typography.label}` alone.
 - **Never italic, anywhere.** Emphasis is colour, size or weight.
-- **No hyphen inside a sentence, heading or label**, and no word left alone
-  on the last line: headings set `text-wrap: balance`, body sets `pretty`.
-- Headings are sentence case. Labels are uppercase mono, and that is the only
-  uppercase in the system.
+- No hyphen inside a sentence, heading or label, and no word left alone on the
+  last line: headings set `text-wrap: balance`, body sets `pretty`, long-form
+  documentation sets neither.
+- Arrow glyphs are text set in the face: `→` after an action label, `~/` as
+  the hero prompt.
 
 ## Layout
 
 ### Spacing System
 
-- **Base unit**: 4 px, with a 2 px half-step for micro-adjustments.
-- **Tokens**: `{spacing.xxs}` 2 px · `{spacing.xs}` 4 px · `{spacing.sm}` 8 px ·
-  `{spacing.md}` 12 px · `{spacing.lg}` 16 px · `{spacing.xl}` 24 px ·
-  `{spacing.2xl}` 32 px · `{spacing.3xl}` 40 px · `{spacing.4xl}` 48 px ·
-  `{spacing.5xl}` 64 px · `{spacing.6xl}` 80 px · `{spacing.7xl}` 96 px.
-- **Buttons**: 8 px vertical, 12 px horizontal.
-- **Card interior**: `{spacing.xl}` 24 px on www and docs; `{spacing.lg}`
-  16 px in the web app, which is the density overlay at work.
-- **Band padding**: `{spacing.7xl}` 96 px for the hero, `{spacing.5xl}` 64 px
-  for a standard band, `{spacing.4xl}` 48 px for a run of short blocks.
+- **Base unit**: 4 px, on Linear's grid — the most flexible of the five, and
+  the one Tailwind speaks natively.
+- **Tokens**: `{spacing.4}` 4 · `{spacing.8}` 8 · `{spacing.12}` 12 ·
+  `{spacing.16}` 16 · `{spacing.20}` 20 · `{spacing.24}` 24 · `{spacing.32}`
+  32 · `{spacing.40}` 40 · `{spacing.48}` 48 · `{spacing.64}` 64 ·
+  `{spacing.80}` 80 · `{spacing.96}` 96 · `{spacing.128}` 128.
+- **Buttons**: 8 px vertical, 16 px horizontal — about 36 px tall.
+- **Card interior**: `{spacing.24}` 24 px; a feature panel takes 32 px, a
+  nested quote block 16 px.
+- **Section rhythm**: `{spacing.40}` between related blocks, `{spacing.80}`
+  between sections, `{spacing.96}` for the hero band.
 
 Nothing between the steps, and nothing outside them. A one-off such as
 `margin-top: 13px` is a defect even when it looks right.
 
 ### Grid & Container
 
-- Content centres at `{spacing.container}` 1200 px with a `{spacing.gutter}`
-  24 px gutter.
-- Prose and hero headings cap at `{spacing.measure}` 680 px. Hero line breaks
-  are placed by hand, where the thought breaks.
-- The dot grid draws at a `{spacing.grid-cell}` 24 px pitch: a 1 px dot of
-  `{colors.grid}` at each intersection, masked so the field fades out rather
-  than stopping at an edge. www only.
+- Content centres at `{spacing.container}` 1200 px with a 24 px gutter.
+- Prose and hero headings cap at `{spacing.measure}` 680 px.
+- The hero is a left-aligned block: the `~/` prompt in fog, a two-line
+  headline, one primary action and one ghost action, the real program below.
 - Documentation uses a three-region shell: top bar, page-tree sidebar, and an
-  on-this-page column.
-- The web app uses a two-region shell: a rail of sessions, and the transcript
-  panel it drives.
+  on-this-page column. The web app uses a rail of sessions beside the
+  transcript panel it drives.
 
 ### Responsive Strategy
-
-#### Breakpoints
 
 | Name    | Width      | Key changes                                            |
 | ------- | ---------- | ------------------------------------------------------ |
@@ -613,89 +575,50 @@ Nothing between the steps, and nothing outside them. A one-off such as
 | Tablet  | 768–1023px | 2-up grids; sidebar still a drawer.                    |
 | Desktop | ≥ 1024px   | Full band layout; documentation sidebar becomes fixed. |
 
-#### Touch Targets
-
-Buttons render about 36 px tall (8 px padding either side of a 20 px line
-box). Every control must clear 24 × 24 CSS px, and should reach 44 × 44 where
-the layout allows. No affordance may depend on hover; touch has none.
-
-#### Collapsing Strategy
-
-- Navigation: a docked hairline bar at desktop; a full-screen overlay with
-  staggered links at mobile, never a dropdown.
-- Card grids: 1-up below 768 px, and the hover border-step is dropped.
-- Documentation sidebar: a focus-trapping drawer below 1024 px that closes on
-  `Escape` and restores focus to its toggle.
-- A button row of more than two stacks full width below 768 px.
-
-#### Image Behavior
-
-- **Terminal captures**: the real program on `{colors.canvas-panel}`, inside
-  `{rounded.lg}` chrome, sitting in a `{colors.canvas-sunken}` well. The
-  capture is the artwork; every reference in the genre leads with the real
-  product and so does Eva.
-- **Diagrams**: monochrome SVG that inherits the surrounding text colour, so
-  both schemes work without a second asset.
-- **Any raster**: `max-width: 100%`, with an intrinsic aspect ratio set so
-  the layout never shifts on load.
+- Every control clears 24 × 24 CSS px and reaches 44 × 44 where the layout
+  allows. No affordance depends on hover; touch has none.
+- Terminal captures sit on `{colors.carbon}` inside `{rounded.lg}` chrome with
+  a `{colors.graphite}` hairline. Any raster sets `max-width: 100%` with an
+  intrinsic aspect ratio.
+- No photography, no lifestyle imagery, no 3D renders. Product captures, log
+  bars and grayscale marks are the whole image system.
 
 ## Elevation & Depth
 
-| Level              | Treatment                                                           | Use                                 |
-| ------------------ | ------------------------------------------------------------------- | ----------------------------------- |
-| Level -1 — Sunken  | `{colors.canvas-sunken}` fill.                                      | Capture wells, control tracks.      |
-| Level 0 — Flat     | No border, no shadow.                                               | Bands, the page itself.             |
-| Level 1 — Hairline | 1 px `{colors.hairline}` on `{colors.canvas-raised}`.               | Cards, tiles, secondary buttons.    |
-| Level 2 — Panel    | `{colors.canvas-panel}` fill against the canvas, plus the hairline. | Code blocks and the terminal panel. |
-| Level 3 — Overlay  | `{colors.canvas-overlay}` fill, plus `{colors.hairline-strong}`.    | Popovers, menus, tooltips.          |
-| Focus              | 2 px `{colors.primary}` outline, 2 px offset.                       | Every focusable element.            |
+| Level | Surface             | Treatment                                       | Use                                 |
+| ----- | ------------------- | ----------------------------------------------- | ----------------------------------- |
+| 0     | `{colors.void}`     | Flat.                                           | The page, the nav, the footer.      |
+| 1     | `{colors.carbon}`   | Tonal step plus a `{colors.graphite}` hairline. | Cards, code blocks, the transcript. |
+| 2     | `{colors.obsidian}` | Tonal step plus hairline.                       | Popovers, menus, secondary buttons. |
+| —     | Focus               | 2 px `{colors.primary}` outline, 2 px offset.   | Every focusable element.            |
 
-The tonal steps are hints, not boundaries; a raised element carries its
-hairline as well. Shadows are not used anywhere, overlay included — an
-overlay is nearer because it is lighter and more strongly edged, not because
-it casts.
+Elevation is a tonal step and a hairline. The one exception is an element that
+genuinely detaches from the page — a popover or a menu over content — which
+may carry `rgba(8, 9, 10, 0.6) 0 4px 32px`. A card never casts, and no shadow
+is ever used to make a flat surface look raised.
 
 ## Shapes
 
-### Border Radius Scale
+| Token            | Value  | Use                                                |
+| ---------------- | ------ | -------------------------------------------------- |
+| `{rounded.sm}`   | 2px    | Inline code, badges, the floor for a nested shape. |
+| `{rounded.md}`   | 6px    | Buttons, inputs, small controls, popovers.         |
+| `{rounded.lg}`   | 12px   | Cards, code blocks, the transcript panel.          |
+| `{rounded.xl}`   | 16px   | A full-bleed feature panel.                        |
+| `{rounded.full}` | 9999px | Avatars, stage tags, icon badges.                  |
 
-Values are Tailwind's, but the token names are ours, so the two do **not**
-line up by name. Read the last column before writing a utility class.
-
-| Token            | Value  | Tailwind utility | Use                                    |
-| ---------------- | ------ | ---------------- | -------------------------------------- |
-| `{rounded.none}` | 0px    | `rounded-none`   | Rules, dividers, the grid, full bands. |
-| `{rounded.xxs}`  | 2px    | `rounded-xs`     | The floor for a nested result.         |
-| `{rounded.xs}`   | 4px    | `rounded-sm`     | Badge, inline code.                    |
-| `{rounded.sm}`   | 6px    | `rounded-md`     | Buttons, inputs, small controls.       |
-| `{rounded.md}`   | 8px    | `rounded-lg`     | Popovers, callouts.                    |
-| `{rounded.lg}`   | 12px   | `rounded-xl`     | Cards, code blocks, the panel.         |
-| `{rounded.xl}`   | 16px   | `rounded-2xl`    | A full-bleed feature panel.            |
-| `{rounded.pill}` | 9999px | `rounded-full`   | Stage tags.                            |
-
-Buttons tighten from 8 px to 6 px — a control is sharper than a container,
-and the genre sits between Warp's hard 0 and Axiom's 7.6. The pill now
-belongs to the stage tag alone; the navigation island that used to wear it is
-retired for a docked bar.
+Linear's range is taken over Axiom's 2 px-everywhere: at a 36 px control a
+2 px corner reads as an unfinished rectangle, and 6 px is the smallest radius
+that reads as deliberate. The 2 px floor is kept for small nested shapes.
 
 **Nested radius.** When a shape sits inside another and the gap is under
-32 px, the inner radius is the outer radius minus the gap, applied only when
-the result is above 2 px. A card at `{rounded.lg}` with 8 px of padding gives
-an inner element 4 px, which is `{rounded.xs}`.
-
-### Image Geometry
-
-- Terminal captures sit inside `{rounded.lg}` chrome.
-- The eyebrow's index is a two-digit mono figure, not a painted shape; the
-  8 px square mark is retired with the island.
-- Icons come from Phosphor, Solar or Iconamoon, at one stroke weight, and
-  never from Lucide, Feather or a Material set.
+32 px, the inner radius is the outer minus the gap, applied only when the
+result is above 2 px.
 
 ## Motion
 
-The motion contract carries over from the previous system unchanged — it was
-already the instrument's: motion confirms a state change, never announces
-one, and never runs on a browser default curve.
+Motion confirms a state change. It never announces one, and it never runs on a
+browser default curve.
 
 | Token         | Value                               | Use                                |
 | ------------- | ----------------------------------- | ---------------------------------- |
@@ -707,318 +630,171 @@ one, and never runs on a browser default curve.
 | `dur-reveal`  | 800ms                               | An element entering the viewport.  |
 | `stagger`     | 50ms                                | The step between siblings.         |
 
-These are custom properties rather than front-matter tokens, because the
-format carries no motion group and would silently drop them. They live in
-`packages/ui/src/styles/motion.css`, and a test fails the build on a literal
-duration or easing.
+These live as custom properties in `packages/ui/src/styles/tokens.css`; a test
+fails the build on a literal duration or easing.
 
-The entrance quiets down: **24 px up, transparent, resolving to settled and
-opaque** over `dur-reveal` — the old 64 px blurred rise was a poster's move.
-Siblings stagger by `stagger`.
-
-- Reveals are driven by `IntersectionObserver`. A scroll listener causes
-  continuous reflow and is never used.
-- Only `transform` and `opacity` animate.
-- Entrance motion is a marketing capability. Docs and the web app use
-  `dur-instant` and `dur-fast` only, because their reader is mid-task.
-- The hidden start state is gated behind a `.js` class, so a page without
-  JavaScript shows its content.
-- Everything transform-based is removed under `prefers-reduced-motion`.
-
-No animation library ships to the browser. The system is CSS.
+- The entrance is one move: 24 px up and transparent, resolving to settled and
+  opaque over `dur-reveal`. Siblings stagger by `stagger`.
+- Reveals are driven by `IntersectionObserver`; only `transform` and `opacity`
+  animate; the hidden start state is gated behind a `.js` class; everything
+  transform-based is removed under `prefers-reduced-motion`.
+- Buttons move by colour change and the 0.98 press. No lift, no shadow.
+- Entrance motion is a marketing capability. Documentation and the web app use
+  `dur-instant` and `dur-fast` only.
+- No animation library ships to the browser. The system is CSS.
 
 ## Components
 
 ### Buttons
 
-**`button-primary`** — the inverted CTA.
-Background `{colors.ink}`, text `{colors.canvas}`, label
-`{typography.button-md}`, padding `{spacing.sm} {spacing.md}`, shape
-`{rounded.sm}`. The loudest element on the page, so it appears once per view.
+**`button-primary`** — the ember CTA, the conversion anchor.
+Fill `{colors.primary}`, label `{colors.void}` at `{typography.button}`,
+padding `{spacing.8} {spacing.16}`, shape `{rounded.md}`. An arrow glyph (`→`)
+follows the label. One per view.
 
-**`button-accent`** — the periwinkle CTA.
-Background `{colors.primary}`, text `{colors.on-primary}`, otherwise as
-above. At most one per page.
+**`button-secondary`** — the filled default.
+`{colors.obsidian}` fill, `{colors.bone}` label, a `{colors.graphite}` edge
+that moves to `{colors.smoke}` on hover.
 
-**`button-secondary`** — the outlined default.
-Background `{colors.canvas-raised}`, text `{colors.ink}`, a
-`{colors.hairline}` edge that moves to `{colors.hairline-strong}` on hover.
+**`button-ghost`** — the unlimited one, and the default for chrome.
+No fill, label `{colors.mist}`. At the density a documentation page carries, a
+filled button is noise.
 
-**`button-quiet`** — the unlimited one.
-No fill, text `{colors.body}`. The default for chrome; at the density a
-documentation page or the web app carries, a filled button is noise.
+**`button-icon`** — an icon alone at `{spacing.32}` 32 px, ink `{colors.fog}`.
+Must carry `aria-label`; a `title` never reaches touch.
 
-**`button-icon`** — an icon alone, at `{spacing.xl}` 24 px.
-Must carry `aria-label`. A `title` is not a substitute; it never reaches
-touch.
+Hover is a 6% wash of the ink; active is `scale(0.98)`; focus is the ring.
+Disabled is `aria-disabled`, never the attribute.
 
-Every button lifts nothing and casts nothing. Hover is a 6% wash, active is
-`scale(0.98)`, and focus is the ring.
+### Chrome
+
+**`nav-bar`** — one docked full-width bar on `{colors.void}`, about 56 px
+tall, links at `{typography.nav}` in `{colors.mist}`, a `{colors.graphite}`
+hairline below and a backdrop blur once content scrolls beneath. No island, no
+mega-menu. The hamburger morphs into a true X by rotation; the mobile menu is
+a full-screen overlay with staggered links.
+
+**`announcement`** — a full-width `{colors.carbon}` strip at
+`{typography.caption}`, closing `×` at the right.
+
+**`footer`** — the closing band on `{colors.void}`, text `{colors.fog}`,
+carrying the privacy and terms links.
 
 ### Cards & Containers
 
-**`card`** — the default content card.
-Background `{colors.canvas-raised}`, a 1 px `{colors.hairline}` border on all
-four sides, padding `{spacing.xl}`, shape `{rounded.lg}`. Hover moves the
-border to `{colors.hairline-strong}`. No shadow. A single-sided border is
-never a card edge.
+**`card`** — `{colors.carbon}`, a `{colors.graphite}` hairline on all four
+sides, `{rounded.lg}`, padding `{spacing.24}`. Hover moves the hairline to
+`{colors.smoke}`. A single-sided border is never a card edge — with one
+exception, next.
 
-**`card-panel`** — the code block and terminal panel.
-Background `{colors.canvas-panel}`, body in `{typography.code}`, shape
-`{rounded.lg}`. Dark in both schemes, because the program it stands for is.
+**`card-elevated`** with **`case-mark`** — the editorial card:
+`{colors.obsidian}` with a 2 px solid `{colors.primary}` left border running
+full height, the only colour in the card, functioning as a category mark. A
+`quote-block` nests inside on `{colors.carbon}`.
 
-**`callout-warning`** — the warning notice.
-Background `{colors.canvas-raised}`, a border and icon in `{colors.warning}`,
-and body text in `{colors.ink}`. The colour never carries the meaning alone.
-Success and danger callouts follow the same anatomy with their own status
-colour.
+**`card-feature`** — the full-bleed panel at `{rounded.xl}` and 32 px padding.
 
-**`stage-tag`** — the roadmap marker.
-A pill outline in `{colors.mute}` at `{typography.label}` — uppercase mono,
-which is what makes it read as a machine-stamped state rather than a
-decoration. When the capability is shipping it takes `{colors.primary}`. The
-text names the stage, so colour is never the only signal. Every unshipped
-capability carries one.
+**`text-input`** — `{colors.carbon}` field, `{colors.bone}` ink, a 1 px
+`{colors.ash}` border, `{rounded.md}`. The border is ash and not graphite
+because here the edge is the only thing that says a control is present, and
+ash is the only line that clears 3:1. Errors are inline, specific, tied by
+`aria-describedby`, never an alert.
 
-### Inputs & Forms
+**`avatar`** — the pill: `{rounded.full}`, `{colors.obsidian}` fill,
+`{colors.mist}` glyph.
 
-**`text-input`** — the dark-canvas input.
-Background `{colors.canvas-raised}`, text `{colors.ink}`, a 1 px
-`{colors.edge}` border, body in `{typography.body-md}`, padding
-`{spacing.sm} {spacing.md}`, shape `{rounded.sm}`. The border is
-`{colors.edge}` and not `{colors.hairline}` because here the outline is the
-only thing that says a control is present.
+### Labels & states
 
-Errors are inline, specific, tied by `aria-describedby`, and never an alert.
+**`eyebrow`** and **`stage-tag`** — uppercase mono at `{typography.label}` in
+`{colors.fog}`. The eyebrow is pure typography; the stage tag adds a
+`{rounded.full}` outline. When the capability is shipping the tag takes
+`{colors.primary}`. The text names the stage, so colour is never the only
+signal. Every unshipped capability carries one.
 
-### Navigation
+**`status-ok`**, **`status-fail`**, **`status-running`** — a run's outcome in
+`{colors.green}`, `{colors.red}` and `{colors.teal}`, always beside a symbol
+and the word. There is no coloured fill; the state is the glyph and the word,
+and the colour only confirms it.
 
-**`nav-bar`** — a docked bar, hairline below, on `{colors.canvas}` with a
-backdrop blur once content scrolls beneath it. The floating pill island is
-retired: every instrument in the genre docks its chrome, and a detached pill
-is a poster's gesture. The hamburger morphs into a true X by rotation; it
-never swaps glyph. The mobile menu is a full-screen overlay with staggered
-links.
+**`tab-active`** and **`tab-inactive`** — `{colors.bone}` with an underline
+against `{colors.ash}`. Ash is legible enough to identify a resting tab and
+deliberately not legible enough to compete with the selected one.
 
-**`nav-link`** — a link in the bar.
-Text `{colors.body}` at `{typography.body-sm-strong}`. The current page
-carries `aria-current="page"`.
+**`link-inline`** — `{colors.bone}` with a 1 px underline drawn from the
+font's own metrics, skipping descenders. Colour never distinguishes a link on
+its own here, so the underline is mandatory.
 
-**`footer`** — the closing band.
-Background `{colors.canvas}`, text `{colors.mute}`, padding
-`{spacing.3xl} {spacing.xl}`. Carries the privacy and terms links.
+### Signature
 
-### Signature Components
+**`hero-band`** — the opening band at `{spacing.96}`: `hero-prompt` (`~/` in
+mono), a two-line `hero-heading` in `{colors.paper}`, a `hero-lede` in
+`{colors.mist}`, one `button-primary` and one `button-ghost`, and the real
+program on `{colors.carbon}` chrome below.
 
-**`hero-band`** — the opening band.
-Padding `{spacing.7xl} {spacing.xl}`. Holds the eyebrow, the headline, one
-subheading, one primary action and one proof signal — and below them, the
-real program in a `{colors.canvas-sunken}` well. The capture is the hero
-image; there is no other.
+**`log-bar`** — tight rows of rectangular bars in `{colors.teal}`, 4–8 px tall
+with 2–4 px gaps. Event volume over time; in marketing the bar pattern itself
+is the visual, no axes.
 
-**`hero-heading`** — flat `{colors.heading}` at `{typography.display-xl}`,
-capped at `{spacing.measure}`. The old text gradient is retired; the system
-now contains no gradient at all. Line breaks are placed by hand.
+**`rule`, `rule-strong`, `rule-control`** — the three 1 px lines: the graphite
+hairline, the smoke hover edge, and the ash control boundary. Modelled as
+filled 1 px elements because a border is a painted region and this format
+carries fills.
 
-**`tagline-reveal`** — the large-type band further down the page.
-At least two lines of `{typography.display-md}`, capped at
-`{spacing.measure}`. Words rest at 30% of `{colors.ink}` and reach full
-colour one at a time, in reading order, as each crosses the trigger line.
-Under `prefers-reduced-motion` every word renders at full colour immediately.
+### Terminal
 
-**`eyebrow`** and **`eyebrow-index`** — the section marker.
-A two-digit mono index in `{colors.mark}` (`01`, `02`, …), then a label in
-`{typography.label}` at `{colors.mute}`, uppercase. It is a label, not a
-heading, and is not marked up as one.
+**`terminal-transcript`** — `{colors.carbon}`, body at `{typography.code}`,
+`{rounded.lg}`, a `{colors.graphite}` hairline.
+**`terminal-thought`** — reasoning in `{colors.terminal-muted}`.
+**`terminal-turn-marker`** — the 2 px `{colors.terminal-accent}` bar beside a
+person's turn; the words stay `{colors.terminal-fg}`, because emphasis is
+position, not hue. **`terminal-tool`** — tool output in
+`{colors.terminal-warning}`.
 
-**`grid-surface`** — the dot grid.
-A 1 px dot of `{colors.grid}` at each `{spacing.grid-cell}` 24 px
-intersection, masked so it fades out rather than stopping at an edge. The
-only texture, and www-only.
-
-**`rule`**, **`rule-hover`**, **`rule-control`** — the three 1 px lines.
-A hairline divider, the same line under hover, and the control boundary. They
-are modelled as filled 1 px elements because a border is a painted region and
-this format carries fills.
-
-## Surface briefs
-
-What each interface does with the system. These are the normative overlay
-contents; the overlay files implement exactly this and nothing more.
-
-### www — the instrument across the room
-
-Dark only. Full display scale to 72 px, full motion contract, the dot grid,
-the tagline reveal. Every image is the real program. One accent button per
-page, one primary per view. No light scheme: the site is a night-lit readout,
-and dropping the second scheme deletes the entire class of light-mode
-contrast defects the old document had to warn about.
-
-### docs — the manual
-
-Light and dark, reader's choice, defaulting to the system scheme; the cookie
-in `packages/ui/src/theme.ts` keeps the choice in step with the web app.
-Display capped at `{typography.display-sm}`; a docs page never shouts. Motion
-`dur-instant`/`dur-fast` only. No dot grid. Prose measure 680 px. The
-three-region shell, code blocks on the pinned-dark panel.
-
-### web — the panel
-
-Dark first, matching the terminal it fronts; light ships whenever the
-semantic layer's light column is wired in, at no extra design cost. Density
-overlay: card interiors at `{spacing.lg}`, controls at `{typography.button-sm}`
-where rows are tight, titles at `{typography.title}`. The full status set
-(success, warning, danger) lives here. Motion `dur-instant`/`dur-fast` only.
-shadcn components read `shadcn.css`, which is already mapped to semantic
-roles, so no component is styled twice.
-
-### cli — the instrument
-
-No CSS. The renderer contract names four colours and a theme fills every one
-of them and no more (see [Terminal](#terminal)). The default theme's values
-are the `terminal-*` tokens above, so the program and its three web surfaces
-agree on sight. High-contrast and monochrome themes ship beside the default.
-
-## Terminal
-
-The terminal is the product, so its palette is part of this system and not a
-separate one. A theme fills every colour the renderer contract names and no
-more; a colour no renderer reads is not carried. The contract names four:
-
-- `{colors.terminal-fg}` for a person's words and the agent's words alike.
-- `{colors.terminal-muted}` for reasoning and anything secondary.
-- `{colors.terminal-accent}` for the bar beside a person's turn.
-- `{colors.terminal-warning}` for tool output.
-
-The default theme maps onto the site accent exactly. Two further themes ship:
-high contrast, and monochrome for terminals without colour. A person's turn
-is marked by the accent bar beside it; the words themselves stay the reading
-colour, because emphasis is position and weight, not hue.
+The default theme maps exactly onto these four values. Two further themes
+ship: high contrast, and monochrome for terminals without colour.
 
 ## Do's and Don'ts
 
 ### Do
 
-- Read a semantic token. `{colors.ink}` on `{colors.canvas}`, never a hex.
-- Keep one accent per view, and at most one accent button per page.
-- Set machine-produced text in Geist Mono, and prose in Geist. That one rule
-  decides every ambiguous case.
-- Use `{colors.mark}` for painted shapes and `{colors.primary}` for text.
-- Give an input `{colors.edge}`. It is the only border that clears 3:1.
-- Pin the ink on `{colors.canvas-panel}`. That field is dark in both schemes.
-- Land every size on a scale step and take that step's line height.
-- Keep buttons at `{rounded.sm}` 6 px and labels at 14 px/500.
+- Set prose in Geist and machine output in Geist Mono. That one rule decides
+  every ambiguous case.
+- Keep the canvas at `{colors.void}`; pure `#000000` haloes on OLED.
+- Set default text in `{colors.bone}` and save `{colors.paper}` for the hero
+  and inline emphasis.
+- Keep `{colors.fog}` as the floor for anything meant to be read.
+- Use `{colors.ash}` for a control's edge and an inactive label — never for
+  text a reader has to take in.
+- Put `{colors.void}` ink on an ember fill. Bone measures 2.64:1 there.
+- Spend `{colors.primary}` on the CTA, the case mark, the shipping tag, the
+  turn marker and the focus ring, and nowhere else.
+- Report a machine outcome with a glyph, a word, and then the colour.
+- Land every size on the type scale and take that step's line height.
+- Keep body at 16 px and 1.6 leading; step to 15 px only where a surface is
+  genuinely dense.
 - Take every duration and easing from the motion table.
 - Let the page work with motion disabled and with JavaScript off.
 - Put a stage tag on any capability that has not shipped.
 - Self-host both faces.
-- Put surface differences in the app's overlay file, and only remaps there.
 
 ### Don't
 
-- Don't introduce a second accent colour to rank two kinds of importance.
-- Don't set text in `{colors.mark}` on a light ground; it measures 2.41:1.
-- Don't put the scheme-aware accent on `{colors.canvas-panel}` in light mode;
-  it measures 3.11:1.
-- Don't identify a control with a hairline; hairlines never reach 3:1.
-- Don't set body copy in a status colour on a light ground without checking
-  the light column; the light values are tuned to clear 4.5:1, the dark ones
-  are not their mirrors.
-- Don't exceed weight 500 anywhere, and don't set anything in italic.
+- Don't set long-form prose in the mono. That is the one thing the terminal
+  aesthetic gets wrong, and this system does not repeat it.
+- Don't use pure `#000000` as a ground or pure `#ffffff` as the default ink.
+- Don't set text in `{colors.ash}`, or in anything below `{colors.fog}`.
+- Don't put a light ink on the ember fill.
+- Don't scatter `{colors.primary}` onto ordinary text, icons or borders.
+- Don't use `{colors.teal}`, `{colors.green}` or `{colors.red}` for chrome, or
+  as a filled status badge.
+- Don't introduce a second accent to rank two kinds of importance.
+- Don't add a light-theme section, a scheme toggle, or an alternate ground.
+- Don't put a shadow under a card, or use one to fake elevation anywhere
+  except a genuinely detached overlay.
+- Don't put a gradient anywhere.
+- Don't exceed weight 600, and don't set anything in italic.
 - Don't uppercase anything except `{typography.label}`.
 - Don't write a fluid clamp or an arbitrary pixel size.
-- Don't put a gradient anywhere. The hero gradient is retired.
-- Don't border one side of a card, and don't add a shadow to make depth —
-  overlays included.
-- Don't give a button the pill; it belongs to the stage tag alone.
+- Don't distinguish a link by colour alone; the underline is mandatory.
 - Don't attach a scroll listener for a reveal.
 - Don't load a font from a third-party origin.
-- Don't write a colour literal, a font-family or an `@font-face` in an app
-  stylesheet.
-
-## Implementation plan
-
-This document is the normative source from the moment it lands; the code
-below it still implements the previous system. Nothing in this plan has been
-executed. Each phase is a self-contained change that leaves every suite
-green, ordered so the token swap lands before anything that reads it.
-
-### Phase 0 — decisions this document already made
-
-Recorded so the diff review has the argument, not just the outcome:
-
-- One design system in `packages/ui`, four thin overlays. No per-app system.
-- Common CSS consolidated in `packages/ui/src/styles`; per-surface themes are
-  overlay files that may only remap semantic tokens.
-- Geist + Geist Mono replace Instrument Serif + Space Grotesk.
-- The accent stays the terminal's periwinkle; the canvas moves from `#000000`
-  to `#0a0a0a`; success and danger join the status set.
-- www goes dark-only; docs keeps both schemes; web ships dark first.
-- The nav island, the hero gradient, the 48 px line grid and the eyebrow
-  square are retired (docked bar, flat heading, 24 px dot grid, mono index).
-
-### Phase 1 — tokens and faces (`packages/ui`)
-
-1. Add `geist-latin-var.woff2` and `geist-mono-latin-var.woff2` to
-   `packages/ui/fonts`; delete the two retired families.
-2. Rewrite `tokens.css`: the two `@font-face` blocks, the primitive ladders,
-   and the semantic roles — `:root` from the frontmatter above,
-   `[data-theme="light"]` from the light-scheme table.
-3. Update `typography.css` to the new hierarchy (display at 500, `title`,
-   `label`, mono `code`), and `surfaces.css` to the new component values
-   (buttons at `{rounded.sm}`, the sunken well, the overlay step, the dot
-   grid).
-4. Update `motion.css` only where the entrance changed: 24 px rise, no blur.
-5. Remap `shadcn.css` onto the new semantic roles, including
-   success/danger → the shadcn status slots.
-6. Update the pinned expectations in `apps/docs/src/lib/tokens.test.ts`:
-   the families assertion becomes `["Geist", "Geist Mono"]`, the `--font-mono`
-   assertion becomes Geist Mono. The origin and file-existence tests hold
-   unchanged.
-
-### Phase 2 — the overlay contract (all three web apps)
-
-1. Reduce each app entry (`apps/www/src/styles/app.css`,
-   `apps/docs/src/styles/app.css`, `apps/web/src/styles.css`) to: import the
-   package, then one overlay block remapping semantic tokens per its surface
-   brief.
-2. Add the conformance test that greps the three app entries for hex,
-   `rgb(`, `oklch(` and `@font-face`, and fails on any hit.
-3. Wire `data-theme` per surface: www hard-codes dark (and stops writing the
-   scheme cookie), docs and web keep the cookie contract in
-   `packages/ui/src/theme.ts` unchanged.
-
-### Phase 3 — component migration (www, then docs, then web)
-
-1. www: docked `nav-bar` replaces the island; flat hero heading; dot grid
-   replaces the line grid; eyebrow index replaces the square; hero capture
-   moves into a sunken well. www is first because it exercises the expressive
-   end of every token.
-2. docs: shell unchanged; re-point the Fumadocs theme variables at the new
-   semantic roles; verify the pinned-dark panel in the light scheme.
-3. web: apply the density overlay; adopt success/danger tokens in run and
-   diff states; sweep for raw values the conformance test now catches.
-
-### Phase 4 — terminal agreement
-
-1. Confirm `packages/tui`'s default theme equals the four `terminal-*`
-   values; adjust whichever side drifted (this document is normative).
-2. Add the conformance test that pins the tui default theme to the
-   frontmatter's `terminal-*` tokens, so the CSS and the terminal cannot
-   drift apart again.
-
-### Phase 5 — documentation reconciliation
-
-1. Rewrite section 2.3 of [docs/ui-guidelines.md](docs/ui-guidelines.md):
-   the semantic-name → custom-property map and the measured contrast table
-   for the values in this document.
-2. Sweep `docs/` and `plans/` for references to the retired vocabulary
-   (Instrument Serif, Space Grotesk, nav island, heading gradient, 48 px
-   grid) and re-point them here.
-
-### Verification
-
-Every phase ends the same way: the full suite runs green repeatedly, not
-once — and Phase 3 additionally gets an eyes-on pass of each surface in both
-schemes it ships (www dark; docs light and dark; web dark), at mobile and
-desktop widths, with reduced motion on and off.

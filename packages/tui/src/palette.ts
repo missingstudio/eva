@@ -11,13 +11,14 @@ export interface Palette {
 
 export const DEFAULT_PALETTE: Palette = {
   // A person's words are bold, and the accent is the bar beside them. The
-  // words themselves stay the reading colour.
-  human: "#e6e6e6",
-  agent: "#e6e6e6",
-  thought: "#8a8a94",
-  tool: "#e0af68",
-  muted: "#8a8a94",
-  accent: "#7aa2f7",
+  // words themselves stay the reading colour. The values are docs/design.md's
+  // terminal contract: bone, fog, ember, and teal for tool output.
+  human: "#e5e5e6",
+  agent: "#e5e5e6",
+  thought: "#8a8f98",
+  tool: "#02b8cc",
+  muted: "#8a8f98",
+  accent: "#ee6018",
 }
 
 // How a theme paints the transcript. Every color the contract names is read

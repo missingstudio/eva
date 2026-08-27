@@ -31,7 +31,7 @@ function Changelog() {
         attestation.
       </p>
       <p className="mt-8 text-sm">
-        <a className="text-accent underline underline-offset-4" href={`${external.repo}/releases`}>
+        <a className="text-bone underline underline-offset-4" href={`${external.repo}/releases`}>
           View releases on GitHub →
         </a>
       </p>

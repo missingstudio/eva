@@ -1,45 +1,52 @@
 /* ===========================================================================
    "Evidence, not claims" — Eva's design system entry point.
 
-   The phrase is the product's, printed in its own banner, and it is the whole
-   brief: an instrument surface rather than a persuasive one. A flat ground,
-   hairline rules, a measurement grid for texture, and one signal accent. The
-   neutrals and the marks come from the brand kit, the accent from the program
-   itself. Where Inklate is ink on paper, Eva is the readout.
+   The phrase is the product's, printed in its own banner, and the surface is
+   the instrument that prints it: a near-black panel, quiet neutrals, and one
+   ember signal spent only where something is actually happening.
+
+   Two decisions here are measurements rather than taste, and both are argued
+   in docs/design.md:
+
+     - The ground is #08090a, not #000000. Pure black reaches 21:1 against
+       white, which haloes on OLED and smears text in motion.
+     - Prose is a sans and machine output is a mono. A monospaced face slows
+       continuous reading, and the documentation is continuous reading.
+
+   The system is dark only. There is no light scheme, no theme toggle, and no
+   scheme cookie; a light surface breaks the system, so none can be expressed.
 
    This file owns two things: the tokens, and the base layer. Everything else
    is one file per concern.
 
-     typography.css  display scale, lede, eyebrow, section rhythm
-     surfaces.css    the grid, the terminal panel, cards, buttons
+     typography.css  the type scale, the lede, the eyebrow, section rhythm
+     surfaces.css    the transcript panel, cards, buttons, rules
      motion.css      the reveal system and the motion contract
 
-   DESIGN.md is the normative source for every value below. Section 2.3 of
-   docs/ui-guidelines.md maps each semantic name to the custom property that
-   implements it, and carries the measured contrast for every pairing. A value
-   that is not in one of those two files does not belong here.
+   docs/design.md is the normative source for every value below. A value that
+   is not in that file does not belong here.
 
    Both faces are self-hosted. A CDN font is forbidden, and a test in apps/docs
    holds the line.
 =========================================================================== */
 
 @font-face {
-  font-family: "Instrument Serif";
+  font-family: "Geist";
   font-style: normal;
-  font-weight: 400;
+  font-weight: 100 900;
   font-display: swap;
-  src: url("../../fonts/instrument-serif-latin-400.woff2") format("woff2");
+  src: url("../../fonts/geist-latin-var.woff2") format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: "Space Grotesk";
+  font-family: "Geist Mono";
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 100 900;
   font-display: swap;
-  src: url("../../fonts/space-grotesk-latin-var.woff2") format("woff2");
+  src: url("../../fonts/geist-mono-latin-var.woff2") format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -49,6 +56,12 @@
 @import "./surfaces.css";
 @import "./motion.css";
 
+/*
+   The dark variant answers to the `dark` class rather than to the OS setting.
+   The system is dark only, so every app pins `class="dark"` on its root
+   element — the class is what keeps the components' `dark:` utilities live,
+   and the OS preference must not be able to take them away.
+*/
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
@@ -66,159 +79,91 @@
 }
 
 @theme {
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
   /*
-     Two faces, everywhere, code included. Space Grotesk is proportional, so
-     `pre` and `code` below buy back what they can: tabular numerals, so digits
-     and counters still line up in a column, and a little extra tracking, which
-     is what keeps a proportional face legible at code sizes.
+     Two faces of one family, so their metrics, x-height and letterforms
+     agree. The rule that picks between them: if a machine produced the text
+     it is set in the mono, and if a person is being spoken to it is the sans.
   */
-  --font-mono: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /*
-     Code is text-sm, the same step on both sites, so a command printed on the
-     marketing page and the same command in the documentation are one size. It
-     stays a token because that agreement is the point.
-
-     It is a step above the caption row it used to share. Code here is set in a
-     proportional face, which already costs it some legibility, and at 12px on
-     the dark panel that cost came due. 14px is the smallest step that reads.
+     The palette, from docs/design.md. Ten neutrals on Linear's ladder — two
+     grounds, three lines, four inks — then the accent and the three states
+     that only ever report a machine outcome. Every measured pairing is in
+     design.md's contrast table.
   */
-  --text-code: 0.875rem;
-  --text-code--line-height: 1.25rem;
+  --color-void: #08090a;
+  --color-carbon: #0f1011;
+  --color-obsidian: #161718;
+  --color-graphite: #23252a;
+  --color-smoke: #383b3f;
+  --color-ash: #62666d;
+  --color-fog: #8a8f98;
+  --color-mist: #d0d6e0;
+  --color-bone: #e5e5e6;
+  --color-paper: #ffffff;
+
+  --color-ember: #ee6018;
+  --color-teal: #02b8cc;
+  --color-green: #27a644;
+  --color-red: #eb5757;
 
   /*
-     The four display steps, from DESIGN.md. They are tokens rather than four
-     numbers typed into a stylesheet because both surfaces need them: the
-     marketing site through the `.d-*` classes in typography.css, and the
-     documentation site to bind its own `h1` and `h2` to the same scale.
-
-     Instrument Serif ships one weight, so every step moves size, leading and
-     tracking together — which is why tracking travels beside each one.
+     The type scale. Body is 16px at 1.6 — the reading size, chosen for
+     long-form legibility rather than for density; dense product surfaces step
+     down to body-sm. Code is 13px, one step below body, because a monospaced
+     face renders optically larger at the same pixel size.
   */
-  --text-display-sm: 1.875rem;
-  --text-display-sm--line-height: 2.25rem;
-  --text-display-md: 3rem;
-  --text-display-md--line-height: 1;
-  --text-display-lg: 3.75rem;
-  --text-display-lg--line-height: 1;
-  --text-display-xl: 4.5rem;
-  --text-display-xl--line-height: 1;
-
-  --tracking-display-sm: -0.015em;
-  --tracking-display-md: -0.02em;
-  --tracking-display-lg: -0.024em;
-  --tracking-display-xl: -0.028em;
+  --text-display: 3.5rem;
+  --text-display--line-height: 1.05;
+  --text-heading-lg: 2.5rem;
+  --text-heading-lg--line-height: 1.1;
+  --text-heading: 2rem;
+  --text-heading--line-height: 1.15;
+  --text-heading-sm: 1.5rem;
+  --text-heading-sm--line-height: 1.25;
+  --text-subheading: 1.25rem;
+  --text-subheading--line-height: 1.4;
+  --text-code: 0.8125rem;
+  --text-code--line-height: 1.6;
 
   /*
-     Page geometry. Content centres at the container with a gutter either side;
-     prose and hero headings cap at the measure, so a line never outruns a
-     comfortable read. The grid cell is the visible unit of the system.
+     Tracking, on Linear's discipline: about -0.011em at reading sizes,
+     tightening to -0.022em at display sizes, because tracking that is right
+     at 56px closes the letters up at 16px. The mono never tracks negative.
+  */
+  --tracking-reading: -0.011em;
+  --tracking-display: -0.022em;
+  --tracking-label: 0.06em;
 
-     These are Tailwind's container namespace, so they answer as utilities:
-     `max-w-page` and `max-w-measure`.
+  /*
+     Sharp, but not severe. 6px is the smallest radius that reads as
+     deliberate on a 36px control; the 2px floor is kept for small nested
+     shapes, and the pill belongs to avatars and stage tags.
+  */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /*
+     Page geometry. Content centres at the container with a gutter either
+     side; prose caps at the measure. These answer as utilities: `max-w-page`,
+     `max-w-measure`.
   */
   --container-page: 75rem;
   --container-measure: 42.5rem;
-  --eva-gutter: 1.5rem;
-  --eva-grid-cell: 3rem;
 }
 
-/* ---------------------------------------------------------------------------
-   The palette. Every value is measured, and every pairing a component can
-   make is in the contrast tables of docs/ui-guidelines.md §2.3.
-
-   The ground is dark-first, because the product is a terminal program: the
-   dark column is what DESIGN.md declares, and the light scheme is the
-   translation of exactly those roles.
-
-   Periwinkle carries only 2.41:1 on paper, so it is a mark rather than a text
-   colour there. `--eva-mark` is the program's exact accent, for painted shapes
-   in both schemes; `--eva-accent` is the text-safe one, which the light scheme
-   takes down the same hue until it clears AA.
---------------------------------------------------------------------------- */
 :root {
-  --eva-bg: #fafafa;
-  --eva-card: #ffffff;
-  --eva-text: #0a0a0a;
-  --eva-lede: #484848;
-  --eva-muted: #717171;
-  --eva-rule: #e2e2e2;
-  --eva-rule-strong: #c4c4c4;
-  --eva-grid: #ededed;
-
-  /*
-     A hairline separates two static surfaces at about 1.2:1 and cannot say
-     "this is a control". The control boundary is its own token, at 3.31:1 on
-     paper and 3.94:1 on the ground, which is what SC 1.4.11 asks for. A card
-     may use a hairline; an input may not.
-  */
-  --eva-border-control: #8a8a8a;
-
-  /* The mark. The program's own accent, for squares and rules — not for text. */
-  --eva-mark: #7aa2f7;
-  /* The same hue, taken down until it clears AA on paper. */
-  --eva-accent: #3d5fc9;
-
-  --eva-warning: #b37903;
-
-  /* The panel stays dark in both schemes, because the program it stands for is. */
-  --eva-panel-ink: #181818;
-
-  /* The two stops of the hero headline gradient, on the text and nowhere else. */
-  --eva-heading-from: #000000;
-  --eva-heading-to: #666666;
-
-  /* Fumadocs reads its own variables. Point them at the same two faces. */
+  /* Fumadocs reads its own variables. Point them at the two faces. */
   --fd-font-sans: var(--font-sans);
   --fd-font-mono: var(--font-mono);
 }
 
-.dark {
-  --eva-bg: #000000;
-  --eva-card: #181818;
-  --eva-text: #f5f5f5;
-  --eva-lede: #c4c4c4;
-  --eva-muted: #989898;
-  --eva-rule: #272727;
-  --eva-rule-strong: #313131;
-  --eva-grid: #181818;
-
-  --eva-border-control: #6b6b6b;
-
-  /* On this ground the program's accent is legible as text, so mark and accent
-     are the same colour here — exactly what the terminal paints. */
-  --eva-mark: #7aa2f7;
-  --eva-accent: #7aa2f7;
-
-  --eva-warning: #e1ad63;
-
-  --eva-panel-ink: #1f1f1f;
-
-  --eva-heading-from: #ffffff;
-  --eva-heading-to: #9b9b9b;
-}
-
 /* ---------------------------------------------------------------------------
-   The panel's ink does not flip with the scheme.
-
-   `--eva-panel-ink` is dark on a light page and on a dark one, so anything
-   drawn on it must read these three rather than the scheme-aware pair. A
-   component that reaches for `--eva-accent` here gets #3d5fc9 on a light page
-   and lands at 3.11:1, which fails: every code block on the documentation site
-   would fail AA in light mode. This is the one place a component does not read
-   the scheme-aware token.
---------------------------------------------------------------------------- */
-:root,
-.dark {
-  --eva-on-strong: #f5f5f5;
-  --eva-on-strong-muted: #989898;
-  --eva-on-strong-accent: #7aa2f7;
-}
-
-/* ---------------------------------------------------------------------------
-   Motion. Every animation on either site draws from this table; a literal
+   Motion. Every animation on every surface draws from this table; a literal
    duration or easing is a bug, and a test fails the build on one.
 --------------------------------------------------------------------------- */
 :root {
@@ -241,65 +186,44 @@
 }
 
 /*
-   Changing the scheme repaints every colour on the page at once. Left alone,
-   every element that carries a colour transition animates that repaint, and
-   the page wipes through an intermediate palette for the length of the longest
-   transition. The flip is not a state change worth animating, so transitions
-   are suppressed for the frame it takes.
-*/
-[data-theme-changing] *,
-[data-theme-changing] *::before,
-[data-theme-changing] *::after {
-  transition: none !important;
-}
-
-@theme inline {
-  --color-bg: var(--eva-bg);
-  --color-card: var(--eva-card);
-  --color-ink: var(--eva-text);
-  --color-lede: var(--eva-lede);
-  --color-muted: var(--eva-muted);
-  --color-rule: var(--eva-rule);
-  --color-rule-strong: var(--eva-rule-strong);
-  --color-control: var(--eva-border-control);
-  --color-accent: var(--eva-accent);
-  --color-mark: var(--eva-mark);
-  --color-warning: var(--eva-warning);
-  --color-panel: var(--eva-panel-ink);
-  --color-on-strong: var(--eva-on-strong);
-  --color-on-strong-muted: var(--eva-on-strong-muted);
-  --color-on-strong-accent: var(--eva-on-strong-accent);
-}
-
-/*
    The base layer, and it is a layer on purpose. An unlayered element rule
-   outranks every class in `@layer components`, so an unlayered `h1` here would
-   quietly beat `.d-hero` and the display tracking would never land. Base sets
-   the defaults; the display classes and the utilities override them.
+   outranks every class in `@layer components`, so an unlayered `body` here
+   would quietly beat a utility. Base sets the defaults; the components and
+   the utilities override them.
 */
 @layer base {
-  /* Display type is the serif, in both sites. It stops at h2: Instrument Serif
-     ships one weight, so a small heading set in it reads as body text rather
-     than as structure. h3 and below stay in the sans. */
-  h1,
-  h2 {
-    font-family: var(--font-serif);
-    font-weight: 400;
-    letter-spacing: -0.018em;
+  /*
+     The ground. Near-black, bone ink rather than white, the sans at the
+     reading size — the whole instrument panel in four declarations.
+  */
+  body {
+    background: var(--color-void);
+    color: var(--color-bone);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    letter-spacing: var(--tracking-reading);
   }
 
-  /* No word left alone on the last line. A heading balances its lines; body
-     copy only avoids the orphan, because balancing a paragraph costs more than
-     it buys. */
+  /*
+     Headings are weight 500 and track tighter than body. The step sizes
+     themselves live on the display classes in typography.css, so an h1 in
+     prose and a `.d-hero` on the marketing page cannot disagree.
+  */
   h1,
   h2,
   h3,
   h4,
   h5,
   h6 {
+    font-weight: 500;
+    letter-spacing: var(--tracking-display);
     text-wrap: balance;
   }
 
+  /* No word left alone on the last line. A heading balances its lines; body
+     copy only avoids the orphan, because balancing a paragraph costs more than
+     it buys. */
   p,
   li {
     text-wrap: pretty;
@@ -331,7 +255,8 @@
 
   /*
      Underlines are drawn from the font's own metrics and skip the descenders,
-     so a `g` or a `y` is not struck through by its own link.
+     so a `g` or a `y` is not struck through by its own link. Colour does not
+     distinguish a link in this system, so the underline is what does.
   */
   a {
     text-underline-position: from-font;
@@ -359,31 +284,30 @@
 }
 
 /*
-   One focus treatment, both surfaces, every component. `:focus-visible` rather
-   than `:focus`, so a mouse click never paints a ring. The accent measures
-   5.47:1 on paper and 8.34:1 on the ground, above the 3:1 that SC 1.4.11 asks.
+   One focus treatment, every surface, every component. `:focus-visible` rather
+   than `:focus`, so a mouse click never paints a ring. Ember measures 6.00:1
+   on the void, well above the 3:1 that SC 1.4.11 asks.
 
    `outline` rather than a border or a shadow: it is drawn outside the box, so
    it never moves the layout, and the offset keeps it clear of the element's
    own edge.
 */
 :focus-visible {
-  outline: 2px solid var(--eva-accent);
+  outline: 2px solid var(--color-ember);
   outline-offset: 2px;
   border-radius: inherit;
 }
 
 @layer base {
-  /* Code is Space Grotesk like everything else. A proportional face set as code
-     needs the help below: figures that line up, and air between glyphs so a
-     dense command still parses at a glance. */
+  /* Machine output is the mono, and it carries figures that line up in a
+     column plus a slashed zero — most of what a transcript depends on. */
   code,
   kbd,
   pre,
   samp {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums slashed-zero;
-    letter-spacing: 0.005em;
+    letter-spacing: normal;
   }
 
   /*
@@ -402,10 +326,10 @@
     min-width: 1.25rem;
     height: 1.25rem;
     padding-inline: 0.25rem;
-    border-radius: var(--radius-sm, 0.25rem);
-    background: var(--eva-rule);
-    color: var(--eva-lede);
-    font-size: 0.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-obsidian);
+    color: var(--color-mist);
+    font-size: 0.8125rem;
     line-height: 1rem;
     white-space: nowrap;
   }

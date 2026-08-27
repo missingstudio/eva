@@ -54,7 +54,7 @@
        from the first paint.
     */
     .js .word {
-      color: color-mix(in oklch, var(--eva-text) 30%, transparent);
+      color: color-mix(in oklch, var(--color-paper) 30%, transparent);
       transition: color var(--dur-base) var(--ease-fluid);
       /*
          The word carries its own delay rather than inheriting the group's.
@@ -65,7 +65,7 @@
       transition-delay: calc(var(--reveal-index, 0) * var(--stagger));
     }
     .js .word[data-shown] {
-      color: var(--eva-text);
+      color: var(--color-paper);
     }
   }
 
@@ -100,7 +100,7 @@
      draws its rule against the text rather than against the padding.
   */
   .link-rule {
-    background-image: linear-gradient(var(--eva-accent), var(--eva-accent));
+    background-image: linear-gradient(currentColor, currentColor);
     background-repeat: no-repeat;
     background-origin: content-box;
     background-position: 0 100%;

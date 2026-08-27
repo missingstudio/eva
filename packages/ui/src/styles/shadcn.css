@@ -11,19 +11,15 @@
    own neutral scale, its own font, and its own `dark` variant, and importing
    it would replace the brand rather than bridge to it.
 
-   Import it after tokens.css. Two rules follow from that order, and both are
-   deliberate:
+   Import it after tokens.css. The system is dark only, so every mapping below
+   is a single value — there is no scheme to switch.
 
-     - `--color-muted` is redefined here. See the note above it.
-     - `--radius` is defined here, because tokens.css has no radius scale and
-       eight components read `var(--radius-*)` arithmetic.
-
-   The one distinction worth keeping: the tokens split the hairline between two
-   static surfaces from the boundary that says "this is a control", because
-   SC 1.4.11 asks 3:1 of the second and nothing of the first. shadcn spends one
-   `--border` on both. Here `--color-border` is the hairline and `--color-input`
-   is the control boundary, so a component that draws a control reaches for a
-   boundary that is measured for one.
+   The one distinction worth keeping: the tokens split the graphite hairline
+   between two static surfaces from the ash boundary that says "this is a
+   control", because SC 1.4.11 asks 3:1 of the second and nothing of the
+   first. shadcn spends one `--border` on both. Here `--color-border` is the
+   hairline at 1.30:1 and `--color-input` is the control boundary at 3.45:1,
+   so a component that draws a control reaches for a boundary measured for one.
 =========================================================================== */
 
 /*
@@ -35,76 +31,69 @@
 @source "../components/*.tsx";
 
 @theme inline {
-  /* Ground and ink. */
-  --color-background: var(--eva-bg);
-  --color-foreground: var(--eva-text);
+  /* Ground and ink. Bone rather than white: white as the default ink haloes
+     on a near-black ground, which is the same problem as a pure black page. */
+  --color-background: var(--color-void);
+  --color-foreground: var(--color-bone);
 
-  /* Surfaces. A card is the raised step; a popover is the same field. */
-  --color-card: var(--eva-card);
-  --color-card-foreground: var(--eva-text);
-  --color-popover: var(--eva-card);
-  --color-popover-foreground: var(--eva-text);
+  /* Surfaces. A card is the carbon step; a popover is the elevated one. */
+  --color-card: var(--color-carbon);
+  --color-card-foreground: var(--color-bone);
+  --color-popover: var(--color-obsidian);
+  --color-popover-foreground: var(--color-bone);
 
   /*
      `--color-muted` is the one name where the two systems disagree outright.
      Brand means a text grey by it; shadcn means the quietest surface off the
      ground, and forty of the components paint `bg-muted` as their hover wash.
      A chip painted in the text grey is a slab, so shadcn's meaning wins here
-     and the hairline is that quietest step.
+     and obsidian is that quietest step.
 
      The text grey keeps its value under shadcn's name for it. An app says
      `text-muted-foreground` for secondary copy, never `text-muted`.
   */
-  --color-muted: var(--eva-rule);
-  --color-muted-foreground: var(--eva-muted);
+  --color-muted: var(--color-obsidian);
+  --color-muted-foreground: var(--color-fog);
 
-  /* The accent carries primary. It is text-safe in both schemes; the mark is not. */
-  --color-primary: var(--eva-accent);
-  --color-primary-foreground: var(--eva-bg);
+  /* Ember carries primary. Its ink is void: bone on ember measures 2.64:1
+     and fails, void measures 6.00:1. */
+  --color-primary: var(--color-ember);
+  --color-primary-foreground: var(--color-void);
 
-  /* Secondary is a filled quiet control, which is the raised surface. */
-  --color-secondary: var(--eva-card);
-  --color-secondary-foreground: var(--eva-text);
+  /* Secondary is a filled quiet control, which is the elevated surface. */
+  --color-secondary: var(--color-obsidian);
+  --color-secondary-foreground: var(--color-bone);
 
-  /*
-     Brand has no destructive hue — nothing on either surface deletes anything.
-     Warning is the one alarm colour it does define, and it is a mark rather
-     than a text colour, so the components' tinted-background destructive
-     variants land on it correctly.
-  */
-  --color-destructive: var(--eva-warning);
+  /* shadcn's accent is its hover wash, not the brand accent. Obsidian again. */
+  --color-accent: var(--color-obsidian);
+  --color-accent-foreground: var(--color-bone);
 
-  /* Warning under its own name, for the variants added on top of the registry. */
-  --color-warning: var(--eva-warning);
+  /* Destructive is the one state colour the registry names by itself. */
+  --color-destructive: var(--color-red);
 
   /* Boundaries. The hairline and the control boundary stay distinct. */
-  --color-border: var(--eva-rule);
-  --color-input: var(--eva-border-control);
-  --color-ring: var(--eva-accent);
+  --color-border: var(--color-graphite);
+  --color-input: var(--color-ash);
+  --color-ring: var(--color-ember);
 
   /* Streamdown draws its table and code containers on `bg-sidebar`. */
-  --color-sidebar: var(--eva-card);
-  --color-sidebar-foreground: var(--eva-text);
-  --color-sidebar-border: var(--eva-rule);
-  --color-sidebar-accent: var(--eva-rule);
-  --color-sidebar-accent-foreground: var(--eva-text);
-  --color-sidebar-primary: var(--eva-accent);
-  --color-sidebar-primary-foreground: var(--eva-bg);
-  --color-sidebar-ring: var(--eva-accent);
+  --color-sidebar: var(--color-carbon);
+  --color-sidebar-foreground: var(--color-bone);
+  --color-sidebar-border: var(--color-graphite);
+  --color-sidebar-accent: var(--color-obsidian);
+  --color-sidebar-accent-foreground: var(--color-bone);
+  --color-sidebar-primary: var(--color-ember);
+  --color-sidebar-primary-foreground: var(--color-void);
+  --color-sidebar-ring: var(--color-ember);
 }
 
 /*
-   The radius scale. tokens.css declares no radius, so without this the
-   components fall through to Tailwind's defaults — which happens to look
-   close, but means `rounded-[min(var(--radius-md),10px)]` silently reads a
-   number nobody chose. DESIGN.md §"Border Radius Scale" sets the step.
+   The radius scale. tokens.css sets the four steps; this only supplies the
+   bare `--radius` that eight components read arithmetic from, at the control
+   step. docs/design.md §"Shapes" sets the values.
 */
 @theme {
-  --radius: 0.5rem;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius: 0.375rem;
 }
 
 /*
@@ -112,11 +101,10 @@
    than a Tailwind colour utility, so the `--color-*` aliases above never reach
    them. `bubble` is the one in this package; the names are cheap to hold.
 */
-:root,
-.dark {
-  --primary: var(--eva-accent);
-  --secondary: var(--eva-card);
-  --muted: var(--eva-rule);
+:root {
+  --primary: var(--color-ember);
+  --secondary: var(--color-obsidian);
+  --muted: var(--color-obsidian);
 }
 
 @layer base {

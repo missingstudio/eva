@@ -16,9 +16,9 @@ const badgeVariants = cva(
         outline: "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost: "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
-        // The warning hue is a mark and not a text colour: it carries the
-        // border and the icon, and the label stays at full contrast.
-        warning: "border-warning bg-card text-foreground [&>svg]:text-warning",
+        // State is a symbol, a word, and a border treatment — never a colour
+        // fill. The smoke edge is one step louder than the outline's graphite.
+        warning: "border-smoke bg-card text-foreground",
       },
     },
     defaultVariants: {

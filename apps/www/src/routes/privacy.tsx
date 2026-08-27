@@ -24,30 +24,24 @@ export const Route = createFileRoute("/privacy")({
 
 /*
   Everything on this page is a statement about what the code in this repository
-  does. It carries no claim that cannot be checked against the tree: the one
-  cookie is written by packages/ui/src/theme.ts, the two typefaces are files
-  in packages/ui/fonts, and there is no analytics call anywhere in either
-  site. A page that promised more than that would be marketing copy.
+  does. It carries no claim that cannot be checked against the tree: the
+  typeface is a file in packages/ui/fonts, no cookie is written anywhere, and
+  there is no analytics call anywhere in either site. A page that promised
+  more than that would be marketing copy.
 */
 function Privacy() {
   return (
     <Page className="max-w-page mx-auto px-6 pt-24 pb-20">
       <h1 className="d-1 max-w-measure">Privacy</h1>
       <p className="lede max-w-measure mt-6">
-        This site stores one thing, sends nothing to a third party, and has no analytics.
+        This site stores nothing, sends nothing to a third party, and has no analytics.
       </p>
 
-      <h2 className="d-2 max-w-measure mt-16">The one cookie</h2>
+      <h2 className="d-2 max-w-measure mt-16">No cookies</h2>
       <p className="text-muted-foreground max-w-measure mt-4">
-        A cookie named <code className="text-code">eva-theme</code> records whether you chose the
-        light theme, the dark theme, or the system default. It holds one of those three words and
-        nothing else. It is scoped to <code className="text-code">missing.studio</code> so the
-        documentation site shows the theme you picked here.
-      </p>
-      <p className="text-muted-foreground max-w-measure mt-4">
-        The cookie is set only when you use the theme control, and it stores a preference you asked
-        for. Clearing your browser&rsquo;s cookies removes it, and the site returns to following
-        your system setting.
+        This site sets no cookie and writes nothing to your browser&rsquo;s storage. There is no
+        theme control because there is no theme to record: the site is dark only, the same surface
+        the program itself draws.
       </p>
 
       <h2 className="d-2 max-w-measure mt-16">What this site does not do</h2>
@@ -56,7 +50,7 @@ function Privacy() {
         <li>No advertising, and no data sold or shared with an advertiser.</li>
         <li>No account, and no form that asks for a name or an address.</li>
         <li>
-          No third-party fonts or scripts. Both typefaces are served from this origin, so no other
+          No third-party fonts or scripts. The typeface is served from this origin, so no other
           company sees your request.
         </li>
       </ul>
