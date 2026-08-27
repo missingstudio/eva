@@ -64,6 +64,10 @@ const CLAUSES: readonly Clause[] = [
         test: "lands exactly what the dry run answered",
       },
       { file: "packages/conformance/src/tool-edit.test.ts", test: "is undone byte for byte" },
+      {
+        file: "packages/conformance/src/tool-edit.test.ts",
+        test: "puts the file back, and says which token puts the change back",
+      },
     ],
   },
   {

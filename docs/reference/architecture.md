@@ -1203,7 +1203,7 @@ many more that later stages add.
 | Plugin id         | Package           | Contributes                                        |
 | ----------------- | ----------------- | -------------------------------------------------- |
 | `eva.tool.read`   | `eva-tool-read`   | tool transform                                     |
-| `eva.tool.edit`   | `eva-tool-edit`   | tool transform, emits `edit` payloads              |
+| `eva.tool.edit`   | `eva-tool-edit`   | tool and command domains, emits `edit` payloads    |
 | `eva.tool.grep`   | `eva-tool-grep`   | tool transform                                     |
 | `eva.tool.glob`   | `eva-tool-glob`   | tool transform                                     |
 | `eva.tool.bash`   | `eva-tool-bash`   | tool transform, reads `Sandbox`                    |

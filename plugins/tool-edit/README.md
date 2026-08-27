@@ -91,7 +91,9 @@ preview and the apply refuses with `stale`.
 ## How a write is undone
 
 An `applied` outcome carries a token. `undo(token)` reverses that write, and
-the file holds the bytes it held before, to the byte.
+the file holds the bytes it held before, to the byte. `undo()` with no token
+reverses the newest write this process made, which is what a person who says
+"undo" means.
 
 The token reaches the caller and the apply record does not. That record holds
 the whole content the file had before the write, and a result carrying it would
@@ -105,6 +107,25 @@ work would be a second accident, not a fix.
 The tokens are held in this process, for as long as the plugin is loaded. They
 do not survive a restart, and nothing rebuilds them from the Trace — the `edit`
 payload records that a file changed, never how to change it back.
+
+## `/undo`, and what it can reach
+
+A person types `/undo` at the Console. With no argument it reverses the newest
+write; with a token it reverses that one, and the answer names the token so
+typing it again puts the change back. The command opens a Run of its own, so
+the reversal is a fact of the Trace rather than only a change on the disk.
+
+What it reaches is **the writes this process made**, and nothing else:
+
+- A restart, an unload, or a second `eva` reaches none of them. The token map
+  is memory, so a Console started after the write has nothing to reverse and
+  says so.
+- A write another process made is not reachable, whatever the Trace of it
+  says: an `edit` payload records that a file changed and never how to change
+  it back.
+- A file that moved since the apply refuses with `stale` and is left alone.
+- With the `Recorder` slot empty there is nothing to record the reversal
+  against, and the command says that rather than writing.
 
 ## What the Trace says
 
@@ -140,7 +161,8 @@ untouched — an unrecorded write is a change nobody reading the record can see.
 ## API
 
 - `toolEdit` — the plugin definition, id `eva.tool.edit`. It fills no slot, and
-  it registers one row in the tool domain.
+  it registers one row in the tool domain and one in the command domain.
+- `UNDO_COMMAND` — the name of that command row, `undo`.
 - `makeEditTool(deps): EditTool` — the tool, over the three slot reads. It is
   the whole capability, and it needs no kernel.
 - `editToolOf(ctx)` — the tool and the row that offers it, built from a
@@ -150,8 +172,8 @@ untouched — an unrecorded write is a change nobody reading the record can see.
 The row is what a model calls, and it answers a `ToolResult`: `ok` with what
 was written, or with what a dry run would write, and `failed` with the reason a
 boundary refused. The undo token is not in that result. An undo is reached
-through the `EditTool` `editToolOf` answers, because reversing a write is not
-one of the calls a model makes.
+through the `EditTool` `editToolOf` answers and through `/undo`, because
+reversing a write is not one of the calls a model makes.
 
 ## Development
 
