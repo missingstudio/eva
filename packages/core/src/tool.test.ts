@@ -1,5 +1,5 @@
 import { sessionID, type Payload } from "@missingstudio/eva-schema"
-import { Deferred, Effect } from "effect"
+import { Deferred, Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 import {
   executeTool,
@@ -255,6 +255,41 @@ describe("a call that never starts", () => {
     await Effect.runPromise(refuseCall(deps, call, "skipped", "a steer arrived first"))
 
     expect(seen).toEqual([])
+  })
+})
+
+/**
+ * A call stopped while it works. The call record is already out — a barrier
+ * emits straight through — so the pair has to close or the fold reads a call
+ * that never ended.
+ */
+describe("a call a stop interrupts", () => {
+  const parking = (reached: Deferred.Deferred<void>): ToolInfo => ({
+    id: "read",
+    kind: "read",
+    description: "parks",
+    input: {},
+    execute: () => Effect.andThen(Deferred.succeed(reached, undefined), Effect.never),
+  })
+
+  it("closes the pair it opened, and names the stop", async () => {
+    const said: Payload[] = []
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const reached = yield* Deferred.make<void>()
+        const deps: ToolDeps = {
+          ...answering(parking(reached)),
+          emit: (payload) => Effect.sync(() => void said.push(payload)),
+        }
+        const running = yield* Effect.forkChild(executeTool(deps, call))
+        yield* Deferred.await(reached)
+        yield* Fiber.interrupt(running)
+        return said.map((payload) => payload.kind)
+      }),
+    )
+
+    expect(found).toEqual(["tool_call", "tool_update", "tool_result"])
+    expect(said[2]).toMatchObject({ kind: "tool_result", id: "call_1", disposition: "cancelled" })
   })
 })
 
