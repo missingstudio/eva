@@ -33,7 +33,7 @@ for (const name of WORKFLOWS) {
   const recorder = define({
     id: "exit.recorder",
     effect: Effect.fn("exit.recorder")(function* (ctx) {
-      yield* ctx.provider["provider.response.after"]((event) => {
+      yield* ctx.providerHooks["provider.response.after"]((event) => {
         turns.push({ payloads: event.payloads.get() })
       })
     }),

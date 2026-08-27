@@ -69,7 +69,7 @@ const countingProvider = (calls: { count: number }, said = "answered"): Provider
 const providerPlugin = (provider: Provider): Plugin => ({
   id: "acme.provider",
   effect: Effect.fn(function* (ctx) {
-    yield* ctx.provider["model.resolve"]((event) =>
+    yield* ctx.providerHooks["model.resolve"]((event) =>
       Effect.sync(() => event.resolve({ model: event.reference, provider })),
     )
   }),

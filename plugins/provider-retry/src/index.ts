@@ -47,7 +47,7 @@ export const providerRetry = define({
       capMs: OPTIONS.read(ctx.options, "capMs", DEFAULTS.capMs),
     }
 
-    yield* ctx.provider["provider.retry"]((event) => {
+    yield* ctx.providerHooks["provider.retry"]((event) => {
       event.decide({
         retry: shouldRetry(event.error.errorClass, event.attempt, options),
         max: options.maxAttempts ?? DEFAULTS.maxAttempts,
