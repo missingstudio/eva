@@ -372,36 +372,54 @@ export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, cal
     )
   }
 
+  // Read once, so the closure below holds the implementation the row had.
+  const execute = found.execute
   const settled =
     deps.beforeExecute === undefined ? { args: call.args } : yield* deps.beforeExecute(call)
   yield* opened(found.kind, settled.args)
 
+  const answering = Effect.gen(function* () {
+    /**
+     * The person answers after the call record lands, so a surface drawing
+     * the question already holds the call it is about — the call id is the
+     * request id, and the record naming that id came first.
+     */
+    const asked =
+      settled.decision?.kind === "ask" && deps.approving !== undefined
+        ? yield* deps.approving(
+            {
+              sessionId: call.session,
+              toolCall: { toolCallId: call.id, title: settled.decision.question },
+              options: PERMISSION_OPTIONS,
+            },
+            { ...call, args: settled.args },
+          )
+        : settled.decision
+
+    const refused = denial(asked)
+    if (refused !== undefined) return yield* closed(toolText("denied", refused))
+
+    const answered = yield* execute(settled.args, { id: call.id, emit: deps.emit })
+    // The observing boundary reads what the tool answered. A denial never
+    // reaches it: a hook that could rewrite one into an allow is not a gate.
+    const result =
+      deps.afterExecute === undefined ? answered : yield* deps.afterExecute(call, answered)
+    return yield* closed(result)
+  })
+
   /**
-   * The person answers after the call record lands, so a surface drawing the
-   * question already holds the call it is about — the call id is the request
-   * id, and the record naming that id came first.
+   * A stop that lands while the call works still closes the pair the call
+   * record opened. A fold joins the three records by the call id and drops an
+   * orphan without a word, so an interrupted call that left no result would
+   * show a call that never ended.
+   *
+   * A barrier is where this is reachable: it emits straight through, while a
+   * parallel window holds its records back and commits none of them when it
+   * dies.
    */
-  const asked =
-    settled.decision?.kind === "ask" && deps.approving !== undefined
-      ? yield* deps.approving(
-          {
-            sessionId: call.session,
-            toolCall: { toolCallId: call.id, title: settled.decision.question },
-            options: PERMISSION_OPTIONS,
-          },
-          { ...call, args: settled.args },
-        )
-      : settled.decision
-
-  const refused = denial(asked)
-  if (refused !== undefined) return yield* closed(toolText("denied", refused))
-
-  const answered = yield* found.execute(settled.args, { id: call.id, emit: deps.emit })
-  // The observing boundary reads what the tool answered. A denial never
-  // reaches it: a hook that could rewrite one into an allow is not a gate.
-  const result =
-    deps.afterExecute === undefined ? answered : yield* deps.afterExecute(call, answered)
-  return yield* closed(result)
+  return yield* Effect.onInterrupt(answering, () =>
+    Effect.asVoid(closed(toolText("cancelled", `${call.name} stopped before it answered`))),
+  )
 })
 
 /**
