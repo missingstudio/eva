@@ -164,6 +164,9 @@ unload, and it is unbounded. `architecture.md` §12.3a promises a host-scoped
 `inbox` slot, because steering semantics are a choice; the inbox moves there
 when the loop becomes a host of plugins.
 
+And no shipped surface submits one yet. `eva.api`'s wire reads a steer, so a
+client at the end of the socket can send one; the terminal has no key for it.
+
 ## What it does not do
 
 - It does not decide whether a call may run. That is

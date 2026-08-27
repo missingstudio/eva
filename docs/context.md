@@ -70,6 +70,15 @@ later Hook sees what an earlier one changed, and a Hook may narrow what a Run
 does but never widen it.
 _Avoid_: Listener, interceptor, middleware
 
+**Hook boundary**:
+Where one family of Hooks runs, and the declaration of what they do there. A
+Hook that dies at a **deciding** boundary is a denial, because a gate that
+fails open when a plugin throws is not a gate; one that dies at an
+**observing** boundary is reported through `plugin.failed` and the Run goes on.
+The boundary declares which it is, because only the caller of the Hooks knows
+what they decide.
+_Avoid_: Hook kind, hook type, deciding hook (a boundary decides, not a Hook)
+
 **Broadcast**:
 A typed, process-local notification a plugin subscribes to as a stream. It is
 never written to the Trace and carries no schema guarantee across versions;
