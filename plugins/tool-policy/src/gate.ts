@@ -1,9 +1,14 @@
-import { argvOf, looksOnly, strictest, type ToolDecision } from "@missingstudio/eva-core"
+import {
+  invocationsIn,
+  looksOnly,
+  strictest,
+  type Invocation,
+  type ToolDecision,
+} from "@missingstudio/eva-core"
 import type { ToolKind } from "@missingstudio/eva-schema"
 import { readShape } from "@missingstudio/eva-sdk"
 import { protectedIn } from "./paths.js"
 import { matches, type Rule } from "./rules.js"
-import { partsOf, type Part } from "./shell.js"
 
 /**
  * The gate itself: one call in, one decision out, and no model in the room.
@@ -67,7 +72,7 @@ const decisionOf = (rule: Rule, words: readonly string[]): ToolDecision => {
 const ruled = (rules: readonly Rule[], words: readonly string[]): ToolDecision | undefined =>
   strictest(rules.filter((rule) => matches(rule, words)).map((rule) => decisionOf(rule, words)))
 
-const wordsOf = (part: Part): readonly string[] => (part.kind === "words" ? part.words : [])
+const wordsOf = (one: Invocation): readonly string[] => (one.kind === "words" ? one.words : [])
 
 /**
  * The gate's answer for one call, or nothing when neither a protected path nor
@@ -80,13 +85,14 @@ const wordsOf = (part: Part): readonly string[] => (part.kind === "words" ? part
  * weakened by a rule and its reason is the one a person reads. A profile
  * reaches the rules; nothing reaches this ordering.
  *
- * An opaque invocation is judged against no rule at all. It cannot be: the
+ * An Opaque Invocation is judged against no rule at all. It cannot be: the
  * words that would run are not the words a rule could read, so it fails
- * closed and a person is asked.
+ * closed and a person is asked. The reading is `invocationsIn` in
+ * [`@missingstudio/eva-core`](../../../packages/core/README.md), because the
+ * approval gate writes a grant over what it answers.
  */
 export const judge = (rules: readonly Rule[], call: JudgedCall): ToolDecision | undefined => {
-  const argv = argvOf(call.args)
-  const parts = argv === undefined ? [] : partsOf(argv)
+  const invocations = invocationsIn(call.args)
   const decisions: ToolDecision[] = []
 
   /**
@@ -95,7 +101,7 @@ export const judge = (rules: readonly Rule[], call: JudgedCall): ToolDecision | 
    * checked whatever it would do with them, because the gate cannot know which
    * of them a program writes and a bootstrap file is where it matters.
    */
-  const guarded = protectedIn([...writtenIn(call), ...parts.flatMap(wordsOf)])
+  const guarded = protectedIn([...writtenIn(call), ...invocations.flatMap(wordsOf)])
   if (guarded !== undefined) {
     decisions.push({
       kind: "ask",
@@ -103,15 +109,15 @@ export const judge = (rules: readonly Rule[], call: JudgedCall): ToolDecision | 
     })
   }
 
-  for (const part of parts) {
-    if (part.kind === "opaque") {
+  for (const one of invocations) {
+    if (one.kind === "opaque") {
       decisions.push({
         kind: "ask",
-        question: `this is one opaque invocation — ${part.why}. Run it?`,
+        question: `this is one opaque invocation — ${one.why}. Run it?`,
       })
       continue
     }
-    const decision = ruled(rules, part.words)
+    const decision = ruled(rules, one.words)
     if (decision !== undefined) decisions.push(decision)
   }
 

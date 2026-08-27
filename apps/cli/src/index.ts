@@ -1,7 +1,7 @@
 import type { Build } from "@missingstudio/eva-boot"
 import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
-import { checkRules, sayFault } from "@missingstudio/eva-tool-policy"
+import { checkRules, sayFault, unreachableIn } from "@missingstudio/eva-tool-policy"
 import { refusal } from "@missingstudio/eva-web"
 import { Effect, Exit, Scope } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
@@ -77,7 +77,16 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
      * disagree about what a malformed rule set is.
      */
     case "policyCheck": {
-      const found = checkRules(invocation.source)
+      const read = checkRules(invocation.source)
+      /**
+       * A rule that can never fire is a fault of the file and not of the rule,
+       * so it is found here beside the malformed ones. A run reads the same
+       * file and goes on, because a rule that reaches nothing stops nothing.
+       */
+      const found = {
+        ...read,
+        faults: [...read.faults, ...unreachableIn(read.rules)],
+      }
       if (found.faults.length === 0) {
         const count = found.rules.length
         world.out(

@@ -13,11 +13,11 @@ import type { Edit, Hunk } from "./contracts.js"
  * the word `ask` was learning a scheduler to ask a question. Everything here
  * is data and pure functions; nothing in this file runs a tool.
  *
- * `argvOf` and `editOf` are here for one reason: two gates read the same
- * argument. The deterministic gate judges the words a call would run and the
- * approval gate writes a grant over them; the write tool runs an Edit and the
- * approval gate previews it. Two readers of one argument would be two answers
- * to keep in step.
+ * `editOf` is here for one reason: two gates read the same argument. The write
+ * tool runs an Edit and the approval gate previews it, so two readers of one
+ * argument would be two answers to keep in step. The words a call would run
+ * are read the same way and for the same reason, in
+ * [`invocation.ts`](./invocation.ts) beside the splitter they need.
  */
 
 /**
@@ -142,22 +142,6 @@ export type Approving = (
 export const LOOKS_ONLY: readonly ToolKind[] = ["read", "search", "think", "fetch"]
 
 export const looksOnly = (kind: ToolKind): boolean => LOOKS_ONLY.includes(kind)
-
-/**
- * The words a call would run, or nothing when it names none. A `command`
- * argument is already-split words, which is the shape a tool that runs a
- * program takes — so the words are read out of the arguments and never off the
- * tool's name, and a second command tool is read with no change here.
- */
-export const argvOf = (args: unknown): readonly string[] | undefined => {
-  if (typeof args !== "object" || args === null || Array.isArray(args)) return undefined
-  const command = (args as Record<string, unknown>)["command"]
-  return Array.isArray(command) &&
-    command.length > 0 &&
-    command.every((one) => typeof one === "string")
-    ? (command as readonly string[])
-    : undefined
-}
 
 /**
  * What a call that names an Edit is asked to do: the Edit, and whether the

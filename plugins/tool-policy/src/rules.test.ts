@@ -6,6 +6,7 @@ import {
   readRules,
   rulesOf,
   sayFault,
+  unreachableIn,
   type Rule,
 } from "./rules.js"
 
@@ -157,5 +158,42 @@ describe("checkRules", () => {
   it("reads an empty file, and a file with no policy, as no rules", () => {
     for (const source of ["", "\n", "model: anthropic/claude\n"])
       expect(checkRules(source)).toEqual({ rules: [], faults: [] })
+  })
+})
+
+/**
+ * A rule a call can never present words to. The gate judges the words of one
+ * Invocation, and a shell that names a line is never one — so a rule whose
+ * first position holds nothing but shell names is a rule nothing reaches.
+ *
+ * This is the shape a grant wrote before it knew which words it granted, which
+ * is why `eva policy check` is the thing that finds one in a person's file.
+ */
+describe("a rule nothing can reach", () => {
+  const found = (rules: readonly unknown[]) =>
+    unreachableIn(readRules({ rules }).rules).map(sayFault)
+
+  it("names a rule over the argument list a shell was handed", () => {
+    expect(found([{ allow: [["bash"], ["-c"], ["git status"]] }])[0]).toContain("policy.rules.0")
+  })
+
+  it.each([["sh"], ["zsh"], ["/bin/bash"]])("names one over %s", (shell) => {
+    expect(found([{ allow: [[shell], ["-c"], ["npm test"]] }])).toHaveLength(1)
+  })
+
+  // The words inside the line are what the gate judges, so a rule naming them
+  // is the rule that fires.
+  it("says nothing about a rule over the words the gate judges", () => {
+    expect(found([{ allow: [["git"], ["status"]] }, { deny: [["rm"], ["-rf"]] }])).toEqual([])
+  })
+
+  // A union that names a shell and a program still reaches the program.
+  it("says nothing about a position that also names a program", () => {
+    expect(found([{ allow: [["bash", "git"]] }])).toEqual([])
+  })
+
+  // Every rule a run carries is one a call reaches.
+  it("finds none among the built-in rules", () => {
+    expect(unreachableIn(BUILT_IN_RULES)).toEqual([])
   })
 })

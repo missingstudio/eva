@@ -1,3 +1,4 @@
+import { isShell } from "@missingstudio/eva-core"
 import { declare, readShape } from "@missingstudio/eva-sdk"
 import { parse } from "yaml"
 
@@ -217,6 +218,33 @@ export const POLICY_KEYS = declare({ policy: "mapping" })
 export const rulesOf = (config: Record<string, unknown>): RuleSet => {
   const found = readRules(config["policy"])
   return { rules: [...BUILT_IN_RULES, ...found.rules], faults: found.faults }
+}
+
+/**
+ * The rules that can never fire, as faults naming each one.
+ *
+ * A rule is judged against the words of one Invocation, and a shell that names
+ * a line is never one: the line is split, so the words a rule sees start at the
+ * program inside it, and a shell that names no line is opaque and is matched
+ * against no rule at all. So a first position holding nothing but shell names
+ * is a rule that no call can ever present words to.
+ *
+ * This is asked by `eva policy check` and never by a run. A rule that reaches
+ * nothing stops nothing, so it is a thing to tell a person about their file and
+ * not a reason to refuse every call — and a person whose file holds one wrote
+ * it before the grant knew which words it was granting.
+ */
+export const unreachableIn = (rules: readonly Rule[]): readonly Fault[] => {
+  const faults: Fault[] = []
+  for (const [index, rule] of rules.entries()) {
+    const first = rule.words[0]
+    if (first === undefined || !first.every(isShell)) continue
+    faults.push({
+      at: `policy.rules.${index}`,
+      says: `${first.join(" or ")} names a line rather than words, so no call reaches this rule — name the command the line runs`,
+    })
+  }
+  return faults
 }
 
 /**

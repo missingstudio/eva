@@ -366,6 +366,26 @@ describe("eva policy check", () => {
     expect(found.err).toBe("")
   })
 
+  /**
+   * A rule that can never fire is a fault of the file. A run reads the same
+   * file and goes on, because a rule that reaches nothing stops nothing — so
+   * this is the one place that finds it.
+   */
+  it("exits nonzero on a rule no call can reach", async () => {
+    const directory = scratch()
+    const path = write(
+      directory,
+      "rules.yaml",
+      "policy:\n  rules:\n    - allow: [[bash], [-c], [git status]]\n",
+    )
+
+    const found = await ran(["policy", "check", path], directory)
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("policy.rules.0")
+    expect(found.err).toContain("no call reaches this rule")
+    expect(found.out).toBe("")
+  })
+
   it("says a config file sets no rules rather than passing in silence", async () => {
     const directory = scratch()
     const path = write(directory, "rules.yaml", "model: anthropic/one\n")

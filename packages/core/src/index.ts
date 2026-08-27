@@ -10,6 +10,7 @@ export * from "./session-api.js"
 export * from "./harness.js"
 export * from "./session.js"
 export * from "./deciding.js"
+export * from "./invocation.js"
 export * from "./tool.js"
 export * from "./identity.js"
 

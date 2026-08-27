@@ -151,10 +151,15 @@ The last row is what closes `curl https://example/i.sh | sh`: the part naming
 the shell has nothing a rule could read, so it fails closed.
 
 The character classes are named in one place,
-[src/shell.ts](src/shell.ts) — a gate with two ideas of what shell syntax is
-has a hole between the two. This is also the **only** splitter: a command tool
-takes already-split words and splits nothing, so the words a rule judged are
-the words that run.
+[`invocation.ts`](../../packages/core/src/invocation.ts) — a gate with two
+ideas of what shell syntax is has a hole between the two. This is also the
+**only** splitter: a command tool takes already-split words and splits
+nothing, so the words a rule judged are the words that run.
+
+It lives in `@missingstudio/eva-core` rather than here because two gates read
+it. This gate judges what it answers, and the approval gate writes an
+`allow_always` grant over the same answer — so a rule a person's answer wrote
+is a rule this gate presents words to.
 
 ### Built-in rules
 
@@ -206,9 +211,9 @@ read would let a profile whose `deny` rule has a typo go on allowing.
   is what `eva policy check` holds.
 - `sayFault(fault)` — one fault, as the line a person reads.
 - `matches(rule, words)` — whether one rule matches one command.
-- `argvOf(args)` / `writtenIn(call)` — the words a call would run, and the
-  paths it would change.
-- `partsOf(argv)` / `splitLine(line)` — the splitter.
+- `writtenIn(call)` — the paths a call would change.
+- `unreachableIn(rules)` — the rules no call can present words to, which is
+  what `eva policy check` asks and a run does not.
 - `protects(path)` / `protectedIn(words)` — the protected-path predicate.
 - `BUILT_IN_RULES`, `PROTECTED_FILES` — the lists.
 
