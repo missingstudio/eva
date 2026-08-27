@@ -371,6 +371,26 @@ or more. A Workflow's Step causes none, and a Repair is a Step. DeepSeek
 Harness's word, and precise.
 _Avoid_: Turn unqualified, stage, task, job
 
+**Loop**:
+Eva's own Harness, and the first one with agency: it proposes, acts, and
+observes until the model asks for no more tools, a Budget runs out, or the
+max-steps fuse trips. One Step is one Run, so the calls a response proposed
+commit inside the Run that proposed them.
+_Avoid_: Agent loop, ReAct, engine, REPL
+
+**Tool**:
+A named action a model may call: an id, a description, a JSON Schema for its
+input, and the behaviour that runs it. It is a row in the tool domain, so what a
+Session may call is what the domain holds at the moment of the call.
+_Avoid_: Function, action, capability, Command (that is what a person types)
+
+**Tool Group**:
+The calls one Provider response proposed, run as one unit. It is split into
+windows: a run of consecutive parallel-safe calls is one window under a bound,
+and every other call is a Barrier. Results land in source order whichever call
+answered first.
+_Avoid_: Batch, wave, round, fan-out
+
 **Barrier**:
 A tool call that runs alone inside a Step: everything before it commits before
 it starts, and nothing after it starts until it has committed. A call the
@@ -497,6 +517,50 @@ environment or a subscription obtained by a Login. The configured mode alone
 decides which a Provider Turn uses.
 _Avoid_: Token, key, secret
 
+## Permission and containment
+
+**Mode**:
+A named set of permissions a Session runs under: `read-only`, `supervised`,
+`autonomous`, or `plan`. It selects which tools the registry holds and states a
+mandate at the deciding boundary, so a Mode narrows and never widens. A change
+emits a `mode` payload, so which one is open is a fact on the Trace.
+_Avoid_: Permission level, policy (a Rule Set is the policy), profile
+
+**Approval**:
+A person's answer to one permission request, in one of the Agent Client
+Protocol's four options: `allow_once`, `allow_always`, `reject_once`,
+`reject_always`. The request names the tool call by its id, and `allow_always`
+writes an allow rule into the person's own config and never the repo's.
+_Avoid_: Consent, confirmation, Prompt (that is what a person asks for)
+
+**Rule Set**:
+The rules under the `policy` config key that the deterministic gate judges a
+call against: `allow`, `deny`, or `ask` over the words a command would run, a
+position at a time. It is a CI artifact — `eva policy check` reads the file a
+Run reads and refuses a malformed one.
+_Avoid_: Policy file, permission list, ACL, allowlist
+
+**Protected Path**:
+A toolchain-bootstrap file a write is never auto-approved to touch: `.git`,
+`.eva`, `.npmrc`, `.mcp.json`, CI config, dependency manifests, and shell rc.
+The check runs before the rules and is un-overridable by ordering rather than
+by a flag. A read of one is not checked, because the rule is about writes.
+_Avoid_: Blocklist, denylist, sacred path
+
+**Opaque Invocation**:
+A shell line the gate cannot read as words, because it holds a redirection, a
+substitution, a variable, a quotation, a glob, a subshell, a comment, or a
+newline. It is matched against no rule and fails closed, which is what closes
+`curl … | sh`.
+_Avoid_: Unsafe command, unparseable command
+
+**Sandbox**:
+The Slot a command starts inside. Containment is how a process starts and not
+what it returns, so a Sandbox answers the same live process a Shell does. It
+states what it enforces, so a filler that contains nothing says so instead of
+looking like one that does.
+_Avoid_: Jail, container, Seatbelt (that is one filler of it)
+
 ## Interfaces
 
 **Console**:
@@ -585,7 +649,6 @@ is allowed.
 
 | Term                                                | Arrives at |
 | --------------------------------------------------- | ---------- |
-| Loop, Tool, Mode, Approval, Sandbox                 | Stage 2    |
 | Repomap, Compaction, System Context, Context Source | Stage 3    |
 | Workspace, Snapshot, Isolation                      | Stage 4    |
 | Verifier, Check, Evidence, Remediation              | Stage 5    |
