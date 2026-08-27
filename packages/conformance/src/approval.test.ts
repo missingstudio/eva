@@ -524,6 +524,53 @@ describe("an allow_always", () => {
       },
     )
   })
+
+  /**
+   * The same round trip for a line a shell was handed, which is the shape the
+   * two gates once read two ways. The gate judges the words inside the line,
+   * so the grant is written over those words — a rule naming `bash` and the
+   * line would be well formed, would reach disk, and would never fire.
+   */
+  it("persists a shell line as a rule over the words the gate judged", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "eva-approval-")), "config.yaml")
+    const line = ["bash", "-c", "git status"]
+    const first: string[] = []
+
+    await bench(
+      (found) =>
+        Effect.gen(function* () {
+          const result = yield* found.call("bash", { command: line })
+          expect(found.asked).toHaveLength(1)
+          expect(result.disposition).toBe("ok")
+        }),
+      {
+        config: { approval: { mode: "supervised" } },
+        approving: remembering(answering("allow_always", first), { EVA_CONFIG: path }),
+        asked: first,
+      },
+    )
+
+    const written = parse(readFileSync(path, "utf8")) as Record<string, unknown>
+    expect((written["policy"] as Record<string, unknown>)["rules"]).toEqual([
+      { allow: [["git"], ["status"]], why: expect.stringContaining("a person allowed this") },
+    ])
+
+    const second: string[] = []
+    await bench(
+      (found) =>
+        Effect.gen(function* () {
+          const result = yield* found.call("bash", { command: line })
+
+          expect(found.asked).toEqual([])
+          expect(result.disposition).toBe("ok")
+        }),
+      {
+        config: { ...written, approval: { mode: "supervised" } },
+        approving: answering("allow_once", second),
+        asked: second,
+      },
+    )
+  })
 })
 
 // A mode is a named agent definition, which is where the four are published.

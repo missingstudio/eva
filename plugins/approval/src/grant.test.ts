@@ -43,21 +43,21 @@ describe("the grant an allow_always writes", () => {
   // the deterministic gate reads. That the gate then answers from it is proven
   // where the two plugins meet, in `packages/conformance`.
   it("is an entry of policy.rules in the file", () => {
-    expect(writeGrant(path, grantedRule(["git", "push"], "a person allowed it"))).toBe(true)
+    expect(writeGrant(path, [grantedRule(["git", "push"], "a person allowed it")])).toBe(true)
 
     expect(rules()).toEqual([{ allow: [["git"], ["push"]], why: "a person allowed it" }])
   })
 
   it("keeps the keys the file already held", () => {
     writeFileSync(path, "model: anthropic/kept\n")
-    writeGrant(path, grantedRule(["git", "push"], "a person allowed it"))
+    writeGrant(path, [grantedRule(["git", "push"], "a person allowed it")])
 
     expect(parse(readFileSync(path, "utf8"))["model"]).toBe("anthropic/kept")
   })
 
   it("keeps the rules the person wrote themselves", () => {
     writeFileSync(path, "policy:\n  rules:\n    - deny: [[rm]]\n")
-    writeGrant(path, grantedRule(["git", "push"], "a person allowed it"))
+    writeGrant(path, [grantedRule(["git", "push"], "a person allowed it")])
 
     expect(rules()).toContainEqual({ deny: [["rm"]] })
   })
@@ -65,7 +65,7 @@ describe("the grant an allow_always writes", () => {
   // Answering the same question twice is one grant, so a person does not
   // collect copies of their own rule.
   it("writes nothing the second time", () => {
-    const rule = grantedRule(["git", "push"], "a person allowed it")
+    const rule = [grantedRule(["git", "push"], "a person allowed it")]
     expect(writeGrant(path, rule)).toBe(true)
     expect(writeGrant(path, rule)).toBe(false)
     expect(rules()).toHaveLength(1)
@@ -103,6 +103,38 @@ describe("an asker that remembers", () => {
     expect(await asking("allow_always", call({ path: "one.md" }))).toEqual({
       kind: "allow_always",
     })
+    expect(() => readFileSync(path, "utf8")).toThrow()
+  })
+
+  /**
+   * The rule names the words the gate judged. A person asked about
+   * `bash -c "git status"` was asked about `git status`, so a rule over
+   * `bash`, `-c` and the line would be well formed and could never fire.
+   */
+  it("writes the grant over the words the gate judged, not the argument list", async () => {
+    await asking("allow_always", call({ command: ["bash", "-c", "git status"] }))
+
+    expect(rules()).toEqual([
+      { allow: [["git"], ["status"]], why: "a person allowed this: run git push?" },
+    ])
+  })
+
+  it("writes one rule for every Invocation of a chain", async () => {
+    await asking("allow_always", call({ command: ["bash", "-c", "git status && git diff"] }))
+
+    expect(rules()).toEqual([
+      { allow: [["git"], ["status"]], why: "a person allowed this: run git push?" },
+      { allow: [["git"], ["diff"]], why: "a person allowed this: run git push?" },
+    ])
+  })
+
+  // No rule could fire for it, so a rule that claimed to would be a person
+  // told they had granted something they had not.
+  it("remembers nothing about an Opaque Invocation", async () => {
+    expect(
+      await asking("allow_always", call({ command: ["bash", "-c", "rm -rf $(cat target)"] })),
+    ).toEqual({ kind: "allow_always" })
+
     expect(() => readFileSync(path, "utf8")).toThrow()
   })
 })

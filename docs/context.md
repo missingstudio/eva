@@ -573,11 +573,20 @@ The check runs before the rules and is un-overridable by ordering rather than
 by a flag. A read of one is not checked, because the rule is about writes.
 _Avoid_: Blocklist, denylist, sacred path
 
+**Invocation**:
+One thing a call would run, in the one reading every gate takes: either the
+plain words a rule judges position by position, or an Opaque Invocation. The
+deterministic gate judges what the reading answers and a grant is written over
+it, so a rule a person's answer wrote is a rule the gate presents words to.
+_Avoid_: Part (a Block already refuses that word), command line, argv (that is
+the argument list a reading starts from)
+
 **Opaque Invocation**:
-A shell line the gate cannot read as words, because it holds a redirection, a
-substitution, a variable, a quotation, a glob, a subshell, a comment, or a
-newline. It is matched against no rule and fails closed, which is what closes
-`curl … | sh`.
+An Invocation the gate cannot read as words, because the line holds a
+redirection, a substitution, a variable, a quotation, a glob, a subshell, a
+comment, or a newline. It is matched against no rule and fails closed, which is
+what closes `curl … | sh` — and nothing may grant one, because a rule over
+words nobody read could never fire.
 _Avoid_: Unsafe command, unparseable command
 
 **Sandbox**:

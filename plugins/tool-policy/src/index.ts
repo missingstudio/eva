@@ -6,7 +6,6 @@ import { POLICY_KEYS, rulesOf, sayFault } from "./rules.js"
 export * from "./gate.js"
 export * from "./paths.js"
 export * from "./rules.js"
-export * from "./shell.js"
 
 /**
  * The deterministic gate. It decides at `tool.execute.before`, which is a

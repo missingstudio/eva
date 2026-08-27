@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 import {
-  argvOf,
   editOf,
   looksOnly,
   optionFor,
@@ -81,27 +80,6 @@ describe("a tool kind that only looks", () => {
 
   it.each(["edit", "execute", "other"] as const)("says %s may change something", (kind) => {
     expect(looksOnly(kind)).toBe(false)
-  })
-})
-
-/**
- * The words a call would run. The deterministic gate judges these and the
- * approval gate writes a grant over them, so one reading answers both.
- */
-describe("the words a call would run", () => {
-  it("reads the command words out of the arguments", () => {
-    expect(argvOf({ command: ["git", "status"] })).toEqual(["git", "status"])
-  })
-
-  it.each([
-    ["nothing", undefined],
-    ["a list", ["git", "status"]],
-    ["no command", { path: "one.md" }],
-    ["an empty command", { command: [] }],
-    ["a command that is not words", { command: ["git", 1] }],
-    ["a command that is one string", { command: "git status" }],
-  ])("names no words when the arguments are %s", (_case, args) => {
-    expect(argvOf(args)).toBeUndefined()
   })
 })
 
