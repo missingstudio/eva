@@ -11,6 +11,7 @@ import {
   type ToolCall,
   type ToolDecision,
   type ToolDeps,
+  type ToolInfo,
   type ToolResult,
 } from "@missingstudio/eva-core"
 import type { Payload } from "@missingstudio/eva-schema"
@@ -127,12 +128,15 @@ export const toolDeps = (
     return held.read()
   })
 
-  const beforeExecute = Effect.fn("boot.tool.before")(function* (call: ToolCall) {
+  const beforeExecute = Effect.fn("boot.tool.before")(function* (call: ToolCall, named: ToolInfo) {
     const args = cell(call.args)
     const decisions: ToolDecision[] = []
     const baselines: ToolDecision[] = []
     const failure = yield* kernel.toolHooks.run("tool.execute.before", {
       name: call.name,
+      // The row the execution resolved for this call, so every gate judges
+      // the row that will run and none reads the domain a second time.
+      kind: named.kind,
       session: call.session,
       args: args.port,
       decide: (decision) => void decisions.push(decision),

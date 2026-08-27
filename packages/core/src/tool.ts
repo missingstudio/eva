@@ -289,8 +289,12 @@ export interface Decided {
 export interface ToolDeps {
   // Which tool answers this name, after `tool.resolve`. Nothing is a refusal.
   readonly tool: (call: ToolCall) => Effect.Effect<ToolInfo | undefined>
-  // The deciding boundary. Absent means nothing decides and the call runs.
-  readonly beforeExecute?: (call: ToolCall) => Effect.Effect<Decided>
+  /**
+   * The deciding boundary. Absent means nothing decides and the call runs.
+   * The row is the one the execution resolved for this call, so a gate at the
+   * boundary judges the row that will run and reads the domain no second time.
+   */
+  readonly beforeExecute?: (call: ToolCall, tool: ToolInfo) => Effect.Effect<Decided>
   /**
    * Turns the `ask` the boundary settled on into one of the four options.
    *
@@ -426,7 +430,7 @@ export const executeTool = Effect.fn("core.tool")(function* (deps: ToolDeps, cal
   // Read once, so the closure below holds the implementation the row had.
   const execute = found.execute
   const settled =
-    deps.beforeExecute === undefined ? { args: call.args } : yield* deps.beforeExecute(call)
+    deps.beforeExecute === undefined ? { args: call.args } : yield* deps.beforeExecute(call, found)
   yield* opened(found.kind, settled.args)
 
   const answering = Effect.gen(function* () {

@@ -1,4 +1,3 @@
-import type { ToolKind } from "@missingstudio/eva-schema"
 import { define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import {
@@ -115,14 +114,12 @@ export const approval = define({
     const ground = { files: ctx.slot.fileSystem.peek, applier: ctx.slot.diffApplier.peek }
 
     /**
-     * The mandate. The row is read at the moment of use, so a rebuilt tool
-     * domain is judged on the next call, and a name with no row is judged as
-     * a kind nothing reads — the execution refuses that call anyway.
+     * The mandate. The kind is the boundary's: the execution resolved this
+     * call's row and the event carries what it is, so the mandate judges the
+     * row that will run and reads the domain no second time.
      */
     yield* ctx.toolHooks["tool.execute.before"]((event) =>
       Effect.gen(function* () {
-        const rows = yield* ctx.tool.get
-        const kind: ToolKind = rows.find((row) => row.id === event.name)?.kind ?? "other"
         const mode = modeFor(event.session)
         const override = read.overrides[mode.id]?.[event.name]
 
@@ -140,7 +137,7 @@ export const approval = define({
                 kind: "ask",
                 question: `${event.name} is asked about in ${mode.id} mode. Run it?`,
               } as const)
-            : mandateOf(mode, kind, event.name)
+            : mandateOf(mode, event.kind, event.name)
         if (wanted === undefined) return
 
         /**
