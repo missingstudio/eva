@@ -56,15 +56,13 @@ function Section({
   children,
   label,
   beat = "section-y",
-  tone,
 }: {
   children: ReactNode
   label?: string
   beat?: "section-y" | "section-y-lg" | "section-y-tight"
-  tone?: "grid"
 }) {
   return (
-    <section className={`border-graphite border-t ${tone === "grid" ? "arrow-field" : ""}`}>
+    <section className="border-graphite border-t">
       <div className={`max-w-page relative mx-auto px-6 ${beat}`}>
         {label ? <p className="eyebrow reveal mb-8">{label}</p> : null}
         {children}
@@ -194,7 +192,7 @@ export function Nav() {
 
 export function Hero() {
   return (
-    <header className="arrow-field border-graphite border-b">
+    <header className="border-graphite border-b">
       <div className="max-w-page relative mx-auto px-6 pt-20 pb-16 sm:pt-28">
         {/*
           The tagline is one string in the ui package. The site never
@@ -277,7 +275,9 @@ export function Today() {
           >
             <h3 className="text-lg font-semibold tracking-tight">{row.title}</h3>
             <p className="text-muted-foreground mt-2 text-sm">{row.body}</p>
-            <span className="text-muted-foreground group-mt-4 inline-block text-xs">Read →</span>
+            <span className="text-muted-foreground group-hover:text-bone mt-4 inline-block text-xs">
+              Read →
+            </span>
           </a>
         ))}
       </div>
@@ -398,7 +398,7 @@ export function Faq() {
 
 export function Close() {
   return (
-    <Section tone="grid" beat="section-y-lg">
+    <Section beat="section-y-lg">
       <h2 className="d-1 reveal">Run it now.</h2>
       <div className="reveal mt-8">
         <Install version={siteData.version} />

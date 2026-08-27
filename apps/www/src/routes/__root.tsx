@@ -9,7 +9,7 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       // The browser chrome takes the page's own ground. The system is dark
       // only, so one value is the whole answer.
-      { name: "theme-color", content: "#000000" },
+      { name: "theme-color", content: "#08090a" },
       { property: "og:image", content: "https://missing.studio/brand/og.png" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },

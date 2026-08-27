@@ -172,8 +172,8 @@ measures **2.64:1** and fails outright. **Resolution:** the ink on an ember
 fill is void, at 6.00:1.
 
 **The neutral ladder.** Linear's is the only one of the five with a distinct
-step at every job — two grounds, three lines, four inks. **Resolution:** taken
-whole and unchanged.
+step at every job — three grounds, three lines, four inks. **Resolution:**
+taken whole and unchanged.
 
 **The radius.** Axiom rounds everything to 2px, which reads as an unfinished
 rectangle on a 36px control. **Resolution:** Linear's range — 2px for small
@@ -451,15 +451,14 @@ square.
 
 Never use a default transition. Every transition uses a custom curve.
 
-| Token           | Value                               | Use                                |
-| --------------- | ----------------------------------- | ---------------------------------- |
-| `--ease-fluid`  | `cubic-bezier(0.32, 0.72, 0, 1)`    | Every transition                   |
-| `--ease-spring` | `cubic-bezier(0.34, 1.56, 0.64, 1)` | A control that must feel physical  |
-| `--dur-instant` | 150ms                               | Hover, focus, active               |
-| `--dur-fast`    | 300ms                               | Popover, dropdown, disclosure      |
-| `--dur-base`    | 700ms                               | The default transition             |
-| `--dur-reveal`  | 800ms                               | An element entering the viewport   |
-| `--stagger`     | 50ms                                | The step between revealed siblings |
+| Token           | Value                            | Use                                |
+| --------------- | -------------------------------- | ---------------------------------- |
+| `--ease-fluid`  | `cubic-bezier(0.32, 0.72, 0, 1)` | Every transition                   |
+| `--dur-instant` | 150ms                            | Hover, focus, active               |
+| `--dur-fast`    | 300ms                            | Popover, dropdown, disclosure      |
+| `--dur-base`    | 700ms                            | The default transition             |
+| `--dur-reveal`  | 800ms                            | An element entering the viewport   |
+| `--stagger`     | 50ms                             | The step between revealed siblings |
 
 **Never `transition: all`.** Name the exact properties that change. `all`
 animates every property that happens to differ, including ones the browser
@@ -606,29 +605,32 @@ The current page must be indicated in the navigation.
 (`→`) in the label's own colour. Gap 8px. Padding 8px vertical, 16px
 horizontal. Radius `rounded-md`.
 
-| Variant   | Type             | Field       | Text    | Border  | Budget per page |
-| --------- | ---------------- | ----------- | ------- | ------- | --------------- |
-| Primary   | `text-base`, 700 | `ember`     | `void`  | None    | One per view    |
-| Ghost     | `text-base`, 400 | Transparent | `paper` | `slate` | Unlimited       |
-| Header    | `text-sm`, 400   | Transparent | `fog`   | None    | Unlimited       |
-| Icon-only | n/a              | Transparent | `ash`   | None    | Unlimited       |
+| Variant   | Type     | Field       | Text   | Border     | Budget per page |
+| --------- | -------- | ----------- | ------ | ---------- | --------------- |
+| Primary   | 15px/500 | `ember`     | `void` | None       | One per view    |
+| Secondary | 15px/500 | `obsidian`  | `bone` | `graphite` | Unlimited       |
+| Ghost     | 15px/500 | Transparent | `mist` | None       | Unlimited       |
+| Header    | 15px/400 | Transparent | `mist` | None       | Unlimited       |
+| Icon-only | n/a      | Transparent | `fog`  | None       | Unlimited       |
 
-The primary CTA is the conversion anchor and the one place weight 700 and
-ember meet. The ghost is the default everywhere else; at the density a
-documentation page carries, a filled button is noise.
+The primary CTA is the conversion anchor and the one place ember appears as a
+fill. The ghost is the default everywhere else; at the density a documentation
+page carries, a filled button is noise.
 
-A button that sits in a row of chrome takes the header step (`.btn-sm`)
-instead of the body one, and changes nothing else. It is a size, not a
-variant.
+Every button label is 15px at weight 500. Nothing in this system carries a
+button at 700 — the fill is what makes the CTA loud, not the weight.
 
-| State         | Ghost, header, icon-only                | Primary       |
-| ------------- | --------------------------------------- | ------------- |
-| Hover         | 6% bone wash; ghost's border to `smoke` | 8% lighten    |
-| Focus-visible | Ring                                    | Ring          |
-| Active        | `scale(0.98)`                           | `scale(0.98)` |
-| Disabled      | 45% opacity                             | 45% opacity   |
-| Loading       | Skeleton at resting width               | Same          |
-| Error         | The form owns the error                 | Same          |
+A button in a dense row takes the compact size (`.btn-sm`, 13px) and changes
+nothing else. It is a size, not a variant.
+
+| State         | Ghost, header, icon-only                    | Primary       |
+| ------------- | ------------------------------------------- | ------------- |
+| Hover         | 6% bone wash; secondary's border to `smoke` | 8% lighten    |
+| Focus-visible | Ring                                        | Ring          |
+| Active        | `scale(0.98)`                               | `scale(0.98)` |
+| Disabled      | 45% opacity                                 | 45% opacity   |
+| Loading       | Skeleton at resting width                   | Same          |
+| Error         | The form owns the error                     | Same          |
 
 **Interaction.** `Enter` and `Space` must both activate. Pointer activation
 fires on release inside the bounds, so a drag away cancels. Targets must be at
@@ -717,7 +719,7 @@ tag and the only colour in the card.
 elevated, on `graphite` with the case mark; and transcript card, which is the
 `panel-terminal` component on `carbon`.
 
-**States.** Hover moves the border to `slate`. Focus-visible paints the ring
+**States.** Hover moves the border to `smoke`. Focus-visible paints the ring
 around the card, not the title. Active applies `scale(0.98)`. Loading shows a
 skeleton at the resting height. Error replaces the body with a message and a
 retry button, and keeps the card frame.
@@ -886,7 +888,7 @@ constraint appears; a reader scanning headings will miss it.
 
 ### 3.11 Hero — marketing
 
-**Anatomy.** The `~/` prompt in `ash`, a two-line `h1`, subheading, one
+**Anatomy.** The `~/` prompt in `fog`, a two-line `h1`, subheading, one
 primary CTA with one ghost action beside it, one proof signal, and the real
 program full-width below.
 
@@ -894,11 +896,10 @@ program full-width below.
 - The `h1` and the subheading both cap at 680px.
 - Line breaks in the `h1` are placed by hand, where the thought breaks. A
   break that splits a phrase awkwardly is a defect.
-- Type climbs `heading-lg` to `display` at 768px — 24px to 32px. A terminal
-  does not shout.
+- Type climbs `heading-lg` to `display` at 768px — 40px to 56px.
 - One primary action. A competing CTA above the fold is a defect.
-- The arrow field — repeating `>` glyphs in `slate` — may fill the negative
-  space, masked so it fades rather than stopping.
+- The hero carries no texture. The product capture is the only thing behind
+  the copy.
 
 ### 3.12 Tagline reveal — marketing, mandatory
 
@@ -927,9 +928,9 @@ carry exactly one `h2`. Everything centred and symmetrical is the generic
 layout; break symmetry with offset margins, mixed aspect ratios, or a left
 aligned header over centred content.
 
-**Tag (eyebrow).** Pure typography: `text-xs`, uppercase, `ash`, no border,
-no fill, no mark. It is a label, not a heading, and must not be marked up as
-one.
+**Tag (eyebrow).** Pure typography: the mono at 13px, uppercase, tracked
+open, in `fog` — never `ash`, which fails as text. No border, no fill, no
+mark. It is a label, not a heading, and must not be marked up as one.
 
 **Stage tag.** The same anatomy. When the capability is shipping, the text
 takes `ember`. The text names the stage; color never carries it alone.
@@ -1002,7 +1003,7 @@ reviewer or a test can run.
 - Hover styling lives behind `@media (hover: hover)`. On touch `:hover` sticks
   after a tap, so the last thing a reader touched keeps looking selected. The
   `hover:` variant is redefined in `tokens.css` so every call site is gated.
-- A decorative element — the arrow field, a blur layer — sets
+- A decorative element — a blur layer, a backdrop — sets
   `pointer-events: none`, or it swallows the click meant for the control
   underneath it.
 - `aria-hidden="true"` never goes on a focusable element. It creates a stop
@@ -1304,7 +1305,7 @@ Run before merge, on the surface being changed.
 
 **Motion**
 
-- [ ] Every transition uses `ease-fluid` or `ease-spring`
+- [ ] Every transition uses `ease-fluid`
 - [ ] Reveals use `IntersectionObserver`, never a scroll listener
 - [ ] Only `transform` and `opacity` are animated
 - [ ] Buttons change colour only — no lift, no shadow
