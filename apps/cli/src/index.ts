@@ -1,5 +1,4 @@
-import { makeSessionAPI, type Build } from "@missingstudio/eva-boot"
-import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
+import type { Build } from "@missingstudio/eva-boot"
 import { grantTrust, isTrusted, revokeTrust } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
 import { checkRules, sayFault } from "@missingstudio/eva-tool-policy"
@@ -13,6 +12,7 @@ import { interacted, runInteractive } from "./interactive.js"
 import { runPrint } from "@missingstudio/eva-print"
 import { resolveConfig, runHarness, startFrom, withSignals } from "./run.js"
 import { runServe, served } from "./serve.js"
+import { openClient } from "./surface.js"
 import { fromProcess, type World } from "./world.js"
 
 export * from "./argv.js"
@@ -22,6 +22,7 @@ export * from "./interactive.js"
 export * from "./plugins.js"
 export * from "./run.js"
 export * from "./serve.js"
+export * from "./surface.js"
 export * from "./version.js"
 export * from "./world.js"
 
@@ -117,8 +118,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
         return 1
       }
 
-      const api = yield* makeSessionAPI(started.kernel, started.model, scope)
-      const client = yield* makeClient(yield* localTransport(api.session))
+      const client = yield* openClient(started, scope)
       const answered = yield* withSignals(
         runHarness(client, {
           harness: invocation.harness,
@@ -193,16 +193,11 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       }
 
       // The same Session API a Console calls, driven by the command line
-      // instead of keys — and answered by the same default harness, because a
-      // Prompt means the same thing whichever door it came through.
-      const harness = started.harness
-      const api = yield* makeSessionAPI(
-        started.kernel,
-        started.model,
-        scope,
-        harness === undefined ? {} : { harness },
-      )
-      const client = yield* makeClient(yield* localTransport(api.session))
+      // instead of keys — and answered by the same default harness and the
+      // same gate, because a Prompt means the same thing whichever door it
+      // came through. Nothing here holds a person, so an `ask` is a denial
+      // that says nobody is there.
+      const client = yield* openClient(started, scope)
       const printed = yield* withSignals(
         runPrint(client, invocation.prompt, {
           location: settled.location.directory,

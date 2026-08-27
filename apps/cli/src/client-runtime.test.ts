@@ -43,13 +43,16 @@ describe("what reads the Session API", () => {
     expect(naming("SessionAPI", ["plugins/tui/src"])).toEqual([])
   })
 
-  // One more site than there were, because `eva serve --web` starts a surface
-  // and a surface is handed a Client.
-  it("the command line builds one, at its four sites, and hands on the client", () => {
+  /**
+   * One site, for four doors. The terminal, `eva serve`, `eva run` and
+   * `--print` all open a Session through `openClient`, so the gate is wired
+   * once — while each door built its own, two of the four built one with no
+   * gate at all, and an `ask` under those was denied for a different reason
+   * than at the others.
+   */
+  it("the command line builds one, at one site, and hands on the client", () => {
     expect(naming("makeSessionAPI", ["plugins/tui/src", "apps/cli/src"])).toEqual([
-      "apps/cli/src/index.ts",
-      "apps/cli/src/interactive.ts",
-      "apps/cli/src/serve.ts",
+      "apps/cli/src/surface.ts",
     ])
   })
 
