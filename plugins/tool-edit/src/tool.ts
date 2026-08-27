@@ -105,7 +105,11 @@ export type Recording = (payload: Payload) => Effect.Effect<void>
 
 export interface EditTool {
   readonly execute: (input: EditInput, record?: Recording) => Effect.Effect<EditOutcome>
-  readonly undo: (token: string) => Effect.Effect<UndoOutcome>
+  /**
+   * Reverses one write. A token names one; no token names the newest write
+   * this process made, which is what a person who says "undo" means.
+   */
+  readonly undo: (token?: string) => Effect.Effect<UndoOutcome>
 }
 
 /**
@@ -213,9 +217,11 @@ export const makeEditTool = (deps: EditDeps): EditTool => {
      * counts zero — the Trace says the file changed, and the count says the
      * change was not a set of Hunks.
      */
-    undo: Effect.fn("eva.tool.edit.undo")(function* (token: string) {
-      const applied = applies.get(token)
-      if (applied === undefined) return { kind: "unknown", undo: token } as const
+    undo: Effect.fn("eva.tool.edit.undo")(function* (token?: string) {
+      // No token is the newest write, because the tokens count up from one.
+      const named = token ?? String(issued)
+      const applied = applies.get(named)
+      if (applied === undefined) return { kind: "unknown", undo: named } as const
 
       const held = yield* ground
       if (held.kind === "degraded") return held
@@ -224,9 +230,9 @@ export const makeEditTool = (deps: EditDeps): EditTool => {
       if (reversed._tag === "Failure") return refusedOf(reversed.failure)
 
       yield* held.recorder.commit([{ kind: "edit", path: applied.path, hunks: 0 }])
-      applies.set(token, reversed.success)
+      applies.set(named, reversed.success)
 
-      return { kind: "undone", path: applied.path, undo: token } as const
+      return { kind: "undone", path: applied.path, undo: named } as const
     }),
   }
 }

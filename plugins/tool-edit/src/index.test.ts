@@ -1,7 +1,7 @@
 import { withPlugin } from "@missingstudio/eva-testkit"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { toolEdit } from "./index.js"
+import { toolEdit, UNDO_COMMAND } from "./index.js"
 import { EDIT_TOOL_INPUT, editToolOf } from "./row.js"
 
 /**
@@ -37,6 +37,17 @@ describe("the edit tool plugin", () => {
     )
 
     expect(rows).toEqual([])
+  })
+
+  // The person's door. What `/undo` does is proven in
+  // `packages/conformance/src/tool-edit.test.ts`, over the real applier.
+  it("registers the undo command a person types", async () => {
+    const rows = await withPlugin(toolEdit, (kernel) => kernel.domains.command.get)
+    const row = rows.find((one) => one.id === UNDO_COMMAND)
+
+    expect(UNDO_COMMAND).toBe("undo")
+    expect(row?.argumentHint).toBe("token")
+    expect(row?.run).toBeTypeOf("function")
   })
 
   it("builds a row that names the edit tool and the kind the Trace records", async () => {

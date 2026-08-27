@@ -215,7 +215,7 @@ on.
 | Plugin             | Adds                                                             |
 | ------------------ | ---------------------------------------------------------------- |
 | `eva.tool.read`    | tool domain                                                      |
-| `eva.tool.edit`    | tool domain; emits `edit` payloads                               |
+| `eva.tool.edit`    | tool and command domains; emits `edit` payloads                  |
 | `eva.tool.grep`    | tool domain                                                      |
 | `eva.tool.glob`    | tool domain                                                      |
 | `eva.tool.bash`    | tool domain; reads slot `Sandbox`                                |

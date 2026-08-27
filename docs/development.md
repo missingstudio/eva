@@ -316,10 +316,10 @@ execution owns the records — `tool_call`, then the closing update, then
 disagreeing with what ran.
 `tool.execute.before` is the stage's first deciding boundary. `eva.tool.read`,
 `eva.tool.grep`, `eva.tool.glob` and `eva.tool.web` answer through it;
-`eva.tool.edit` previews every write and can undo one; and `eva.tool.bash` runs
-a command inside whatever the Sandbox slot holds, reading that slot per call.
-A tool that works for a while says so while it works, through a context the
-execution hands it.
+`eva.tool.edit` previews every write and `/undo` reverses one; and
+`eva.tool.bash` runs a command inside whatever the Sandbox slot holds, reading
+that slot per call. A tool that works for a while says so while it works,
+through a context the execution hands it.
 
 The **deterministic gate** ships as `eva.tool.policy`. A Rule Set under the
 `policy` config key allows, denies or asks over the words a command would run,

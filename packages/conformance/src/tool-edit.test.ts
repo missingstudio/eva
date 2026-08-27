@@ -1,7 +1,8 @@
-import type { Kernel } from "@missingstudio/eva-boot"
+import { makeSessionAPI, type Kernel } from "@missingstudio/eva-boot"
+import type { ModelRef } from "@missingstudio/eva-core"
 import { diff } from "@missingstudio/eva-diff"
 import { type Payload, sessionID } from "@missingstudio/eva-schema"
-import type { Plugin } from "@missingstudio/eva-sdk"
+import type { CommandContext, Plugin } from "@missingstudio/eva-sdk"
 import {
   calling,
   committed,
@@ -9,13 +10,16 @@ import {
   withKernel,
   type Calling,
 } from "@missingstudio/eva-testkit"
-import { makeEditTool, toolEdit, type EditTool } from "@missingstudio/eva-tool-edit"
+import { makeEditTool, toolEdit, UNDO_COMMAND, type EditTool } from "@missingstudio/eva-tool-edit"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 
 const SESSION = sessionID("sess_tool_edit")
+
+// The command context wants one, and no Provider is reached here.
+const MODEL: ModelRef = { provider: "anthropic", model: "claude-sonnet-4-5" }
 
 // The ground under the tool, in load order: the sink, the Recorder over it,
 // and the applier. A test that leaves one out is testing the empty slot.
@@ -436,5 +440,101 @@ describe("a call the model makes by name", () => {
 
     expect(found.result.disposition).toBe("failed")
     expect(found.held["a.ts"]).toBe("one\n")
+  })
+})
+
+/**
+ * The person's door onto a write. The exit clause is "you can preview and undo
+ * every write", and a preview is on the row while an undo is not: reversing a
+ * write is not a call a model makes. So `/undo` is what makes the clause true
+ * for a person, and this drives the row `eva.tool.edit` registers in the
+ * command domain.
+ */
+describe("the write a person reverses", () => {
+  const typing = <A>(
+    seed: Readonly<Record<string, string>>,
+    body: (
+      undo: (token?: string) => Effect.Effect<readonly string[]>,
+      made: Calling,
+      held: () => Readonly<Record<string, string>>,
+    ) => Effect.Effect<A>,
+  ): Promise<A> => {
+    const virtual = virtualFileSystem(seed)
+
+    return withKernel([...GROUND, virtual.plugin, toolEdit], (kernel, scope) =>
+      Effect.gen(function* () {
+        const recorder = yield* kernel.slot.recorder.get
+        yield* recorder.open(SESSION)
+        const api = yield* makeSessionAPI(kernel, MODEL, scope)
+
+        const undo = Effect.fn("test.undo")(function* (token?: string) {
+          const row = (yield* kernel.domains.command.get).find((one) => one.id === UNDO_COMMAND)
+          const said: string[] = []
+          const context: CommandContext = {
+            api: api.session,
+            session: SESSION,
+            ...(token === undefined ? {} : { argument: token }),
+            write: (text) => void said.push(text),
+            select: () => {},
+          }
+          yield* row?.run?.(context) ?? Effect.void
+          return said as readonly string[]
+        })
+
+        return yield* body(
+          undo,
+          calling(kernel, {
+            session: SESSION,
+            emit: (payload) =>
+              Effect.flatMap(kernel.slot.recorder.get, (one) => one.commit([payload])),
+          }),
+          virtual.files,
+        )
+      }),
+    )
+  }
+
+  it("puts the file back, and says which token puts the change back", async () => {
+    const found = await typing({ "a.ts": "one\n" }, (undo, made, held) =>
+      Effect.gen(function* () {
+        yield* made.call("edit", { path: "a.ts", hunks: hunks(["one", "two"]) })
+        const written = held()["a.ts"]
+        const said = yield* undo()
+        return { written, said, held: held()["a.ts"] }
+      }),
+    )
+
+    expect(found.written).toBe("two\n")
+    expect(found.held).toBe("one\n")
+    expect(found.said[0]).toContain("a.ts is as it was")
+    expect(found.said[0]).toContain(`/${UNDO_COMMAND} 1`)
+  })
+
+  // The token map lives in this process, so a token nothing issued is not an
+  // error: it is a person told what this build can reach.
+  it("says so when no write is held under the token", async () => {
+    const found = await typing({ "a.ts": "one\n" }, (undo, _made, held) =>
+      Effect.map(undo("7"), (said) => ({ said, held: held()["a.ts"] })),
+    )
+
+    expect(found.said[0]).toContain("no write is held under 7")
+    expect(found.held).toBe("one\n")
+  })
+
+  // Undoing twice redoes: one token names one write and reverses it whichever
+  // way it stands. The command says the token, so a person can.
+  it("puts the change back when the same token is named again", async () => {
+    const found = await typing({ "a.ts": "one\n" }, (undo, made, held) =>
+      Effect.gen(function* () {
+        yield* made.call("edit", { path: "a.ts", hunks: hunks(["one", "two"]) })
+        yield* undo()
+        const reversed = held()["a.ts"]
+        yield* undo("1")
+        return { reversed, held: held()["a.ts"] }
+      }),
+    )
+
+    expect(found.reversed).toBe("one\n")
+    expect(found.held).toBe("two\n")
   })
 })
