@@ -359,7 +359,7 @@ describe("a slot nothing fills", () => {
 })
 
 /**
- * The plugin's row, over the pipeline that runs it. The tool's own contract
+ * The plugin's row, over the execution that runs it. The tool's own contract
  * is above, against `makeEditTool`; what is here is that the name a model
  * writes reaches the write, and that the call leaves the three records.
  */
@@ -404,7 +404,7 @@ describe("a call the model makes by name", () => {
     expect(found.result.disposition).toBe("ok")
     expect(found.held["a.ts"]).toBe("two\n")
     // The `edit` payload lands inside the call, because the tool records the
-    // write and the pipeline records the call.
+    // write and the execution records the call.
     expect(found.recorded.map((payload) => payload.kind)).toEqual([
       "tool_call",
       "edit",

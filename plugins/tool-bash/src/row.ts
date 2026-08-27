@@ -38,7 +38,7 @@ const INPUT = {
  *
  * The call id and the emit are the context's, because the output streams: a
  * command that works for a while writes `tool_update` records of its own, and
- * each one joins the call the pipeline opened.
+ * each one joins the call the execution opened.
  */
 export const commandTool = (deps: CommandDeps): ToolInfo => ({
   id: "bash",

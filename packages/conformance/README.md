@@ -108,10 +108,10 @@ priced and accepted, and a test is what keeps it a decision.
 | `tool-bash.test.ts`            | The command tool over the Sandbox slot: what streams, and what a timeout stops             |
 | `tool-policy.test.ts`          | The deterministic gate in front of the write tool and the command tool                     |
 | `tool-trace.test.ts`           | The read tools over the real Recorder, and the order a reader of the Trace finds           |
-| `tool-pipeline.test.ts`        | What schedule a group of the shipped tools runs under, and what a dead hook does           |
+| `tool-execution.test.ts`       | What schedule a group of the shipped tools runs under, and what a dead hook does           |
 | `approval.test.ts`             | Named permission modes, the four options, and a profile rule beside a mode                 |
 | `harness-host.test.ts`         | One adapter's answer to the harness seam, whose scope outlives the call                    |
-| `harness-loop.test.ts`         | The loop, the pipeline, the gate and a mode, end to end with no model                      |
+| `harness-loop.test.ts`         | The loop, the execution, the gate and a mode, end to end with no model                     |
 | `stage-2-exit.test.ts`         | The Stage 2 exit clauses against the roadmap's words, and where each is proven             |
 | `tui.test.ts`                  | The shipped bindings against the surface, the shipped theme against the renderer's palette |
 | `session-view.test.tsx`        | The terminal's mapping and the page's, over one fold of one Trace                          |

@@ -393,6 +393,15 @@ input, and the behaviour that runs it. It is a row in the tool domain, so what a
 Session may call is what the domain holds at the moment of the call.
 _Avoid_: Function, action, capability, Command (that is what a person types)
 
+**Tool Execution**:
+One tool call, from the name a model wrote to the three records it leaves: the
+deciding boundary settles the arguments, the `tool_call` record opens, the row's
+behaviour runs, and the closing pair reports the Disposition. The Execution owns
+those records and the Tool does not, because a Hook at the closing boundary may
+rewrite the result.
+_Avoid_: Pipeline (retired, and it named a Workflow), Executor (a Unit already
+refuses that word), dispatch
+
 **Tool Group**:
 The calls one Provider response proposed, run as one unit. It is split into
 windows: a run of consecutive parallel-safe calls is one window under a bound,

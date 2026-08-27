@@ -83,7 +83,7 @@ Changing the mode **rebuilds the tool domain**. The agent is shown a different
 registry rather than the same registry with rows refused at call time: a filter
 is a list the model was offered and then denied from, and a rebuild is a list
 that never held the row. A call naming a row the mode removed is
-`unknown_tool`, which is the pipeline's own refusal and not this plugin's.
+`unknown_tool`, which is the execution's own refusal and not this plugin's.
 
 The rebuild publishes `tool.updated` by itself, so a mode needs no broadcast of
 its own.

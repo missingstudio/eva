@@ -317,7 +317,7 @@ describe("the calls a response proposed", () => {
       emit: into,
     })
 
-  it("runs them through the pipeline and answers what each one said", async () => {
+  it("runs them through the execution and answers what each one said", async () => {
     const recorder = fakeRecorder()
     const wiring = deps(recorder, proposing([{ id: "call_1", name: "read", args: { path: "a" } }]))
     const result = await Effect.runPromise(
@@ -345,7 +345,7 @@ describe("the calls a response proposed", () => {
 
   // A build with no tool domain is a registry that holds nothing, never a
   // proposal quietly dropped: the model reads `unknown_tool` and can act.
-  it("answers unknown_tool when the build has no pipeline", async () => {
+  it("answers unknown_tool when the build holds no tool domain", async () => {
     const recorder = fakeRecorder()
     const wiring = deps(recorder, proposing([{ id: "call_1", name: "read", args: {} }]))
     const result = await Effect.runPromise(submit(wiring, input))

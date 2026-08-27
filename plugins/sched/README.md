@@ -113,7 +113,7 @@ so both are barriers.
 
 Tests live beside the source: [src/index.test.ts](src/index.test.ts) holds the
 option reading, the narrowing through a live kernel, and one group of calls end
-to end through the pipeline. Run the suite from the repository root:
+to end through the execution. Run the suite from the repository root:
 
 ```bash
 bun run test

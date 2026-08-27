@@ -39,7 +39,7 @@ const cell = <A>(initial: A) => {
  * declares is run here. A hook no plugin registered is a no-op, not a
  * missing feature.
  *
- * `approving` is carried through to the tool pipeline rather than read here,
+ * `approving` is carried through to the tool execution rather than read here,
  * for the reason `toolDeps` states: the surface that holds a person and the
  * rule language that remembers an answer are two plugins, and the
  * composition root is where they meet.
@@ -87,7 +87,7 @@ export const runDeps = (
     sleep: (milliseconds) => Effect.sleep(milliseconds),
     emit,
     /**
-     * The tool pipeline the Run runs its proposed calls through. It takes the
+     * The tool execution the Run runs its proposed calls through. It takes the
      * Run's own report path, so the records of a call commit inside the Run
      * that proposed it. The ceiling stays `TOOL_GROUP_LIMIT`: a swappable
      * bound belongs to the host-scoped `schedule` slot, which does not exist.

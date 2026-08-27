@@ -44,7 +44,7 @@ interface Ran {
 }
 
 /**
- * One call over a live kernel, through the pipeline the composition root
+ * One call over a live kernel, through the execution the composition root
  * builds. Boot is where a boundary's kind and a hook's owner are stamped, so
  * the tool boundaries are pinned against a real boot rather than a double.
  */
@@ -81,7 +81,7 @@ const calling = (plugins: readonly Plugin[], one: ToolCall = call): Promise<Ran>
     }),
   )
 
-describe("the tool domain, as the pipeline reads it", () => {
+describe("the tool domain, as the execution reads it", () => {
   it("answers the row a plugin registered, by the name the model called", async () => {
     const ran = await calling([registering(reading("hello"))])
 

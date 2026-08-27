@@ -107,7 +107,7 @@ export interface TurnEmitter {
   /**
    * Closes the stream with the reason, and with the calls this response
    * proposed. Both settle here because both are read after the drain, and a
-   * proposal is not a payload: the pipeline writes one `tool_call` per call
+   * proposal is not a payload: the execution writes one `tool_call` per call
    * once the deciding boundary has settled its arguments.
    */
   readonly end: (reason: StopReason | undefined, calls?: readonly ProposedCall[]) => void

@@ -37,7 +37,7 @@ export interface RunDeps {
   readonly budget?: Effect.Effect<Budget | undefined>
   readonly sleep?: (milliseconds: number) => Effect.Effect<void>
   /**
-   * The tool pipeline this Run runs its proposed calls through, built over
+   * The tool execution this Run runs its proposed calls through, built over
    * the Run's own report path — so the three records of a call commit inside
    * the Run that proposed it, and not after that Run has closed.
    *
@@ -275,7 +275,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
       if (payload.kind === "tool_result") yield* flush()
     })
     const stopping = input.stop === undefined ? {} : { stop: input.stop }
-    const pipeline: ToolGroupDeps =
+    const execution: ToolGroupDeps =
       deps.tools === undefined
         ? { tool: () => Effect.succeed(undefined), emit: record, ...stopping }
         : { ...deps.tools(record), ...stopping }
@@ -293,7 +293,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
     if (decision?.kind === "exhausted") {
       for (const call of asked) {
         const result = yield* refuseCall(
-          pipeline,
+          execution,
           call,
           "budget_denied",
           `the Budget is exhausted: ${decision.limit}`,
@@ -303,7 +303,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
       return
     }
 
-    const answers = yield* executeToolGroup(pipeline, asked)
+    const answers = yield* executeToolGroup(execution, asked)
     for (const [at, call] of calls.entries()) {
       const result = answers[at]
       if (result !== undefined) called.push({ call, result })

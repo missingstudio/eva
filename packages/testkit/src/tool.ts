@@ -14,7 +14,7 @@ import { Effect } from "effect"
 export const CALLING_SESSION: SessionID = sessionID("sess_tool")
 
 /**
- * The context a test hands a tool it calls straight, without the pipeline. It
+ * The context a test hands a tool it calls straight, without the execution. It
  * keeps nothing: a tool that writes records while it works is held to them
  * through `calling`, where the order the records land in is the order a reader
  * of the Trace finds.
@@ -57,9 +57,9 @@ export interface Calling {
 }
 
 /**
- * Tool calls over a live kernel, through the same pipeline a composition root
+ * Tool calls over a live kernel, through the same execution a composition root
  * builds. A plugin may not import boot, so without this a tool plugin's own
- * tests could reach its `execute` and never the pipeline that runs it.
+ * tests could reach its `execute` and never the execution that runs it.
  */
 export const calling = (kernel: Kernel, options: CallOptions = {}): Calling => {
   const said: Payload[] = []

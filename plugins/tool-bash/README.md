@@ -132,8 +132,8 @@ never this tool's.
 - It contains nothing itself. Containment is the `Sandbox` slot's, read per
   call so stage 4's filler arrives with no change here.
 - It writes no `tool_call` and no `tool_result`. It emits the `tool_update`
-  payloads only it can see, through the `ToolContext` the pipeline hands it,
-  and answers the result the pipeline records.
+  payloads only it can see, through the `ToolContext` the execution hands it,
+  and answers the result the execution records.
 
 ## API
 

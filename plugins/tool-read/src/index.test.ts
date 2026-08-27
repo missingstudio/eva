@@ -5,7 +5,7 @@ import { toolRead } from "./index.js"
 
 /**
  * Through a live kernel, because the half that matters is the transform and
- * the pipeline that runs the row: a plugin whose id is right and whose effect
+ * the execution that runs the row: a plugin whose id is right and whose effect
  * registers nothing looks identical from outside until something calls it.
  */
 describe("the read tool plugin", () => {
@@ -20,7 +20,7 @@ describe("the read tool plugin", () => {
     expect(rows[0]?.execute).toBeTypeOf("function")
   })
 
-  it("reads a file end to end, through the pipeline and the virtual slot", async () => {
+  it("reads a file end to end, through the execution and the virtual slot", async () => {
     const virtual = virtualFileSystem({ "notes/one.md": "read through the slot" })
 
     const ran = await withPlugin(

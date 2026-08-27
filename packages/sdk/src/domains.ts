@@ -117,7 +117,7 @@ export interface CommandInfo {
 export type { Row } from "@missingstudio/eva-core"
 
 /**
- * The tool row lives in core for the same reason, and one more: the pipeline
+ * The tool row lives in core for the same reason, and one more: the execution
  * that executes a tool is core's, and core may not import the SDK. A plugin
  * still reaches the row from here.
  */

@@ -43,7 +43,7 @@ export interface ToolContext {
   // The call id every record of this call joins on. Not an EventID.
   readonly id: string
   /**
-   * Records the tool writes while it works. The pipeline owns `tool_call`,
+   * Records the tool writes while it works. The execution owns `tool_call`,
    * the closing `tool_update`, and `tool_result`; a tool that works for a
    * while says so in between.
    */
@@ -567,7 +567,7 @@ export const executeToolGroup = Effect.fn("core.tool.group")(function* (
       if (yield* stopped(at)) return
       /**
        * A barrier is looked up twice — once here to classify it, once by the
-       * pipeline to run it — and the second read is the one that runs. So a
+       * execution to run it — and the second read is the one that runs. So a
        * tool domain rebuilt while the group was in flight decides the barrier,
        * which is what a mode change needs.
        */

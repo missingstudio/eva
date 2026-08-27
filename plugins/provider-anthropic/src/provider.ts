@@ -136,7 +136,7 @@ export const makeAnthropicProvider = (options: AnthropicOptions): Provider =>
 
         /**
          * The arguments of a proposed call, arriving a fragment at a time.
-         * The proposal carries them whole after the drain, and the pipeline
+         * The proposal carries them whole after the drain, and the execution
          * is what records a call, so a fragment here says nothing the record
          * does not already hold.
          */

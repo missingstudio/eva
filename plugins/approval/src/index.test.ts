@@ -110,7 +110,7 @@ describe("capability selection", () => {
   })
 
   // A row that is not in the registry is not a tool the model may call, so the
-  // pipeline refuses the name outright.
+  // execution refuses the name outright.
   it("refuses a call naming a row the mode removed", async () => {
     const { result } = await running({ approval: { mode: "read-only" } }, "edit", {
       path: "one.md",

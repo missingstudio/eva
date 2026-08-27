@@ -46,7 +46,7 @@ export const toolPolicy = define({
      * The row is read at the moment of use, never captured, so a rebuilt tool
      * domain is judged on the next call. What a call may change is the row's
      * `kind`, and a name with no row is judged as a kind nothing reads — the
-     * pipeline refuses that call anyway, and failing closed is what a gate
+     * execution refuses that call anyway, and failing closed is what a gate
      * does.
      */
     yield* ctx.toolHooks["tool.execute.before"]((event) =>

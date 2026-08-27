@@ -20,7 +20,7 @@ import { Deferred, Effect, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 
 /**
- * The shipped tools through the shipped pipeline: what schedule a group of
+ * The shipped tools through the shipped execution: what schedule a group of
  * them runs under, and what the two boundaries do when a hook dies.
  *
  * `packages/core` holds the same rules against tools it writes for itself, so

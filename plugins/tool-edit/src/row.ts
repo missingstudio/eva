@@ -93,7 +93,7 @@ const resultOf = (outcome: EditOutcome): ToolResult => {
  * The row this plugin offers the tool domain.
  *
  * It says nothing about progress: one write is one act. It does hand the
- * pipeline's own emit down, because the `edit` record belongs in the call's
+ * execution's own emit down, because the `edit` record belongs in the call's
  * group and in the order it happened — a commit straight to the Recorder
  * lands ahead of the `tool_call` it belongs to.
  *

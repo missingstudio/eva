@@ -95,7 +95,7 @@ export interface EditDeps {
 /**
  * Where an `edit` record goes. `ToolContext.emit` is what the row hands over,
  * so the record lands in the call's own group and in the order it happened —
- * the pipeline buffers a call's records until the call ends, and a commit
+ * the execution buffers a call's records until the call ends, and a commit
  * straight to the Recorder would land ahead of the `tool_call` it belongs to.
  *
  * Absent, the Recorder is what commits it. An undo has no call and so no
