@@ -88,21 +88,41 @@ priced and accepted, and a test is what keeps it a decision.
 
 ## The suites
 
-| Suite                        | What it holds together                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------ |
-| `workflow-validator.test.ts` | The Stage 1 gate: `eva.workflow`, `eva.prompt`, `eva.validator` over a scripted Provider   |
-| `workflow-prompt.test.ts`    | A Workflow over the row `eva.prompt` projected, and the refusal when nothing projected it  |
-| `catalog.test.ts`            | The models and the Prices, which meet only in a build                                      |
-| `compatible.test.ts`         | A compatible endpoint against the Prices and the auth store                                |
-| `session-api.test.ts`        | The Session API over the real trace and session stores                                     |
-| `sink-contract.test.ts`      | Every TraceSink against one contract, and where they are allowed to differ                 |
-| `list-order.test.ts`         | One listing order over every sink, whatever each reads to answer                           |
-| `swap.test.ts`               | A Slot hot-swaps mid-Run; a missing capability degrades rather than fails                  |
-| `fs-contract.test.ts`        | Every FileSystem against one contract: `eva.fs` on a disk, the testkit's filler on a map   |
-| `ground-slots.test.ts`       | The FileSystem, Shell, and Sandbox slots wired, and each read at the moment of use         |
-| `tool-edit.test.ts`          | The write tool over the real applier and Recorder: previewed, undoable, recorded           |
-| `tui.test.ts`                | The shipped bindings against the surface, the shipped theme against the renderer's palette |
-| `session-view.test.tsx`      | The terminal's mapping and the page's, over one fold of one Trace                          |
+| Suite                          | What it holds together                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `workflow-validator.test.ts`   | The Stage 1 gate: `eva.workflow`, `eva.prompt`, `eva.validator` over a scripted Provider   |
+| `workflow-prompt.test.ts`      | A Workflow over the row `eva.prompt` projected, and the refusal when nothing projected it  |
+| `catalog.test.ts`              | The models and the Prices, which meet only in a build                                      |
+| `compatible.test.ts`           | A compatible endpoint against the Prices and the auth store                                |
+| `session-api.test.ts`          | The Session API over the real trace and session stores                                     |
+| `session-api-contract.test.ts` | Every filler of the Session API seam, the wire included                                    |
+| `session-api-write.test.ts`    | The write half from both doors, against one live kernel                                    |
+| `both-doors.test.ts`           | One permission request, read and answered by the page over a real socket                   |
+| `page-converges.test.ts`       | The page's own protocol against the server a person's Eva serves                           |
+| `sink-contract.test.ts`        | Every TraceSink against one contract, and where they are allowed to differ                 |
+| `list-order.test.ts`           | One listing order over every sink, whatever each reads to answer                           |
+| `swap.test.ts`                 | A Slot hot-swaps mid-Run; a missing capability degrades rather than fails                  |
+| `fs-contract.test.ts`          | Every FileSystem against one contract: `eva.fs` on a disk, the testkit's filler on a map   |
+| `ground-slots.test.ts`         | The FileSystem, Shell, and Sandbox slots wired, and each read at the moment of use         |
+| `tool-edit.test.ts`            | The write tool over the real applier and Recorder: previewed, undoable, recorded           |
+| `tool-bash.test.ts`            | The command tool over the Sandbox slot: what streams, and what a timeout stops             |
+| `tool-policy.test.ts`          | The deterministic gate in front of the write tool and the command tool                     |
+| `tool-trace.test.ts`           | The read tools over the real Recorder, and the order a reader of the Trace finds           |
+| `tool-pipeline.test.ts`        | What schedule a group of the shipped tools runs under, and what a dead hook does           |
+| `approval.test.ts`             | Named permission modes, the four options, and a profile rule beside a mode                 |
+| `harness-host.test.ts`         | One adapter's answer to the harness seam, whose scope outlives the call                    |
+| `harness-loop.test.ts`         | The loop, the pipeline, the gate and a mode, end to end with no model                      |
+| `stage-2-exit.test.ts`         | The Stage 2 exit clauses against the roadmap's words, and where each is proven             |
+| `tui.test.ts`                  | The shipped bindings against the surface, the shipped theme against the renderer's palette |
+| `session-view.test.tsx`        | The terminal's mapping and the page's, over one fold of one Trace                          |
+
+Stage 2 exits on `stage-2-exit.test.ts`, and it proves nothing itself. Each
+clause of the roadmap's exit test is already proven by the ticket that built
+the thing it is about, so the suite holds a ledger instead: the roadmap's own
+sentences, and the test that answers each one. A clause the roadmap adds or
+rewords, and a proof that is renamed or deleted, both fail there. Stage 1
+exits the other way, on [packages/exit-test](../exit-test/README.md), because
+a rate has to be measured against a fixture.
 
 The two suites that gate Stage 1's exit live in
 `workflow-validator.test.ts`: a refused Candidate repairs exactly once, with
