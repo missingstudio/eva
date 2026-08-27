@@ -19,6 +19,50 @@ import type { ModelRef, Spec } from "./spec.js"
 import { executeToolGroup, refuseCall, type ToolGroupDeps, type ToolResult } from "./tool.js"
 
 /**
+ * A whole Run, opened and closed in one act.
+ *
+ * Some Runs take no Provider Turn: the refusal a Harness reports before its
+ * first Run, a Prompt that named a Harness which cannot answer, and the record
+ * a Command leaves when it changed the Session. Each one is a Run — it opens
+ * with what it was asked to do and closes with a Claim — and each one used to
+ * spell the open, the commit and the close for itself, which is how one of
+ * them came to drop a refusal in silence.
+ *
+ * The group opens with `started` and ends with `finished`. Everything between
+ * them is committed inside the Run, and the Recorder writes the closing record
+ * because nothing else may.
+ *
+ * An empty Recorder slot records nothing and says so: a caller that holds a
+ * live stream reports `degraded` naming the Recorder, which is the rule
+ * `submit` follows. A caller that holds none — a Command, whose records reach
+ * a surface through the Recorder's own publish — has nowhere to say it, and
+ * commits nothing.
+ */
+export const recordRun = Effect.fn("core.recordRun")(function* (
+  recorder: Recorder | undefined,
+  session: SessionID,
+  group: readonly Payload[],
+  emit?: (payload: Payload) => Effect.Effect<void>,
+) {
+  // The marker goes beside the open, so a stream reads the Run's shortfall
+  // before whatever the Run then said.
+  const said: readonly Payload[] =
+    recorder === undefined
+      ? [...group.slice(0, 1), { kind: "degraded", missing: ["Recorder"] }, ...group.slice(1)]
+      : group
+
+  if (emit !== undefined) for (const payload of said) yield* emit(payload)
+  if (recorder === undefined) return
+
+  yield* recorder.open(session)
+  yield* recorder.commit(said.filter((payload) => payload.kind !== "finished"))
+  const finished = said.find(
+    (payload): payload is Extract<Payload, { kind: "finished" }> => payload.kind === "finished",
+  )
+  if (finished !== undefined) yield* recorder.close(finished.claim, finished.stopReason)
+})
+
+/**
  * Every dependency is an Effect that resolves the current implementation, so
  * `submit` reads a slot at the point of use and never captures it.
  * Replacing the plugin behind one takes effect on the next read.

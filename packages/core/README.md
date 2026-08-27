@@ -52,6 +52,12 @@ same rule:
   model, read one provider turn, commit its payloads in block groups, close
   with a claim. An empty Recorder slot is legal — the Run records nothing,
   reports `degraded` naming the slot, and still answers.
+- `recordRun(recorder, session, group, emit?)` records a whole Run in one act,
+  for a Run that takes no Provider Turn: a Harness's refusal before its first
+  Run, a Prompt naming a Harness that cannot answer, the record `/mode` leaves.
+  It opens, commits what is between, and closes with the group's Claim. An
+  empty Recorder slot reports `degraded` naming the slot to a caller that holds
+  a stream, and never drops the record in silence.
 - `sinkOf(store)` turns a store into a `TraceSink`, and it is the only
   composition a sink author or a test spells. It merges text chunks before
   the store numbers them, hands committed records to their followers, folds
