@@ -29,18 +29,19 @@ export interface CommandDeps extends CommandLimits {
   readonly sandbox: Effect.Effect<Sandbox | undefined>
 }
 
+/**
+ * One call of the command tool.
+ *
+ * There is no `stop` here, for the reason `ToolContext` has none: nothing
+ * cancels one call yet, and an optional field nothing fills is scaffolding a
+ * reader has to guess about. An interrupted call is what a cancelled Run
+ * makes, and the Scope kills the process there.
+ */
 export interface CommandCall {
   // The call id every payload of this call joins on. Not an event id.
   readonly id: string
   readonly args: unknown
   readonly emit: (payload: Payload) => Effect.Effect<void>
-  /**
-   * Resolves when something stops the command. Absent means nothing does.
-   * A stop is answered with a result that says `cancelled`; an interrupted
-   * call has no result to answer with, so it says so in one last
-   * `tool_update` and the Scope is what kills the process there.
-   */
-  readonly stop?: Effect.Effect<void>
 }
 
 export interface CommandInput {
@@ -110,23 +111,11 @@ const update = (call: CommandCall, status: ToolStatus): Payload => ({
 const refused = (call: CommandCall, why: string): Effect.Effect<ToolResult> =>
   Effect.as(call.emit(update(call, "failed")), { disposition: "failed", content: [said(why)] })
 
-type Ending =
-  | { readonly kind: "exited"; readonly exited: Exited }
-  | { readonly kind: "timeout" }
-  | { readonly kind: "stopped" }
+type Ending = { readonly kind: "exited"; readonly exited: Exited } | { readonly kind: "timeout" }
 
 // A nonzero exit is a result, not a failure of the call: the exit goes in the
 // result content and the Run carries on.
-const dispositionOf = (ending: Ending): Disposition => {
-  switch (ending.kind) {
-    case "exited":
-      return "ok"
-    case "timeout":
-      return "failed"
-    case "stopped":
-      return "cancelled"
-  }
-}
+const dispositionOf = (ending: Ending): Disposition => (ending.kind === "exited" ? "ok" : "failed")
 
 const endingOf = (ending: Ending, seconds: number): string => {
   switch (ending.kind) {
@@ -136,8 +125,6 @@ const endingOf = (ending: Ending, seconds: number): string => {
         : `exit code ${ending.exited.code}`
     case "timeout":
       return `the command ran longer than ${seconds} seconds and was stopped`
-    case "stopped":
-      return "the command was cancelled and stopped"
   }
 }
 
@@ -192,11 +179,9 @@ export const runCommand = (deps: CommandDeps, call: CommandCall): Effect.Effect<
         )
         const pumping = yield* Effect.forkChild(pump)
 
-        const stopping: Effect.Effect<void> = call.stop ?? Effect.never
         const racing: readonly Effect.Effect<Ending>[] = [
           Effect.map(started.exit, (exited) => ({ kind: "exited", exited })),
           Effect.as(Effect.sleep(seconds * 1000), { kind: "timeout" }),
-          Effect.as(stopping, { kind: "stopped" }),
         ]
         const ending = yield* Effect.raceAll(racing)
 
@@ -206,10 +191,10 @@ export const runCommand = (deps: CommandDeps, call: CommandCall): Effect.Effect<
           yield* Fiber.join(pumping)
         } else {
           /**
-           * The stop is not waited out. A process that ignores the signal
+           * The kill is not waited out. A process that ignores the signal
            * would hold the Run open for as long as it liked, and the fact
-           * worth reporting is why the command was stopped rather than which
-           * signal ended it.
+           * worth reporting is that the command ran too long rather than
+           * which signal ended it.
            */
           yield* started.kill
           yield* Fiber.interrupt(pumping)

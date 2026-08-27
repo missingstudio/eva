@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest"
  * The command tool over the real Shell and the real `eva.sandbox.none`. The
  * tool's own decisions are held beside it in `plugins/tool-bash`, over a
  * written Sandbox; what is here is the behaviour that needs a real process —
- * live output, a real exit, and a process that is dead after a stop.
+ * live output, a real exit, and a process that is dead after a timeout.
  *
  * A plugin may not import another plugin, so a suite that needs three of them
  * at once lives in this package.
@@ -77,11 +77,7 @@ interface Ran {
   readonly said: readonly Payload[]
 }
 
-const ran = (
-  args: unknown,
-  over: Partial<CommandDeps> = {},
-  stop?: Effect.Effect<void>,
-): Promise<Ran> => {
+const ran = (args: unknown, over: Partial<CommandDeps> = {}): Promise<Ran> => {
   const said: Payload[] = []
   const call = {
     id: "call_1",
@@ -90,7 +86,6 @@ const ran = (
       Effect.sync(() => {
         said.push(payload)
       }),
-    ...(stop === undefined ? {} : { stop }),
   }
   return Effect.runPromise(
     Effect.map(
@@ -184,19 +179,6 @@ describe("the command tool over the ground slots", () => {
 
     expect(found.outcome.disposition).toBe("failed")
     expect(contentOf(found.outcome)).toContain("ran longer than 0.3 seconds")
-    expect(await Effect.runPromise(watcher.ended)).toEqual({ code: null, signal: "SIGTERM" })
-  })
-
-  it("kills a real process when the call is stopped, and the result says cancelled", async () => {
-    const watcher = watching()
-    const found = await ran(
-      { command: WAITING },
-      { sandbox: Effect.succeed(watcher.sandbox) },
-      Effect.sleep(300),
-    )
-
-    expect(found.outcome.disposition).toBe("cancelled")
-    expect(contentOf(found.outcome)).toContain("cancelled and stopped")
     expect(await Effect.runPromise(watcher.ended)).toEqual({ code: null, signal: "SIGTERM" })
   })
 

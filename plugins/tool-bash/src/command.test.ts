@@ -79,7 +79,6 @@ const ran = (
   sandbox: Sandbox | undefined,
   args: unknown,
   over: Partial<CommandDeps> = {},
-  stop?: Effect.Effect<void>,
 ): Promise<Ran> => {
   const said: Payload[] = []
   const call = {
@@ -89,7 +88,6 @@ const ran = (
       Effect.sync(() => {
         said.push(payload)
       }),
-    ...(stop === undefined ? {} : { stop }),
   }
   return Effect.runPromise(
     Effect.map(
@@ -253,15 +251,6 @@ describe("eva.tool.bash", () => {
 
     expect(contentOf(asking.outcome)).toContain("ran longer than 0.2 seconds")
     expect(contentOf(shorter.outcome)).toContain("ran longer than 0.2 seconds")
-  })
-
-  it("kills the process when it is stopped, and the result says cancelled", async () => {
-    const holder = written()
-    const found = await ran(holder.sandbox, { command: ["node", "-v"] }, {}, Effect.sleep(50))
-
-    expect(found.outcome.disposition).toBe("cancelled")
-    expect(contentOf(found.outcome)).toContain("cancelled and stopped")
-    expect(holder.killed()).toBeGreaterThan(0)
   })
 
   /**
