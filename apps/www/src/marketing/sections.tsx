@@ -5,10 +5,17 @@ import { faq } from "./faq.js"
 import { Install } from "./install.js"
 import { armReveals } from "./reveal.js"
 import { site, siteData } from "../lib/site.js"
+import backdrop from "../../../../assets/sea.webp"
 
 const doc = (slug: DocSlug) => site.doc(slug)
 
 const step = (index: number) => ({ "--reveal-index": index }) as CSSProperties
+
+// The hero sets the tagline on two lines. The break falls after the second word.
+const taglineLines = (tagline: string) => {
+  const words = tagline.split(" ")
+  return [words.slice(0, 2).join(" "), words.slice(2).join(" ")]
+}
 
 export function Reveals() {
   useEffect(() => armReveals(), [])
@@ -196,10 +203,20 @@ export function Hero() {
       <div className="max-w-page relative mx-auto px-6 pt-20 pb-16 sm:pt-28">
         {/*
           The tagline is one string in the ui package. The site never
-          restates it in its own words, so the headline reads it rather than
-          spelling it out again.
+          restates it in its own words, so the headline splits that string
+          rather than spelling the words out again.
+
+          Where it breaks is editorial, not whatever the box decides, so the
+          two lines are two blocks. A box too narrow for the second line adds
+          a line below the break, but nothing moves the break itself.
         */}
-        <h1 className="d-hero reveal max-w-measure">{entity.product.tagline}</h1>
+        <h1 className="d-hero reveal max-w-hero">
+          {taglineLines(entity.product.tagline).map((line) => (
+            <span key={line} className="block">
+              {line}
+            </span>
+          ))}
+        </h1>
 
         <p className="lede reveal max-w-measure mt-6">
           A local-first control center for coding agents. They run in parallel, and they ship
@@ -220,19 +237,29 @@ export function Hero() {
   )
 }
 
+/*
+  The capture is a window on a transparent margin. On a panel of the same
+  near-black it read as an empty box with a hairline around the padding, so
+  the window sits on a backdrop instead — the way a window sits on a desktop.
+  The band is the image now, so the band carries the edge, and the window
+  keeps the border it was captured with.
+*/
 export function Screenshot({ src }: { src: string }) {
   return (
     <Section label="The console" beat="section-y-tight">
       <Harnesses />
 
-      <div className="panel-terminal reveal overflow-hidden rounded-xl p-2">
-        <img
-          src={src}
-          alt="Eva answering a question in the terminal"
-          width={1824}
-          height={1234}
-          className="image-edge w-full rounded-lg"
-        />
+      <div className="image-edge reveal relative isolate overflow-hidden rounded-xl">
+        <img src={backdrop} alt="" className="absolute inset-0 -z-10 size-full object-cover" />
+        <div className="p-4 sm:p-10 lg:p-16">
+          <img
+            src={src}
+            alt="Eva answering a question in the terminal"
+            width={2048}
+            height={1152}
+            className="w-full"
+          />
+        </div>
       </div>
     </Section>
   )

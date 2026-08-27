@@ -157,11 +157,14 @@
 
   /*
      Page geometry. Content centres at the container with a gutter either
-     side; prose caps at the measure. These answer as utilities: `max-w-page`,
-     `max-w-measure`.
+     side; prose caps at the measure. The hero caps wider than prose, because
+     the tagline's second line is longer than the measure allows and would
+     otherwise fall to a third. These answer as utilities: `max-w-page`,
+     `max-w-measure`, `max-w-hero`.
   */
   --container-page: 75rem;
   --container-measure: 42.5rem;
+  --container-hero: 48rem;
 }
 
 :root {

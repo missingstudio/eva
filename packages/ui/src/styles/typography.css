@@ -33,7 +33,8 @@
     text-wrap: balance;
   }
 
-  /* Mobile first: each step opens one down and climbs at 768px. */
+  /* Mobile first: each step opens one down and climbs at 768px — the hero
+     32px later than the rest, for the reason given below. */
   .d-hero {
     font-size: var(--text-heading-lg);
     line-height: var(--text-heading-lg--line-height);
@@ -75,6 +76,20 @@
       font-size: var(--text-heading-sm);
       line-height: var(--text-heading-sm--line-height);
       letter-spacing: var(--tracking-heading-sm);
+    }
+  }
+
+  /*
+     The hero climbs one step later than the rest. At 56px the tagline's
+     second line wants 749px, and the column does not reach that until the
+     viewport is about 800px — between 768px and there the line folded and the
+     headline set on three. The step is the same step, taken 32px later.
+  */
+  @media (48rem <= width < 50rem) {
+    .d-hero {
+      font-size: var(--text-heading-lg);
+      line-height: var(--text-heading-lg--line-height);
+      letter-spacing: var(--tracking-heading-lg);
     }
   }
 
