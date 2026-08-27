@@ -1,4 +1,4 @@
-import { entity, ogSiteName, titleTemplate } from "@missingstudio/ui"
+import { entity, ogSiteName, titleTemplate } from "@missingstudio/machine"
 import { createFileRoute } from "@tanstack/react-router"
 import { NotFound } from "../marketing/not-found.js"
 

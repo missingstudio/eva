@@ -1,4 +1,4 @@
-import { entity, external, links } from "@missingstudio/ui"
+import { entity, external, links } from "@missingstudio/machine"
 import type { LayoutTab } from "fumadocs-ui/layouts/shared"
 import type { DocsLayoutProps } from "fumadocs-ui/layouts/notebook"
 

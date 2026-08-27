@@ -1,4 +1,4 @@
-import { entity, external, origin } from "@missingstudio/ui"
+import { entity, external, origin } from "@missingstudio/machine"
 
 /*
   The changelog page keeps its own markup, because it is a heading, a sentence,

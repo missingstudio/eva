@@ -1,4 +1,4 @@
-import { origin } from "@missingstudio/ui"
+import { origin } from "@missingstudio/machine"
 
 /**
  * A documentation page as markdown.

@@ -1,4 +1,4 @@
-import { links } from "@missingstudio/ui"
+import { links } from "@missingstudio/machine"
 import data from "./site-data.json" with { type: "json" }
 
 export const site = links(import.meta.env.DEV)

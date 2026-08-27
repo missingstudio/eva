@@ -1,4 +1,4 @@
-import { docPageGraphs } from "@missingstudio/ui"
+import { docPageGraphs } from "@missingstudio/machine"
 import { useFumadocsLoader } from "fumadocs-core/source/client"
 import { DocsLayout } from "fumadocs-ui/layouts/notebook"
 import {

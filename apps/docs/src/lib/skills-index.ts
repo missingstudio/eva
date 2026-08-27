@@ -1,4 +1,4 @@
-import { agentSkillsIndex, type DocSlug } from "@missingstudio/ui"
+import { agentSkillsIndex, type DocSlug } from "@missingstudio/machine"
 import { pageMarkdown } from "./markdown.js"
 import { taught } from "./skills.js"
 import { source } from "./source.js"

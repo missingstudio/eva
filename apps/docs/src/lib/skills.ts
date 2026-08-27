@@ -1,4 +1,4 @@
-import type { DocSlug } from "@missingstudio/ui"
+import type { DocSlug } from "@missingstudio/machine"
 
 /**
  * The tasks these pages teach, as Agent Skills.

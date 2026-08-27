@@ -1,4 +1,4 @@
-import { entity, ogSiteName, origin, titleTemplate } from "@missingstudio/ui"
+import { entity, ogSiteName, origin, titleTemplate } from "@missingstudio/machine"
 import { notFound } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
 import { glossaryTerms } from "./glossary.js"

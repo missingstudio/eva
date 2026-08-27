@@ -1,4 +1,4 @@
-import { entity, origin } from "@missingstudio/ui"
+import { entity, origin } from "@missingstudio/machine"
 import type { Prose } from "./prose.js"
 
 /*

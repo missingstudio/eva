@@ -6,7 +6,7 @@ import {
   catalogEntry,
   entity,
   origin,
-} from "@missingstudio/ui"
+} from "@missingstudio/machine"
 import dedent from "dedent"
 import { skillPath } from "./pages.js"
 

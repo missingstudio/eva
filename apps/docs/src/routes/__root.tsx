@@ -1,4 +1,4 @@
-import { origin } from "@missingstudio/ui"
+import { origin } from "@missingstudio/machine"
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import { RootProvider } from "fumadocs-ui/provider/tanstack"
 import type { ReactNode } from "react"

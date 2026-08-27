@@ -1,5 +1,5 @@
-import { pricingMarkdown } from "@missingstudio/ui"
-import { markdown } from "@missingstudio/ui/serve"
+import { pricingMarkdown } from "@missingstudio/machine"
+import { markdown } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 
 // Both origins answer what Eva costs, from one source in the ui package. A

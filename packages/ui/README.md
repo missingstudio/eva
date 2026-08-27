@@ -1,9 +1,13 @@
 # @missingstudio/ui
 
 The front-end system the sites and the web app stand on: the design tokens —
-the two self-hosted faces, the dark-only palette, the surfaces, the
-motion contract — the shadcn components, the site metadata, and the shared
-marks and favicons both sites point their `publicDir` at.
+the two self-hosted faces, the dark-only palette, the surfaces, the motion
+contract — the shadcn components, and the shared marks and favicons both sites
+point their `publicDir` at.
+
+Everything a site is built _from_ rather than drawn with —
+the origins, the vocabulary, the documents an agent reads — is
+[`@missingstudio/machine`](../machine/README.md).
 
 ## Usage
 
@@ -12,6 +16,5 @@ marks and favicons both sites point their `publicDir` at.
 ```
 
 ```ts
-import { entity, links } from "@missingstudio/ui"
 import { Button } from "@missingstudio/ui/components/button"
 ```

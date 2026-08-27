@@ -1,4 +1,4 @@
-import { plain } from "@missingstudio/ui/serve"
+import { plain } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 import { llmsTxt } from "../lib/llms.js"
 

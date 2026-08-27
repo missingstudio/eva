@@ -1,4 +1,4 @@
-import { origin } from "@missingstudio/ui"
+import { origin } from "@missingstudio/machine"
 import { Page } from "./sections.js"
 import { site } from "../lib/site.js"
 

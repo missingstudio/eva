@@ -1,4 +1,4 @@
-import { origin, trustPageGraph } from "@missingstudio/ui"
+import { origin, trustPageGraph } from "@missingstudio/machine"
 import { createFileRoute } from "@tanstack/react-router"
 import { contact } from "../content/contact.js"
 import { pageHead } from "../lib/head.js"

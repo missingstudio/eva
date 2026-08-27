@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { aiCatalog } from "../lib/discovery.js"
-import { json } from "@missingstudio/ui/serve"
+import { json } from "@missingstudio/machine/serve"
 
 // The predecessor path. The specification says a publisher should move to
 // ard.json and that reading this one is a courtesy rather than conformance,

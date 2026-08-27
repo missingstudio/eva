@@ -9,7 +9,7 @@ import { defineConfig, type Plugin } from "vite"
 // `.js`-means-`.ts` rule and fails on the package's own internal imports. The
 // application still imports `@missingstudio/ui` by name; only the build config
 // reaches past it, and only for the one list below.
-import { capabilities } from "../../packages/ui/src/agents.js"
+import { capabilities } from "../../packages/machine/src/agents.js"
 import { machinePathsFor, notFoundPath } from "./src/lib/pages.js"
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url))

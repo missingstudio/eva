@@ -1,4 +1,4 @@
-import { origin } from "@missingstudio/ui"
+import { origin } from "@missingstudio/machine"
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import appCss from "../styles/app.css?url"

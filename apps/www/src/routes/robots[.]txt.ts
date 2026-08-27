@@ -1,5 +1,5 @@
-import { origin, robotsTxt } from "@missingstudio/ui"
-import { plain } from "@missingstudio/ui/serve"
+import { origin, robotsTxt } from "@missingstudio/machine"
+import { plain } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 
 // The policy is the ui package's, because it is the same policy on both

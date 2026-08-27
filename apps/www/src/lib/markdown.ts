@@ -8,7 +8,7 @@ import {
   pricingMarkdown,
   whenNotToUse,
   whenToUse,
-} from "@missingstudio/ui"
+} from "@missingstudio/machine"
 import { about } from "../content/about.js"
 import { changelog } from "../content/changelog.js"
 import { contact } from "../content/contact.js"

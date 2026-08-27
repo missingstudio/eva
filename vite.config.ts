@@ -197,10 +197,19 @@ export default defineConfig({
         ["@missingstudio/ui"],
         "ui imports nothing internal — its own subpaths only",
       ),
+      // machine holds what both sites are built from: the origins, the
+      // vocabulary, the documents an agent reads, and the content types a
+      // route answers with. It imports nothing, which is what lets a build
+      // config read it through Node.
+      layer(
+        ["packages/machine/**"],
+        ["@missingstudio/machine"],
+        "machine imports nothing internal — its own subpaths only",
+      ),
       layer(
         ["apps/www/**", "apps/docs/**"],
-        ["@missingstudio/ui"],
-        "a site imports the ui package only — reference arrives as MDX",
+        ["@missingstudio/ui", "@missingstudio/machine"],
+        "a site imports ui and machine only — reference arrives as MDX",
       ),
       {
         files: ["apps/web/**", "apps/www/**", "apps/docs/**"],

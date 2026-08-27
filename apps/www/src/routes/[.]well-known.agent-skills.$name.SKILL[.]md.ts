@@ -1,4 +1,4 @@
-import { markdown, missing } from "@missingstudio/ui/serve"
+import { markdown, missing } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 import { skill } from "../lib/discovery.js"
 

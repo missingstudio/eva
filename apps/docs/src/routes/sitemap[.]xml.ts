@@ -1,5 +1,5 @@
-import { origin } from "@missingstudio/ui"
-import { xml } from "@missingstudio/ui/serve"
+import { origin } from "@missingstudio/machine"
+import { xml } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 import { modifiedOn } from "../lib/modified.js"
 import { source } from "../lib/source.js"

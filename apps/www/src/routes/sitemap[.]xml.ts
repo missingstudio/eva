@@ -1,7 +1,7 @@
-import { origin } from "@missingstudio/ui"
+import { origin } from "@missingstudio/machine"
 import { createFileRoute } from "@tanstack/react-router"
 import { pagePaths as paths } from "../lib/pages.js"
-import { xml } from "@missingstudio/ui/serve"
+import { xml } from "@missingstudio/machine/serve"
 
 // Flush left on purpose. `dedent` measures the static lines and leaves an
 // interpolated block alone, so indenting this template would strip the

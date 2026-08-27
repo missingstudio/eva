@@ -1,4 +1,4 @@
-import { entity, external, type DocSlug } from "@missingstudio/ui"
+import { entity, external, type DocSlug } from "@missingstudio/machine"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@missingstudio/ui/components/sheet"
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
 import { faq } from "./faq.js"

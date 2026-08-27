@@ -1,5 +1,5 @@
-import { agentSkillFields, capabilities, origin, resources } from "@missingstudio/ui"
-import { json, markdown, plain } from "@missingstudio/ui/serve"
+import { agentSkillFields, capabilities, origin, resources } from "@missingstudio/machine"
+import { json, markdown, plain } from "@missingstudio/machine/serve"
 import { readdirSync, readFileSync } from "node:fs"
 import { createHash } from "node:crypto"
 import { fileURLToPath } from "node:url"

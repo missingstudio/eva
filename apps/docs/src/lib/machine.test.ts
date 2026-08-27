@@ -5,8 +5,8 @@ import {
   docPageGraph,
   docSlugs,
   pricingMarkdown,
-} from "@missingstudio/ui"
-import { json, markdown, plain } from "@missingstudio/ui/serve"
+} from "@missingstudio/machine"
+import { json, markdown, plain } from "@missingstudio/machine/serve"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"

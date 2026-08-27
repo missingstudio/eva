@@ -1,5 +1,5 @@
-import { authMarkdown } from "@missingstudio/ui"
-import { markdown } from "@missingstudio/ui/serve"
+import { authMarkdown } from "@missingstudio/machine"
+import { markdown } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 
 // How an agent obtains a credential, which is by not needing one. The sections

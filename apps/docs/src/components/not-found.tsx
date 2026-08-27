@@ -1,4 +1,4 @@
-import { origin } from "@missingstudio/ui"
+import { origin } from "@missingstudio/machine"
 
 /**
  * The page a wrong documentation URL lands on. It says what happened and

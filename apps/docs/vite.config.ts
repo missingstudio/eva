@@ -7,7 +7,7 @@ import { defineConfig, type Plugin } from "vite"
 // A path into the ui package rather than its name. Vite loads this config
 // through Node, which resolves a bare specifier without the bundler's
 // `.js`-means-`.ts` rule and fails on the package's own internal imports.
-import { docSlugs } from "../../packages/ui/src/site.js"
+import { docSlugs } from "../../packages/machine/src/site.js"
 // `twins.ts` imports nothing, which is what lets the build read it: Vite loads
 // this config through Node, and a bare package specifier anywhere in the
 // import graph fails on the package's own internal imports.

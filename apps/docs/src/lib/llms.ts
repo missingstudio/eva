@@ -6,7 +6,7 @@ import {
   origin,
   whenNotToUse,
   whenToUse,
-} from "@missingstudio/ui"
+} from "@missingstudio/machine"
 import { pageMarkdown } from "./markdown.js"
 import { source } from "./source.js"
 import { sections, type Section } from "./twins.js"

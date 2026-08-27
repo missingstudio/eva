@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { llmsTxt } from "../lib/markdown.js"
-import { plain } from "@missingstudio/ui/serve"
+import { plain } from "@missingstudio/machine/serve"
 
 // The index an agent reads first. llmstxt.org asks for a level-one heading, a
 // blockquote summary, and sections of markdown links. It registers no media

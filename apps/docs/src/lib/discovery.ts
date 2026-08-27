@@ -1,4 +1,4 @@
-import { aiCatalogManifest, ardManifest, catalogEntry } from "@missingstudio/ui"
+import { aiCatalogManifest, ardManifest, catalogEntry } from "@missingstudio/machine"
 import { sections } from "./twins.js"
 
 /**

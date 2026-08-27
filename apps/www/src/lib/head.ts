@@ -1,4 +1,4 @@
-import { ogSiteName, origin, titleTemplate } from "@missingstudio/ui"
+import { ogSiteName, origin, titleTemplate } from "@missingstudio/machine"
 import { twinOf } from "./pages.js"
 
 /**

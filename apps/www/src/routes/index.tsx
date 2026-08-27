@@ -1,4 +1,4 @@
-import { entity, faqGraph, homeGraph } from "@missingstudio/ui"
+import { entity, faqGraph, homeGraph } from "@missingstudio/machine"
 import { createFileRoute } from "@tanstack/react-router"
 import screenshot from "../../../../assets/eva-cli.png"
 import { pageHead } from "../lib/head.js"

@@ -1,4 +1,4 @@
-import { entity, type DocSlug } from "@missingstudio/ui"
+import { entity, type DocSlug } from "@missingstudio/machine"
 
 /*
   The home page's words, held where both the page and its markdown twin can

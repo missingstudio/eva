@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { createHash } from "node:crypto"
 import { agentSkills } from "../lib/discovery.js"
-import { json } from "@missingstudio/ui/serve"
+import { json } from "@missingstudio/machine/serve"
 
 // The digest the draft requires is a SHA-256 of the bytes each skill URL
 // serves. It is computed here, over the body this build generates, so a skill

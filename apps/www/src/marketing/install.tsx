@@ -1,4 +1,4 @@
-import { installChannels as channels } from "@missingstudio/ui"
+import { installChannels as channels } from "@missingstudio/machine"
 import { useId, useRef, useState } from "react"
 import { SteadyLabel } from "./steady-label.js"
 

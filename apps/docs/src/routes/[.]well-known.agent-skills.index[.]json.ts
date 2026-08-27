@@ -1,4 +1,4 @@
-import { json } from "@missingstudio/ui/serve"
+import { json } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 import { createHash } from "node:crypto"
 import { agentSkills } from "../lib/skills-index.js"
