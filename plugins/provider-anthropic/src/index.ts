@@ -13,7 +13,7 @@ export const providerAnthropic = define({
   effect: Effect.fn("eva.provider.anthropic")(function* (ctx) {
     const maxTokens = OPTIONS.read(ctx.options, "maxTokens", 0)
 
-    yield* ctx.provider["model.resolve"](
+    yield* ctx.providerHooks["model.resolve"](
       Effect.fn("eva.provider.anthropic.resolve")(function* (event) {
         if (event.reference.provider !== NAMESPACE) return
         const store = yield* ctx.slot.credentialStore.peek

@@ -949,7 +949,8 @@ export interface ToolHookSpec {
 
 The family is `ctx.toolHooks` and not `ctx.tool`, because `ctx.tool` is the
 tool domain: a plugin registers a tool as a row and decorates a call with a
-hook, and the two are different extension points.
+hook, and the two are different extension points. `ctx.providerHooks` is
+spelled the same way, so one kind of field has one spelling.
 
 ```ts
 export const toolPolicy = define({

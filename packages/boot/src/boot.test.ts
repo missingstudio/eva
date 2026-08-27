@@ -237,7 +237,7 @@ describe("an observing provider hook that throws", () => {
     const observer: Plugin = {
       id: "acme.broken",
       effect: Effect.fn(function* (ctx) {
-        yield* ctx.provider["provider.response.after"](() => {
+        yield* ctx.providerHooks["provider.response.after"](() => {
           throw new Error("the observer broke")
         })
       }),

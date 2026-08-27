@@ -33,7 +33,7 @@ export const normalize = (payload: Payload): Payload => {
 export const usage = define({
   id: "eva.usage",
   effect: Effect.fn("eva.usage")(function* (ctx) {
-    yield* ctx.provider["provider.response.after"]((event) => {
+    yield* ctx.providerHooks["provider.response.after"]((event) => {
       event.payloads.update((payloads) => payloads.map(normalize))
     })
   }),

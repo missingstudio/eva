@@ -243,7 +243,7 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
   // Each entry is checked against the spec, so a hook the SDK declares and
   // this map misses is a compile error. The owner is stamped here the way a
   // domain's transform stamps it: a plugin never names its own id.
-  const providerFor = (owner: string): ProviderHooks => ({
+  const providerHooksFor = (owner: string): ProviderHooks => ({
     "model.resolve": (callback) => hooks.on("model.resolve", callback, owner),
     "provider.request.before": (callback) => hooks.on("provider.request.before", callback, owner),
     "provider.response.after": (callback) => hooks.on("provider.response.after", callback, owner),
@@ -289,7 +289,7 @@ export const boot = Effect.fn("boot")(function* (options: BootOptions): Effect.f
       integration: withOwner(domains.integration, id),
       tool: withOwner(domains.tool, id),
       slot,
-      provider: providerFor(id),
+      providerHooks: providerHooksFor(id),
       toolHooks: toolHooksFor(id),
       broadcast,
       prices,

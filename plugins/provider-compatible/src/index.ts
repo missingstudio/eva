@@ -25,7 +25,7 @@ export const providerCompatible = define({
   effect: Effect.fn(PLUGIN_ID)(function* (ctx) {
     const entries = readEntries(OPTIONS.read(ctx.options, "providers", {}))
 
-    yield* ctx.provider["model.resolve"](
+    yield* ctx.providerHooks["model.resolve"](
       Effect.fn(`${PLUGIN_ID}.resolve`)(function* (event) {
         const entry = entries.find((one) => one.namespace === event.reference.provider)
         if (entry === undefined) return

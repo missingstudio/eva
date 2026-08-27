@@ -28,7 +28,7 @@ export const providing = (provider: Provider, id: string = FAKE_PROVIDER): Plugi
   define({
     id,
     effect: Effect.fn(id)(function* (ctx) {
-      yield* ctx.provider["model.resolve"]((event) => {
+      yield* ctx.providerHooks["model.resolve"]((event) => {
         event.resolve({ model: event.reference, provider })
       })
     }),

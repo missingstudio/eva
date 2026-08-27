@@ -75,7 +75,7 @@ const liveSeam = async (): Promise<Seam> => {
   const counting = define({
     id: "test.counting",
     effect: Effect.fn("test.counting")(function* (ctx) {
-      yield* ctx.provider["provider.request.before"](() => {
+      yield* ctx.providerHooks["provider.request.before"](() => {
         atRequest.push(events().filter((event) => event.payload.kind === "verdict").length)
       })
     }),

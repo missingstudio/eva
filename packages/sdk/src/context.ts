@@ -81,7 +81,7 @@ export interface PluginContext extends Domains {
   readonly options: Record<string, unknown>
 
   readonly slot: Slots
-  readonly provider: ProviderHooks
+  readonly providerHooks: ProviderHooks
   readonly toolHooks: ToolHooks
   readonly broadcast: Broadcast<BroadcastMap>
 
