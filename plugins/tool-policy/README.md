@@ -210,7 +210,7 @@ read would let a profile whose `deny` rule has a typo go on allowing.
   paths it would change.
 - `partsOf(argv)` / `splitLine(line)` — the splitter.
 - `protects(path)` / `protectedIn(words)` — the protected-path predicate.
-- `BUILT_IN_RULES`, `PROTECTED_FILES`, `PROTECTED_TREES` — the lists.
+- `BUILT_IN_RULES`, `PROTECTED_FILES` — the lists.
 
 ## Development
 

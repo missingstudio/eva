@@ -6,7 +6,7 @@ import { sessionID } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 import { parse } from "yaml"
 import { beforeEach, describe, expect, it } from "vitest"
-import { grantableIn, grantedRule, grantPath, remembering, writeGrant } from "./grant.js"
+import { grantedRule, remembering, writeGrant } from "./grant.js"
 
 const call = (args: unknown): ToolCall => ({
   id: "call_1",
@@ -69,23 +69,6 @@ describe("the grant an allow_always writes", () => {
     expect(writeGrant(path, rule)).toBe(true)
     expect(writeGrant(path, rule)).toBe(false)
     expect(rules()).toHaveLength(1)
-  })
-
-  it("is written into the person's own config file", () => {
-    expect(grantPath({ EVA_CONFIG: "/tmp/eva-somewhere.yaml" })).toBe("/tmp/eva-somewhere.yaml")
-    expect(grantPath({})).toMatch(/\.eva\/config\.yaml$/)
-  })
-})
-
-/**
- * A call that names no words cannot be granted: the rule language grants over
- * the words a command would run. Such an ask is either an ordinary change a
- * mode is what widens, or a protected path settings may never pre-approve.
- */
-describe("a call the rule language cannot grant", () => {
-  it("is one that names no words", () => {
-    expect(grantableIn(call({ path: "one.md", hunks: [] }))).toBeUndefined()
-    expect(grantableIn(push)).toEqual(["git", "push"])
   })
 })
 

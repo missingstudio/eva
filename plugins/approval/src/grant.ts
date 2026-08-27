@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
-import { argvOf, type Approving, type ToolCall } from "@missingstudio/eva-core"
+import { argvOf, type Approving } from "@missingstudio/eva-core"
 import { configPath } from "@missingstudio/eva-core/local"
 import { Effect } from "effect"
 import { parse, stringify } from "yaml"
@@ -76,21 +76,16 @@ export const writeGrant = (path: string, rule: GrantedRule): boolean => {
 }
 
 /**
- * The words a grant is written over, or nothing when the call names none.
+ * An asker that remembers an answer saying "always". It wraps the asker that
+ * reaches a person, because the surface that holds the person is boot's and
+ * the rule language is this plugin's — the composition root is where the two
+ * meet.
  *
  * A call with no words is a call the rule language cannot grant: it grants
  * over the words a command would run, and a call that names a file instead is
  * either an ordinary change a mode is what widens, or a protected path that
  * settings may never pre-approve. So `allow_always` on one of those allows the
  * call and remembers nothing, and the person changes the mode instead.
- */
-export const grantableIn = (call: ToolCall): readonly string[] | undefined => argvOf(call.args)
-
-/**
- * An asker that remembers an answer saying "always". It wraps the asker that
- * reaches a person, because the surface that holds the person is boot's and
- * the rule language is this plugin's — the composition root is where the two
- * meet.
  */
 export const remembering =
   (asking: Approving, env: NodeJS.ProcessEnv = process.env): Approving =>
@@ -99,7 +94,7 @@ export const remembering =
       const outcome = yield* asking(request, call)
       if (outcome.kind !== "allow_always") return outcome
 
-      const words = grantableIn(call)
+      const words = argvOf(call.args)
       if (words !== undefined) {
         yield* Effect.sync(() =>
           writeGrant(
@@ -110,6 +105,3 @@ export const remembering =
       }
       return outcome
     })
-
-// Where a grant is written, for a person who wants to read or remove one.
-export const grantPath = (env: NodeJS.ProcessEnv = process.env): string => configPath(env)

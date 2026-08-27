@@ -181,8 +181,8 @@ standing grant, and a standing grant is a mode.
   `approval` key, faults collected.
 - `remembering(asking, env?)` — an asker that writes the grant when the answer
   says always. The composition root wraps boot's asker in this.
-- `writeGrant(path, rule)`, `grantedRule(words, why)`, `grantPath(env?)` — the
-  grant itself, for a suite or a tool that wants to read one.
+- `writeGrant(path, rule)`, `grantedRule(words, why)` — the grant itself, for
+  a suite or a tool that wants to read one.
 
 ## Development
 
