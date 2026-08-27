@@ -200,6 +200,27 @@ export interface Api {
 export type Gate = (request: (id: RequestID) => Effect.Effect<FrontendAnswer>) => Approving
 
 /**
+ * What one build decides about the Sessions this API opens.
+ *
+ * Both are handed in for the same reason the model is: they come out of config,
+ * and reading config is not this package's job.
+ */
+export interface ApiOptions {
+  readonly gate?: Gate
+  /**
+   * Which harness answers a Prompt that names none. Absent is the behaviour a
+   * Prompt has always had: one Run against the resolved model, no Harness
+   * involved.
+   *
+   * A Prompt still names its own, and a named one wins. This only says what a
+   * Session means by a bare line, which is what makes `eva.harness.loop`
+   * reachable from a Console at all. A profile decides it at stage 7; until
+   * then a person names it once in config.
+   */
+  readonly harness?: string
+}
+
+/**
  * The whole of what a Surface may do to Eva, over this kernel. A surface
  * reads two sources and never confuses them: `watch` while a Run is open,
  * `attach` for everything committed.
@@ -211,13 +232,14 @@ export type Gate = (request: (id: RequestID) => Effect.Effect<FrontendAnswer>) =
  * root; answering a Surface does not.
  *
  * The model is handed in rather than read: the Catalog owns the default, and
- * `model` is a key the kernel carries and does not interpret.
+ * `model` is a key the kernel carries and does not interpret. The default
+ * harness arrives the same way.
  */
 export const makeSessionAPI = (
   kernel: Kernel,
   model: ModelRef,
   scope: Scope.Scope,
-  gate?: Gate,
+  options: ApiOptions = {},
 ): Effect.Effect<Api> =>
   Effect.sync(() => {
     const live = new Map<SessionID, Live>()
@@ -252,7 +274,7 @@ export const makeSessionAPI = (
 
     // The gate is built here because the request half is minted here. A build
     // that named none asks nobody, and an `ask` is then a denial.
-    const approving = gate?.(request)
+    const approving = options.gate?.(request)
 
     const of = Effect.fn("session.of")(function* (session: SessionID) {
       const found = live.get(session)
@@ -477,12 +499,19 @@ export const makeSessionAPI = (
 
         const prompt = [...state.steered, input.text].join("\n")
         state.steered.length = 0
-        // A Harness gets the Prompt with the steering already in it, so it
-        // reads all of what the person asked for.
+        /**
+         * A Harness gets the Prompt with the steering already in it, so it
+         * reads all of what the person asked for.
+         *
+         * The Prompt's own harness wins, and the build's default answers a
+         * Prompt that names none. A build that names no default is a bare Run
+         * against the resolved model, which is what every Prompt was before.
+         */
+        const wanted = input.harness ?? options.harness
         const opened =
-          input.harness === undefined
+          wanted === undefined
             ? turn(id, prompt)
-            : throughHarness(id, { ...input, text: prompt }, input.harness)
+            : throughHarness(id, { ...input, text: prompt }, wanted)
         const running = yield* Effect.forkIn(opened, scope)
         state.fiber = running
         yield* Fiber.await(running)

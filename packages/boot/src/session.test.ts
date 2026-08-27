@@ -25,7 +25,7 @@ import type { HarnessInfo, Plugin } from "@missingstudio/eva-sdk"
 import { Deferred, Effect, Exit, Fiber, Option, Scope, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 import { boot, buildOf, type Kernel } from "./boot.js"
-import { harnessHost, makeSessionAPI, runTurn } from "./session.js"
+import { harnessHost, makeSessionAPI, runTurn, type ApiOptions } from "./session.js"
 
 const MODEL: ModelRef = { provider: "anthropic", model: "claude-sonnet-4-5" }
 
@@ -155,9 +155,10 @@ const watched = (
   wiring: Wiring,
   scope: Scope.Scope,
   input: SubmitInput,
+  options: ApiOptions = {},
 ): Effect.Effect<readonly Payload[]> =>
   Effect.gen(function* () {
-    const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope)
+    const api = yield* makeSessionAPI(wiring.kernel, MODEL, scope, options)
     const session = yield* api.session.create(".")
     const seen: Payload[] = []
     const watching = yield* Effect.forkChild(
@@ -320,6 +321,71 @@ describe("a Prompt that names a harness", () => {
  * answering now; `next-run` is the whole arc's boundary, so it waits and rides
  * the next prompt the way steering always has.
  */
+/**
+ * The Console and `--print` submit a bare Prompt, so a Harness they never name
+ * is a Harness they never reach. The build's default is what a person names
+ * once in config, and it is read here rather than in a surface: one key, and
+ * every door inherits it.
+ */
+describe("a build that names a default harness", () => {
+  const row = (seen: { opens: number; prompts: SubmitInput[]; text: string[] }): HarnessInfo => ({
+    id: "acme.spy",
+    name: "Spy",
+    open: (host) =>
+      Effect.sync(() => {
+        seen.opens += 1
+        return spyHarness(seen, host)
+      }),
+  })
+
+  it("hands a Prompt that names none to that harness", async () => {
+    const seen = { opens: 0, prompts: [] as SubmitInput[], text: [] as string[] }
+
+    const payloads = await wired({ harness: row(seen) }, (wiring, scope) =>
+      watched(wiring, scope, { kind: "prompt", text: "rename UserSvc" }, { harness: "acme.spy" }),
+    )
+
+    expect(seen.prompts).toEqual([{ kind: "prompt", text: "rename UserSvc" }])
+    expect(seen.text).toEqual(["answered"])
+    expect(payloads.map((one) => one.kind)).toEqual(["started", "text", "finished"])
+  })
+
+  // The Prompt still names its own. A default says what a bare line means and
+  // never what a named one does.
+  it("refuses the harness the Prompt names, not the one config named", async () => {
+    const seen = { opens: 0, prompts: [] as SubmitInput[], text: [] as string[] }
+
+    const found = await wired({ harness: row(seen) }, (wiring, scope) =>
+      Effect.map(
+        watched(
+          wiring,
+          scope,
+          { kind: "prompt", text: "hello", harness: "acme.spi" },
+          { harness: "acme.spy" },
+        ),
+        summaryOf,
+      ),
+    )
+
+    expect(found).toBe("no harness answers acme.spi, did you mean acme.spy")
+    expect(seen.opens).toBe(0)
+  })
+
+  // A build that names no default is what every build was before this key.
+  it("is a bare Run when config names none", async () => {
+    const seen = { opens: 0, prompts: [] as SubmitInput[], text: [] as string[] }
+
+    const calls = await wired({ harness: row(seen) }, (wiring, scope) =>
+      Effect.map(watched(wiring, scope, { kind: "prompt", text: "hello" }), () => ({
+        opens: seen.opens,
+        count: wiring.calls.count,
+      })),
+    )
+
+    expect(calls).toEqual({ opens: 0, count: 1 })
+  })
+})
+
 describe("a steer", () => {
   interface Gate {
     readonly opened: Deferred.Deferred<void>

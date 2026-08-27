@@ -54,11 +54,17 @@ needs `approval.mode: autonomous`, or `policy.rules` that allow the calls the
 task makes. This is the mode working, and it is worth knowing before the first
 try.
 
-**A line typed at a terminal does not reach the loop.** `eva.tui` submits a
-Prompt that names no harness, so it takes the bare-Run path and no tool is
-offered. Which harness answers an unnamed Prompt is a profile decision, and the
-roadmap puts profiles at stage 7; until one picks a default, the loop is
-reached by naming it.
+**A line typed at a terminal reaches the loop once config says so.** A Prompt
+that names no harness takes the bare-Run path, where no tool is offered, so a
+build names the default once:
+
+```yaml
+harness: eva.harness.loop
+```
+
+The Console and `--print` then answer through the loop, and a Prompt that names
+another harness still gets that one. Naming the default per profile is a stage
+7 decision; the key is what a person has until then.
 
 Two options bound one Prompt:
 

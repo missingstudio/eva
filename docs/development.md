@@ -134,6 +134,7 @@ Without the grant every run says which directories it did not read, and
 
 ```yaml
 model: anthropic/claude-haiku-4-5
+harness: eva.harness.loop
 
 plugins:
   - id: eva.workflow
@@ -144,9 +145,18 @@ plugins:
     options: { path: "~/.eva/eva-repo.sqlite" }
 ```
 
-`model` is the default for this directory. `repairs` is the ceiling on Repairs
-per Step. The budget stops the next Step when a limit is reached. The trace
-path keeps this repository's evidence apart from the shared store.
+`model` is the default for this directory. `harness` names which harness
+answers a line that names none, so a Prompt typed at the Console and one sent
+with `--print` reach `eva.harness.loop` — its tools, its permission mode, and
+its Steps. Leave the key out and a bare line is one Run against the model,
+with no tool offered; a Prompt that names its own harness always gets that one.
+`repairs` is the ceiling on Repairs per Step. The budget stops the next Step
+when a limit is reached. The trace path keeps this repository's evidence apart
+from the shared store.
+
+The loop under the default `supervised` mode denies every write, because
+nobody has answered the question a write asks. Add `approval.mode: autonomous`
+or the `policy.rules` the work needs before the first real task.
 
 **4. Write a Template.** A file in `.eva/prompts/` becomes one prompt row,
 keyed by its base name. This is `.eva/prompts/commit-msg.md`:

@@ -41,12 +41,10 @@ export const runServe = Effect.fn("cli.serve")(function* (started: Started) {
   // Filled the moment the surface starts, which is after the API it answers
   // through is built. Until then an ask has nobody to reach, which is a denial.
   let surface: Frontend | undefined
-  const api = yield* makeSessionAPI(
-    started.kernel,
-    started.model,
-    scope,
-    gateFor(started.kernel, () => surface),
-  )
+  const api = yield* makeSessionAPI(started.kernel, started.model, scope, {
+    gate: gateFor(started.kernel, () => surface),
+    ...(started.harness === undefined ? {} : { harness: started.harness }),
+  })
   const client = yield* makeClient(yield* localTransport(api.session))
   const frontend = yield* Effect.provideService(chosen.start(client), Scope.Scope, scope)
   surface = frontend

@@ -7,9 +7,15 @@ import { declare, fitsShape, nearest, type Reads, type Shape } from "@missingstu
  *
  * `project` reads through this rather than beside it: a key spelled here and
  * misspelled there was a key config accepted and then ignored.
+ *
+ * `harness` is declared here and read by the composition root, the way `model`
+ * is: no domain holds a default harness, so the Session API is handed it. One
+ * declaration either way, which is what keeps the sweep and the reader in
+ * step.
  */
 export const KEYS = declare({
   model: "string",
+  harness: "string",
   agents: "mapping",
   commands: "mapping",
   keymap: "mapping",

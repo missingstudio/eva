@@ -38,12 +38,13 @@ package from another workspace package, add it as a dependency:
 
 ## Usage
 
-The plugin takes no options. It reads five top-level config keys — `model`,
-`agents`, `commands`, `keymap`, `themes` — from a `.eva` config file, read
-only after `eva trust` grants it:
+The plugin takes no options. It declares six top-level config keys — `model`,
+`harness`, `agents`, `commands`, `keymap`, `themes` — read from a `.eva`
+config file only after `eva trust` grants it:
 
 ```yaml
 model: anthropic/claude-opus-5
+harness: eva.harness.loop
 agents:
   reviewer:
     prompt: review carefully
@@ -59,6 +60,11 @@ themes:
     name: Dusk
     colors: { foreground: "#eee" }
 ```
+
+`harness` names which harness answers a Prompt that names none — the Console's
+lines and `--print`. It is declared here and read by the composition root, the
+way `model` is, because no domain holds a default harness: the Session API is
+handed it. A Prompt that names its own harness still wins.
 
 Each projected row is read back and registered whole, so config only replaces
 what it names: a `/model` described in config keeps the `run` that
