@@ -1,5 +1,5 @@
 import type { Usage } from "@missingstudio/eva-core"
-import { toTicks } from "@missingstudio/eva-schema"
+import { toTicks, type PriceLookup } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { makeBudget } from "./index.js"
@@ -64,8 +64,9 @@ describe("makeBudget", () => {
       }),
     )
 
-    expect(spent.quiet.costTicks).toBeNull()
-    expect(spent.reported.costTicks).toBe(51)
+    // Nothing to price and nothing reported: a spend nobody put a figure to.
+    expect(spent.quiet.spend).toEqual({ kind: "unreported" })
+    expect(spent.reported.spend).toEqual({ kind: "reported", ticks: 51 })
   })
 
   it("reports the limits it was built with", async () => {
@@ -157,8 +158,7 @@ describe("a budget check", () => {
     it("prices the counters when nothing reported a cost", async () => {
       const spent = await charged(usage({ inputTokens: 1_000_000, outputTokens: 0 }))
 
-      expect(spent.costTicks).toBe(toTicks(3))
-      expect(spent.costFrom).toBe("estimated")
+      expect(spent.spend).toEqual({ kind: "estimated", ticks: toTicks(3) })
     })
 
     it("prices a cache read at its own rate, not the input rate", async () => {
@@ -166,14 +166,13 @@ describe("a budget check", () => {
         usage({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 }),
       )
 
-      expect(spent.costTicks).toBe(toTicks(0.3))
+      expect(spent.spend).toEqual({ kind: "estimated", ticks: toTicks(0.3) })
     })
 
     it("takes a reported figure over one it worked out", async () => {
       const spent = await charged(usage({ inputTokens: 1_000_000, costTicks: 42 }))
 
-      expect(spent.costTicks).toBe(42)
-      expect(spent.costFrom).toBe("reported")
+      expect(spent.spend).toEqual({ kind: "reported", ticks: 42 })
     })
 
     it("reaches a cost limit that no reported figure could have reached", async () => {
@@ -188,6 +187,36 @@ describe("a budget check", () => {
       expect(decision).toEqual({ kind: "exhausted", limit: "costTicks" })
     })
 
+    /**
+     * The disagreement this closes. A fold over the Trace nulls the whole
+     * estimate when one record cannot be priced, because a partial estimate
+     * misleads exactly as a partial sum does. This used to add nothing for
+     * that record and read its total as whole — and then enforce a limit
+     * against it, stopping a Run early for a cost nobody measured.
+     */
+    it("says nothing about an estimate one record could not complete", async () => {
+      const found = await Effect.runPromise(
+        Effect.gen(function* () {
+          // The second model is one the catalog does not price.
+          const some: PriceLookup = (model) =>
+            model === "priced/one"
+              ? { inputTicks: toTicks(3), outputTicks: toTicks(15) }
+              : undefined
+          const budget = yield* makeBudget({
+            limits: { costTicks: 1 },
+            prices: Effect.succeed(some),
+          })
+          yield* budget.charge(usage({ model: "priced/one", inputTokens: 1_000_000 }))
+          const partial = yield* budget.charge(usage({ model: "unpriced/two", inputTokens: 1 }))
+          return { partial, decision: yield* budget.check }
+        }),
+      )
+
+      expect(found.partial.spend).toEqual({ kind: "unreported" })
+      // A limit is reached by a figure, and there is none.
+      expect(found.decision).toEqual({ kind: "affordable" })
+    })
+
     it("says nothing about a cost when the catalog prices no model", async () => {
       const spent = await Effect.runPromise(
         Effect.flatMap(makeBudget({ limits: {}, prices: Effect.succeed(() => undefined) }), (b) =>
@@ -195,8 +224,7 @@ describe("a budget check", () => {
         ),
       )
 
-      expect(spent.costTicks).toBeNull()
-      expect(spent.costFrom).toBeUndefined()
+      expect(spent.spend).toEqual({ kind: "unreported" })
     })
   })
 

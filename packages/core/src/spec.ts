@@ -1,4 +1,4 @@
-import type { Claim, ErrorClass, SessionID } from "@missingstudio/eva-schema"
+import type { Claim, ErrorClass, SessionID, Spend } from "@missingstudio/eva-schema"
 
 // A statement of intent whose acceptance criteria a machine can check.
 export interface Spec {
@@ -24,18 +24,19 @@ export interface BudgetLimits {
 
 export interface BudgetState {
   readonly tokens: number
-  // Null when nothing reported a cost and nothing could price one. Silence
-  // is not zero.
-  readonly costTicks: number | null
   /**
-   * Where `costTicks` came from. `reported` is a Provider's own figure;
-   * `estimated` is the counters at catalog rates, which is what a Budget
-   * spends when nobody reports one. Absent when there is no cost at all.
+   * What this Budget has spent, in the one closed set every reader of a spend
+   * is shown. `reported` is a Provider's own figure; `estimated` is the
+   * counters at catalog rates, which is what a Budget spends when nobody
+   * reports one; `unreported` is a spend nobody could put a figure to, and
+   * `none` is a Budget that has not been charged.
    *
    * An exhausted Outcome names a limit, so the state must say whether the
-   * figure that reached it was a bill or an arithmetic.
+   * figure that reached it was a bill or an arithmetic. It used to say that in
+   * two fields of its own — a nullable number and a two-way optional — which
+   * could express neither `none` nor `unreported`.
    */
-  readonly costFrom?: "reported" | "estimated"
+  readonly spend: Spend
   readonly milliseconds: number
   readonly steps: number
   readonly limits: BudgetLimits

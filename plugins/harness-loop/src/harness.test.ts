@@ -47,7 +47,13 @@ const acting = (name: string, disposition: Disposition, said = ""): Partial<RunR
 const answering = (text: string): Partial<RunResult> => ({ text, calls: [] })
 
 const exhausted = (limit: "tokens" | "steps"): Budget => {
-  const state = { tokens: 0, costTicks: null, milliseconds: 0, steps: 0, limits: {} }
+  const state = {
+    tokens: 0,
+    spend: { kind: "none" } as const,
+    milliseconds: 0,
+    steps: 0,
+    limits: {},
+  }
   return {
     charge: () => Effect.succeed(state),
     state: Effect.succeed(state),

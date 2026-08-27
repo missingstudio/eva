@@ -1,5 +1,5 @@
 import type { Budget, BudgetLimits, BudgetState, Usage } from "@missingstudio/eva-core"
-import { estimateTicks, type PriceLookup } from "@missingstudio/eva-schema"
+import { estimating, spendIn, type PriceLookup } from "@missingstudio/eva-schema"
 import { declare, define } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 
@@ -19,10 +19,17 @@ export interface BudgetDeps {
  * one.
  *
  * A Provider's own figure is what a Budget spends. When none arrives it
- * spends the counters at catalog rates instead, because a limit that can
- * never be reached is worse than one that is reached approximately — and
- * `costFrom` says which of the two the state holds, so an exhausted Outcome
- * is attributable. The two are never added: one shape wins for the Run.
+ * spends the counters at catalog rates instead, because a limit that can never
+ * be reached is worse than one that is reached approximately — and the state's
+ * `spend` says which of the two the figure is, so an exhausted Outcome is
+ * attributable. The two are never added: one shape wins for the Run.
+ *
+ * Both the accumulation of the estimate and the choice between the two are
+ * `@missingstudio/eva-schema`'s, because a fold over the Trace answers the
+ * same questions. This plugin used to answer them itself, and it disagreed
+ * with the fold about a record nothing could price: the fold nulled the whole
+ * estimate and this added nothing for that record, then enforced a limit
+ * against a total it read as whole.
  */
 export const makeBudget = (deps: BudgetDeps): Effect.Effect<Budget> =>
   Effect.sync(() => {
@@ -30,33 +37,30 @@ export const makeBudget = (deps: BudgetDeps): Effect.Effect<Budget> =>
     const started = now()
     let tokens = 0
     let reportedTicks: number | null = null
-    let estimatedTicks: number | null = null
+    const estimated = estimating()
     let steps = 0
 
-    // A reported figure outranks an estimate, and the estimate is kept
-    // rather than dropped: a Run whose provider reports cost for some
-    // exchanges and not others still answers from the shape that is whole.
-    const state = (): BudgetState => {
-      const costTicks = reportedTicks ?? estimatedTicks
-      return {
-        tokens,
-        costTicks,
-        ...(costTicks === null
-          ? {}
-          : { costFrom: reportedTicks === null ? ("estimated" as const) : ("reported" as const) }),
-        milliseconds: now() - started,
-        steps,
-        limits: deps.limits,
-      }
-    }
+    const state = (): BudgetState => ({
+      tokens,
+      spend: spendIn(steps > 0, reportedTicks, estimated.ticks()),
+      milliseconds: now() - started,
+      steps,
+      limits: deps.limits,
+    })
 
     const exceeded = (current: BudgetState): keyof BudgetLimits | undefined => {
-      const { limits } = current
+      const { limits, spend } = current
       if (limits.tokens !== undefined && current.tokens >= limits.tokens) return "tokens"
+      /**
+       * Only a figure reaches a cost limit. A spend nobody could put a figure
+       * to reaches none, which is what an estimate nothing could complete now
+       * answers — it used to answer a partial sum, and a limit enforced
+       * against one stops a Run early for a cost nobody measured.
+       */
       if (
         limits.costTicks !== undefined &&
-        current.costTicks !== null &&
-        current.costTicks >= limits.costTicks
+        (spend.kind === "reported" || spend.kind === "estimated") &&
+        spend.ticks >= limits.costTicks
       ) {
         return "costTicks"
       }
@@ -75,11 +79,9 @@ export const makeBudget = (deps: BudgetDeps): Effect.Effect<Budget> =>
           reportedTicks = (reportedTicks ?? 0) + spent.costTicks
           return state()
         }
-        const prices = deps.prices === undefined ? undefined : yield* deps.prices
-        const price = prices === undefined ? undefined : prices(spent.model)
-        if (price !== undefined) {
-          estimatedTicks = (estimatedTicks ?? 0) + estimateTicks(spent, price)
-        }
+        // The rates are read at the charge, so a Catalog that gained a price
+        // mid-Run is one this Budget spends at.
+        estimated.price(spent, deps.prices === undefined ? undefined : yield* deps.prices)
         return state()
       }),
       state: Effect.sync(state),

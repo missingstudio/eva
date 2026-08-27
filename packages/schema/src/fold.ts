@@ -1,4 +1,4 @@
-import { estimateTicks, type PriceLookup } from "./cost.js"
+import { estimateTicks, type Counted, type PriceLookup } from "./cost.js"
 import { sameFoldKeys, type Event } from "./event.js"
 import type { ActorKind } from "./id.js"
 import type { Claim, ContentBlock, Disposition, ToolKind, ToolStatus, Verdict } from "./payload.js"
@@ -85,17 +85,67 @@ export type Spend =
   | { readonly kind: "unreported" }
 
 /**
+ * Which of the two figures a reader is shown, and what kind it is.
+ *
  * `ran` is whether the Session has done anything. A Session that has not run
  * has spent nothing, which is not a spend nobody reported — one answer for
  * both tells a reader the Provider is silent when it has not been asked.
+ *
+ * A reported figure outranks an estimate, and neither is ever merged into the
+ * other. This is the selection every reader takes: a fold over the Trace holds
+ * a `CostSummary` and a Budget holds two running figures, and both used to
+ * choose between them in their own words — the Budget in a two-way optional
+ * that could say neither `none` nor `unreported`.
  */
-export const spendOf = (summary: CostSummary, ran: boolean): Spend => {
+export const spendIn = (ran: boolean, reported: number | null, estimated: number | null): Spend => {
   if (!ran) return { kind: "none" }
-  if (summary.costTicks !== null) return { kind: "reported", ticks: summary.costTicks }
-  if (summary.estimatedCostTicks !== null) {
-    return { kind: "estimated", ticks: summary.estimatedCostTicks }
-  }
+  if (reported !== null) return { kind: "reported", ticks: reported }
+  if (estimated !== null) return { kind: "estimated", ticks: estimated }
   return { kind: "unreported" }
+}
+
+export const spendOf = (summary: CostSummary, ran: boolean): Spend =>
+  spendIn(ran, summary.costTicks, summary.estimatedCostTicks)
+
+/**
+ * The estimate, accumulated: what the counters come to at catalog rates.
+ *
+ * It is a module because two readers accumulate it and they used to disagree.
+ * A fold over the Trace nulled the whole estimate when one record could not be
+ * priced — a partial estimate misleads exactly as a partial sum does — while
+ * the Budget added nothing for that record and went on reading its total as
+ * whole, then enforced a limit against it. One Trace, two answers, and the one
+ * that decided whether to stop work was the wrong one.
+ */
+export interface Estimating {
+  /**
+   * One exchange, priced at the rates the caller holds now. The rates are
+   * given per call rather than held, because a Budget reads the Catalog at the
+   * moment of the charge and a rate that arrived mid-Run is one it should
+   * spend at.
+   *
+   * No rates, or a model the catalog does not price, nulls the whole estimate,
+   * and nothing prices it back.
+   */
+  readonly price: (counted: Counted & { readonly model?: string }, priceOf?: PriceLookup) => void
+  // The estimate, or null when nothing priced one and when one record could
+  // not be priced. Silence is not zero.
+  readonly ticks: () => number | null
+}
+
+export const estimating = (): Estimating => {
+  // Undefined until one record is priced, null once one cannot be.
+  let total: number | null | undefined
+
+  return {
+    price: (counted, priceOf) => {
+      if (total === null) return
+      const price =
+        priceOf === undefined || counted.model === undefined ? undefined : priceOf(counted.model)
+      total = price === undefined ? null : (total ?? 0) + estimateTicks(counted, price)
+    },
+    ticks: () => total ?? null,
+  }
 }
 
 const EMPTY_COST: CostSummary = {
@@ -134,8 +184,9 @@ export const costFold = (events: readonly Event[], priceOf?: PriceLookup): CostS
   let total = EMPTY_COST
   let first = true
   let reported: number | undefined
-  let estimated: number | null = priceOf === undefined ? null : 0
-  let priced = false
+  // The estimate is `estimating`'s, because the Budget accumulates the same
+  // thing and the two used to disagree about a record nothing could price.
+  const estimated = estimating()
   for (const event of events) {
     if (event.payload.kind === "info") {
       reported = event.payload.costTicks ?? reported
@@ -143,14 +194,7 @@ export const costFold = (events: readonly Event[], priceOf?: PriceLookup): CostS
     }
     if (event.payload.kind !== "usage") continue
     const usage = event.payload
-    if (priceOf !== undefined && estimated !== null) {
-      const price = usage.model === undefined ? undefined : priceOf(usage.model)
-      if (price === undefined) estimated = null
-      else {
-        estimated += estimateTicks(usage, price)
-        priced = true
-      }
-    }
+    estimated.price(usage, priceOf)
     total = {
       inputTokens: addCounter(total.inputTokens, usage.inputTokens, first),
       outputTokens: addCounter(total.outputTokens, usage.outputTokens, first),
@@ -167,7 +211,7 @@ export const costFold = (events: readonly Event[], priceOf?: PriceLookup): CostS
   return {
     ...total,
     ...(reported === undefined ? {} : { costTicks: reported }),
-    estimatedCostTicks: priced ? estimated : null,
+    estimatedCostTicks: estimated.ticks(),
   }
 }
 

@@ -197,7 +197,7 @@ describe("the Budget", () => {
     const charged: Usage[] = []
     const state: BudgetState = {
       tokens: 0,
-      costTicks: null,
+      spend: { kind: "none" },
       milliseconds: 0,
       steps: 0,
       limits: {},
