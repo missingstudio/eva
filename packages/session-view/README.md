@@ -90,8 +90,16 @@ renderer that draws an outcome — denied, failed, over budget — draws it from
 the `result`.
 
 The `diff` Block carries what the record carries: a path and a count of hunks.
-Hunk text arrives when the edit tools ship, and the Block does not change
-shape when it does.
+`eva.tool.edit` records no hunk text, so none is drawn; the Block does not
+change shape on the day one does.
+
+Two things a Run does are on the Trace and on neither surface, and both are
+deliberate. **A command's streamed output** arrives as many `tool_update`
+windows per call, so folding it into one Block would make the fold decide
+truncation — a rendering policy with no home — and a `ContentBlock` carries no
+stream to draw it under. **That a call ran beside another** is not a record
+field at all: `parallelSafe` is a property of the row, and drawing it on a card
+would need a record change and a decision to go with it.
 
 The `permission` Block is the one Block that is not on the record, and it
 cannot be: a request a person has answered is the Disposition of the call it

@@ -48,6 +48,18 @@ The loop is a harness row, so anything that names a harness reaches it:
 eva run eva.harness.loop --input task.md
 ```
 
+**Under the default `supervised` mode that run denies every write**, because
+nobody is there to answer and an unanswered question is a denial. Real work
+needs `approval.mode: autonomous`, or `policy.rules` that allow the calls the
+task makes. This is the mode working, and it is worth knowing before the first
+try.
+
+**A line typed at a terminal does not reach the loop.** `eva.tui` submits a
+Prompt that names no harness, so it takes the bare-Run path and no tool is
+offered. Which harness answers an unnamed Prompt is a profile decision, and the
+roadmap puts profiles at stage 7; until one picks a default, the loop is
+reached by naming it.
+
 Two options bound one Prompt:
 
 ```yaml

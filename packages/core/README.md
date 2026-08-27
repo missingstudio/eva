@@ -80,6 +80,7 @@ same rule:
 | `harness.ts`     | The harness contract, in the Agent Client Protocol's shapes                                                                                              |
 | `session-api.ts` | The whole of what a surface may do to Eva                                                                                                                |
 | `session.ts`     | `submit`, the one-Run mechanism                                                                                                                          |
+| `tool.ts`        | One tool call and one group of them: the pipeline, the decisions, the schedule                                                                           |
 | `sink.ts`        | `sinkOf`, the one store-to-sink entry, over the `sequenced` and `numbered` seams                                                                         |
 | `rows.ts`        | The row-shaped store both SQL sinks keep: columns, codec, head row, allocation                                                                           |
 | `glob.ts`        | `globMatcher`: what a glob pattern means, for every `FileSystem` filler                                                                                  |
@@ -89,10 +90,10 @@ same rule:
 
 Nothing here fills a slot. The Recorder, the sinks, the session and credential
 stores, the Validator, the file system, the shell, the sandbox, and every
-Provider are plugins. `submit` is one step
-with no tools and no agency: a tool-calling loop belongs to a harness, and a
-harness is a plugin too. And nothing here loads plugins — the plugin runtime
-is the kernel's.
+Provider are plugins. `submit` is one Step — one model request, and the calls
+that response proposed — and it has no agency of its own: the loop that asks
+for another Step belongs to a harness, and a harness is a plugin too. And
+nothing here loads plugins — the plugin runtime is the kernel's.
 
 ## Development
 

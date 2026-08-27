@@ -90,6 +90,24 @@ watch, submit, cancel, model, answer. `harnessHost` is what a native Harness
 is handed: `run` is the one path that opens a Run, and `report` commits a
 group through the same Recorder.
 
+## One question, both doors
+
+`overSurface` races two answers to one permission request: `Frontend.ask`, the
+direct call to the surface Eva holds, and `SessionAPI.answer`, which names the
+request over a socket. Both are answers to one question, so the first one wins
+and the other door closes at once. A person who answers at a terminal leaves no
+card still offering four buttons on a page.
+
+**A known limit, and closing it changes a contract.** The request id is the
+tool call's id. That is what lets a surface pair a question with the
+`tool_call` record it already drew, and it is why the request carries nothing
+else. But call ids repeat across Runs: a model that writes `call_1` in one Run
+writes `call_1` in the next. An answer that arrives when no request of that id
+is open is dropped, and a test pins that — but one that arrives while the
+**next** Run's `call_1` stands answers the wrong question. A request id that is
+unique per Run closes it, and that changes what `FrontendRequest` carries, what
+the wire answers, and what both surfaces draw.
+
 ## What it does not do
 
 It is not the composition root. It does not resolve config — the kernel's
@@ -110,6 +128,8 @@ ships no plugins.
   hook and both budget and recorder slots wired.
 - `makeSessionAPI(kernel, model, scope)` — core's `SessionAPI` over this
   kernel, plus `request` for a question a surface must answer.
+- `overSurface(kernel, doors)` — the `Approving` a tool call asks through: the
+  surface's own `ask` raced against an answer that names the request.
 - `harnessHost(kernel, session, emit)` — the `HarnessHost` a native Harness
   is handed: `run` and `report`.
 - `runTurn(kernel, input)` — one Run against the resolved model.
