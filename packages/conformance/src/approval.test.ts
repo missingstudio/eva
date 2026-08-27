@@ -3,14 +3,15 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { approval, remembering } from "@missingstudio/eva-approval"
 import { makeSessionAPI, type Kernel } from "@missingstudio/eva-boot"
-import type { Approving, Command, ModelRef, Process, ToolResult } from "@missingstudio/eva-core"
+import type { Approving, Command, ModelRef, ToolResult } from "@missingstudio/eva-core"
 import { diff } from "@missingstudio/eva-diff"
 import type { Event, Payload } from "@missingstudio/eva-schema"
-import { define, type CommandContext, type Plugin } from "@missingstudio/eva-sdk"
+import type { CommandContext } from "@missingstudio/eva-sdk"
 import {
   calling,
   CALLING_SESSION,
   committed,
+  spyingSandbox,
   virtualFileSystem,
   withKernel,
 } from "@missingstudio/eva-testkit"
@@ -20,7 +21,7 @@ import { toolPolicy } from "@missingstudio/eva-tool-policy"
 import { toolRead } from "@missingstudio/eva-tool-read"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
-import { Effect, Stream } from "effect"
+import { Effect } from "effect"
 import { parse } from "yaml"
 import { describe, expect, it } from "vitest"
 
@@ -39,32 +40,6 @@ import { describe, expect, it } from "vitest"
  */
 
 const MODEL: ModelRef = { provider: "anthropic", model: "claude-sonnet-4-5" }
-
-const NOTHING: Process = {
-  output: Stream.empty,
-  exit: Effect.succeed({ code: 0, signal: null }),
-  kill: Effect.void,
-}
-
-const SPY = "test.sandbox.spy"
-
-const spying = (): { readonly plugin: Plugin; readonly asked: readonly Command[] } => {
-  const asked: Command[] = []
-  const plugin = define({
-    id: SPY,
-    effect: Effect.fn(SPY)(function* (ctx) {
-      yield* ctx.slot.sandbox.provide(SPY, {
-        run: (command) =>
-          Effect.sync(() => {
-            asked.push(command)
-            return NOTHING
-          }),
-        capabilities: Effect.succeed({ enforces: [] }),
-      })
-    }),
-  })
-  return { plugin, asked }
-}
 
 // One answer to every ask, and what it was asked. A suite that names none is a
 // run with nobody to answer.
@@ -101,7 +76,7 @@ const bench = <A>(
   } = {},
 ): Promise<A> => {
   const virtual = virtualFileSystem(options.seed ?? { "one.md": "before\n" })
-  const sandbox = spying()
+  const sandbox = spyingSandbox()
   const asked = options.asked ?? []
 
   return withKernel(
