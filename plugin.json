@@ -1,0 +1,13 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "eva",
+  "description": "An open-source, autonomous software factory. Runs coding work end to end from the command line, with a durable trace and per-run cost.",
+  "homepage": "https://evafactory.co",
+  "repository": "https://github.com/missingstudio/eva",
+  "license": "MIT",
+  "author": {
+    "name": "Missing studio",
+    "url": "https://evafactory.co"
+  },
+  "keywords": ["ai", "agent", "coding-agent", "cli", "software-factory"]
+}
