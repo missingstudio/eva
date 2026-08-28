@@ -2284,7 +2284,11 @@ fact of the build and not of a Session, and a surface that holds no Catalog
 has to be told the rows before it can offer them. `eva.api` reads the Catalog
 from its own plugin context, so the wire reaches a Domain without importing the
 plugin that fills it. A model is picked and never typed: `model.set` carries a
-`ModelRef` and refuses a name.
+`ModelRef` and refuses a name, and `PUT /api/sessions/:id/model` refuses a
+reference the Catalog does not hold. That refusal is the route's and not the
+contract's — at a terminal an unlisted reference still runs, because a Provider
+answers anything in its namespace, and `/model` reaches the Domains through the
+command route below.
 
 `POST /api/sessions/:id/command` is the other. It runs a line where the
 Domains are, because that is where the rows and the Run both are: a door that

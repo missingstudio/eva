@@ -114,6 +114,7 @@
         "@missingstudio/eva-client-runtime": "workspace:*",
         "@missingstudio/eva-core": "workspace:*",
         "@missingstudio/eva-schema": "workspace:*",
+        "@missingstudio/eva-sdk": "workspace:*",
         "@missingstudio/eva-session-view": "workspace:*",
         "@missingstudio/eva-web": "workspace:*",
         "@missingstudio/ui": "workspace:*",
@@ -125,7 +126,6 @@
         "streamdown": "2.5.0",
       },
       "devDependencies": {
-        "@missingstudio/eva-sdk": "workspace:*",
         "@tailwindcss/vite": "catalog:",
         "@types/node": "catalog:",
         "@types/react": "19.2.18",

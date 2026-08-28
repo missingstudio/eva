@@ -9,14 +9,6 @@ import {
 } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 
-/**
- * The rows `/model` picks from, said again here because this is where a
- * caller found them. They moved down to the sdk when the wire started to
- * answer them too: the terminal reads a Catalog in process and a page holds
- * none, and one function is what keeps the two pickers from drifting.
- */
-export { modelRows }
-
 // One block of lines, said once. A surface shows what it is given, so what
 // is one answer arrives as one answer.
 const wrote = (ctx: CommandContext, lines: readonly string[]): void =>

@@ -2,9 +2,9 @@ import type { ClientState } from "@missingstudio/eva-client-runtime"
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { spendOf, spendText, type CostSummary, type Cursor } from "@missingstudio/eva-schema"
 import { askingOf, type Asking, type Turn } from "@missingstudio/eva-session-view"
-import type { ReactNode } from "react"
 import { Turns } from "./blocks.js"
-import { Composer, type Composing } from "./composer.js"
+import { Composer } from "./composer.js"
+import type { Composing } from "./composing.js"
 import {
   Context,
   ContextCacheUsage,
@@ -191,10 +191,10 @@ export const Live = ({ said }: { readonly said: string }) =>
  * in it, then the questions that stand, then what the open Run is saying, then
  * what it cost — and under all of it, what to say next.
  *
- * The page writes four things: a prompt, an answer to a permission request
- * that stands, a command line, and the model this Session is kept at. A
- * question that stands blocks a Run, and a reader watching it blocked is the
- * person the Run is waiting on.
+ * The page writes three things: a line — a Prompt, or the command it names —
+ * an answer to a permission request that stands, and the model this Session is
+ * kept at. A question that stands blocks a Run, and a reader watching it
+ * blocked is the person the Run is waiting on.
  *
  * The composer is drawn outside the fold, because saying something needs no
  * record: a page still reading a long Session can already prompt it.
@@ -211,7 +211,6 @@ export const Session = ({
   pipe,
   asking = [],
   answer,
-  command,
   composer,
 }: {
   readonly session: string
@@ -220,16 +219,12 @@ export const Session = ({
   readonly pipe: Pipe
   readonly asking?: readonly Asking[]
   readonly answer?: (request: string, optionId: string) => void
-  // Where a command line goes, when the page that mounts this holds one. It
-  // arrives already built, so this page draws it without reading anything.
-  readonly command?: ReactNode
   readonly composer?: Composing
 }) => (
   <main className="mx-auto max-w-measure px-6 py-16">
     <Named session={session} header={header} />
     <Notice pipe={pipe} />
     <Models session={session} />
-    {command}
     {reading.folded.kind === "folding" ? (
       <p aria-busy="true" className="mt-6 text-muted-foreground" role="status">
         Reading the transcript…

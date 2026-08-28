@@ -6,6 +6,7 @@ import {
   type SessionAPI,
 } from "@missingstudio/eva-core"
 import type { Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
+import type { Running } from "@missingstudio/eva-sdk"
 import { Effect, Schedule, Scope, Stream, SubscriptionRef } from "effect"
 import {
   answerPath,
@@ -30,7 +31,6 @@ import {
   SESSIONS,
   watchPath,
   type PickRow,
-  type Ran,
 } from "../wire.js"
 
 // How long a call that could not reach the far side waits before it asks
@@ -53,6 +53,17 @@ export interface HttpOptions {
 }
 
 /**
+ * The options, with the defaults filled in. Two calls read them — the Catalog's
+ * rows and the Transport — and the defaults are one rule for both: the origin
+ * the page was served by, and the global fetch.
+ */
+const settled = (options: HttpOptions) => ({
+  origin: options.origin ?? "",
+  gap: options.gap ?? RETRY_GAP,
+  request: options.request ?? fetch,
+})
+
+/**
  * A write the far side read and refused. It is a shape the two halves of one
  * wire disagree about — a page held from an older build, calling a newer one —
  * so it is a defect where the call was made. Asking again forever would turn
@@ -72,9 +83,6 @@ class Unreachable extends Error {
   override readonly name = "Unreachable"
 }
 
-// A line, run where the Domains are, and what it wrote back.
-export type Commanding = (session: SessionID, line: string) => Effect.Effect<Ran>
-
 /**
  * The transport, and the one thing beside the contract that crosses this
  * wire. A command is not a `SessionAPI` method and it is not going to become
@@ -83,7 +91,7 @@ export type Commanding = (session: SessionID, line: string) => Effect.Effect<Ran
  * filler can run a line, and one that holds only the seam cannot.
  */
 export interface HttpTransport extends Transport {
-  readonly command: Commanding
+  readonly command: Running
 }
 
 /**
@@ -119,15 +127,18 @@ const read = async (
 export const readModels = (
   options: HttpOptions = {},
 ): Effect.Effect<readonly PickRow[] | undefined> =>
-  Effect.map(
-    Effect.result(
-      Effect.tryPromise({
-        try: (signal) => read(options.request ?? fetch, options.origin ?? "", MODELS, signal),
-        catch: (cause) => new Unreachable(String(cause)),
-      }),
-    ),
-    (answered) => (answered._tag === "Success" ? modelRowsIn(answered.success) : undefined),
-  )
+  Effect.suspend(() => {
+    const { origin, request } = settled(options)
+    return Effect.map(
+      Effect.result(
+        Effect.tryPromise({
+          try: (signal) => read(request, origin, MODELS, signal),
+          catch: (cause) => new Unreachable(String(cause)),
+        }),
+      ),
+      (answered) => (answered._tag === "Success" ? modelRowsIn(answered.success) : undefined),
+    )
+  })
 
 /**
  * The whole Session API over HTTP, and the one fact `client-runtime` reads
@@ -137,9 +148,7 @@ export const readModels = (
 export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTransport> =>
   Effect.gen(function* () {
     const health = yield* SubscriptionRef.make<TransportHealth>("ready")
-    const origin = options.origin ?? ""
-    const gap = options.gap ?? RETRY_GAP
-    const request = options.request ?? fetch
+    const { origin, gap, request } = settled(options)
 
     /**
      * One call, and the pipe's state as it answers. `SessionAPI` carries no
@@ -408,7 +417,7 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
      * others, key and all: `/undo` asked twice would reverse two writes, and
      * the key is what makes asking again after a lost answer safe.
      */
-    const command: Commanding = (session, line) =>
+    const command: Running = (session, line) =>
       writing("POST", commandPath(session), { line }, ranIn)
 
     return { api, health, command }

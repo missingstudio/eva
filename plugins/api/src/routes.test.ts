@@ -11,7 +11,7 @@ import {
 } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { apiWire, routeFor, watchFor } from "./routes.js"
+import { apiWire, routeFor, watchFor, type WireOptions } from "./routes.js"
 import {
   answerPath,
   API_ROOT,
@@ -64,18 +64,8 @@ const held = (): Promise<MemorySession> =>
  * plugin, so the socket here is bare — and what falls past the wire is
  * `eva.web`'s to answer, said in one line so a test can tell that it fell.
  */
-const standing = async (
-  memory: MemorySession,
-  directory?: () => string,
-  commands?: Effect.Effect<readonly CommandInfo[]>,
-  catalog?: CatalogState,
-) => {
-  const wire = apiWire(
-    memory.api,
-    directory,
-    commands,
-    catalog === undefined ? undefined : Effect.succeed(catalog),
-  )
+const standing = async (memory: MemorySession, serving: WireOptions = {}) => {
+  const wire = apiWire(memory.api, serving)
   const server = createServer((request, response) => {
     if (wire(request, response)) return
     response.writeHead(200, { "content-type": "text/plain; charset=utf-8" })
@@ -210,7 +200,7 @@ describe("the read half, over a socket", () => {
    */
   it("answers every model the Catalog knows, as the rows the panel picks from", async () => {
     const memory = await held()
-    const served = await standing(memory, undefined, undefined, CATALOG)
+    const served = await standing(memory, { catalog: Effect.succeed(CATALOG) })
 
     const response = await fetch(`${served.origin}${MODELS}`)
     expect(response.status).toBe(200)
@@ -450,7 +440,9 @@ describe("the route table", () => {
    */
   it("opens a Session from a body it was never given, and refuses one it cannot read", async () => {
     const memory = await held()
-    expect(routeFor("POST", SESSIONS, undefined, () => "/pinned")).toBeTypeOf("function")
+    expect(routeFor("POST", SESSIONS, undefined, { directory: () => "/pinned" })).toBeTypeOf(
+      "function",
+    )
 
     const refusing = routeFor("POST", SESSIONS, { location: 7 })
     const answer = await Effect.runPromise(refusing?.(memory.api) ?? Effect.succeed(undefined))
@@ -543,7 +535,7 @@ describe("the write half, over a socket", () => {
   // with the directory the serving process is in.
   it("opens the Session where the serving process is when nobody named a place", async () => {
     const memory = await held()
-    const served = await standing(memory, () => "/pinned")
+    const served = await standing(memory, { directory: () => "/pinned" })
 
     const response = await wrote(served.origin, "POST", SESSIONS, undefined)
 
@@ -624,6 +616,58 @@ describe("the write half, over a socket", () => {
     const served = await standing(memory)
 
     const next = { provider: "wire", model: "another" }
+    expect((await wrote(served.origin, "PUT", modelPath(memory.session), next)).status).toBe(200)
+    expect(await (await fetch(`${served.origin}${modelPath(memory.session)}`)).json()).toEqual(next)
+
+    await served.close()
+  })
+
+  /**
+   * A model is picked and never typed, and this is the half of that rule the
+   * page cannot keep for itself: a picker offers the rows the Catalog holds,
+   * and a caller that is not the picker has to be told no.
+   *
+   * It is this route's refusal and not the contract's. `/model provider/model`
+   * at a terminal still runs an unlisted reference, because a Provider answers
+   * anything in its namespace — that line reaches the Domains through the
+   * command route, which this leaves alone.
+   */
+  it("refuses a model the Catalog does not hold, and leaves the Session at the one it had", async () => {
+    const memory = await held()
+    const served = await standing(memory, { catalog: Effect.succeed(CATALOG) })
+
+    const refused = await wrote(served.origin, "PUT", modelPath(memory.session), {
+      provider: "openai",
+      model: "gpt-nothing",
+    })
+
+    expect(refused.status).toBe(400)
+    expect(await refused.json()).toEqual({
+      error: "the Catalog does not hold openai/gpt-nothing",
+    })
+    expect(memory.calls).not.toContainEqual(
+      expect.objectContaining({ method: "model.set" as const }),
+    )
+
+    const held_ = { provider: "anthropic", model: "claude-opus-5" }
+    expect((await wrote(served.origin, "PUT", modelPath(memory.session), held_)).status).toBe(200)
+    expect(await (await fetch(`${served.origin}${modelPath(memory.session)}`)).json()).toEqual(
+      held_,
+    )
+
+    await served.close()
+  })
+
+  /**
+   * And a build that loaded no Provider refuses none of them. It knows of no
+   * model at all, so it can call none of them wrong — the reading the read
+   * half already takes, where a listing of none is the truth and never a miss.
+   */
+  it("refuses no model when the Catalog knows none", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const next = { provider: "wire", model: "unlisted" }
     expect((await wrote(served.origin, "PUT", modelPath(memory.session), next)).status).toBe(200)
     expect(await (await fetch(`${served.origin}${modelPath(memory.session)}`)).json()).toEqual(next)
 
@@ -787,7 +831,7 @@ describe("a command, over a socket", () => {
   const serving = async (mode = "default", writes: string[] = []) => {
     const state: Serving = { mode, writes }
     const memory = await held()
-    const served = await standing(memory, undefined, Effect.succeed(rowsOf(state)))
+    const served = await standing(memory, { commands: Effect.succeed(rowsOf(state)) })
     return { state, memory, served }
   }
 

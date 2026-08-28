@@ -14,6 +14,7 @@ import {
   type FrontendRequest,
   type KeymapInfo,
   type PickRow,
+  type Running,
 } from "@missingstudio/eva-sdk"
 import {
   canonical,
@@ -67,20 +68,6 @@ export const TUI_SURFACE = "eva.tui"
 export type Where =
   | { readonly kind: "directory"; readonly path: string }
   | { readonly kind: "runtime"; readonly origin: string }
-
-/**
- * What running a line came to, for a door that ran it somewhere else. `wrote`
- * is everything the command said, as one block, and `selected` is the Session
- * it opened when it opened one.
- */
-export interface Ran {
-  readonly wrote: string
-  readonly selected?: SessionID
-}
-
-// A line, run where the Domains are. It is the wire's shape, because that is
-// the only place a line goes that is not this process.
-export type Running = (session: SessionID, line: string) => Effect.Effect<Ran>
 
 export interface SurfaceDeps {
   readonly client: Client

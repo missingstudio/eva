@@ -1,10 +1,10 @@
 import type { ModelRef, SessionAPI } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
-import { define, type CommandContext, type PickRow } from "@missingstudio/eva-sdk"
+import { define, modelRows, type CommandContext, type PickRow } from "@missingstudio/eva-sdk"
 import { describe, expect, it } from "vitest"
 import { withPlugin } from "@missingstudio/eva-testkit"
 import { Effect } from "effect"
-import { COMMANDS, commands, modelRows } from "./index.js"
+import { COMMANDS, commands } from "./index.js"
 
 describe("COMMANDS", () => {
   it("names the four the product ships", () => {

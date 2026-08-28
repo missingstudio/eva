@@ -1,85 +1,44 @@
 import {
-  idle,
   stepped,
   type LoopAction,
   type LoopState,
   type LoopStep,
 } from "@missingstudio/eva-client-runtime"
-import { optionFor } from "@missingstudio/eva-core"
-import type { SessionID } from "@missingstudio/eva-schema"
-import type { Asking } from "@missingstudio/eva-session-view"
-import { Effect } from "effect"
-import { useRef, useState } from "react"
-import type { Composing } from "./composer.js"
-import { client } from "./eva.js"
-import { sessionHref } from "./paths.js"
+import { namesCommand } from "@missingstudio/eva-sdk"
 
 /**
- * How the page says something to Eva, and the rules it says it by.
+ * What composing a line means on this page: what the page can do with one,
+ * what it is asked to do about one, and which of those a step turns out to
+ * mean.
  *
  * The rules are not this page's. `client-runtime` holds the composer fold the
  * terminal steps — which line answers a question, which one waits behind a
  * Run, what a cancel drops — so a line typed at either door means the same
- * thing for one reason and not for two. What is here is the doing: the calls
- * the fold's actions turn into, all of them through the one Client.
+ * thing for one reason and not for two. Nothing here reaches Eva: the doing is
+ * handed in, so every rule below is provable with no Client behind it.
  */
 
 /**
- * A Prompt, and the Run it opened. `submit` answers when that Run has closed
- * — the contract every filler of the Session API keeps — so it is also what
- * says the queue may move, and the page needs no fiber of its own to hear it.
+ * What the page can do with a line, and what it is holding while it does. The
+ * composer is handed this rather than reaching for the Client, so what it
+ * offers is provable without a socket — and one drawn with nowhere to send a
+ * line says so rather than looking live, which is the rule the permission
+ * card already keeps.
  */
-const prompted = (session: SessionID, line: string): Promise<void> =>
-  client().then((one) => Effect.runPromise(one.api.submit(session, { kind: "prompt", text: line })))
-
-/**
- * A steer, which rides the Run that is open. `submit` for a steer answers at
- * once rather than when a Run closed, so nothing waits on it and no Run
- * number is taken. The Run says the line back as a `message`, which the fold
- * already draws as the human-authored message it is.
- */
-const steered = (session: SessionID, line: string): void =>
-  void client().then((one) =>
-    Effect.runPromise(one.api.submit(session, { kind: "steer", text: line, target: "next-step" })),
-  )
-
-const stopped = (session: SessionID): void =>
-  void client().then((one) => Effect.runPromise(one.api.cancel(session, "user")))
-
-/**
- * The line, as an answer to the question that stands. The four options are
- * words a person can type, so the line is read for one first and a line that
- * names none goes as the text it is — which is how the terminal reads a line
- * typed at a standing question, and the gate reads both back the same way.
- */
-const replied = (request: string, line: string): void => {
-  const option = optionFor(line)
-  void client().then((one) =>
-    Effect.runPromise(
-      one.api.answer(
-        request,
-        option === undefined
-          ? { kind: "text", text: line }
-          : { kind: "permission", optionId: option },
-      ),
-    ),
-  )
+export interface Composing {
+  // The lines typed while a Run was open, oldest first. They wait their turn
+  // rather than racing it.
+  readonly pending: readonly string[]
+  // Whether a Run this page opened is still open.
+  readonly open: boolean
+  readonly send: (line: string) => void
+  // The same line, meant as a steer: it rides the Run that is open rather
+  // than waiting behind it.
+  readonly steer: (line: string) => void
+  readonly stop: () => void
+  // What the last line that named a command wrote back. Nothing until one has.
+  readonly wrote?: string
 }
-
-/**
- * Open a Session, then go and read it. A plain load, because the rows on the
- * listing are plain anchors for the same reason: `eva.web` answers a path
- * with no extension with the page, so the route is resolved on the load.
- *
- * The call names no directory. A browser holds no honest path, so the
- * Session opens where the process answering the call is.
- */
-export const opening = (): void =>
-  void client()
-    .then((one) => Effect.runPromise(one.api.create()))
-    .then((made) => {
-      window.location.assign(sessionHref(made))
-    })
 
 /**
  * What the page can be asked to do. It is handed in rather than reached for,
@@ -94,6 +53,8 @@ export interface Doing {
   readonly steer: (line: string) => void
   readonly cancel: () => void
   readonly answer: (line: string) => void
+  // Run this line where the Domains are, and say what it wrote.
+  readonly run: (line: string) => void
 }
 
 /**
@@ -107,12 +68,22 @@ const performed = (action: LoopAction, doing: Doing): LoopStep | undefined => {
       doing.answer(action.line)
       return undefined
     /**
-     * A line this page dispatches always opens a Run. The terminal asks a
-     * command registry of its own first; this page holds none — a `/` line is
-     * Eva's to answer over the wire, and until it is, the line is a Prompt.
+     * A line that names a command is a command, at whichever door it was
+     * typed. Whether it names one is decided here, because it is a fact of
+     * the line and of nothing else — `namesCommand` is the rule `dispatch`
+     * parses by, so this page and the attached terminal read one line one
+     * way. A Prompt sent over to be told it is a Prompt would be one write to
+     * learn the answer and a second to act on it.
+     *
+     * Nothing has moved yet: the answer crosses a wire, and the Session a
+     * command opened is followed when it arrives.
      */
     case "handle":
-      return { kind: "handled", line: action.line, ran: false, moved: false }
+      if (!namesCommand(action.line)) {
+        return { kind: "handled", line: action.line, ran: false, moved: false }
+      }
+      doing.run(action.line)
+      return { kind: "handled", line: action.line, ran: true, moved: false }
     case "open":
       doing.open(action.run, action.line)
       return undefined
@@ -160,39 +131,4 @@ export const walk = (state: LoopState, step: LoopStep, doing: Doing): LoopState 
     for (const action of answered.actions) next = performed(action, doing) ?? next
   }
   return standing
-}
-
-/**
- * The composer's half of one Session: what waits, what is open, and the
- * gestures. The loop is held in a ref because it is what the page is doing
- * and not what it is drawing; what is drawn is the state each walk left.
- */
-export const useComposer = (session: SessionID, asking: readonly Asking[] = []): Composing => {
-  const held = useRef<LoopState>(idle)
-  const [shown, setShown] = useState<LoopState>(idle)
-
-  // The question a typed line answers is the first one standing, which is the
-  // one the terminal answers too.
-  const standing = asking[0]?.request
-
-  const drive = (step: LoopStep): void => {
-    held.current = walk(held.current, step, {
-      open: (run, line) =>
-        void prompted(session, line).finally(() => drive({ kind: "settled", run })),
-      steer: (line) => steered(session, line),
-      cancel: () => stopped(session),
-      answer: (line) => {
-        if (standing !== undefined) replied(standing, line)
-      },
-    })
-    setShown(held.current)
-  }
-
-  return {
-    pending: shown.pending,
-    open: shown.open !== undefined,
-    send: (line) => drive({ kind: "line", line, asking: standing !== undefined }),
-    steer: (line) => drive({ kind: "line", line, asking: standing !== undefined, steer: true }),
-    stop: () => drive({ kind: "cancel" }),
-  }
 }

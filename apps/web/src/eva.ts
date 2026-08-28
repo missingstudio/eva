@@ -1,10 +1,6 @@
-import {
-  httpTransport,
-  readModels,
-  type Commanding,
-  type PickRow,
-} from "@missingstudio/eva-api/client"
+import { httpTransport, readModels, type PickRow } from "@missingstudio/eva-api/client"
 import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
+import type { Running } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 
 // One row of the Catalog, as the picker draws it. Said again here for the
@@ -22,7 +18,7 @@ export type { PickRow }
  */
 interface Held {
   readonly client: Client
-  readonly command: Commanding
+  readonly command: Running
 }
 
 let held: Promise<Held> | undefined
@@ -42,7 +38,7 @@ export const client = (): Promise<Client> => one().then((each) => each.client)
  * Client rather than through it. It is the same transport all the same: one
  * pipe, and one answer to where the runtime is.
  */
-export const command = (): Promise<Commanding> => one().then((each) => each.command)
+export const command = (): Promise<Running> => one().then((each) => each.command)
 
 /**
  * Every model the Catalog behind that wire knows. It is read here and not

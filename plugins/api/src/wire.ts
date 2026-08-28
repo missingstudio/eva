@@ -16,7 +16,7 @@ import {
   type Payload,
   type SessionID,
 } from "@missingstudio/eva-schema"
-import type { PickRow } from "@missingstudio/eva-sdk"
+import type { PickRow, Ran } from "@missingstudio/eva-sdk"
 
 export const API_PLUGIN = "eva.api"
 
@@ -215,19 +215,8 @@ export const lineIn = (value: unknown): string | undefined => {
   return row === undefined ? undefined : stringAt(row, "line")
 }
 
-/**
- * What running a line came to. `write` is a capability a surface supplies, so
- * over the wire it is collected and answered as one block of text — which is
- * also the answer a command gives a door that cannot draw a panel.
- *
- * `selected` is the Session a command opened, when it opened one. A `/clear`
- * that said nothing would otherwise read as a command that did nothing.
- */
-export interface Ran {
-  readonly wrote: string
-  readonly selected?: SessionID
-}
-
+// What running a line came to, read off the wire. The shape is the sdk's, so
+// the wire and the door that draws the answer read one agreement.
 export const ranIn = (value: unknown): Ran | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined

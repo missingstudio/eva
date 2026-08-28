@@ -1,8 +1,8 @@
 import { idle, type LoopState } from "@missingstudio/eva-client-runtime"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
-import { Composer, refusalOf, waitingText, type Composing } from "./composer.js"
-import { walk, type Doing } from "./composing.js"
+import { Composer, refusalOf, waitingText } from "./composer.js"
+import { walk, type Composing, type Doing } from "./composing.js"
 import type { Pipe } from "./session.js"
 
 const READY: Pipe = { at: "ready", dropped: false }
@@ -21,6 +21,7 @@ const doing = () => {
     steer: (line) => said.push(`steer ${line}`),
     cancel: () => said.push("cancel"),
     answer: (line) => said.push(`answer ${line}`),
+    run: (line) => said.push(`run ${line}`),
   }
   return { doing: one, said, opened }
 }
@@ -143,6 +144,44 @@ describe("what the page does with a line", () => {
     expect(after.open).toBeUndefined()
   })
 
+  /**
+   * One line, one meaning, at either door. A line that names a command runs
+   * where the Domains are and opens no Run — the terminal at the end of a
+   * socket decides the same way, off the same rule — and a line that names
+   * none is the Prompt the tests above open a Run for.
+   */
+  it("runs a line that names a command, and opens no Run for it", () => {
+    const { doing: one, said } = doing()
+    const after = walk(idle, { kind: "line", line: "/mode read-only", asking: false }, one)
+
+    expect(said).toEqual(["run /mode read-only"])
+    expect(after.open).toBeUndefined()
+    expect(after.runs).toBe(0)
+  })
+
+  // And it waits its turn like any other line, because a `/undo` that ran
+  // during the Run it was meant to reverse would reverse the wrong write.
+  it("queues a command typed during a Run, and runs it once the Run has closed", () => {
+    const { doing: one, said } = doing()
+    const open = walk(idle, { kind: "line", line: "change it", asking: false }, one)
+    const queued = walk(open, { kind: "line", line: "/undo", asking: false }, one)
+    const after = walk(queued, { kind: "settled", run: 1 }, one)
+
+    expect(said).toEqual(["open 1 change it", "run /undo"])
+    expect(after.open).toBeUndefined()
+    expect(after.pending).toEqual([])
+  })
+
+  // A question outranks a command too: what a person types at one is that
+  // question's answer, whatever it starts with.
+  it("answers the question that stands with a line that names a command", () => {
+    const { doing: one, said } = doing()
+    const after = walk(idle, { kind: "line", line: "/mode", asking: true }, one)
+
+    expect(said).toEqual(["answer /mode"])
+    expect(after.open).toBeUndefined()
+  })
+
   // A Run this page never opened settles nothing it is holding.
   it("closes nothing on a Run it is not holding", () => {
     const { doing: one, said } = doing()
@@ -188,6 +227,16 @@ describe("what the composer says", () => {
    */
   it("offers a stop for a Run another door opened", () => {
     expect(drawn({}, READY, true)).toContain("Stop")
+  })
+
+  /**
+   * What a command wrote is the whole of its answer, and it arrives nowhere
+   * else — a command is the one write on this page whose outcome is not on the
+   * record. So the composer that dispatched the line is where it is drawn.
+   */
+  it("draws what the command it dispatched wrote", () => {
+    expect(drawn({ wrote: "mode: read-only" })).toContain("mode: read-only")
+    expect(drawn({})).not.toContain("panel-terminal")
   })
 })
 

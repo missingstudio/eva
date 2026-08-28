@@ -1,7 +1,7 @@
-import { declare, define, type Plugin } from "@missingstudio/eva-sdk"
+import { declare, define, type Plugin, type Running } from "@missingstudio/eva-sdk"
 import { themeColors, type ChosenRenderer, type ThemeColors } from "@missingstudio/eva-tui-core"
 import { Effect } from "effect"
-import { makeSurface, TUI_SURFACE, type Running, type Where } from "./surface.js"
+import { makeSurface, TUI_SURFACE, type Where } from "./surface.js"
 
 export * from "./banner.js"
 export * from "./console.js"
