@@ -112,7 +112,7 @@ const bench = async () => {
   const config = join(mkdtempSync(join(tmpdir(), "eva-doors-grant-")), "config.yaml")
   const asking = remembering(
     overSurface(started.kernel, {
-      frontend: Effect.sync(() => surface),
+      frontends: Effect.sync(() => (surface === undefined ? [] : [surface])),
       request: started.api.request,
     }),
     { EVA_CONFIG: config },

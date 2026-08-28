@@ -282,6 +282,48 @@ describe("eva serve", () => {
   })
 })
 
+describe("eva --web", () => {
+  it("runs the page beside the terminal, and leaves the bind to the surface", () => {
+    expect(ran(["--web"]).invocation).toEqual({ kind: "interactive", overlays: {}, web: true })
+  })
+
+  // The bind is spelled as the serve member spells it, so the plugin half
+  // takes this invocation as it stands.
+  it("carries the host and the port the command line named", () => {
+    expect(ran(["--web", "--host", "127.0.0.1", "--port", "8080"]).invocation).toEqual({
+      kind: "interactive",
+      overlays: {},
+      web: true,
+      host: "127.0.0.1",
+      port: 8080,
+    })
+  })
+
+  // A bind with no page to bind names an address nothing is served at, and a
+  // flag passed over in silence reads as a flag that was honoured.
+  it.each([
+    ["--host", "127.0.0.1"],
+    ["--port", "8080"],
+  ])("refuses %s with no --web, and says what it wants", (flag, value) => {
+    const found = ran([flag, value])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain("--web")
+  })
+
+  it("refuses a port it cannot read, naming it", () => {
+    const found = ran(["--web", "--port", "eight"])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain("eight")
+  })
+
+  // `--print` answers once and exits, so nothing would hold the page open.
+  it("refuses a page beside --print, and names the verb that serves one", () => {
+    const found = ran(["--print", "hello", "--web"])
+    expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+    expect(found.err).toContain("eva serve --web")
+  })
+})
+
 describe("what the command line says it did not read", () => {
   it("says nothing when every argument was read", () => {
     expect(ran(["config", "show"]).err).toBe("")

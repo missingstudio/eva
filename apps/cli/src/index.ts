@@ -19,7 +19,7 @@ import {
   type ResolvedConfig,
   type Started,
 } from "./run.js"
-import { runServe } from "./serve.js"
+import { runServe, WEB_DOOR } from "./serve.js"
 import { closed, openClient } from "./surface.js"
 import { fromProcess, type World } from "./world.js"
 
@@ -208,14 +208,37 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       )
     }
 
-    case "interactive":
-      // No prompt means the interactive surface. A build with none says so
-      // rather than printing help and exiting as though it had run.
-      return yield* door(world, invocation.overlays, build, (started) =>
-        Effect.map(Effect.exit(withSignals(runInteractive(started))), (outcome) =>
-          closed(outcome, world.err, () => showHelp(world)),
-        ),
+    /**
+     * No prompt means the interactive surface. A build with none says so
+     * rather than printing help and exiting as though it had run.
+     *
+     * `--web` runs the page beside it, in this process and against this
+     * Session — which is what lets a request asked in the terminal be
+     * answered in the browser. The build is rebuilt exactly as `serve` rebuilds
+     * it, because the raw `eva.web` entry has no writer, no bind, and no
+     * `eva.api` wire: a page started from it would bind on the defaults, say
+     * nothing, and answer no call. The bind is refused before anything boots,
+     * for the reason it is refused there.
+     */
+    case "interactive": {
+      const refused = refusal(invocation.host)
+      if (refused !== undefined) {
+        world.err(`${refused}\n`)
+        return 1
+      }
+
+      const page = invocation.web === true
+      return yield* door(
+        world,
+        invocation.overlays,
+        page ? serving(build, invocation, world.out) : build,
+        (started) =>
+          Effect.map(
+            Effect.exit(withSignals(runInteractive(started, page ? [WEB_DOOR] : []))),
+            (outcome) => closed(outcome, world.err, () => showHelp(world)),
+          ),
       )
+    }
 
     /**
      * The same Session API a Console calls, driven by the command line instead

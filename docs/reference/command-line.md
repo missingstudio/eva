@@ -47,6 +47,7 @@ The three mode flags are commands.
 ```
 eva                                 start the interactive surface
 eva --print <prompt>                answer once and exit
+eva --web                           run the page beside the terminal
 eva run <name> [file]               run a workflow: one input in, the last Run's text out
 eva serve --web                     serve the page that watches a Session
 eva trust                           read this directory's .eva, and record the grant
@@ -103,21 +104,34 @@ eva serve --web --host 0.0.0.0
   ← refused: a non-local bind needs a token, and tokens arrive at 9b
 ```
 
+`eva --web` is the other arrangement of those two rows. One process holds the
+terminal and the page, against one Session, so a request asked in the terminal
+is answerable in the browser and the Trace shows one Session either way. The
+flag names the `eva.web` row beside the interactive row the root already chose;
+a row both of them name is started once; and the run ends when the terminal
+ends, because a page holds nobody to end it. The build is rebuilt the way
+`eva serve --web` rebuilds it, and the bind is refused by the same rule before
+anything boots. `--host` or `--port` with no `--web` is refused rather than
+passed over, and so is `--print --web`: an answer that exits serves no page.
+
 A positional argument is safe under `eva run` and it is not safe at the root:
 the verb is already named, so the positional cannot swallow a misspelled one.
 The rule below about the bare prompt still holds where it was made.
 
 Global flags. They are valid on every command, before it or after it:
 
-| Flag                       | Repeatable | What it does               |
-| -------------------------- | ---------- | -------------------------- |
-| `--config <path>`          | yes        | overlay a config file      |
-| `--model <provider/model>` | no         | set the model for this run |
-| `--plugin <id>`            | yes        | load a plugin for this run |
-| `--without-plugin <id>`    | yes        | skip a plugin for this run |
-| `-p, --print <prompt>`     | no         | answer once and exit       |
-| `-v, --version`            | no         | print the version and exit |
-| `-h, --help`               | no         | print the help and exit    |
+| Flag                       | Repeatable | What it does                     |
+| -------------------------- | ---------- | -------------------------------- |
+| `--config <path>`          | yes        | overlay a config file            |
+| `--model <provider/model>` | no         | set the model for this run       |
+| `--plugin <id>`            | yes        | load a plugin for this run       |
+| `--without-plugin <id>`    | yes        | skip a plugin for this run       |
+| `-p, --print <prompt>`     | no         | answer once and exit             |
+| `--web`                    | no         | run the page beside the terminal |
+| `--host <host>`            | no         | the address the page binds       |
+| `--port <port>`            | no         | the port the page binds          |
+| `-v, --version`            | no         | print the version and exit       |
+| `-h, --help`               | no         | print the help and exit          |
 
 `--without-plugin` replaces `--no-plugin`. §8.1 says why the old spelling cannot
 survive, and §9 says why nothing forwards it.
