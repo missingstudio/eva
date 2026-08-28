@@ -14,6 +14,7 @@ import {
   type Cursor,
   type Event,
   type Payload,
+  type SessionID,
 } from "@missingstudio/eva-schema"
 
 export const API_PLUGIN = "eva.api"
@@ -128,6 +129,30 @@ export const modelIn = (value: unknown): ModelRef | undefined => {
   const model = stringAt(row, "model")
   return provider === undefined || model === undefined ? undefined : { provider, model }
 }
+
+/**
+ * Where a new Session is, as the caller named it. A browser holds no honest
+ * path, so the field is optional and an absent one means the directory the
+ * serving process is in.
+ *
+ * An absent body reads the same way, and it has to: a body that is not JSON
+ * arrives here as nothing, exactly as no body at all does. So this refuses
+ * only a `location` that is there and is not a string — the one disagreement
+ * about a shape that this side can really see.
+ */
+export const locationIn = (value: unknown): { readonly location?: string } | undefined => {
+  if (value === undefined) return {}
+  const row = objectIn(value)
+  if (row === undefined) return undefined
+  if (row["location"] === undefined) return {}
+  const location = stringAt(row, "location")
+  return location === undefined ? undefined : { location }
+}
+
+// The Session a `create` opened. It travels as the string it is, because a
+// `SessionID` is a branded string and an envelope around one would say no more.
+export const sessionIn = (value: unknown): SessionID | undefined =>
+  typeof value === "string" ? sessionID(value) : undefined
 
 /**
  * What a write carries, read the way an answer is. The shapes are the

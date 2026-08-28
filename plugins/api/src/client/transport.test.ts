@@ -125,6 +125,26 @@ describe("the wire, read as a Transport", () => {
     await served.close()
   })
 
+  // The one call that writes and answers a value. What comes back is the
+  // Session itself, so the listing after it holds the id the caller holds.
+  it("opens a Session, and the listing after it holds the one it handed back", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const transport = yield* httpTransport({ origin: served.origin })
+        const made = yield* transport.api.create("/there")
+        return { made, listed: (yield* transport.api.list).map((row) => row.id) }
+      }),
+    )
+
+    expect(found.listed).toContain(found.made)
+    expect(memory.calls).toContainEqual({ method: "create", args: ["/there"] })
+
+    await served.close()
+  })
+
   it("answers the model a Session is kept at", async () => {
     const memory = await held()
     const served = await standing(memory)
@@ -477,6 +497,36 @@ describe("a pipe that is down", () => {
   })
 
   /**
+   * The same rule, for the one write that answers a value. A second Session
+   * would be worse than a second Run: the caller holds one id and the other
+   * is open where nobody is looking at it.
+   */
+  it("opens one Session when a create lands and its answer is lost", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    let asked = 0
+    const request = (async (...given: Parameters<Request>) => {
+      asked += 1
+      const answered = await fetch(...given)
+      if (asked === 1) throw new Error("socket hang up")
+      return answered
+    }) as Request
+
+    const made = await Effect.runPromise(
+      Effect.flatMap(httpTransport({ origin: served.origin, gap: 1, request }), (transport) =>
+        transport.api.create("/there"),
+      ),
+    )
+
+    expect(asked).toBe(2)
+    expect(memory.calls.filter((one) => one.method === "create")).toHaveLength(1)
+    expect(memory.opened()).toEqual([made])
+
+    await served.close()
+  })
+
+  /**
    * And the other side of that rule. A write the far side read and refused is
    * a shape the two halves disagree about, so asking again forever would be a
    * hang where a report belongs.
@@ -502,11 +552,11 @@ describe("a pipe that is down", () => {
 })
 
 /**
- * `SessionAPI` is one interface and a filler answers all of it. A method this
- * one does not reach is a defect where it is called, so a caller that reached
- * for one hears about it instead of waiting on a stream that never opens.
+ * `SessionAPI` is one interface and a filler answers all of it. This one
+ * reaches every method, so a call made against a pipe that is down waits for
+ * it — and no call is answered at once with a defect saying it was not wired.
  */
-describe("what the wire does not carry", () => {
+describe("what the wire carries", () => {
   const transport = httpTransport({ origin: "http://eva.invalid", gap: 1 })
 
   /**
@@ -517,23 +567,13 @@ describe("what the wire does not carry", () => {
   const tried = <A>(call: Effect.Effect<A>): Effect.Effect<string> =>
     Effect.race(Effect.map(Effect.exit(call), String), Effect.as(Effect.sleep(5), "still waiting"))
 
-  it("makes `create` a defect rather than a wait", async () => {
-    const failed = await Effect.runPromise(
-      Effect.flatMap(transport, (one) => Effect.exit(one.api.create("/here"))),
-    )
-
-    expect(Exit.isFailure(failed)).toBe(true)
-    expect(String(failed)).toContain("NotOnTheWire")
-  })
-
-  // Everything else is whole. `create` is the one method in neither half: a
-  // page that takes no input opens no Session.
-  it("carries every other call the page makes", async () => {
+  it("carries every call the page makes", async () => {
     const found = await Effect.runPromise(
       Effect.flatMap(transport, (one) =>
         Effect.all([
           tried(Stream.runCollect(one.api.watch(sessionID("ses_1")))),
           tried(one.api.list),
+          tried(one.api.create("/here")),
           tried(Effect.scoped(one.api.attach(sessionID("ses_1")))),
           tried(one.api.model.get(sessionID("ses_1"))),
           tried(one.api.model.set(sessionID("ses_1"), MODEL)),
@@ -544,7 +584,7 @@ describe("what the wire does not carry", () => {
       ),
     )
 
-    expect(found.join("\n")).not.toContain("NotOnTheWire")
+    expect(found.join("\n")).not.toContain("Failure")
   })
 })
 
