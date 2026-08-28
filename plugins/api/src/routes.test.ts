@@ -28,8 +28,8 @@ const held = (): Promise<MemorySession> =>
  * plugin, so the socket here is bare — and what falls past the wire is
  * `eva.web`'s to answer, said in one line so a test can tell that it fell.
  */
-const standing = async (memory: MemorySession) => {
-  const wire = apiWire(memory.api)
+const standing = async (memory: MemorySession, directory?: () => string) => {
+  const wire = apiWire(memory.api, directory)
   const server = createServer((request, response) => {
     if (wire(request, response)) return
     response.writeHead(200, { "content-type": "text/plain; charset=utf-8" })
@@ -343,7 +343,8 @@ describe("the route table", () => {
 
   // The other half, and the same rule: a method and a path this does not
   // carry is a miss, whatever body arrived with it.
-  it("carries the four calls that write, and nothing else", () => {
+  it("carries the five calls that write, and nothing else", () => {
+    expect(routeFor("POST", SESSIONS, {})).toBeTypeOf("function")
     expect(routeFor("POST", sessionPath("ses_1"), { kind: "prompt", text: "ask" })).toBeTypeOf(
       "function",
     )
@@ -351,11 +352,27 @@ describe("the route table", () => {
     expect(routeFor("PUT", modelPath("ses_1"), MODEL)).toBeTypeOf("function")
     expect(routeFor("PUT", answerPath("call_1"), { kind: "cancelled" })).toBeTypeOf("function")
 
-    expect(routeFor("POST", SESSIONS, {})).toBeUndefined()
     expect(routeFor("POST", modelPath("ses_1"), MODEL)).toBeUndefined()
     expect(routeFor("PUT", sessionPath("ses_1"), {})).toBeUndefined()
     expect(routeFor("DELETE", sessionPath("ses_1"), undefined)).toBeUndefined()
     expect(watchFor("POST", watchPath("ses_1"), undefined)).toBeUndefined()
+  })
+
+  /**
+   * The one body that may be absent. A body that is not JSON reaches this
+   * table as nothing, exactly as no body at all does — so a `create` with
+   * neither opens a Session where the serving process is, and only a
+   * `location` that is there and is not a string is a shape it refuses.
+   */
+  it("opens a Session from a body it was never given, and refuses one it cannot read", async () => {
+    const memory = await held()
+    expect(routeFor("POST", SESSIONS, undefined, () => "/pinned")).toBeTypeOf("function")
+
+    const refusing = routeFor("POST", SESSIONS, { location: 7 })
+    const answer = await Effect.runPromise(refusing?.(memory.api) ?? Effect.succeed(undefined))
+
+    expect(answer).toEqual({ status: 400, body: { error: "the wire cannot read this body" } })
+    expect(memory.calls).toEqual([])
   })
 
   /**
@@ -394,6 +411,60 @@ describe("the write half, over a socket", () => {
       },
       body: JSON.stringify(body),
     })
+
+  /**
+   * The one write that answers a value. A status alone would not say which
+   * Session was opened, and a caller that has to list to find out would not
+   * know its own from another door's.
+   */
+  it("opens a Session, and the listing then holds it", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const response = await wrote(served.origin, "POST", SESSIONS, { location: "/there" })
+    const made = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(typeof made).toBe("string")
+    expect(memory.calls).toEqual([{ method: "create", args: ["/there"] }])
+
+    const listed = (await (await fetch(`${served.origin}${SESSIONS}`)).json()) as {
+      readonly id: string
+    }[]
+    expect(listed.map((row) => row.id)).toContain(made)
+
+    await served.close()
+  })
+
+  // A browser holds no honest path, so a caller that names none is answered
+  // with the directory the serving process is in.
+  it("opens the Session where the serving process is when nobody named a place", async () => {
+    const memory = await held()
+    const served = await standing(memory, () => "/pinned")
+
+    const response = await wrote(served.origin, "POST", SESSIONS, undefined)
+
+    expect(response.status).toBe(200)
+    expect(memory.calls).toEqual([{ method: "create", args: ["/pinned"] }])
+
+    await served.close()
+  })
+
+  // The same key rule as every other write, and the reason `create` needs it:
+  // a caller that asked again would otherwise hold one Session and leave
+  // another open behind it.
+  it("answers one id for a create asked twice under one key", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const first = await wrote(served.origin, "POST", SESSIONS, {}, "key_1")
+    const again = await wrote(served.origin, "POST", SESSIONS, {}, "key_1")
+
+    expect(await first.json()).toBe(await again.json())
+    expect(memory.calls.filter((one) => one.method === "create")).toHaveLength(1)
+
+    await served.close()
+  })
 
   it("opens a Run from a Prompt, and answers nothing back", async () => {
     const memory = await held()

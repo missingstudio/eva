@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { apiWire } from "@missingstudio/eva-api"
 import { httpTransport } from "@missingstudio/eva-api/client"
 import { approval } from "@missingstudio/eva-approval"
-import { makeSessionAPI, overSurface, type Api, type Kernel } from "@missingstudio/eva-boot"
+import { makeSessionAPI, overSurface, type Kernel } from "@missingstudio/eva-boot"
 import {
   PERMISSION_OPTIONS,
   providerTurn,
@@ -92,14 +92,15 @@ const overWire: Door = { name: "over the socket", of: overSocket }
 const doors: readonly Door[] = [inProcess, overWire]
 
 /**
- * The Session is opened beside the door, because `create` is on neither half of
- * the wire: a page that takes no input opens no Session. Everything the clause
- * then writes goes through the door it named.
+ * The Session is opened through the door too, because `create` is on both
+ * halves of the wire now: a page names a Session by opening one. So a clause
+ * reaches for nothing beside the door it named, and the kernel is here for
+ * the record it holds rather than for a call.
  */
 const writing = <A>(
   door: Door,
   plugins: readonly Plugin[],
-  body: (writes: SessionAPI, api: Api, kernel: Kernel) => Effect.Effect<A>,
+  body: (writes: SessionAPI, kernel: Kernel) => Effect.Effect<A>,
   config: Record<string, unknown> = {},
 ): Promise<A> =>
   withKernel(
@@ -108,7 +109,7 @@ const writing = <A>(
       Effect.gen(function* () {
         const api = yield* makeSessionAPI(kernel, MODEL, scope)
         const writes = yield* Effect.provideService(door.of(api.session), Scope.Scope, scope)
-        return yield* body(writes, api, kernel)
+        return yield* body(writes, kernel)
       }),
     { config },
   )
@@ -132,9 +133,9 @@ describe("a Prompt, through each door", () => {
     writing(
       door,
       [trace, traceMemory, scripted([{ payloads: [text("an answer")] }]).plugin],
-      (writes, api, kernel) =>
+      (writes, kernel) =>
         Effect.gen(function* () {
-          const session = yield* api.session.create("/here")
+          const session = yield* writes.create("/here")
           yield* writes.submit(session, { kind: "prompt", text: "ask" })
           return payloadsOf(yield* committed(kernel))
         }),
@@ -188,9 +189,9 @@ describe("a cancel, through each door", () => {
     const said = await writing(
       door,
       [trace, traceMemory, providing(parked(reached))],
-      (writes, api, kernel) =>
+      (writes, kernel) =>
         Effect.gen(function* () {
-          const session = yield* api.session.create("/here")
+          const session = yield* writes.create("/here")
           const running = yield* Effect.forkChild(
             writes.submit(session, { kind: "prompt", text: "ask" }),
           )
@@ -367,9 +368,9 @@ describe("a Run that calls tools, through each door", () => {
         scripted(SCRIPT).plugin,
         harnessLoop,
       ],
-      (writes, api, kernel) =>
+      (writes, kernel) =>
         Effect.gen(function* () {
-          const session = yield* api.session.create("/here")
+          const session = yield* writes.create("/here")
           yield* writes.submit(session, {
             kind: "prompt",
             text: "rename it",

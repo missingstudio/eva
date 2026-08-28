@@ -19,6 +19,16 @@ export interface ApiOptions {
    * are answered by nobody, which is a degradation and not a crash.
    */
   readonly serve: (wire: (api: SessionAPI) => Answering) => void
+  /**
+   * Where a Session goes when the caller named nowhere. A page holds no
+   * honest path, so the serving process answers with its own directory —
+   * which is what this reads when nobody hands one over.
+   *
+   * Handed in at construction, as the terminal is handed its directory and
+   * `eva.web` its bind: a run's own facts meet a plugin at the composition
+   * root, and a suite that must pin one does it here and not with a chdir.
+   */
+  readonly directory?: () => string
 }
 
 /**
@@ -29,5 +39,5 @@ export interface ApiOptions {
 export const makeApi = (options: ApiOptions): Plugin =>
   define({
     id: API_PLUGIN,
-    effect: () => Effect.sync(() => options.serve(apiWire)),
+    effect: () => Effect.sync(() => options.serve((api) => apiWire(api, options.directory))),
   })

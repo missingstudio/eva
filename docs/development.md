@@ -370,8 +370,8 @@ the next Prompt.
 **The write half of the Session API** ships as `eva.api`: `submit`, `cancel`,
 `answer` and setting the model, over the socket W1 opened. Sends carry a
 client-minted idempotency key, so a retry after a flaky reconnect is one Run.
-The contract suite crosses the wire for eight of the nine methods, and the
-records a Run leaves are the same whichever door drove it.
+The contract suite crosses the wire for all nine methods, and the records a
+Run leaves are the same whichever door drove it.
 
 **Both surfaces draw the stage's work.** The page answers a permission request
 over its own event stream, so the four options are reachable from a browser,

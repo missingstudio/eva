@@ -21,6 +21,7 @@ import {
   modelPath,
   payloadIn,
   refusalIn,
+  sessionIn,
   sessionPath,
   SESSIONS,
   watchPath,
@@ -46,23 +47,14 @@ export interface HttpOptions {
 }
 
 /**
- * What the wire does not carry. `SessionAPI` is one interface and a filler
- * answers all of it, so a method this one does not reach is a defect where it
- * is called — not a hang, and not a shape nobody can read. `create` is the
- * only one left: a page that takes no input opens no Session.
- */
-export class NotOnTheWire extends Error {
-  override readonly name = "NotOnTheWire"
-  constructor(method: string) {
-    super(`the wire does not carry \`${method}\` yet`)
-  }
-}
-
-/**
  * A write the far side read and refused. It is a shape the two halves of one
  * wire disagree about — a page held from an older build, calling a newer one —
  * so it is a defect where the call was made. Asking again forever would turn
- * a report into a hang, which is why `NotOnTheWire` is a defect too.
+ * a report into a hang.
+ *
+ * It is the only defect this filler raises. `SessionAPI` is one interface and
+ * a filler answers all of it, and this one now reaches all nine methods — so
+ * there is no method left that says it is not carried.
  */
 export class Refused extends Error {
   override readonly name = "Refused"
@@ -135,13 +127,12 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
         () => SubscriptionRef.set(health, "ready"),
       )
 
-    const missing = (method: string) => Effect.die(new NotOnTheWire(method))
-
     /**
-     * One write, sent. `undefined` back is a write that landed; a `Refused` is
-     * one the far side read and would refuse again however often it is asked.
-     * Anything else is not this wire answering, which is the same fact as a
-     * pipe that is down.
+     * One write, sent, and what the far side said back — `null` from a write
+     * that answers nothing, and the Session from the one that opens one. A
+     * `Refused` is a write the far side read and would refuse again however
+     * often it is asked. Anything else is not this wire answering, which is
+     * the same fact as a pipe that is down.
      */
     const send = async (
       method: string,
@@ -149,19 +140,18 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
       body: unknown,
       key: string,
       signal: AbortSignal,
-    ): Promise<Refused | undefined> => {
+    ): Promise<Refused | { readonly said: unknown }> => {
       const response = await request(`${origin}${path}`, {
         method,
         signal,
         headers: { "content-type": "application/json", [IDEMPOTENCY]: key },
         body: JSON.stringify(body),
       })
-      if (response.ok) return undefined
 
       const kind = response.headers.get("content-type") ?? ""
-      if (kind.includes("application/json")) {
-        return new Refused(`${path} refused this shape with ${response.status}`)
-      }
+      const json = kind.includes("application/json")
+      if (response.ok) return { said: json ? ((await response.json()) as unknown) : undefined }
+      if (json) return new Refused(`${path} refused this shape with ${response.status}`)
       throw new Unreachable(`${path} answered ${kind === "" ? "nothing" : kind}`)
     }
 
@@ -173,9 +163,18 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
      * The key is minted once, before the first send, so every retry of this
      * write names the same one. That is what makes asking again safe: a
      * `submit` whose answer was lost is answered from the Run it already
-     * opened rather than opening a second.
+     * opened rather than opening a second, and a `create` whose answer was
+     * lost hands back the Session it already opened rather than a second one.
+     *
+     * `shape` is what that answer has to be. `create` is the one write that
+     * answers a value, and it is read here the way `call` reads a read.
      */
-    const write = (method: string, path: string, body: unknown): Effect.Effect<void> =>
+    const writing = <A>(
+      method: string,
+      path: string,
+      body: unknown,
+      shape: (said: unknown) => A | undefined,
+    ): Effect.Effect<A> =>
       Effect.suspend(() => {
         const key = shortID()
         return Effect.tap(
@@ -187,7 +186,13 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
                     try: (signal) => send(method, path, body, key, signal),
                     catch: (cause) => new Unreachable(String(cause)),
                   }),
-                  (refused) => (refused === undefined ? Effect.void : Effect.die(refused)),
+                  (answered) => {
+                    if (answered instanceof Refused) return Effect.die(answered)
+                    const found = shape(answered.said)
+                    return found === undefined
+                      ? Effect.fail(new Unreachable(`${path} answered a shape this cannot read`))
+                      : Effect.succeed(found)
+                  },
                 ),
                 () => SubscriptionRef.set(health, "disconnected"),
               ),
@@ -197,6 +202,11 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
           () => SubscriptionRef.set(health, "ready"),
         )
       })
+
+    // A write that answers nothing reads nothing: the status is the whole of
+    // the answer, so any body at all is one this can read.
+    const write = (method: string, path: string, body: unknown): Effect.Effect<void> =>
+      Effect.asVoid(writing(method, path, body, () => null))
 
     // A pipe that is not answering, said where it can be acted on. The watch
     // ends and no error channel carries it, which is the rule every filler of
@@ -310,7 +320,12 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
         get: (session) => call(modelPath(session), modelIn),
         set: (session, model) => write("PUT", modelPath(session), model),
       },
-      create: () => missing("create"),
+      /**
+       * The one write that answers a value. A page holds no honest path, so
+       * the location it names is the one it was given — and a page that names
+       * none leaves the serving process to answer with its own directory.
+       */
+      create: (location) => writing("POST", SESSIONS, { location }, sessionIn),
       /**
        * The record arrives and the fold happens here. So the Cursor is not
        * read off the wire either — this fold ends where the far side's ended,

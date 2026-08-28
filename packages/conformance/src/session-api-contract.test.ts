@@ -106,10 +106,9 @@ const memoryFiller: Filler = {
  * back over the socket. Every clause then passes unchanged, which is the
  * strongest thing that can be said about a seam surviving its second filler.
  *
- * Eight of the nine methods cross the socket here — both halves. `create` is
- * the ninth and it stays direct, because it is in neither half of the wire: a
- * page that takes no input opens no Session, so a Session is opened beside the
- * wire the way `eva.web`'s own composition opens one.
+ * Nine of the nine methods cross the socket here — both halves, and nothing
+ * beside them. There is no field below that reads the in-memory filler, so a
+ * clause that passes is a clause the wire carried whole.
  *
  * It is served where a person's Eva serves it: behind `eva.web`'s own server,
  * on one port, from the handler the composition root hands over. A wire that
@@ -156,7 +155,7 @@ const httpFiller: Filler = {
           )
 
           const over: SessionAPI = {
-            create: memory.api.create,
+            create: transport.api.create,
             list: transport.api.list,
             attach: transport.api.attach,
             model: transport.api.model,

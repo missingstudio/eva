@@ -2262,11 +2262,13 @@ export interface SessionAPI {
 A surface reads **two** sources and never confuses them: `watch` while a Run is
 open, `attach` for everything committed. The stream is never the record.
 
-**Eight of the nine are on the socket, both halves.** `list`, `attach`, `watch`
-and `model.get` are `GET`s; `submit` and `cancel` are `POST`s on the Session
-they act in; `model.set` and `answer` are `PUT`s, because asking twice sets the
-same value. `create` is on neither half: a page that takes no input opens no
-Session, so the composition root opens one beside the wire.
+**All nine are on the socket, both halves.** `list`, `attach`, `watch` and
+`model.get` are `GET`s; `create` is a `POST` on the listing, and `submit` and
+`cancel` are `POST`s on the Session they act in; `model.set` and `answer` are
+`PUT`s, because asking twice sets the same value. `create` is the one write
+that answers a value, and its `location` is optional: a browser holds no honest
+path, so a caller that names none opens the Session where the serving process
+is.
 
 What travels is the contract's own shapes, with no envelope: a `SubmitInput`
 body _is_ the Prompt, and a write answers a status and nothing else. A body the

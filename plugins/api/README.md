@@ -53,6 +53,7 @@ curl http://127.0.0.1:7777/api/sessions
 | `attach`    | `GET /api/sessions/:id`         | that Session's record, as events         |
 | `watch`     | `GET /api/sessions/:id/watch`   | what commits after a Cursor, as a stream |
 | `model.get` | `GET /api/sessions/:id/model`   | the model that Session is kept at        |
+| `create`    | `POST /api/sessions`            | opens a Session, and answers which       |
 | `submit`    | `POST /api/sessions/:id`        | opens a Run in that Session              |
 | `cancel`    | `POST /api/sessions/:id/cancel` | stops the Run open in it                 |
 | `model.set` | `PUT /api/sessions/:id/model`   | keeps that Session at another model      |
@@ -71,8 +72,13 @@ tells the two apart. `answer` is the one call keyed by a `RequestID` rather
 than by a Session, so it sits outside the listing: the id is the tool call's,
 which the `tool_call` record named before anybody was asked.
 
-`create` is in neither half: a page that takes no input opens no Session, so
-the composition root opens one beside the wire.
+`create` is the one write that answers a value, because a status alone would
+not say which Session was opened. Its body is `{"location"?}` and the field is
+optional: a browser holds no honest path, so a caller that names none is
+answered with the directory the serving process is in. An absent body reads the
+same way, and it has to — a body that is not JSON arrives as nothing, exactly
+as no body at all does — so the one shape this route refuses is a `location`
+that is there and is not a string.
 
 ## A write is asked twice and done once
 
@@ -201,31 +207,37 @@ slower, never differently typed** — the rule `droppableTransport` states, kept
 by the filler that really has a pipe. `SessionAPI` has no error channel and
 this keeps it that way.
 
-A method this wire does not carry is a defect where it is called, and `create`
-is the only one. A wire that hung instead would be a page that waits on a
-stream nobody opened.
+This wire carries all nine methods, so there is no method left that answers at
+once with a defect saying it is not carried. The one defect it raises is a
+write the far side read and refused, because a shape the two halves disagree
+about would be refused again however often it is sent.
 
 ## API
 
-- `makeApi({ serve })` — the plugin, id `eva.api`. It registers no row: a wire
-  is not a Domain, and the plugin id is what a person turns off.
-- `apiWire(api)` — the request handler, answering from any filler of the
-  Session API. It says whether it answered, so the server that owns the socket
-  can serve the page with what falls past it.
-- `routeFor(method, path, body)` — the route table, as a pure function. The
-  body arrives as a third argument the way `watchFor` takes its Cursor, so a
-  write route is still a description of an answer and never a write itself.
+- `makeApi({ serve, directory })` — the plugin, id `eva.api`. It registers no
+  row: a wire is not a Domain, and the plugin id is what a person turns off.
+  `directory` is where a Session goes when the caller named nowhere, and it is
+  the serving process's own when nobody hands one over.
+- `apiWire(api, directory)` — the request handler, answering from any filler of
+  the Session API. It says whether it answered, so the server that owns the
+  socket can serve the page with what falls past it.
+- `routeFor(method, path, body, directory)` — the route table, as a pure
+  function. The body arrives as a third argument the way `watchFor` takes its
+  Cursor, so a write route is still a description of an answer and never a
+  write itself; the directory arrives as a fourth, because where the serving
+  process is is a fact of that process and not of the request.
 - `watchFor(method, path, from)` — the same, for the one method that answers a
   stream. It is matched first, because a `Route` answers a body.
 - `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `REQUESTS`, `sessionPath(session)`,
   `modelPath(session)`, `watchPath(session)`, `cancelPath(session)`,
   `answerPath(request)` — the id and the paths, rooted so no address is built
   into the page.
-- `headerIn`, `headersIn`, `modelIn`, `eventsIn` — what a body has to be to be
-  an answer. `eventsOut` is the record on its way out.
-- `submitInputIn`, `cancelCauseIn`, `answerIn` — what a body has to be to be a
-  write. `modelIn` reads both directions, because `model.set` sends back what
-  `model.get` answers.
+- `headerIn`, `headersIn`, `modelIn`, `sessionIn`, `eventsIn` — what a body has
+  to be to be an answer. `eventsOut` is the record on its way out.
+- `submitInputIn`, `cancelCauseIn`, `answerIn`, `locationIn` — what a body has
+  to be to be a write. `modelIn` reads both directions, because `model.set`
+  sends back what `model.get` answers, and `locationIn` is the one that accepts
+  an absent body: only a `location` that is there and is not a string refuses.
 - `CURSOR`, `cursorIn(value)`, `IDEMPOTENCY`, `StreamFrame`, `frameOut(frame)`,
   `framesIn(text)`, `payloadIn(frame)`, `refusalOut(refused)`,
   `refusalIn(from, body)` — the headers and the stream's own shapes, read by

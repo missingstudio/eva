@@ -13,6 +13,7 @@ import {
   EVENT_STREAM,
   frameOut,
   IDEMPOTENCY,
+  locationIn,
   modelIn,
   refusalOut,
   REQUESTS,
@@ -80,6 +81,14 @@ const UNREADABLE: Answer = { status: 400, body: { error: "the wire cannot read t
 const refusing: Route = () => Effect.succeed(UNREADABLE)
 
 /**
+ * Where a Session goes when the caller named nowhere. A browser holds no
+ * honest path, so the honest answer is the directory the process answering
+ * the call is in — read at the moment of the call, and handed in rather than
+ * reached for, so a suite can pin it as it pins a bind.
+ */
+const HERE = (): string => process.cwd()
+
+/**
  * Both halves `eva.api` carries as a body. `watch` is in neither: it answers
  * a stream rather than a body, so it has a table of its own that is matched
  * first.
@@ -89,9 +98,16 @@ const refusing: Route = () => Effect.succeed(UNREADABLE)
  * and this table is still a pure function — the socket reads the bytes and
  * this decides what they mean.
  *
- * `create` is in neither half: a page that takes no input opens no Session.
+ * `directory` is the fourth for the same reason: where the serving process is
+ * is a fact of that process and not of the request, so it arrives beside the
+ * request rather than being read from inside a route.
  */
-export const routeFor = (method: string, path: string, body?: unknown): Route | undefined => {
+export const routeFor = (
+  method: string,
+  path: string,
+  body?: unknown,
+  directory: () => string = HERE,
+): Route | undefined => {
   if (method === "GET") {
     if (path === SESSIONS) {
       return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: rows }))
@@ -131,6 +147,18 @@ export const routeFor = (method: string, path: string, body?: unknown): Route | 
    * is what the idempotency key exists for.
    */
   if (method === "POST") {
+    /**
+     * Before the Session match, which needs a segment this path does not
+     * have. It is the one write that answers a value: what a caller asked for
+     * is the Session, and a status alone would not say which one.
+     */
+    if (path === SESSIONS) {
+      const opening = locationIn(body)
+      if (opening === undefined) return refusing
+      const where = opening.location ?? directory()
+      return (api) => Effect.map(api.create(where), (made) => ({ status: 200, body: made }))
+    }
+
     const prompting = askedFor(SESSION, path)
     if (prompting !== undefined) {
       const input = submitInputIn(body)
@@ -347,8 +375,12 @@ interface Once {
  * Everything under the root, answered from the contract it was given. Which
  * filler that is — the kernel's, or one a suite stands up — is not a fact
  * this wire holds: it calls the Session API as any other caller does.
+ *
+ * `directory` is where a Session goes when the caller named nowhere, and it
+ * is the serving process's own by default. A caller may hand over another,
+ * as the composition root hands `eva.web` a bind and a writer.
  */
-export const apiWire = (api: SessionAPI): Answering => {
+export const apiWire = (api: SessionAPI, directory?: () => string): Answering => {
   /**
    * The write each path is answering, under the key its caller named. A write
    * has no error channel, so a caller that could not reach this side waits
@@ -397,7 +429,7 @@ export const apiWire = (api: SessionAPI): Answering => {
     const read = method === "GET" ? Effect.succeed(undefined) : bodyOf(request)
     Effect.runFork(
       Effect.flatMap(read, (body) => {
-        const route = routeFor(method, asked, body)
+        const route = routeFor(method, asked, body, directory)
         const answered =
           route === undefined
             ? Effect.succeed(MISS)
