@@ -29,40 +29,22 @@ export const tailOf = (said: string, payload: Payload): string =>
   payload.kind === "text" && payload.content.type === "text" ? said + payload.content.text : said
 
 /**
- * Whether a Run is open, from the two payloads that bracket one. The record
- * says nothing about a Run that has not closed, and the page opens no Run of
- * its own to hold — so this is what tells it there is something to stop, and
- * it says so for a Run any door opened.
- *
- * A page opened while a Run was already going learns of it at the next
- * `started`: the payload that opened it was folded before this page attached,
- * and reading it back out of the fold would be a second fold of the record.
- */
-export const openOf = (running: boolean, payload: Payload): boolean => {
-  if (payload.kind === "started") return true
-  if (payload.kind === "finished") return false
-  return running
-}
-
-/**
  * What one Run signal changes about what the page holds. A fold replaces the
  * tail, so the tail goes with it; a payload of the live stream grows it.
  *
  * The protocol behind the signals is the Client's: attach, watch from the
  * fold's own position, and fold again however the watch ended — the Run
  * closed, the pipe went, or the Cursor was refused. This page held a second
- * spelling of that rule until `Client.follow` existed. What is here is the
- * page's own: which Blocks it draws and what it prices.
+ * spelling of that rule until `Client.follow` existed, and it read the
+ * bracketing payloads for whether a Run is open until the follow said so
+ * itself. What is here is the page's own: which Blocks it draws and what it
+ * prices.
  */
 const readingOf =
-  (signal: RunSignal) =>
+  (signal: RunSignal, running: boolean) =>
   (was: Reading): Reading => {
     if (signal.kind === "payload") {
-      return {
-        ...was,
-        running: openOf(was.running, signal.payload),
-        said: tailOf(was.said, signal.payload),
-      }
+      return { ...was, running, said: tailOf(was.said, signal.payload) }
     }
     const folded: Folded = {
       kind: "folded",
@@ -70,7 +52,7 @@ const readingOf =
       turns: blocksOf(signal.transcript),
       cost: signal.transcript.cost(),
     }
-    return { ...was, folded, said: "" }
+    return { ...was, folded, said: "", running }
   }
 
 /**
@@ -81,7 +63,7 @@ export const follow = (
   one: Client,
   session: SessionID,
   each: (reading: (was: Reading) => Reading) => void,
-): Effect.Effect<void> => one.follow(session, (signal) => each(readingOf(signal)))
+): Effect.Effect<void> => one.follow(session, (signal, running) => each(readingOf(signal, running)))
 
 /**
  * Runs one read over the Client for as long as the component is drawn, and

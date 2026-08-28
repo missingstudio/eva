@@ -3,8 +3,7 @@ import type { SessionHeader } from "@missingstudio/eva-core"
 import { spendOf, spendText, type CostSummary, type Cursor } from "@missingstudio/eva-schema"
 import { askingOf, type Asking, type Turn } from "@missingstudio/eva-session-view"
 import { Turns } from "./blocks.js"
-import { Composer } from "./composer.js"
-import type { Composing } from "./composing.js"
+import { Composer, type Composing } from "./composer.js"
 import {
   Context,
   ContextCacheUsage,
@@ -12,8 +11,16 @@ import {
   ContextInputUsage,
   ContextOutputUsage,
   ContextReasoningUsage,
-} from "./components/ai-elements/context.js"
-import { Models } from "./models.js"
+} from "@missingstudio/ui/components/ai-elements/context"
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@missingstudio/ui/components/ai-elements/conversation"
+import { MessageResponse } from "@missingstudio/ui/components/ai-elements/message"
+import { ModelPicker, type Choosing } from "./models.js"
+import { priced } from "./pricing.js"
+import { Main, stampText, TopBar } from "./shell.js"
 import { titleLine } from "./title.js"
 
 /**
@@ -74,7 +81,7 @@ export interface Pipe {
  * used to be unreachable, because the page held a refold of its own that said
  * nothing about the pipe.
  */
-export const noticeOf = (pipe: Pipe): string | undefined => {
+const noticeOf = (pipe: Pipe): string | undefined => {
   switch (pipe.at) {
     case "ready":
       return pipe.dropped ? "The pipe is back." : undefined
@@ -91,10 +98,10 @@ export const noticeOf = (pipe: Pipe): string | undefined => {
  * a Session that stopped reads the wrong thing off a page that is otherwise
  * correct.
  */
-export const Notice = ({ pipe }: { readonly pipe: Pipe }) => {
+const Notice = ({ pipe }: { readonly pipe: Pipe }) => {
   const said = noticeOf(pipe)
   return said === undefined ? null : (
-    <p className="mt-3 rounded-md border border-ember bg-card px-3 py-2 text-sm" role="status">
+    <p className="notice" role="status">
       {said}
     </p>
   )
@@ -120,7 +127,7 @@ export const Notice = ({ pipe }: { readonly pipe: Pipe }) => {
  * The spend is worked out here and handed over already said, because pricing
  * is not a drawing's job and this side of the wire holds no Catalog anyway.
  */
-export const Cost = ({ cost, ran }: { readonly cost: CostSummary; readonly ran: boolean }) => (
+const Cost = ({ cost, ran }: { readonly cost: CostSummary; readonly ran: boolean }) => (
   <Context cost={cost} className="mt-8">
     <ContextContentHeader>{spendText(spendOf(cost, ran))}</ContextContentHeader>
     <ContextInputUsage />
@@ -131,40 +138,76 @@ export const Cost = ({ cost, ran }: { readonly cost: CostSummary; readonly ran: 
 )
 
 /**
- * Which Session this is. It is drawn from the id the page was asked for, so
- * it is drawn at once, and the title joins it when the listing answers.
+ * Which mode the Session runs under, read off the record and nowhere else.
+ *
+ * The last mode Block on the record is the one in force, because a mode is a
+ * fact with a position and every change writes another one. A record that
+ * holds none leaves this undefined, and the pill beside the field is then not
+ * drawn at all: the page never guesses a posture it cannot read, and a Session
+ * whose mode has never been said is not a Session in the default mode as far
+ * as this page can prove.
+ */
+const modeOf = (reading: Reading): string | undefined => {
+  if (reading.folded.kind === "folding") return undefined
+  return reading.folded.turns
+    .flatMap((turn) => turn.blocks)
+    .findLast((block) => block.kind === "mode")?.mode
+}
+
+// The same answer as a prop or as no prop at all, because an absent mode and
+// a mode of `undefined` are the same fact and the composer takes one of them.
+const modeSaid = (reading: Reading): { mode?: string } => {
+  const mode = modeOf(reading)
+  return mode === undefined ? {} : { mode }
+}
+
+/**
+ * What the pipe is, in one word, and nothing while it is plainly up. It is the
+ * meta row's half of the notice above the record: a reader who has read the
+ * sentence once does not need it again beside the field, and a reader who has
+ * not still gets told the record is not moving.
+ */
+const pipeWord = (pipe: Pipe): string | undefined => {
+  switch (pipe.at) {
+    case "ready":
+      return undefined
+    case "synchronizing":
+      return "catching up…"
+    case "disconnected":
+      return "down"
+  }
+}
+
+/**
+ * Which Session this is, under the field where a reader is about to write.
+ * The id is drawn from what the page was asked for, so it is there at once;
+ * `updatedAt` joins it when the listing answers, and neither is invented.
  *
  * It takes no `Folded`, which is how the page keeps its promise that reading
  * is progressive: a long Session cannot be waited on here, because the fold
  * is not reachable from this component at all.
- *
- * The title is a Run's intent until an `info` gives a better one, and an
- * intent is a whole prompt. The record is right to hold all of it and a
- * heading is the wrong place to draw all of it, so the heading is one line
- * and the record's own text is on the element behind it.
  */
-export const Named = ({
+const Named = ({
   session,
   header,
+  pipe,
 }: {
   readonly session: string
   readonly header: SessionHeader | undefined
-}) => (
-  <>
-    <h1 className="d-3" title={header?.title}>
-      {titleLine(header?.title)}
-    </h1>
-    <p className="text-muted-foreground text-sm">
+  readonly pipe: Pipe
+}) => {
+  const said = pipeWord(pipe)
+
+  return (
+    <p className="meta-row">
       <code>{session}</code>
       {header?.updatedAt === undefined ? null : (
-        <time dateTime={header.updatedAt}> · {header.updatedAt}</time>
+        <time dateTime={header.updatedAt}>{stampText(header.updatedAt)}</time>
       )}
+      {said === undefined ? null : <span>{said}</span>}
     </p>
-    <p className="text-muted-foreground text-sm">
-      <a href="/">every Session</a>
-    </p>
-  </>
-)
+  )
+}
 
 /**
  * What the open Run has streamed so far, after the fold and before the cost.
@@ -172,18 +215,25 @@ export const Named = ({
  * a reader can see which words are still being said, and the fold writes over
  * them when the Run closes.
  *
- * It is drawn on the panel, which is the one surface that stays dark in both
- * schemes because the program it stands for is. Nothing else on this page is
- * the program talking while it talks.
+ * It is drawn as the agent's own prose, through the same renderer the
+ * committed fold goes through, in `streaming` mode. A Run writes markdown
+ * while it writes — a heading, a list, a half-finished fence — so a tail drawn
+ * as plain characters shows a reader the source of the answer rather than the
+ * answer, and then rewrites it as prose the moment the Run closes. Streaming
+ * mode is what reads a half-written document without waiting for it to close,
+ * so the words arrive already formed and the fold replaces them with the same
+ * drawing rather than a different one.
+ *
+ * The caret is the stylesheet's, on the last line of what has arrived. It says
+ * the words are still coming, carries no text, and is gone under reduced
+ * motion — the live region says the same thing to a reader who is being read
+ * the page rather than shown it.
  */
-export const Live = ({ said }: { readonly said: string }) =>
+const Live = ({ said }: { readonly said: string }) =>
   said === "" ? null : (
-    <p
-      className="panel-terminal my-2 whitespace-pre-wrap rounded-md px-3 py-2 text-sm"
-      aria-live="polite"
-    >
-      {said}
-    </p>
+    <div aria-live="polite" className="prose live">
+      <MessageResponse mode="streaming">{said}</MessageResponse>
+    </div>
   )
 
 /**
@@ -212,6 +262,7 @@ export const Session = ({
   asking = [],
   answer,
   composer,
+  choosing,
 }: {
   readonly session: string
   readonly header: SessionHeader | undefined
@@ -220,29 +271,72 @@ export const Session = ({
   readonly asking?: readonly Asking[]
   readonly answer?: (request: string, optionId: string) => void
   readonly composer?: Composing
+  /**
+   * The models this build can run and the one this Session is kept at. It is
+   * the picker's, and it is the cost line's too: the Catalog is where a rate
+   * comes from, so the rows that offer a model are the rows that price it.
+   */
+  readonly choosing?: Choosing
 }) => (
-  <main className="mx-auto max-w-measure px-6 py-16">
-    <Named session={session} header={header} />
-    <Notice pipe={pipe} />
-    <Models session={session} />
-    {reading.folded.kind === "folding" ? (
-      <p aria-busy="true" className="mt-6 text-muted-foreground" role="status">
-        Reading the transcript…
-      </p>
-    ) : (
-      <>
-        <Turns
-          turns={[...reading.folded.turns, ...askingOf(asking)]}
-          {...(answer === undefined ? {} : { answer })}
-        />
-        <Live said={reading.said} />
-        <Cost cost={reading.folded.cost} ran={reading.folded.at.seq > 0} />
-      </>
-    )}
-    <Composer
-      pipe={pipe}
-      running={reading.running}
-      {...(composer === undefined ? {} : { composer })}
+  <Main>
+    <TopBar
+      title={titleLine(header?.title)}
+      {...(reading.folded.kind === "folding"
+        ? {}
+        : {
+            spend: spendText(
+              spendOf(
+                priced(reading.folded.cost, choosing?.rows ?? [], choosing?.chosen),
+                reading.folded.at.seq > 0,
+              ),
+            ),
+          })}
     />
-  </main>
+    {/*
+       The one scroll container on the page. It sticks to the bottom while the
+       record grows and stops the moment a reader scrolls up, so the composer
+       and the rail hold still while the record moves.
+    */}
+    <Conversation className="scroll">
+      <ConversationContent className="col">
+        <Notice pipe={pipe} />
+        {reading.folded.kind === "folding" ? (
+          <p aria-busy="true" className="text-muted-foreground" role="status">
+            Reading the transcript…
+          </p>
+        ) : (
+          <>
+            <Turns
+              turns={[...reading.folded.turns, ...askingOf(asking)]}
+              {...(answer === undefined ? {} : { answer })}
+            />
+            <Live said={reading.said} />
+            <Cost
+              cost={priced(reading.folded.cost, choosing?.rows ?? [], choosing?.chosen)}
+              ran={reading.folded.at.seq > 0}
+            />
+          </>
+        )}
+      </ConversationContent>
+      <ConversationScrollButton className="to-newest" />
+    </Conversation>
+    <div className="dock">
+      <div className="dock-col">
+        <Composer
+          model={
+            <ModelPicker
+              chosen={choosing?.chosen}
+              rows={choosing?.rows ?? []}
+              {...(choosing === undefined ? {} : { choose: choosing.choose })}
+            />
+          }
+          pipe={pipe}
+          running={reading.running}
+          {...(composer === undefined ? {} : { composer })}
+          {...modeSaid(reading)}
+        />
+        <Named header={header} pipe={pipe} session={session} />
+      </div>
+    </div>
+  </Main>
 )

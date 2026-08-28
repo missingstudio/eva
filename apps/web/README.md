@@ -202,10 +202,8 @@ cd apps/web && bun run dev
 | `src/session.tsx`   | one Session: which it is, what was said, what it cost        |
 | `src/blocks.tsx`    | one Block, in page primitives                                |
 | `src/composer.tsx`  | what to say next: the line, the send, the stop, the queue    |
-| `src/composing.ts`  | the composer fold, driven — and the calls its actions make   |
 | `src/models.tsx`    | the model picker: the Catalog's rows, and the one chosen     |
 | `src/title.ts`      | what to call a Session, in one line                          |
-| `src/command.tsx`   | a command line, and what the last one wrote                  |
 | `src/eva.ts`        | the one Client, over the same-origin wire                    |
 | `src/sessions.ts`   | what the page reads: the Sessions, or not yet                |
 | `src/transcript.ts` | what it reads of one Session: the Header, the fold, the tail |

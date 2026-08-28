@@ -1,23 +1,62 @@
-import { idle, type LoopState, type LoopStep } from "@missingstudio/eva-client-runtime"
+import {
+  idle,
+  waitingText,
+  walk,
+  type LoopState,
+  type LoopStep,
+} from "@missingstudio/eva-client-runtime"
 import { optionFor } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
+import { namesCommand } from "@missingstudio/eva-sdk"
 import type { Asking } from "@missingstudio/eva-session-view"
 import { Button } from "@missingstudio/ui/components/button"
-import { Textarea } from "@missingstudio/ui/components/textarea"
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+} from "@missingstudio/ui/components/ai-elements/prompt-input"
 import { Effect } from "effect"
-import { useRef, useState } from "react"
-import { Wrote } from "./command.js"
-import { walk, type Composing } from "./composing.js"
+import { ArrowUpIcon, LockIcon } from "lucide-react"
+import { useRef, useState, type ReactNode } from "react"
 import { client, command } from "./eva.js"
 import { sessionHref } from "./paths.js"
+import { SAY_NEXT } from "./shell.js"
 import type { Pipe } from "./session.js"
 
 /**
  * The composer: what a line typed here does, and how it is drawn. The rules a
- * line is read by are `composing.ts`'s and the fold's behind it; what is here
- * is the doing — the calls each of the fold's actions turns into, all of them
- * through the one Client.
+ * line is read by are the composer fold's in `client-runtime` — which line
+ * answers a question, which one waits behind a Run, what a cancel drops — and
+ * the fold walks its own answers out, so a line typed at either door means
+ * the same thing for one reason and not for two. What is here is the doing —
+ * the calls each of the fold's actions turns into, all of them through the
+ * one Client.
  */
+
+/**
+ * What the page can do with a line, and what it is holding while it does. The
+ * composer is handed this rather than reaching for the Client, so what it
+ * offers is provable without a socket — and one drawn with nowhere to send a
+ * line says so rather than looking live, which is the rule the permission
+ * card already keeps.
+ */
+export interface Composing {
+  // The lines typed while a Run was open, oldest first. They wait their turn
+  // rather than racing it.
+  readonly pending: readonly string[]
+  // Whether a Run this page opened is still open.
+  readonly open: boolean
+  readonly send: (line: string) => void
+  // The same line, meant as a steer: it rides the Run that is open rather
+  // than waiting behind it.
+  readonly steer: (line: string) => void
+  readonly stop: () => void
+  // What the last line that named a command wrote back. Nothing until one has.
+  readonly wrote?: string
+}
 
 /**
  * A Prompt, and the Run it opened. `submit` answers when that Run has closed
@@ -100,16 +139,60 @@ export const useComposer = (session: SessionID, asking: readonly Asking[] = []):
   const standing = asking[0]?.request
 
   const drive = (step: LoopStep): void => {
-    held.current = walk(held.current, step, {
-      open: (run, line) =>
-        void prompted(session, line).finally(() => drive({ kind: "settled", run })),
-      steer: (line) => steered(session, line),
-      cancel: () => stopped(session),
-      answer: (line) => {
-        if (standing !== undefined) replied(standing, line)
-      },
-      run: (line) => ran(session, line, setWrote),
-    })
+    held.current = Effect.runSync(
+      walk(held.current, step, {
+        answer: (line) =>
+          Effect.sync(() => {
+            if (standing !== undefined) replied(standing, line)
+          }),
+        /**
+         * A line that names a command is a command, at whichever door it was
+         * typed. Whether it names one is decided here, because it is a fact
+         * of the line and of nothing else — `namesCommand` is the rule
+         * `dispatch` parses by, so this page and the attached terminal read
+         * one line one way. A Prompt sent over to be told it is a Prompt
+         * would be one write to learn the answer and a second to act on it.
+         *
+         * Nothing has moved yet: the answer crosses a wire, and the Session a
+         * command opened is followed when it arrives — so `moved` is never
+         * this page's to say.
+         */
+        handle: (line) =>
+          Effect.sync(() => {
+            if (!namesCommand(line)) return { ran: false, moved: false }
+            ran(session, line, setWrote)
+            return { ran: true, moved: false }
+          }),
+        open: (run, line) =>
+          Effect.sync(() => {
+            // The conversation moves on, so what a command wrote before it
+            // goes with it — the lifetime a Note has at every door.
+            setWrote(undefined)
+            void prompted(session, line).finally(() => drive({ kind: "settled", run }))
+          }),
+        /**
+         * The gesture, made. A steer rides the open Run and returns at once,
+         * and the Run says the line back as a `message`, so the page draws
+         * nothing of its own for it.
+         */
+        steer: (line) => Effect.sync(() => steered(session, line)),
+        /**
+         * Eva is told the person stopped. The `interrupt` beside it is a
+         * fiber the terminal holds and this page does not — the page submits
+         * and does not run the Run — so telling Eva is the whole of what a
+         * stop is here.
+         */
+        cancelled: () => Effect.sync(() => stopped(session)),
+        /**
+         * Nothing. `settle` reads how a fiber ended, `interrupt` stops one,
+         * and `refresh` follows a Session a command moved — this page holds
+         * no fiber and never says `moved`.
+         */
+        refresh: () => Effect.void,
+        interrupt: () => Effect.void,
+        settle: () => Effect.void,
+      }),
+    ).state
     setShown(held.current)
   }
 
@@ -124,12 +207,30 @@ export const useComposer = (session: SessionID, asking: readonly Asking[] = []):
 }
 
 /**
- * What the queue says, and nothing while nothing waits. A queue a reader
- * cannot see is a line they type a second time, and two Runs is not what they
- * asked for.
+ * What a command wrote, and nothing before one has run.
+ *
+ * Nothing here knows what any of the commands do: the rows live where the
+ * Domains do, so `/mode` and `/undo` reach this page by being on the wire and
+ * not by being drawn a second time. There is no field of its own either — the
+ * composer dispatches a line that names a command, the way the terminal does,
+ * because two fields would be two answers to what one line means.
+ *
+ * What a command writes is the whole of its answer, so it is drawn as a strip
+ * over the field that dispatched it — the last thing the program said, with
+ * the place for the next thing directly under it. A command that would have
+ * asked lists its options there instead, because this door supplies no way to
+ * pick one.
+ *
+ * It is a strip rather than the program's dark panel: the panel is the live
+ * tail's, which is a Run talking while it runs, and a command's answer is
+ * neither a Run nor live.
  */
-export const waitingText = (pending: readonly string[]): string | undefined =>
-  pending.length === 0 ? undefined : `${pending.length} waiting`
+const Wrote = ({ text }: { readonly text?: string }) =>
+  text === undefined || text === "" ? null : (
+    <p className="wrote" role="status">
+      {text}
+    </p>
+  )
 
 /**
  * Why nothing can be sent, or nothing while it can. A write that cannot reach
@@ -157,15 +258,30 @@ export const Composer = ({
   pipe,
   running = false,
   composer,
+  model,
+  mode,
 }: {
   readonly pipe: Pipe
   readonly running?: boolean
   readonly composer?: Composing
+  /**
+   * The model picker, handed in rather than mounted here. It reads for itself
+   * and the composer reads nothing, so a composer drawn on its own is still
+   * provable without a socket.
+   */
+  readonly model?: ReactNode
+  /**
+   * The mode the record last named, or nothing. It is display-only: switching
+   * modes is a typed `/mode` line, and a pill that looked like a picker would
+   * be a control that reaches nothing. Absent when the record holds no mode
+   * Block, because the page never guesses a posture it cannot read.
+   */
+  readonly mode?: string
 }) => {
   const [line, setLine] = useState("")
   const refused = refusalOf(pipe)
   const off = refused !== undefined || composer === undefined
-  const waiting = waitingText(composer?.pending ?? [])
+  const waiting = waitingText(composer?.pending.length ?? 0)
   const open = running || composer?.open === true
 
   /**
@@ -194,57 +310,75 @@ export const Composer = ({
   }
 
   return (
-    <section aria-label="what to say next" className="mt-8 border-graphite border-t pt-4">
-      {/* Above the field, where the tail of an open Run is: it is the last
+    <section aria-label="what to say next">
+      {/* Above the card, where the tail of an open Run is: it is the last
           thing the program said, and the field is for the next thing. */}
       <Wrote {...(composer?.wrote === undefined ? {} : { text: composer.wrote })} />
-      <Textarea
-        aria-label="a line for Eva"
-        disabled={off}
-        onChange={(event) => setLine(event.target.value)}
-        onKeyDown={(event) => {
-          // Enter sends and shift+Enter makes a line, which is what the
-          // terminal is bound to: one gesture, whichever door a person is at.
-          if (event.key !== "Enter" || event.shiftKey) return
-          event.preventDefault()
-          send()
-        }}
-        placeholder="Say something to Eva"
-        value={line}
-      />
-      {/* The row beside send, which is where another gesture goes. */}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button disabled={off} onClick={send} size="sm">
-          Send
-        </Button>
-        {/*
-          Steering rides a Run, so it is offered while one is going and not
-          before. A control that is always drawn is a control that means
-          nothing, which is the rule the stop beside it keeps.
-        */}
-        {open ? (
-          <Button disabled={off} onClick={steer} size="sm" variant="outline">
-            Steer
-          </Button>
-        ) : null}
-        {open ? (
-          <Button
-            disabled={composer === undefined}
-            onClick={() => composer?.stop()}
-            size="sm"
-            variant="outline"
-          >
-            Stop
-          </Button>
-        ) : null}
-        {waiting === undefined ? null : (
-          <p className="text-muted-foreground text-sm" role="status">
-            {waiting}
-          </p>
-        )}
-      </div>
+      {/*
+        The card supplies the clothes and the submit plumbing. What a line
+        means is decided here and in the fold behind this file: `onSubmit` is
+        wired to the same walk the button was, and nothing else about the
+        component is allowed an opinion on whether a line may go.
+      */}
+      <PromptInput className="composer" onSubmit={() => send()}>
+        <PromptInputBody>
+          <PromptInputTextarea
+            aria-label="a line for Eva"
+            className="field"
+            disabled={off}
+            id={SAY_NEXT}
+            onChange={(event) => setLine(event.target.value)}
+            placeholder="Say something to Eva"
+            value={line}
+          />
+        </PromptInputBody>
+        <PromptInputFooter className="controls">
+          <PromptInputTools>
+            {model}
+            {mode === undefined ? null : (
+              <span className="ctl">
+                <LockIcon aria-hidden="true" />
+                {mode}
+              </span>
+            )}
+            {/*
+              Steering rides a Run, so it is offered while one is going and not
+              before. A control that is always drawn is a control that means
+              nothing, which is the rule the stop beside it keeps.
+            */}
+            {open ? (
+              <Button disabled={off} onClick={steer} size="sm" variant="outline">
+                Steer
+              </Button>
+            ) : null}
+            {open ? (
+              <Button
+                disabled={composer === undefined}
+                onClick={() => composer?.stop()}
+                size="sm"
+                variant="outline"
+              >
+                Stop
+              </Button>
+            ) : null}
+            {waiting === undefined ? null : (
+              <p className="waiting" role="status">
+                {waiting}
+              </p>
+            )}
+          </PromptInputTools>
+          {/*
+            The send keeps its accessible name. Its glyph says which way the
+            line goes and never what a Run is doing: that is the record's to
+            say, and a button that said it too would be a second source.
+          */}
+          <PromptInputSubmit aria-label="Send" className="send" disabled={off}>
+            <ArrowUpIcon />
+          </PromptInputSubmit>
+        </PromptInputFooter>
+      </PromptInput>
       {refused === undefined ? null : (
-        <p className="mt-2 text-ember text-sm" role="status">
+        <p className="refusal" role="status">
           {refused}
         </p>
       )}
