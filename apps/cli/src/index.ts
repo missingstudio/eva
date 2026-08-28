@@ -1,4 +1,5 @@
 import type { Build } from "@missingstudio/eva-boot"
+import { httpTransport } from "@missingstudio/eva-api/client"
 import type { ConfigError } from "@missingstudio/eva-kernel"
 import type { Claim } from "@missingstudio/eva-schema"
 import { grantTrust, isTrusted, revokeTrust, type Overlays } from "@missingstudio/eva-kernel"
@@ -6,7 +7,8 @@ import { checkRules, sayFault, unreachableIn } from "@missingstudio/eva-tool-pol
 import { refusal } from "@missingstudio/eva-web"
 import { Effect, Exit, Scope } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
-import { BUILD, serving } from "./plugins.js"
+import { runAttach } from "./attach.js"
+import { attaching, BUILD, serving } from "./plugins.js"
 import { report } from "./report.js"
 import { showConfig } from "./show.js"
 import { runInteractive } from "./interactive.js"
@@ -24,6 +26,7 @@ import { closed, openClient } from "./surface.js"
 import { fromProcess, type World } from "./world.js"
 
 export * from "./argv.js"
+export * from "./attach.js"
 export * from "./report.js"
 export * from "./show.js"
 export * from "./interactive.js"
@@ -235,6 +238,34 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
         (started) =>
           Effect.map(
             Effect.exit(withSignals(runInteractive(started, page ? [WEB_DOOR] : []))),
+            (outcome) => closed(outcome, world.err, () => showHelp(world)),
+          ),
+      )
+    }
+
+    /**
+     * The terminal, against a runtime another process serves — the same door
+     * `eva` opens, reaching Eva over a socket instead of over this kernel.
+     *
+     * The wire is built before anything boots, because the build needs it: a
+     * line typed here runs where the Domains are, and the terminal is rebuilt
+     * around that as `serving` rebuilds the two halves of one port. A kernel
+     * still starts, for the theme, the keymap and the renderer the person at
+     * this terminal reads — those are facts of the process they sit at.
+     *
+     * No bind is refused here. This run opens no port: the one that was
+     * refused, or not, is the serving process's, and it made that decision
+     * when it bound.
+     */
+    case "attach": {
+      const wire = yield* httpTransport({ origin: invocation.url })
+      return yield* door(
+        world,
+        invocation.overlays,
+        attaching(build, invocation.url, wire.command),
+        (started) =>
+          Effect.map(
+            Effect.exit(withSignals(runAttach(started, wire, invocation.url))),
             (outcome) => closed(outcome, world.err, () => showHelp(world)),
           ),
       )

@@ -41,7 +41,7 @@ import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { tracePostgres } from "@missingstudio/eva-trace-postgres"
 import { traceSqlite } from "@missingstudio/eva-trace-sqlite"
 import { validator } from "@missingstudio/eva-validator"
-import { makeTui } from "@missingstudio/eva-tui-surface"
+import { makeTui, TUI_SURFACE, type Running, type TuiOptions } from "@missingstudio/eva-tui-surface"
 import { usage } from "@missingstudio/eva-usage"
 import { hasPage, makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
 import { workflow } from "@missingstudio/eva-workflow"
@@ -55,13 +55,12 @@ import { VERSION } from "./version.js"
  * native code over Bun's FFI. A `--print` run, and any run on Node, never
  * loads it — the module is not named until a surface actually starts.
  */
-export const tui = makeTui({
-  renderer: async (theme) => {
-    const { start } = await import("@missingstudio/eva-tui")
-    return start(theme === undefined ? {} : { theme })
-  },
-  version: VERSION,
-})
+const RENDERER: TuiOptions["renderer"] = async (theme) => {
+  const { start } = await import("@missingstudio/eva-tui")
+  return start(theme === undefined ? {} : { theme })
+}
+
+export const tui = makeTui({ renderer: RENDERER, version: VERSION })
 
 // What `scripts/release/build.ts` names the page it stages beside the binary.
 const PAGE = "eva-page"
@@ -134,6 +133,39 @@ export const serving = (build: Build, bind: WebBind, write: (text: string) => vo
     }),
   ])
 }
+
+/**
+ * This build, with the terminal pointed at a runtime another process serves.
+ *
+ * Two things change and nothing else does. A line runs where the Domains are,
+ * because a command mutates state where it runs — a `/mode` dispatched here
+ * would move this process's approval state and leave the Run under the mode it
+ * already had. And the banner names the address rather than this directory,
+ * because the repository the work happens in is on the machine the runtime is
+ * on.
+ *
+ * The rest of the table stays: the terminal reads its theme, its keymap and
+ * its renderer from the process the person is sitting at, which is this one.
+ *
+ * The row is replaced where it stands, and a build carrying none gets none.
+ * Load order is what says a person who typed a verb with no surface in it
+ * gets the terminal and not the page — `eva.tui` is registered before
+ * `eva.web` for exactly that — so a rebuild that moved it would attach a
+ * browser to the runtime instead of this terminal.
+ */
+export const attaching = (build: Build, origin: string, run: Running): Build =>
+  buildOf(
+    build.all.map((plugin) =>
+      plugin.id === TUI_SURFACE
+        ? makeTui({
+            renderer: RENDERER,
+            version: VERSION,
+            where: () => ({ kind: "runtime", origin }),
+            run,
+          })
+        : plugin,
+    ),
+  )
 
 /**
  * The built-in table, in load order: the trace first because everything

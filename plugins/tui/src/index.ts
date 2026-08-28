@@ -1,7 +1,7 @@
 import { declare, define, type Plugin } from "@missingstudio/eva-sdk"
 import { themeColors, type ChosenRenderer, type ThemeColors } from "@missingstudio/eva-tui-core"
 import { Effect } from "effect"
-import { makeSurface, TUI_SURFACE } from "./surface.js"
+import { makeSurface, TUI_SURFACE, type Running, type Where } from "./surface.js"
 
 export * from "./banner.js"
 export * from "./console.js"
@@ -26,7 +26,15 @@ export interface TuiOptions {
    * renderer as a fact of every Frame.
    */
   readonly renderer: (theme?: ThemeColors) => Promise<ChosenRenderer>
-  readonly directory?: () => string
+  /**
+   * Where the work happens. This process's own directory by default, which is
+   * what an in-process door knows; `eva attach` names the runtime it dialled,
+   * because the work is then on another machine.
+   */
+  readonly where?: () => Where
+  // How a line runs, when it does not run in this process. Absent is the
+  // local dispatch.
+  readonly run?: Running
   // The banner names the build, and the app is what holds the manifest.
   readonly version: string
 }
@@ -76,7 +84,10 @@ export const makeTui = (options: TuiOptions): Plugin =>
                 renderer: picked.renderer,
                 commands: ctx.command.get,
                 keymap: ctx.keymap.get,
-                directory: (options.directory ?? (() => process.cwd()))(),
+                where: (
+                  options.where ?? (() => ({ kind: "directory", path: process.cwd() }) as const)
+                )(),
+                ...(options.run === undefined ? {} : { run: options.run }),
                 version: options.version,
                 ...(chosen.colors === undefined ? {} : { theme: chosen.colors }),
                 notices: [...chosen.notices, ...picked.notices],

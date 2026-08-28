@@ -31,6 +31,13 @@ export type Invocation =
       readonly host?: string
       readonly port?: number
     }
+  /**
+   * `eva attach <url>`. The terminal, run against a runtime another process
+   * serves. The address is read here rather than in the branch, because one
+   * nothing can dial is a parse error and no kernel boots for it — the rule
+   * `eva policy check` and `eva run`'s inputs both keep.
+   */
+  | { readonly kind: "attach"; readonly url: string; readonly overlays: Overlays }
   | { readonly kind: "print"; readonly prompt: string; readonly overlays: Overlays }
   | { readonly kind: "showConfig"; readonly overlays: Overlays }
   | { readonly kind: "trust" }
@@ -65,7 +72,15 @@ export type Invocation =
     }
 
 // The verbs, for the suggestion a stray word gets.
-export const COMMANDS: readonly string[] = ["config", "policy", "run", "serve", "trust", "untrust"]
+export const COMMANDS: readonly string[] = [
+  "attach",
+  "config",
+  "policy",
+  "run",
+  "serve",
+  "trust",
+  "untrust",
+]
 
 /**
  * The rule set `eva policy check` reads when nothing names one: the
@@ -175,6 +190,32 @@ const portOf = (value: string | undefined, command: Command, where: string): num
     : command.error(`${where} takes a port from 0 to 65535; it got ${value}`)
 }
 
+// The schemes a runtime is reachable at. `eva.web` binds a socket, so an
+// address in any other spelling names something this cannot dial.
+const REACHABLE: readonly string[] = ["http:", "https:"]
+
+/**
+ * The runtime `eva attach` dials, as an origin.
+ *
+ * Every call is built as the origin and a path, so what is kept is the origin
+ * and a trailing slash goes. A word that is not an address is refused rather
+ * than dialled: a run that boots a kernel and then cannot reach anything has
+ * spent a person's time to say what the command line already knew.
+ */
+const runtimeAt = (value: string, command: Command): string => {
+  let read: URL | undefined
+  try {
+    read = new URL(value)
+  } catch {
+    read = undefined
+  }
+  return read === undefined || !REACHABLE.includes(read.protocol)
+    ? command.error(
+        `eva attach takes the address a runtime serves, like http://${DEFAULT_HOST}:${DEFAULT_PORT}; it got ${value}`,
+      )
+    : read.origin
+}
+
 /**
  * The page `eva --web` runs beside the terminal, and where it binds.
  *
@@ -274,6 +315,18 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
         })
       },
     )
+
+  root
+    .command("attach")
+    .description("run the terminal against a runtime another process serves")
+    .argument("<url>", "the address that runtime printed when it bound")
+    .action((url: string, _options: unknown, command: Command) => {
+      record({
+        kind: "attach",
+        url: runtimeAt(url, command),
+        overlays: overlaysOf(command.optsWithGlobals()),
+      })
+    })
 
   root
     .command("serve")

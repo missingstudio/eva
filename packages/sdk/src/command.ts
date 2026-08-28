@@ -24,6 +24,16 @@ const parseCommand = (line: string): Parsed | undefined => {
   }
 }
 
+/**
+ * Whether a line names a command at all.
+ *
+ * It is a fact of the line and of nothing else: no registry answers it, so a
+ * door that runs its lines in another process decides here what a Prompt is
+ * rather than asking the far side. The rule is `parseCommand`'s own, read
+ * from the one module that holds it, so the two doors cannot drift.
+ */
+export const namesCommand = (line: string): boolean => parseCommand(line) !== undefined
+
 const resolveCommand = (rows: readonly CommandInfo[], name: string): CommandInfo | undefined =>
   rows.find((row) => row.id === name || (row.aliases ?? []).includes(name))
 

@@ -1,6 +1,6 @@
 import { remembering } from "@missingstudio/eva-approval"
 import { makeSessionAPI, overSurface, type Gate, type Kernel } from "@missingstudio/eva-boot"
-import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
+import { localTransport, makeClient, type Client } from "@missingstudio/eva-client-runtime"
 import type { Frontend, SurfaceInfo } from "@missingstudio/eva-sdk"
 import { Cause, Effect, Exit, Scope } from "effect"
 import type { Started } from "./run.js"
@@ -72,6 +72,37 @@ export const openClient = Effect.fn("cli.openClient")(function* (
 export type Startable = SurfaceInfo & { readonly start: NonNullable<SurfaceInfo["start"]> }
 
 /**
+ * How this run reached Eva, and how Eva reaches the person here.
+ *
+ * Both halves are one choice. A door in this process opens the Session API
+ * over this kernel and wires the gate to the surfaces it starts, so there is
+ * nothing left to run; a door at the end of a socket opens the same contract
+ * over HTTP and leaves the gate to the process that owns it — and that process
+ * cannot call a surface it does not hold, so the reaching is a thing this side
+ * does for as long as the surfaces are up.
+ */
+export interface Reached {
+  readonly client: Client
+  readonly reaching?: Effect.Effect<void>
+}
+
+/**
+ * How a door reaches Eva. The surfaces arrive as a cell for the reason
+ * `gateFor` takes one: they start after the Client they answer through is
+ * built, and `reaching` is run once they have.
+ */
+export type Opening = (
+  scope: Scope.Scope,
+  surfaces: () => readonly Frontend[],
+) => Effect.Effect<Reached>
+
+// The local runtime: this kernel behind the local transport, under the gate.
+export const locally =
+  (started: Started): Opening =>
+  (scope, surfaces) =>
+    Effect.map(openClient(started, scope, surfaces), (client) => ({ client }))
+
+/**
  * Runs the Surfaces a door named, until the one that holds the person stops.
  * A Surface owns its own loop; this hands each of them the client runtime and
  * waits on the first.
@@ -85,22 +116,30 @@ export type Startable = SurfaceInfo & { readonly start: NonNullable<SurfaceInfo[
  * so two rows watch one Session rather than one each; the run ends when the
  * row that holds the person ends, because a page holds nobody to end it; and
  * the scope is what lets the rows beside it go.
+ *
+ * Where that Client comes from is the door's, because it is the one thing an
+ * attached run does differently: the rows, the scope and the wait are the
+ * same whether Eva is in this process or at the end of a socket.
  */
 export const runSurface = Effect.fn("cli.runSurface")(function* (
   started: Started,
   chosen: Startable,
   beside: readonly Startable[] = [],
+  open: Opening = locally(started),
 ) {
   const scope = yield* Scope.make()
   // Filled as each surface starts, which is after the API they answer through
   // is built. Until then an ask has nobody to reach, which is a denial.
   const live: Frontend[] = []
-  const client = yield* openClient(started, scope, () => live)
+  const reached = yield* open(scope, () => live)
+  const client = reached.client
   const frontend = yield* Effect.provideService(chosen.start(client), Scope.Scope, scope)
   live.push(frontend)
   for (const row of beside) {
     live.push(yield* Effect.provideService(row.start(client), Scope.Scope, scope))
   }
+  // After the rows are live, because what this runs is how Eva reaches them.
+  if (reached.reaching !== undefined) yield* Effect.forkIn(reached.reaching, scope)
   yield* Effect.ensuring(frontend.done, Scope.close(scope, Exit.void))
   return chosen.id
 })
@@ -141,6 +180,7 @@ export const runDoor = Effect.fn("cli.runDoor")(function* (
   started: Started,
   door: Door,
   beside: readonly Door[] = [],
+  open: Opening = locally(started),
 ) {
   const rows = yield* started.kernel.domains.surface.get
   const chosen = yield* rowFor(door, rows)
@@ -149,6 +189,7 @@ export const runDoor = Effect.fn("cli.runDoor")(function* (
     started,
     chosen,
     extra.filter((row) => row.id !== chosen.id),
+    open,
   )
 })
 

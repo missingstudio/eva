@@ -807,6 +807,50 @@ describe("a bind that needs a token", () => {
  * which is what lets a request asked in the terminal be answered in the
  * browser — the two are not two processes with a Session each.
  */
+/**
+ * The verb, from the command line to the door it opens. What an attached run
+ * does after that needs a runtime at the other end and a terminal to draw in,
+ * which is `attach.test.ts`; what is here is that the branch exists and gets
+ * that far — the address is read, a kernel boots, and the terminal's own door
+ * chooses the row.
+ */
+describe("eva attach", () => {
+  /**
+   * The build carries no surface that takes input, so the terminal's own door
+   * refuses in the words it always refuses in — and no socket is dialled,
+   * because the row is chosen before the Client is opened.
+   */
+  it("refuses on a build with no surface to run, and says so", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", contained(directory))
+
+    const found = await ran(
+      [
+        "attach",
+        "http://127.0.0.1:7777",
+        "--without-plugin",
+        "eva.tui",
+        "--without-plugin",
+        "eva.web",
+      ],
+      directory,
+    )
+
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("no registered surface can run interactively")
+  })
+
+  // The address is read before anything boots, so a word nothing can dial
+  // costs no kernel.
+  it("refuses an address it cannot dial, and boots nothing", async () => {
+    const found = await ran(["attach", "localhost:7777"], scratch())
+
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("eva attach takes the address a runtime serves")
+    expect(found.out).toBe("")
+  })
+})
+
 describe("eva --web", () => {
   /**
    * The terminal's id, answered by a row that looks and then ends. The
