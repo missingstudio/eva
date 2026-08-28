@@ -2,6 +2,7 @@ import type { ClientState } from "@missingstudio/eva-client-runtime"
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { spendOf, spendText, type CostSummary, type Cursor } from "@missingstudio/eva-schema"
 import { askingOf, type Asking, type Turn } from "@missingstudio/eva-session-view"
+import type { ReactNode } from "react"
 import { Turns } from "./blocks.js"
 import { Composer, type Composing } from "./composer.js"
 import {
@@ -204,6 +205,7 @@ export const Session = ({
   pipe,
   asking = [],
   answer,
+  command,
   composer,
 }: {
   readonly session: string
@@ -212,11 +214,15 @@ export const Session = ({
   readonly pipe: Pipe
   readonly asking?: readonly Asking[]
   readonly answer?: (request: string, optionId: string) => void
+  // Where a command line goes, when the page that mounts this holds one. It
+  // arrives already built, so this page draws it without reading anything.
+  readonly command?: ReactNode
   readonly composer?: Composing
 }) => (
   <main className="mx-auto max-w-measure px-6 py-16">
     <Named session={session} header={header} />
     <Notice pipe={pipe} />
+    {command}
     {reading.folded.kind === "folding" ? (
       <p aria-busy="true" className="mt-6 text-muted-foreground" role="status">
         Reading the transcript…

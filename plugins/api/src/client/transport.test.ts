@@ -20,10 +20,11 @@ import {
   type Payload,
   type SessionID,
 } from "@missingstudio/eva-schema"
+import type { CommandInfo } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Stream, SubscriptionRef } from "effect"
 import { describe, expect, it } from "vitest"
 import { apiWire } from "../routes.js"
-import { CURSOR, frameOut, modelPath, sessionPath, SESSIONS } from "../wire.js"
+import { commandPath, CURSOR, frameOut, modelPath, sessionPath, SESSIONS } from "../wire.js"
 import { httpTransport, type Request } from "./transport.js"
 
 const MODEL: ModelRef = { provider: "wire", model: "one" }
@@ -33,8 +34,11 @@ const held = (): Promise<MemorySession> =>
 
 // The wire on a port, and nothing else on it. Only the wire's own paths are
 // asked for here, so what would fall past it never comes up.
-const standing = async (memory: MemorySession) => {
-  const wire = apiWire(memory.api)
+const standing = async (
+  memory: MemorySession,
+  commands?: Effect.Effect<readonly CommandInfo[]>,
+) => {
+  const wire = apiWire(memory.api, undefined, commands)
   const server = createServer((request, response) => void wire(request, response))
 
   await new Promise<void>((settle) => void server.listen(0, "127.0.0.1", () => settle()))
@@ -552,6 +556,95 @@ describe("a pipe that is down", () => {
 })
 
 /**
+ * The one thing beside the contract that crosses this wire. A command reaches
+ * Domains rather than a Session, and the Domains are the serving process's —
+ * so the line travels and the answer is what the command wrote.
+ */
+describe("a command, read as a Transport", () => {
+  const MODES = ["default", "read-only"]
+
+  // The rows a serving process holds. `plugins/api` may not import the plugin
+  // that owns `/mode`, so what it does is written here.
+  const rowsOf = (serving: { mode: string }): readonly CommandInfo[] => [
+    {
+      id: "mode",
+      description: "names the permission mode this Session runs under",
+      run: (command) =>
+        Effect.sync(() => {
+          const named = command.argument
+          if (named === undefined || !MODES.includes(named)) {
+            command.write(`mode: ${serving.mode}`)
+            return
+          }
+          serving.mode = named
+          command.write(`mode: ${named}`)
+        }),
+    },
+  ]
+
+  it("runs a line where the rows are, and hands back what it wrote", async () => {
+    const memory = await held()
+    const state = { mode: "default" }
+    const served = await standing(memory, Effect.succeed(rowsOf(state)))
+
+    const answered = await Effect.runPromise(
+      Effect.flatMap(httpTransport({ origin: served.origin, gap: 1 }), (transport) =>
+        transport.command(memory.session, "/mode read-only"),
+      ),
+    )
+
+    expect(answered).toEqual({ wrote: "mode: read-only" })
+    expect(state.mode).toBe("read-only")
+
+    await served.close()
+  })
+
+  /**
+   * A command is a write, so it carries a key and asking again is safe. A
+   * `/mode` whose answer was lost would otherwise be a second Run recorded
+   * for a mode that was already set.
+   */
+  it("asks again for a line the pipe lost, and runs it once", async () => {
+    const memory = await held()
+    let ran = 0
+    const served = await standing(
+      memory,
+      Effect.succeed([
+        {
+          id: "undo",
+          description: "reverses the last write",
+          run: (command) =>
+            Effect.sync(() => {
+              ran += 1
+              command.write(`undone: ${ran}`)
+            }),
+        },
+      ]),
+    )
+
+    let asked = 0
+    const request = (async (...given: Parameters<Request>) => {
+      asked += 1
+      const answered = await fetch(...given)
+      if (asked === 1) throw new Error("socket hang up")
+      return answered
+    }) as Request
+
+    const answered = await Effect.runPromise(
+      Effect.flatMap(httpTransport({ origin: served.origin, gap: 1, request }), (transport) =>
+        transport.command(memory.session, "/undo"),
+      ),
+    )
+
+    expect(asked).toBe(2)
+    expect(ran).toBe(1)
+    expect(answered).toEqual({ wrote: "undone: 1" })
+
+    await served.close()
+  })
+})
+
+/**
  * `SessionAPI` is one interface and a filler answers all of it. This one
  * reaches every method, so a call made against a pipe that is down waits for
  * it — and no call is answered at once with a defect saying it was not wired.
@@ -580,6 +673,7 @@ describe("what the wire carries", () => {
           tried(one.api.submit(sessionID("ses_1"), { kind: "prompt", text: "ask" })),
           tried(one.api.cancel(sessionID("ses_1"), "user")),
           tried(one.api.answer("call_1", { kind: "cancelled" })),
+          tried(one.command(sessionID("ses_1"), "/mode")),
         ]),
       ),
     )
@@ -592,6 +686,7 @@ describe("the paths the two halves agree on", () => {
   it("names one Session under the listing it came from, and its model under it", () => {
     expect(sessionPath("ses_1")).toBe(`${SESSIONS}/ses_1`)
     expect(modelPath("ses_1")).toBe(`${SESSIONS}/ses_1/model`)
+    expect(commandPath("ses_1")).toBe(`${SESSIONS}/ses_1/command`)
   })
 
   // A page asks the host that served it, so nothing here is absolute.
