@@ -1,4 +1,5 @@
 export * from "./client.js"
+export * from "./frames.js"
 export * from "./loop.js"
 export * from "./memory-api.js"
 export * from "./run.js"

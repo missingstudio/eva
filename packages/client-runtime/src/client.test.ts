@@ -105,6 +105,33 @@ describe("a Session the handle follows", () => {
     expect(walked).not.toContain("synchronizing")
   })
 
+  /**
+   * Whether a Run is open rides beside every signal, read off the payloads
+   * that bracket one — whichever door opened it. The surface takes the word
+   * rather than reading the stream a second time for itself.
+   */
+  it("says a Run is open beside every signal, whichever door opened it", async () => {
+    const seen: { kind: string; running: boolean }[] = []
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const fake = yield* fakeApi([], "silent")
+        const client = yield* makeClient(yield* localTransport(fake.api))
+        const following = yield* Effect.forkChild(
+          client.follow(SESSION, (one, running) => void seen.push({ kind: one.kind, running })),
+        )
+        yield* until("the first fold", () => seen.length === 1)
+        yield* fake.say({ kind: "started", intent: "ask" })
+        yield* until("the open Run", () => seen.at(-1)?.running === true)
+        yield* fake.say(CLOSE)
+        yield* until("the close", () => seen.at(-1)?.running === false)
+        yield* Fiber.interrupt(following)
+      }),
+    )
+
+    // The fold before anything ran says nothing is open.
+    expect(seen[0]).toEqual({ kind: "folded", running: false })
+  })
+
   // The reader is counted while it reads, so a restore does not say `ready`
   // over a reader that is still catching up.
   it("gives the state back to the pipe when it stops", async () => {

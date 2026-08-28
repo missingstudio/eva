@@ -35,9 +35,14 @@ export interface Client {
    * the handle to `api.attach` and `api.watch`. The refold rule is the
    * runtime's — which positions are honest, what a refused Cursor means, when
    * the pipe is worth mentioning — and a surface that spelled it again would
-   * be a second answer to keep in step.
+   * be a second answer to keep in step. `running` rides beside every signal
+   * for the same reason: whether a Run is open — whichever door opened it —
+   * is the runtime's reading of its own stream, never a surface's.
    */
-  readonly follow: (session: SessionID, each: (signal: RunSignal) => void) => Effect.Effect<void>
+  readonly follow: (
+    session: SessionID,
+    each: (signal: RunSignal, running: boolean) => void,
+  ) => Effect.Effect<void>
 }
 
 /**
