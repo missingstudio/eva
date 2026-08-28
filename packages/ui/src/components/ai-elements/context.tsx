@@ -1,5 +1,5 @@
 /**
- * Vendored from `ai-elements@latest add context`, then retyped against Eva.
+ * Vendored from `ai-elements@latest add context`, then retyped.
  *
  * Changed, and the changes are the whole of what this component is for here.
  *
@@ -8,7 +8,7 @@
  * reported and the page prices nothing. The spend arrives already formatted.
  *
  * The used-of-maximum ring, the percentage and the Progress bar are gone with
- * it. They need a context window, and Eva's record holds none — a ring drawn
+ * it. They need a context window, and a record may hold none — a ring drawn
  * against a maximum nobody reported would be a number this page invented.
  *
  * The HoverCard is gone. A read-only transcript has nowhere else for the
@@ -18,14 +18,28 @@
  * A counter nobody reported is drawn as `—` rather than left out: silence is
  * not zero, and a row that vanished would read as one.
  */
-import type { CostSummary } from "@missingstudio/eva-schema"
 import type { ComponentProps, ReactNode } from "react"
 import { createContext, useContext, useMemo } from "react"
 
-import { cn } from "@missingstudio/ui/lib/utils"
+import { cn } from "../../lib/utils.js"
+
+/**
+ * The four counters this component draws, declared here rather than imported
+ * from a product's schema: this package is the design system, and a surface
+ * that imports it must not thereby import somebody's domain. A caller's own
+ * summary arrives structurally and may carry more counters than these.
+ *
+ * `null` is a counter nobody reported, which is not zero.
+ */
+export interface ContextUsage {
+  readonly inputTokens: number | null
+  readonly outputTokens: number | null
+  readonly reasoningTokens: number | null
+  readonly cacheReadTokens: number | null
+}
 
 interface ContextSchema {
-  cost: CostSummary
+  cost: ContextUsage
 }
 
 const ContextContext = createContext<ContextSchema | null>(null)
@@ -49,7 +63,7 @@ export const Context = ({ cost, className, ...props }: ContextProps) => {
     <ContextContext.Provider value={contextValue}>
       <dl
         className={cn(
-          "grid grid-cols-[auto_auto] justify-start gap-x-3 border-graphite border-t pt-3 text-xs",
+          "grid grid-cols-[auto_auto] justify-start gap-x-3 border-border border-t pt-3 text-xs",
           className,
         )}
         {...props}

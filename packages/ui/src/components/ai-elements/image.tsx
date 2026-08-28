@@ -1,11 +1,11 @@
 /**
- * Vendored from `ai-elements@latest add image`, then retyped against Eva.
+ * Vendored from `ai-elements@latest add image`, then retyped.
  *
- * Changed: the props are the two fields Eva's image Block holds rather than
+ * Changed: the props are the two fields an image record holds rather than
  * the AI SDK's Experimental_GeneratedImage, so the page carries no second
  * data model. What it draws is the same: the bytes, as a data URL.
  */
-import { cn } from "@missingstudio/ui/lib/utils"
+import { cn } from "../../lib/utils.js"
 
 export type ImageProps = {
   base64: string
