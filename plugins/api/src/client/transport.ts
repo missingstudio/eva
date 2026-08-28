@@ -20,6 +20,8 @@ import {
   IDEMPOTENCY,
   modelIn,
   modelPath,
+  modelRowsIn,
+  MODELS,
   payloadIn,
   ranIn,
   refusalIn,
@@ -27,6 +29,7 @@ import {
   sessionPath,
   SESSIONS,
   watchPath,
+  type PickRow,
   type Ran,
 } from "../wire.js"
 
@@ -84,6 +87,49 @@ export interface HttpTransport extends Transport {
 }
 
 /**
+ * One read, as JSON.
+ *
+ * The page's own server answers an unknown path with the page, so an answer
+ * that is not JSON is not this wire answering — a build carrying no `eva.api`
+ * reads as a pipe that is down, which is what it is.
+ */
+const read = async (
+  asking: Request,
+  origin: string,
+  path: string,
+  signal: AbortSignal,
+): Promise<unknown> => {
+  const response = await asking(`${origin}${path}`, { signal })
+  if (!response.ok) throw new Unreachable(`${path} answered ${response.status}`)
+  const kind = response.headers.get("content-type") ?? ""
+  if (!kind.includes("application/json")) {
+    throw new Unreachable(`${path} answered ${kind === "" ? "nothing" : kind}`)
+  }
+  return (await response.json()) as unknown
+}
+
+/**
+ * Every model the Catalog behind this wire knows, as the rows a picker draws.
+ *
+ * It is beside the Transport and not inside it: a Catalog is a fact of the
+ * build and not of a Session, so this is no `SessionAPI` call and belongs
+ * behind none. Nothing is what a wire that did not answer rows gives back — a
+ * picker with nothing to show says so, and never shows a list it invented.
+ */
+export const readModels = (
+  options: HttpOptions = {},
+): Effect.Effect<readonly PickRow[] | undefined> =>
+  Effect.map(
+    Effect.result(
+      Effect.tryPromise({
+        try: (signal) => read(options.request ?? fetch, options.origin ?? "", MODELS, signal),
+        catch: (cause) => new Unreachable(String(cause)),
+      }),
+    ),
+    (answered) => (answered._tag === "Success" ? modelRowsIn(answered.success) : undefined),
+  )
+
+/**
  * The whole Session API over HTTP, and the one fact `client-runtime` reads
  * about the pipe. It is the seam's second filler: the runtime calls the
  * contract and never learns that this answer crossed a socket.
@@ -94,21 +140,6 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
     const origin = options.origin ?? ""
     const gap = options.gap ?? RETRY_GAP
     const request = options.request ?? fetch
-
-    const read = async (path: string, signal: AbortSignal): Promise<unknown> => {
-      const response = await request(`${origin}${path}`, { signal })
-      if (!response.ok) throw new Unreachable(`${path} answered ${response.status}`)
-      const kind = response.headers.get("content-type") ?? ""
-      /**
-       * The page's own server answers an unknown path with the page, so an
-       * answer that is not JSON is not this wire answering — a build carrying
-       * no `eva.api` reads as a pipe that is down, which is what it is.
-       */
-      if (!kind.includes("application/json")) {
-        throw new Unreachable(`${path} answered ${kind === "" ? "nothing" : kind}`)
-      }
-      return (await response.json()) as unknown
-    }
 
     /**
      * One call, and the pipe's state as it answers. `SessionAPI` carries no
@@ -126,7 +157,7 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
             Effect.tapError(
               Effect.flatMap(
                 Effect.tryPromise({
-                  try: (signal) => read(path, signal),
+                  try: (signal) => read(request, origin, path, signal),
                   catch: (cause) => new Unreachable(String(cause)),
                 }),
                 (body) => {

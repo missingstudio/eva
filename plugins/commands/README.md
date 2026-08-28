@@ -82,7 +82,9 @@ the plugin-extensible surface.
   four rows and edits in the `/help` and `/model` handlers.
 - `COMMANDS` — the table of the four rows, as `CommandInfo` values.
 - `modelRows(catalog)` — every model the build can reach as `PickRow`s, each
-  named `provider/model` the way the line names one.
+  named `provider/model` the way the line names one. It lives in
+  `@missingstudio/eva-sdk` and is said again here, because `eva.api` answers
+  the same rows to a surface that holds no Catalog.
 
 ## Development
 

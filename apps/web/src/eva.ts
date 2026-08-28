@@ -1,6 +1,15 @@
-import { httpTransport, type Commanding } from "@missingstudio/eva-api/client"
+import {
+  httpTransport,
+  readModels,
+  type Commanding,
+  type PickRow,
+} from "@missingstudio/eva-api/client"
 import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
 import { Effect } from "effect"
+
+// One row of the Catalog, as the picker draws it. Said again here for the
+// reason everything else in this file is: the wire is named at one site.
+export type { PickRow }
 
 /**
  * The one Client this page holds, and the only way anything on the page
@@ -34,3 +43,13 @@ export const client = (): Promise<Client> => one().then((each) => each.client)
  * pipe, and one answer to where the runtime is.
  */
 export const command = (): Promise<Commanding> => one().then((each) => each.command)
+
+/**
+ * Every model the Catalog behind that wire knows. It is read here and not
+ * through the Client, because it is no Session API call: a Catalog is a fact
+ * of the build, so `client-runtime` has nothing to say about it and no rule
+ * of its own to keep. The wire is still named at one site, which is this one.
+ *
+ * Nothing is what a far side that answered no rows gives back.
+ */
+export const models = (): Promise<readonly PickRow[] | undefined> => Effect.runPromise(readModels())

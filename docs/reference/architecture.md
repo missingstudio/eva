@@ -2274,6 +2274,21 @@ What travels is the contract's own shapes, with no envelope: a `SubmitInput`
 body _is_ the Prompt, and a write answers a status and nothing else. A body the
 wire cannot read is refused whole and never applied in part.
 
+**Two routes on the socket are no `SessionAPI` call.** `GET /api/models`
+answers what the serving process's Catalog knows, as the `PickRow`s
+`modelRows` builds — the rows `/model` picks from in a terminal. A model is a
+fact of the build and not of a Session, and a surface that holds no Catalog
+has to be told the rows before it can offer them. `eva.api` reads the Catalog
+from its own plugin context, so the wire reaches a Domain without importing the
+plugin that fills it. A model is picked and never typed: `model.set` carries a
+`ModelRef` and refuses a name.
+
+`POST /api/sessions/:id/command` is the other. It runs a line where the
+Domains are, because that is where the rows and the Run both are: a door that
+ran `/mode` for itself would change the approval state of its own process and
+leave the Run under the mode it already had. The rows come from the same
+plugin context the Catalog does.
+
 **A write carries a client-minted key**, in an `Idempotency-Key` header rather
 than in a body the no-envelope rule keeps clear. A write has no error channel,
 so a call that cannot reach the far side waits and asks again — and a `submit`

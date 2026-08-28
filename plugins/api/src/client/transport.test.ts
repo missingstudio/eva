@@ -20,25 +20,41 @@ import {
   type Payload,
   type SessionID,
 } from "@missingstudio/eva-schema"
-import type { CommandInfo } from "@missingstudio/eva-sdk"
+import { modelRows, type CatalogState, type CommandInfo } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Stream, SubscriptionRef } from "effect"
 import { describe, expect, it } from "vitest"
 import { apiWire } from "../routes.js"
-import { commandPath, CURSOR, frameOut, modelPath, sessionPath, SESSIONS } from "../wire.js"
-import { httpTransport, type Request } from "./transport.js"
+import { commandPath, CURSOR, frameOut, modelPath, MODELS, sessionPath, SESSIONS } from "../wire.js"
+import { httpTransport, readModels, type Request } from "./transport.js"
 
 const MODEL: ModelRef = { provider: "wire", model: "one" }
 
 const held = (): Promise<MemorySession> =>
   Effect.runPromise(memorySessionAPI(() => Effect.void, { model: MODEL }))
 
+// A Catalog with a model in it, so the read half of one has a row to answer.
+// The Catalog holds neither a context window nor a rate for it, so the row
+// says its name and leaves the rest unsaid.
+const CATALOG: CatalogState = {
+  providers: new Map(),
+  models: new Map([
+    ["anthropic", new Map([["claude-opus-5", { id: "claude-opus-5", name: "Opus 5" }]])],
+  ]),
+}
+
 // The wire on a port, and nothing else on it. Only the wire's own paths are
 // asked for here, so what would fall past it never comes up.
 const standing = async (
   memory: MemorySession,
   commands?: Effect.Effect<readonly CommandInfo[]>,
+  catalog?: CatalogState,
 ) => {
-  const wire = apiWire(memory.api, undefined, commands)
+  const wire = apiWire(
+    memory.api,
+    undefined,
+    commands,
+    catalog === undefined ? undefined : Effect.succeed(catalog),
+  )
   const server = createServer((request, response) => void wire(request, response))
 
   await new Promise<void>((settle) => void server.listen(0, "127.0.0.1", () => settle()))
@@ -682,11 +698,67 @@ describe("what the wire carries", () => {
   })
 })
 
+/**
+ * The one read on this wire that is not a `SessionAPI` call. A Catalog is a
+ * fact of the build and not of a Session, so it is read beside the Transport
+ * — and a picker that was answered nothing shows nothing rather than a list
+ * it invented.
+ */
+describe("the models, read beside the Transport", () => {
+  it("reads every model the Catalog behind the wire knows", async () => {
+    const memory = await held()
+    const served = await standing(memory, undefined, CATALOG)
+
+    const rows = await Effect.runPromise(readModels({ origin: served.origin }))
+
+    expect(rows).toEqual(modelRows(CATALOG))
+    expect(rows?.map((row) => row.label)).toEqual(["anthropic/claude-opus-5"])
+
+    await served.close()
+  })
+
+  // A build that loaded no Provider knows no model, and that is rows and not
+  // nothing: the read happened, and the listing it found is empty.
+  it("reads no rows from a build that knows no model, which is not nothing", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    expect(await Effect.runPromise(readModels({ origin: served.origin }))).toEqual([])
+
+    await served.close()
+  })
+
+  /**
+   * And a wire that did not answer is nothing rather than a wait. A picker is
+   * drawn or it is not, so this read says which — unlike a Session API call,
+   * which has no error channel and waits until the pipe is back.
+   */
+  it("answers nothing when nothing on the far side answered rows", async () => {
+    expect(await Effect.runPromise(readModels({ origin: "http://eva.invalid" }))).toBeUndefined()
+  })
+
+  it("answers nothing when the far side answered the page instead of the wire", async () => {
+    const request = (async () =>
+      new Response("<!doctype html>", {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      })) as Request
+
+    expect(await Effect.runPromise(readModels({ request }))).toBeUndefined()
+  })
+})
+
 describe("the paths the two halves agree on", () => {
   it("names one Session under the listing it came from, and its model under it", () => {
     expect(sessionPath("ses_1")).toBe(`${SESSIONS}/ses_1`)
     expect(modelPath("ses_1")).toBe(`${SESSIONS}/ses_1/model`)
     expect(commandPath("ses_1")).toBe(`${SESSIONS}/ses_1/command`)
+  })
+
+  // A model is a fact of the build and not of a Session, so it is the one
+  // path here that names none.
+  it("names the Catalog's rows outside the listing, because they are the build's", () => {
+    expect(MODELS).toBe("/api/models")
+    expect(MODELS).not.toContain(SESSIONS)
   })
 
   // A page asks the host that served it, so nothing here is absolute.

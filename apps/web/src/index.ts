@@ -14,6 +14,10 @@
  */
 export * from "./blocks.js"
 export * from "./composer.js"
+// The picker alone, and not the reads beside it: a suite holding this page's
+// model rows against the terminal's panel hands them over, as every other
+// drawing here is handed what it draws.
+export { ModelPicker } from "./models.js"
 export * from "./paths.js"
 export * from "./session.js"
 export * from "./title.js"

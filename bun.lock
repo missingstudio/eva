@@ -125,6 +125,7 @@
         "streamdown": "2.5.0",
       },
       "devDependencies": {
+        "@missingstudio/eva-sdk": "workspace:*",
         "@tailwindcss/vite": "catalog:",
         "@types/node": "catalog:",
         "@types/react": "19.2.18",
@@ -448,6 +449,7 @@
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@missingstudio/eva-testkit": "workspace:*",
         "@types/node": "catalog:",
         "typescript": "catalog:",
       },
