@@ -9,6 +9,7 @@ const keymap = makeKeymap(
     ["shift+enter", "input.newline"],
     ["ctrl+c", "session.cancel"],
     ["ctrl+d", "app.quit"],
+    ["ctrl+s", "session.steer"],
   ]),
 )
 
@@ -185,6 +186,24 @@ describe("what the keymap decides", () => {
   it("holds the line rather than submitting an empty one", () => {
     const line = { buffer: "   ", cursor: 3 }
     expect(edit(line, press({ key: "enter" }), keymap)).toEqual({ kind: "editing", line })
+  })
+
+  /**
+   * The gesture, and the plain key beside it. One line, two meanings: enter
+   * queues it behind the open Run and ctrl+s steers with it, so the fold is
+   * told which the person meant rather than guessing from what is open.
+   */
+  it("steers the trimmed line on ctrl+s", () => {
+    expect(
+      edit({ buffer: "  go left  ", cursor: 11 }, press({ key: "s", ctrl: true }), keymap),
+    ).toEqual({ kind: "steer", line: "go left" })
+  })
+
+  // The same rule submit keeps: an empty line is not a line, so a stray
+  // gesture steers with nothing.
+  it("holds the line rather than steering with an empty one", () => {
+    const line = { buffer: "   ", cursor: 3 }
+    expect(edit(line, press({ key: "s", ctrl: true }), keymap)).toEqual({ kind: "editing", line })
   })
 
   it("adds a row on shift+enter, at the caret", () => {

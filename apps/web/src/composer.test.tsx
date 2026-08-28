@@ -18,6 +18,7 @@ const doing = () => {
       opened.push(run)
       said.push(`open ${run} ${line}`)
     },
+    steer: (line) => said.push(`steer ${line}`),
     cancel: () => said.push("cancel"),
     answer: (line) => said.push(`answer ${line}`),
   }
@@ -28,6 +29,7 @@ const composing = (over: Partial<Composing> = {}): Composing => ({
   pending: [],
   open: false,
   send: () => undefined,
+  steer: () => undefined,
   stop: () => undefined,
   ...over,
 })
@@ -115,6 +117,23 @@ describe("what the page does with a line", () => {
     expect(after.open).toBeUndefined()
   })
 
+  /**
+   * The gesture, on the page. A plain line queues behind the open Run — the
+   * test above — and a steered one rides it, opening no Run and moving no
+   * queue. What the steer then does to a tool group is the harness's rule,
+   * proven where the harness runs; what is proven here is that the control
+   * reaches it.
+   */
+  it("steers the open Run rather than queueing behind it", () => {
+    const { doing: one, said } = doing()
+    const open = walk(idle, { kind: "line", line: "change it", asking: false }, one)
+    const after = walk(open, { kind: "line", line: "go left", asking: false, steer: true }, one)
+
+    expect(said).toEqual(["open 1 change it", "steer go left"])
+    expect(after.pending).toEqual([])
+    expect(after.open).toBe(1)
+  })
+
   // A question outranks everything else a line could mean, open Run or not.
   it("answers the question that stands instead of opening a Run", () => {
     const { doing: one, said } = doing()
@@ -153,6 +172,13 @@ describe("what the composer says", () => {
   it("offers a stop only while a Run is open", () => {
     expect(drawn({})).not.toContain("Stop")
     expect(drawn({ open: true })).toContain("Stop")
+  })
+
+  // And a steer for the same reason: steering rides a Run, so it is offered
+  // while one is going and not before.
+  it("offers a steer only while a Run is open", () => {
+    expect(drawn({})).not.toContain("Steer")
+    expect(drawn({ open: true })).toContain("Steer")
   })
 
   /**

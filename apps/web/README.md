@@ -15,8 +15,11 @@ habit. The glossary in [docs/context.md](../../docs/context.md) defines
 **Session**, **Surface**, **Transcript** and **Block**.
 
 At W2 it prompts. The composer sends a line, queues one typed while a Run is
-open, and stops what is open — through the same one Client, while `follow`
-goes on drawing. The rules are not this page's: `packages/client-runtime`
+open, steers the Run that is going, and stops what is open — through the same
+one Client, while `follow` goes on drawing. Steer is the page's half of the
+gesture ctrl+s makes at the terminal: it is offered beside the stop while a
+Run is open, because steering rides a Run and there is nothing to ride before
+one starts. The rules are not this page's: `packages/client-runtime`
 holds the composer fold the terminal steps, so a line typed at either door
 means one thing. Send is off while the pipe is down, and the reason is drawn
 beside it — a send that spooled behind a dead pipe and said nothing would read
@@ -31,8 +34,9 @@ The page also switches the model this Session is kept at. The model is chosen
 from what the Catalog knows and never typed: `GET /api/models` answers the rows
 `/model` picks from in a terminal, so the two doors offer one list.
 
-What the page puts into Eva is small and counted all the same — a line, a stop,
-an answer to a permission request that stands, a command, and a model.
+What the page puts into Eva is small and counted all the same — a line, a
+steer, a stop, an answer to a permission request that stands, a command, and a
+model.
 
 ## What a Session page draws
 

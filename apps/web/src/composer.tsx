@@ -17,6 +17,9 @@ export interface Composing {
   // Whether a Run this page opened is still open.
   readonly open: boolean
   readonly send: (line: string) => void
+  // The same line, meant as a steer: it rides the Run that is open rather
+  // than waiting behind it.
+  readonly steer: (line: string) => void
   readonly stop: () => void
 }
 
@@ -62,10 +65,28 @@ export const Composer = ({
   const waiting = waitingText(composer?.pending ?? [])
   const open = running || composer?.open === true
 
-  const send = () => {
+  /**
+   * The line as either gesture takes it: trimmed, and nothing when there is
+   * no line or nowhere to send one. Both read it the same way, which is the
+   * rule the terminal's editor keeps for both of its keys.
+   */
+  const taken = (): string | undefined => {
     const said = line.trim()
-    if (off || said === "") return
+    return off || said === "" ? undefined : said
+  }
+
+  const send = () => {
+    const said = taken()
+    if (said === undefined) return
     composer?.send(said)
+    setLine("")
+  }
+
+  // The deliberate gesture. A plain line queues; this one rides the Run.
+  const steer = () => {
+    const said = taken()
+    if (said === undefined) return
+    composer?.steer(said)
     setLine("")
   }
 
@@ -85,11 +106,21 @@ export const Composer = ({
         placeholder="Say something to Eva"
         value={line}
       />
-      {/* The row beside send, which is where another control goes. */}
+      {/* The row beside send, which is where another gesture goes. */}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button disabled={off} onClick={send} size="sm">
           Send
         </Button>
+        {/*
+          Steering rides a Run, so it is offered while one is going and not
+          before. A control that is always drawn is a control that means
+          nothing, which is the rule the stop beside it keeps.
+        */}
+        {open ? (
+          <Button disabled={off} onClick={steer} size="sm" variant="outline">
+            Steer
+          </Button>
+        ) : null}
         {open ? (
           <Button
             disabled={composer === undefined}

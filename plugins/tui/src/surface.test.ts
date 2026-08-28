@@ -245,6 +245,8 @@ const heldWhere = async <A>(read: () => A, holds: (value: A) => boolean): Promis
 // The rows the keymap plugin registers for this surface.
 const KEYMAP: readonly KeymapInfo[] = [
   { id: "submit", binding: "enter", command: "session.submit", surface: "eva.tui" },
+  { id: "newline", binding: "shift+enter", command: "input.newline", surface: "eva.tui" },
+  { id: "steer", binding: "ctrl+s", command: "session.steer", surface: "eva.tui" },
   { id: "cancel", binding: "ctrl+c", command: "session.cancel", surface: "eva.tui" },
   { id: "quit", binding: "ctrl+d", command: "app.quit", surface: "eva.tui" },
   { id: "back", binding: "escape", command: "surface.back", surface: "eva.tui" },
@@ -1423,6 +1425,47 @@ describe("an open Run", () => {
       { kind: "prompt", text: "first" },
       { kind: "prompt", text: "second" },
     ])
+  })
+
+  /**
+   * The gesture, at the terminal. A plain line queues behind the open Run —
+   * the test above — and this one rides it. What the steer then does to a
+   * tool group is the harness's rule and is proven where the harness runs;
+   * what is proven here is that the key reaches it, spelled `next-step`.
+   */
+  it("steers the open Run rather than queueing behind it", async () => {
+    const found = await withSurface([], async (fake, spy) => {
+      const running = spy.hold()
+      fake.press("first")
+      await settle()
+      for (const character of "go left") fake.key({ key: character === " " ? "space" : character })
+      fake.key({ key: "s", ctrl: true })
+      const submitted = await heldWhere(
+        () => spy.submitted,
+        (calls) => calls.length > 1,
+      )
+      running.release()
+      await settle()
+      return submitted
+    })
+
+    expect(found).toEqual([
+      { kind: "prompt", text: "first" },
+      { kind: "steer", text: "go left", target: "next-step" },
+    ])
+  })
+
+  // And it opens no Run of its own. A steer answers at once, so a surface
+  // that treated it as a prompt would hold a Run number nothing closes.
+  it("opens no Run on a steer", async () => {
+    const found = await withSurface([], async (fake, spy) => {
+      for (const character of "go left") fake.key({ key: character === " " ? "space" : character })
+      fake.key({ key: "s", ctrl: true })
+      await settle()
+      return spy.submitted
+    })
+
+    expect(found).toEqual([{ kind: "steer", text: "go left", target: "next-step" }])
   })
 
   // The one path Eva uses when it needs a person opens during a Run. The
