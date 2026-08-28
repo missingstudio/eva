@@ -1,4 +1,5 @@
 import {
+  droppableTransport,
   localTransport,
   makeClient,
   memorySessionAPI,
@@ -191,15 +192,21 @@ describe("following one Session", () => {
  * the Session, so the answer is a fresh fold: `refuse(1)` is the filler's way
  * of reaching it without writing a thousand events.
  */
+/**
+ * A page reaches a Cursor at all only after it has lost its place: while it
+ * still has one it reads the live stream, and a live watch names no position
+ * to refuse. So the drop comes first here, and the refusal lands on the watch
+ * that carries the recovery.
+ */
 describe("a Cursor the far side refuses", () => {
   it("is answered with a fresh fold, and the page shows no gap", async () => {
     const found = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
           const memory = yield* memorySessionAPI(() => Effect.void)
-          const client = yield* makeClient(yield* localTransport(memory.api))
+          const transport = yield* droppableTransport(memory.api)
+          const client = yield* makeClient(transport)
           yield* memory.say({ kind: "started", intent: "said before the refusal" })
-          memory.refuse(1)
 
           const held: Reading[] = []
           let reading: Reading = { folded: { kind: "folding" }, said: "", running: false }
@@ -210,11 +217,27 @@ describe("a Cursor the far side refuses", () => {
             }),
           )
 
-          // Two folds: the one the refused watch resumed from, and the one
-          // that answers the refusal.
-          while (held.length < 2) yield* Effect.sleep(1)
-          // The watch behind the second fold followed the record, which is
-          // what says the page is reading again rather than merely repainted.
+          // The first fold, and the live watch behind it.
+          while (memory.open() === 0) yield* Effect.sleep(1)
+
+          /**
+           * The pipe goes, so what follows is a recovery — and a recovery is
+           * what asks with a Cursor. The far side is waited on: a drop the
+           * watch has not felt yet is a drop that has not happened, and the
+           * refusal would then land on nothing.
+           */
+          yield* transport.drop
+          while (memory.open() > 0) yield* Effect.sleep(1)
+          memory.refuse(1)
+          yield* transport.restore
+
+          /**
+           * Three folds: the one the page opened on, the one the recovery
+           * took, and the one that answers the refusal of the watch behind it.
+           */
+          while (held.length < 3) yield* Effect.sleep(1)
+          // The watch behind the last fold followed the record, which is what
+          // says the page is reading again rather than merely repainted.
           yield* memory.say(word("said after it"))
           while (reading.said !== "said after it") yield* Effect.sleep(1)
           yield* Fiber.interrupt(following)
@@ -224,11 +247,12 @@ describe("a Cursor the far side refuses", () => {
       ),
     )
 
-    // One attach for the refused watch, and one that answers the refusal.
-    expect(found.folded).toBe(2)
-    // The words the first fold held are in the second, so the refusal cost a
+    // One attach the page opened on, one for the recovery, and one that
+    // answers the refusal.
+    expect(found.folded).toBe(3)
+    // The words the first fold held are in the last, so the refusal cost a
     // repaint and left no gap.
-    expect(wordsIn(found.held[1] ?? found.held[0]!)).toBe("said before the refusal")
+    expect(wordsIn(found.held.at(-1)!)).toBe("said before the refusal")
     expect(found.held.at(-1)?.said).toBe("said after it")
   })
 })

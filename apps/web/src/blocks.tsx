@@ -9,15 +9,19 @@ import {
   CommitFileInfo,
   CommitFilePath,
   CommitFileStatus,
-} from "./components/ai-elements/commit.js"
-import { Image } from "./components/ai-elements/image.js"
-import { Message, MessageContent, MessageResponse } from "./components/ai-elements/message.js"
+} from "@missingstudio/ui/components/ai-elements/commit"
+import { Image } from "@missingstudio/ui/components/ai-elements/image"
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@missingstudio/ui/components/ai-elements/message"
 import {
   Reasoning,
   ReasoningContent,
   ReasoningTrigger,
-} from "./components/ai-elements/reasoning.js"
-import { Tool, ToolContent, ToolHeader } from "./components/ai-elements/tool.js"
+} from "@missingstudio/ui/components/ai-elements/reasoning"
+import { Tool, ToolContent, ToolHeader } from "@missingstudio/ui/components/ai-elements/tool"
 
 /**
  * What a Block's disclosure is called, on the panel and on the control that
@@ -84,7 +88,7 @@ export const BlockView = ({
      */
     case "reasoning":
       return (
-        <Reasoning defaultOpen>
+        <Reasoning className="fold" defaultOpen>
           <ReasoningTrigger aria-controls={panelOf(block.key)}>thinking</ReasoningTrigger>
           <ReasoningContent id={panelOf(block.key)}>{block.text}</ReasoningContent>
         </Reasoning>
@@ -93,7 +97,7 @@ export const BlockView = ({
     // it ended, because it has not.
     case "tool":
       return (
-        <Tool>
+        <Tool className="fold">
           <ToolHeader
             aria-controls={panelOf(block.key)}
             name={block.name}
@@ -111,7 +115,7 @@ export const BlockView = ({
      */
     case "result":
       return (
-        <Tool>
+        <Tool className="fold">
           <ToolHeader
             aria-controls={panelOf(block.key)}
             name={block.name}
@@ -122,11 +126,15 @@ export const BlockView = ({
           <ToolContent id={panelOf(block.key)}>call {block.call}</ToolContent>
         </Tool>
       )
-    // The path and the count of hunks, which is the whole of what the record
-    // holds. Nothing here is a rendering the far side sent.
+    /**
+     * The path and the count of hunks, which is the whole of what the record
+     * holds. Nothing here is a rendering the far side sent — and there is no
+     * count of added and deleted lines beside the path, because the record
+     * holds neither.
+     */
     case "diff":
       return (
-        <CommitFile>
+        <CommitFile className="commit">
           <CommitFileInfo>
             <CommitFileStatus status="modified" />
             <CommitFileIcon />
@@ -137,16 +145,17 @@ export const BlockView = ({
       )
     /**
      * Which mode the Session runs under, from the moment it changed. It is
-     * drawn as a plain line and not as a badge on the Turn: a mode is a fact
-     * with a position on the record, and a badge would say it was always so.
+     * drawn as a plain line between two hairlines and not as a badge on the
+     * Turn: a mode is a fact with a position on the record, and a badge would
+     * say it was always so.
      */
     case "mode":
       return (
-        <p className="rounded-md border border-graphite px-3 py-2 text-sm">
-          mode <strong>{block.mode}</strong>
-          {block.reason === undefined ? null : (
-            <span className="text-muted-foreground"> · {block.reason}</span>
-          )}
+        <p className="mode-line">
+          <span>
+            mode → {block.mode}
+            {block.reason === undefined ? null : ` · ${block.reason}`}
+          </span>
         </p>
       )
     /**
@@ -158,26 +167,28 @@ export const BlockView = ({
      * The request id is drawn beside the question, because it is the id of the
      * tool call the question is about — so a reader ties the question to the
      * card the record drew for that call.
+     *
+     * Allow once is the one option drawn as a fill. It is the answer a reader
+     * reaches for most, and the other three read as a step away from it
+     * rather than as four choices with no shape. It is the second accent on
+     * the page after the send, and it never carries the same weight: it sits
+     * inside a card and the send stands alone.
      */
     case "permission":
       return (
-        <div
-          aria-label="permission request"
-          className="rounded-md border border-ember bg-card px-3 py-2"
-          role="group"
-        >
-          <p className="text-muted-foreground text-[13px] uppercase tracking-label">
+        <div aria-label="permission request" className="ask" role="group">
+          <p className="ask-of">
             permission · call <code>{block.request}</code>
           </p>
-          <p className="mt-1 whitespace-pre-wrap">{block.question}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <p className="ask-q">{block.question}</p>
+          <div className="ask-options">
             {PERMISSION_OPTIONS.map((option) => (
               <Button
                 disabled={answer === undefined}
                 key={option.optionId}
                 onClick={() => answer?.(block.request, option.optionId)}
                 size="sm"
-                variant="outline"
+                variant={option.optionId === "allow_once" ? "default" : "outline"}
               >
                 {option.name}
               </Button>
@@ -192,20 +203,20 @@ export const BlockView = ({
      */
     case "image":
       return (
-        <figure className="my-1">
+        <figure className="shot">
           <Image
             base64={block.data}
             mediaType={block.mimeType}
             alt={`an image, ${block.mimeType}`}
           />
-          <figcaption className="mt-1 text-muted-foreground text-xs">
+          <figcaption>
             {block.uri === undefined ? block.mimeType : `${block.mimeType} · ${block.uri}`}
           </figcaption>
         </figure>
       )
     case "unknown":
       return (
-        <p className="rounded-md border border-graphite border-dashed px-3 py-2 text-muted-foreground text-sm">
+        <p className="undrawn">
           this page cannot draw <code>{block.originalKind}</code>, and the record holds one
         </p>
       )
@@ -213,13 +224,31 @@ export const BlockView = ({
 }
 
 /**
+ * Who spoke, for a reader who cannot see where the words sit.
+ *
+ * A person's turn is a bubble on the right and an agent's is the column
+ * itself, so the position says who wrote it and a label over it says it
+ * twice. `system` has no position of its own — it is Eva's own text handed to
+ * a model, drawn in the same column an answer is — so that one is said out
+ * loud. All three are still announced.
+ */
+const Author = ({ author }: { readonly author: ActorKind }) =>
+  author === "system" ? (
+    <p className="turn-author">{author}</p>
+  ) : (
+    <span className="sr-only">{author}</span>
+  )
+
+/**
  * One Session, as the fold gives it: a Turn per Message, and the Blocks of
  * what was said in it. The Turns are handed over rather than read, so what
  * the page draws is provable without a socket.
  *
- * A Turn is a Message, so it is drawn as one. Who spoke is said in words as
- * well as in the styling a `Message` carries: a reader who cannot tell the
- * two apart by colour still has to be able to tell them apart.
+ * A rule follows a person's turn, because a prompt and the work it started
+ * are two things and the record gives no other separator between them. It
+ * carries no words: the record holds no duration for a Run, and a page that
+ * drew "worked for 24s" out of nothing would be inventing exactly the kind of
+ * fact this page exists not to invent.
  */
 export const Turns = ({
   turns,
@@ -232,16 +261,14 @@ export const Turns = ({
     // A Session that folds to nothing and one whose fold has not arrived are
     // two different things, and a page that drew them alike would be lying
     // about one of them.
-    <p className="text-muted-foreground">This Session has said nothing yet.</p>
+    <p className="said-nothing">This Session has said nothing yet.</p>
   ) : (
-    <ol className="mt-6 flex list-none flex-col gap-6 p-0">
-      {turns.map((turn) => (
+    <ol className="turns">
+      {turns.map((turn, at) => (
         <li key={turn.key}>
           <Message from={turn.author}>
-            <p className="text-muted-foreground text-[13px] uppercase tracking-label">
-              {turn.author}
-            </p>
-            <MessageContent>
+            <Author author={turn.author} />
+            <MessageContent className={turn.author === "human" ? "bubble" : "prose"}>
               {turn.blocks.map((block) => (
                 <BlockView
                   key={block.key}
@@ -252,6 +279,7 @@ export const Turns = ({
               ))}
             </MessageContent>
           </Message>
+          {turn.author === "human" && at < turns.length - 1 ? <hr className="worked" /> : null}
         </li>
       ))}
     </ol>

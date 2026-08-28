@@ -224,8 +224,9 @@ and rewind all act on it.
 _Avoid_: Conversation, thread, chat
 
 **Header**:
-What a Session says about itself: what to call it, and when it last moved. It
-is a fold over the Trace, as every other projection is. A store may keep the
+What a Session says about itself: what to call it, when it last moved, and
+whether it was retired. It is a fold over the Trace, as every other projection
+is. A store may keep the
 fold's answer beside the log so a listing is a read rather than a replay, and
 then it records which fold rule wrote it — a cache that cannot say that is a
 listing that goes quietly wrong the first time the rule moves.
@@ -331,6 +332,16 @@ Where a tool call is in its life: `pending`, `in_progress`, `completed`, or
 `failed`. ACP's own set, and it says whether a call is still running. A
 Disposition says how one ended. A call has both, and neither replaces the other.
 _Avoid_: Disposition, state
+
+**Question**:
+What Eva asks a person through a Frontend: an id, its kind — a permission to
+grant or a question to answer in words — and what was asked, and it crosses
+every door as that one shape. A request nobody has answered has no position on
+the Trace, so a Question stands outside the record until its Resolution ends
+it. A Block draws one with the id named `request`, because that is what it is
+the id of.
+_Avoid_: Prompt (that is what a person asks Eva), permission request (one kind
+of Question), ask (the act of offering one)
 
 **Resolution**:
 How a Question ended: `answered`, `rejected`, `expired`, or `cancelled`. A
@@ -630,7 +641,8 @@ The interactive interface a person types into — the `eva.tui` surface ships on
 It is not a Session; it holds one while it runs. Two folds decide everything it
 does: one says what the screen shows, the other says what the loop does next —
 which Run is open, which lines wait behind it, and which close closes which Run.
-The Surface performs what they decide and holds neither.
+The loop fold walks its own answers out through the doing a Surface hands it,
+so a Surface performs single actions and decides nothing.
 _Avoid_: REPL, chat
 
 **Live area**:
@@ -645,6 +657,14 @@ command domain. Some answer from the Console alone (`/help`), some act on the
 Session and record the fact (`/mode`), and some open a Run (`/deploy`). What
 starts a process is a flag, not a Command.
 _Avoid_: Builtin, directive, macro
+
+**Ran**:
+What running a Command came to: the whole of what it wrote, and the Session it
+opened when it opened one. It is one shape at every door and on the wire
+between them, so the door that draws the answer and the wire that carried it
+read one agreement.
+_Avoid_: Result (a Claim is what a Run returns), Output (that is what a
+Candidate became), response
 
 **Binding**:
 A key chord written as words joined by `+`, in one canonical spelling: the
@@ -671,11 +691,20 @@ _Avoid_: Client (a Client is the handle a Surface holds), UI, app, Frontend (a
 Frontend is the contract; the Surface is the plugin that implements it)
 
 **Session API**:
-What Eva exposes and a Surface calls: create, list, attach, watch, submit,
-cancel, read and set the model, and answer a request. It is the whole of what a
-Surface may do to Eva, and it is the same whether the caller is in this process
-or across a socket.
+What Eva exposes and a Surface calls: create, list, retire, attach, watch,
+submit, cancel, read and set the model, and answer a request. It is the whole
+of what a Surface may do to Eva, and it is the same whether the caller is in
+this process or across a socket.
 _Avoid_: Control, RPC surface, service interface
+
+**Retire**:
+To put a Session away: it leaves every listing, and nothing else about it
+moves. It is a fold like the title is — one `info` record on the Trace, which
+every listing honours — so the record is still attached to and still watched.
+This is what a person reaches for as deleting, and Eva has no erasure to offer
+instead: what a Trace cannot rebuild is a bug.
+_Avoid_: Delete, archive, soft delete, hide (a person may say delete; the
+record never does)
 
 **Frontend**:
 The contract a Surface implements and Eva calls: the one path Eva uses when it

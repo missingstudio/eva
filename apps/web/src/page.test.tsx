@@ -1,69 +1,45 @@
-import { sessionID } from "@missingstudio/eva-schema"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 import { buildLine } from "./build.js"
-import { Listing, Page } from "./page.js"
+import { Page } from "./page.js"
 
 /**
  * Rendered to a string rather than into a document, because a browser is what
  * the served page is proven against — `plugins/web` opens a socket for that,
  * and `packages/conformance` reads the wire behind it.
  */
-describe("the listing", () => {
-  const held = [
-    { id: sessionID("ses_one"), title: "the first ask", updatedAt: "2026-08-26T00:00:00.000Z" },
-    { id: sessionID("ses_two") },
-  ]
-
-  it("names every Session Eva holds, with its Header", () => {
-    const drawn = renderToStaticMarkup(<Listing sessions={held} />)
-
-    expect(drawn).toContain("the first ask")
-    expect(drawn).toContain("ses_one")
-    expect(drawn).toContain("2026-08-26T00:00:00.000Z")
-  })
-
-  // A title is what a Run said, so a Session that has heard nothing has none.
-  // It is still on the page: one a person cannot see is one they cannot open.
-  it("names a Session that has no title yet, rather than leaving it out", () => {
-    const drawn = renderToStaticMarkup(<Listing sessions={held} />)
-
-    expect(drawn).toContain("ses_two")
-    expect(drawn).toContain("no title yet")
-  })
-
-  // A Run's intent is a whole prompt, so a listing that drew every title as
-  // the record holds it would be a listing nobody can scan.
-  it("draws a whole prompt as one row, and keeps the whole of it on the row", () => {
-    const drawn = renderToStaticMarkup(
-      <Listing
-        sessions={[{ id: sessionID("ses_long"), title: "make it read\nlike a transcript" }]}
-      />,
-    )
-
-    expect(drawn).toContain("make it read…")
-    expect(drawn).toContain('title="make it read')
-  })
-
-  // An empty listing and a listing that has not arrived are two different
-  // things, and a page that drew them the same way would be lying about one.
-  it("says Eva holds none, rather than looking like it is still reading", () => {
-    const drawn = renderToStaticMarkup(<Listing sessions={[]} />)
-
-    expect(drawn).toContain("Eva holds no Session yet")
-    expect(drawn).not.toContain("Reading")
-  })
-})
-
-describe("the page", () => {
+describe("the index pane", () => {
   it("says which build it is", () => {
     expect(renderToStaticMarkup(<Page />)).toContain(buildLine())
   })
 
-  // Nothing has been read at the first paint. Reading is progressive, so the
-  // page says which page it is before it can say what Eva holds.
-  it("says it is reading before the wire has answered", () => {
-    expect(renderToStaticMarkup(<Page />)).toContain("Reading the Sessions")
+  /**
+   * The listing is not here any more: it is on the rail, which the shell keeps
+   * across both routes. `shell.test.tsx` holds it. What is left is the pane a
+   * reader sees with no Session open, and it reads nothing — so it says
+   * nothing about what Eva holds.
+   */
+  it("reads nothing, and so says nothing about what Eva holds", () => {
+    const drawn = renderToStaticMarkup(<Page />)
+
+    expect(drawn).not.toContain("Reading the Sessions")
+    expect(drawn).not.toContain("Eva holds no Session yet")
+  })
+
+  it("names the page and points at the rail", () => {
+    expect(renderToStaticMarkup(<Page />)).toContain("the page that prompts")
+  })
+
+  /**
+   * One landmark and one heading, on whichever route is drawn. A page with no
+   * `main` is a page a screen reader has no way into past the rail, and a page
+   * with no `h1` is one that never says which page it is.
+   */
+  it("draws one main landmark and one heading", () => {
+    const drawn = renderToStaticMarkup(<Page />)
+
+    expect(drawn.match(/<main/g)).toHaveLength(1)
+    expect(drawn.match(/<h1/g)).toHaveLength(1)
   })
 })
 

@@ -1,6 +1,10 @@
 import { modelRef } from "@missingstudio/eva-core"
-import { sessionID, type SessionID } from "@missingstudio/eva-schema"
-import { NativeSelect, NativeSelectOption } from "@missingstudio/ui/components/native-select"
+import type { SessionID } from "@missingstudio/eva-schema"
+import {
+  PromptInputSelectContent,
+  PromptInputSelectTrigger,
+} from "@missingstudio/ui/components/ai-elements/prompt-input"
+import { Select, SelectItem, SelectValue } from "@missingstudio/ui/components/select"
 import { Effect } from "effect"
 import { useEffect, useState } from "react"
 import { client, models, type PickRow } from "./eva.js"
@@ -15,10 +19,23 @@ import { client, models, type PickRow } from "./eva.js"
  * does not hold is one Eva has no rate and no context window for.
  */
 
-// What a row says, in one line. The label is how a person types the model,
-// and the detail is what the Catalog knows about it.
-const lineOf = (row: PickRow): string =>
-  row.detail === undefined || row.detail === "" ? row.label : `${row.label} · ${row.detail}`
+/**
+ * A row, on two lines: how a person types the model, and what the Catalog
+ * knows about it under that.
+ *
+ * On one line the pair runs past the width a listbox has to give it — a
+ * provider, a model, a context window and a rate — and the end of every row
+ * is then cut, which is the half a person is choosing by. Two lines fit, and
+ * they put what a reader scans by at the front of every row.
+ */
+const Row = ({ row }: { readonly row: PickRow }) => (
+  <span className="pick">
+    <span className="pick-name">{row.label}</span>
+    {row.detail === undefined || row.detail === "" ? null : (
+      <span className="pick-detail">{row.detail}</span>
+    )}
+  </span>
+)
 
 /**
  * How the page switches the model. Nothing is waited on, as nothing is for the
@@ -89,6 +106,16 @@ export const useChoosing = (session: SessionID): Choosing => {
  * A control drawn with nowhere to send its message is disabled rather than
  * hidden, as the four permission options are: a control that looks live and
  * reaches nothing is worse than one that says it is not.
+ *
+ * It is the listbox `Select` opens, on the ui package's own
+ * `select.tsx`. A native `<select>` opens the operating system's list — its
+ * font, its colours, its metrics — which is the one control on this page that
+ * cannot follow the skin, and this page's whole claim is that it has two.
+ *
+ * The rows are drawn only while the listbox is open, so `models.test.tsx`
+ * proves them in a document rather than in a string: it opens the picker and
+ * reads what a person would see, which also lets it prove that choosing a row
+ * reaches `choose` — something a rendered string never could.
  */
 export const ModelPicker = ({
   rows,
@@ -100,37 +127,31 @@ export const ModelPicker = ({
   readonly choose?: (id: string) => void
 }) =>
   rows.length === 0 ? (
-    <p aria-busy="true" className="mt-3 text-muted-foreground text-sm" role="status">
+    <p aria-busy="true" className="ctl-said" role="status">
       Reading the models…
     </p>
   ) : (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
-      <span className="text-muted-foreground text-[13px] uppercase tracking-label">model</span>
-      <NativeSelect
-        aria-label="model"
-        disabled={choose === undefined}
-        onChange={(event) => choose?.(event.target.value)}
-        size="sm"
-        value={chosen ?? ""}
-      >
-        {/* Nothing is chosen until the Session has said what it is kept at. */}
-        {chosen === undefined ? <NativeSelectOption value="" /> : null}
+    <Select
+      disabled={choose === undefined}
+      onValueChange={(value) => choose?.(String(value))}
+      // Nothing is chosen until the Session has said what it is kept at, and
+      // the trigger then shows the placeholder rather than a model nobody set.
+      value={chosen ?? null}
+    >
+      <PromptInputSelectTrigger aria-label="model" className="ctl">
+        {/* The pill names the model and nothing else. What the Catalog knows
+            about it belongs on the row a person is choosing between, not on
+            the control that reports the choice already made. */}
+        <SelectValue placeholder="model">
+          {(value: unknown) => (typeof value === "string" && value !== "" ? value : "model")}
+        </SelectValue>
+      </PromptInputSelectTrigger>
+      <PromptInputSelectContent>
         {rows.map((row) => (
-          <NativeSelectOption key={row.id} value={row.id}>
-            {lineOf(row)}
-          </NativeSelectOption>
+          <SelectItem key={row.id} value={row.id}>
+            <Row row={row} />
+          </SelectItem>
         ))}
-      </NativeSelect>
-    </div>
+      </PromptInputSelectContent>
+    </Select>
   )
-
-/**
- * The picker, reading. `Page` reads its own listing for the same reason: the
- * views take what they draw as props, and one component per read is what keeps
- * the reads out of the drawings.
- */
-export const Models = ({ session }: { readonly session: string }) => {
-  const choosing = useChoosing(sessionID(session))
-
-  return <ModelPicker chosen={choosing.chosen} choose={choosing.choose} rows={choosing.rows} />
-}

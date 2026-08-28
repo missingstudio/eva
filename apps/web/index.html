@@ -1,11 +1,24 @@
 <!doctype html>
-<!-- The `dark` class is pinned: the system is dark only, and the class is
-     what keeps the components' `dark:` utilities live. -->
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Eva</title>
+    <!--
+      The skin follows the OS. It is a class rather than a media query because
+      the ui package's `dark` variant and every `dark:` utility in the imported
+      components answer to the class, and it runs here — before any stylesheet,
+      before the first paint — because a class set later flashes the wrong skin.
+
+      A DOM with no matchMedia gets dark, which is Eva's own skin and the state
+      every existing test renders under.
+    -->
+    <script>
+      const dark = window.matchMedia?.("(prefers-color-scheme: dark)")
+      const apply = () => document.documentElement.classList.toggle("dark", dark?.matches !== false)
+      apply()
+      dark?.addEventListener("change", apply)
+    </script>
   </head>
   <body>
     <div id="page"></div>
