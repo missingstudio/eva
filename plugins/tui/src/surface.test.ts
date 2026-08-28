@@ -1515,6 +1515,26 @@ describe("an open Run", () => {
     ])
   })
 
+  // And it waits where a person can see it waiting: a queue a reader cannot
+  // see is a line they type a second time. The words are the composer fold's,
+  // so this door and the page say a queue the same way.
+  it("says how many lines wait behind the open Run", async () => {
+    const hints = await withSurface([], async (fake, spy) => {
+      const running = spy.hold()
+      fake.press("first")
+      await settle()
+      fake.press("second")
+      await settle()
+      const during = fake.last()?.work.hint
+      running.release()
+      await settle()
+      return { during, after: fake.last()?.work.hint }
+    })
+
+    expect(hints.during).toBe("1 waiting")
+    expect(hints.after).toBe("")
+  })
+
   /**
    * The gesture, at the terminal. A plain line queues behind the open Run —
    * the test above — and this one rides it. What the steer then does to a

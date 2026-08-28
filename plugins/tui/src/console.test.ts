@@ -116,6 +116,42 @@ describe("an open Run", () => {
   })
 })
 
+/**
+ * The composer fold holds the queue; the Console only says its count. The
+ * words are the fold's own, so both doors say a queue the same way — and a
+ * queue a reader cannot see is a line they type a second time.
+ */
+describe("the queue behind the open Run", () => {
+  it("says how many lines wait, beside the spinner", () => {
+    const queued = events(apply(start, { kind: "opened", line: "go", at: 0 }), {
+      kind: "queued",
+      waiting: 2,
+    })
+
+    expect(frameOf(queued, PLACE).work.hint).toBe("2 waiting")
+  })
+
+  it("stops saying so once the queue has drained", () => {
+    const drained = events(
+      apply(start, { kind: "opened", line: "go", at: 0 }),
+      { kind: "queued", waiting: 1 },
+      { kind: "queued", waiting: 0 },
+    )
+
+    expect(frameOf(drained, PLACE).work.hint).toBe("")
+  })
+
+  it("keeps the armed interrupt's words beside the count", () => {
+    const both = events(
+      apply(start, { kind: "opened", line: "go", at: 0 }),
+      { kind: "queued", waiting: 1 },
+      { kind: "backed" },
+    )
+
+    expect(frameOf(both, PLACE).work.hint).toBe(`${ARMED} · 1 waiting`)
+  })
+})
+
 describe("the fold", () => {
   it("replaces what was shown, and the stream with it", () => {
     const folded = events(
