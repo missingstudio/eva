@@ -9,6 +9,7 @@ import { optionFor, type FrontendAnswer, type Transcript } from "@missingstudio/
 import type { SessionID } from "@missingstudio/eva-schema"
 import {
   dispatch,
+  namesCommand,
   type CommandInfo,
   type FrontendRequest,
   type KeymapInfo,
@@ -53,13 +54,55 @@ import {
 
 export const TUI_SURFACE = "eva.tui"
 
+/**
+ * Where the work happens, as this door knows it.
+ *
+ * A door in the same process knows the directory: the Session it opens
+ * belongs to it, and the banner reads this repository's branch out of it. A
+ * door at the end of a socket knows only the address it dialled — the runtime
+ * is somewhere else, so a branch read here names the wrong repository and a
+ * path here is a path nobody is working in. It names no location either, and
+ * the serving process answers with its own.
+ */
+export type Where =
+  | { readonly kind: "directory"; readonly path: string }
+  | { readonly kind: "runtime"; readonly origin: string }
+
+/**
+ * What running a line came to, for a door that ran it somewhere else. `wrote`
+ * is everything the command said, as one block, and `selected` is the Session
+ * it opened when it opened one.
+ */
+export interface Ran {
+  readonly wrote: string
+  readonly selected?: SessionID
+}
+
+// A line, run where the Domains are. It is the wire's shape, because that is
+// the only place a line goes that is not this process.
+export type Running = (session: SessionID, line: string) => Effect.Effect<Ran>
+
 export interface SurfaceDeps {
   readonly client: Client
   readonly renderer: Renderer
   // Read at the point of use, so a plugin loaded later is reachable.
   readonly commands: Effect.Effect<readonly CommandInfo[]>
   readonly keymap: Effect.Effect<readonly KeymapInfo[]>
-  readonly directory: string
+  readonly where: Where
+  /**
+   * How a line runs, when it does not run in this process. Absent is the
+   * local dispatch, which is what every in-process door does.
+   *
+   * A command reaches Domains rather than a Session, and it changes state
+   * where it runs: a `/mode` dispatched here would move the approval state of
+   * the process nobody is talking to and leave the runtime under the mode it
+   * already had.
+   *
+   * `commands` stays this process's rows even then. It is what the panel and
+   * the completion list, and a listing changes nothing: a name the far side
+   * does not answer comes back from it in words, with the near miss it knows.
+   */
+  readonly run?: Running
   // The app owns the manifest, so the app says which version this is.
   readonly version: string
   // The colors configuration chose. They reach the renderer as a fact of
@@ -129,16 +172,24 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
   const finished = yield* Deferred.make<void>()
   const keys = yield* Queue.unbounded<LoopSignal>()
 
-  // Where this run is, which no Run changes. Only the model is read again.
+  /**
+   * Where this run is, which no Run changes. Only the model is read again.
+   *
+   * An attached terminal names the runtime it dialled and no branch: the
+   * repository is on the machine the runtime is on, and this one's branch is
+   * a fact about a directory the work never touches.
+   */
+  const where = deps.where
+  const local = where.kind === "directory" ? where.path : undefined
   const place: Place = {
     version: deps.version,
-    branch: branchOf(deps.directory),
-    directory: shortPath(deps.directory),
+    branch: where.kind === "directory" ? branchOf(where.path) : "",
+    directory: where.kind === "directory" ? shortPath(where.path) : where.origin,
   }
 
   // The Console is the state; every event is drawn, so the screen is never
   // behind what happened.
-  let state = initial(yield* deps.client.api.create(deps.directory))
+  let state = initial(yield* deps.client.api.create(local))
   const on = (event: ConsoleEvent) => {
     state = apply(state, event)
     deps.renderer.draw(frameOf(state, place))
@@ -410,9 +461,31 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     on(painted(transcript, model, holding))
   })
 
+  /**
+   * A line, run where the Domains are. The far side holds the rows, resolves
+   * the name and says what it did — including that no command answers it, in
+   * the same words dispatch says here.
+   *
+   * Whether the line is a command at all is decided on this side, because it
+   * is a fact of the line and of nothing else: `namesCommand` is the rule
+   * `dispatch` parses by. A Prompt sent over to be told it is a Prompt would
+   * be one write to learn the answer and a second to act on it.
+   *
+   * A command that opened a Session says so, and the screen follows it — the
+   * `select` the local dispatch is given, carried as an answer.
+   */
+  const runOverWire = (run: Running) =>
+    Effect.fn("eva.tui.commanded")(function* (line: string) {
+      if (!namesCommand(line)) return false
+      const ran = yield* run(state.session, line)
+      if (ran.wrote !== "") on({ kind: "said", text: ran.wrote })
+      if (ran.selected !== undefined) on({ kind: "selected", session: ran.selected })
+      return true
+    })
+
   // Dispatch owns what a line means and what to say when it means nothing.
   // This surface supplies where writing goes and which Session is open.
-  const runCommand = Effect.fn("eva.tui.command")(function* (line: string) {
+  const runHere = Effect.fn("eva.tui.command")(function* (line: string) {
     const outcome = yield* dispatch(yield* deps.commands, line, (parsed) => ({
       api: deps.client.api,
       session: state.session,
@@ -432,6 +505,8 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     if (outcome.kind === "said") on({ kind: "said", text: outcome.text })
     return outcome.kind !== "prompt"
   })
+
+  const runCommand = deps.run === undefined ? runHere : runOverWire(deps.run)
 
   /**
    * The questions that stand, each waiting on its own answer. Eva may ask more

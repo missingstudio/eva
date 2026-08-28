@@ -2,7 +2,7 @@ import type { SessionAPI } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { dispatch, helpText } from "./command.js"
+import { dispatch, helpText, namesCommand } from "./command.js"
 import type { CommandContext, CommandInfo } from "./domains.js"
 
 // What a command was given when it ran, so a test can see the argument the
@@ -87,6 +87,31 @@ describe("dispatch", () => {
   it("says a known command has nothing to run in this build", async () => {
     expect(await ran("/cost")).toEqual({ kind: "said", text: "/cost does nothing in this build" })
   })
+})
+
+/**
+ * The same rule, asked without a registry. A door that runs its lines in
+ * another process decides here what a Prompt is, so the two answers may never
+ * differ — and this is the clause that says they do not.
+ */
+describe("namesCommand", () => {
+  it.each(["plain text", "/", "", "   ", "not /a command"])(
+    "reads %o as a prompt, as dispatch does",
+    async (line) => {
+      expect(namesCommand(line)).toBe(false)
+      expect(await ran(line)).toEqual({ kind: "prompt" })
+    },
+  )
+
+  // A name no row answers is still a command line: what the far side says of
+  // it is words, and words are not a Prompt.
+  it.each(["/model", "  /model fake/one  ", "/nothing"])(
+    "reads %o as a command, as dispatch does",
+    async (line) => {
+      expect(namesCommand(line)).toBe(true)
+      expect((await ran(line)).kind).not.toBe("prompt")
+    },
+  )
 })
 
 describe("helpText", () => {

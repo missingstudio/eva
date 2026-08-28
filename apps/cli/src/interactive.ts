@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import type { Started } from "./run.js"
-import { pickSurface, runDoor, type Door } from "./surface.js"
+import { locally, pickSurface, runDoor, type Door, type Opening } from "./surface.js"
 
 export class NoSurfaceError extends Error {
   override readonly name = "NoSurfaceError"
@@ -15,7 +15,7 @@ export class NoSurfaceError extends Error {
 
 // The terminal, as a door: the first interactive row, and what a build with
 // no such row is told.
-const TERMINAL_DOOR: Door = {
+export const TERMINAL_DOOR: Door = {
   choose: pickSurface,
   refuse: (known) => new NoSurfaceError(known),
 }
@@ -28,10 +28,14 @@ const TERMINAL_DOOR: Door = {
  *
  * The rows beside it are the caller's, because a flag is read where the
  * command line is read. This door keeps its own rule and nothing more.
+ *
+ * How the run reaches Eva is the caller's too: `eva attach` is this same door
+ * over a socket, and the rule that picks the row does not change with it.
  */
 export const runInteractive = Effect.fn("cli.interactive")(function* (
   started: Started,
   beside: readonly Door[] = [],
+  open: Opening = locally(started),
 ) {
-  return yield* runDoor(started, TERMINAL_DOOR, beside)
+  return yield* runDoor(started, TERMINAL_DOOR, beside, open)
 })

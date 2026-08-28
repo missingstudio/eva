@@ -12,7 +12,7 @@ import type { Frame, KeyPress, Renderer, ThemeColors } from "@missingstudio/eva-
 import { Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 import { ARMED, ASKING, DISCONNECTED, SYNCHRONIZING } from "./console.js"
-import { makeSurface, TICK } from "./surface.js"
+import { makeSurface, TICK, type Running } from "./surface.js"
 
 // What a Run closes with. The surface reads the Claim off it; the record
 // keeps it.
@@ -94,6 +94,8 @@ interface Spy {
   readonly client: Client
   readonly submitted: readonly SubmitInput[]
   readonly cancelled: readonly CancelCause[]
+  // The Sessions whose record the surface asked for, in order.
+  readonly attached: readonly SessionID[]
   readonly publish: (payload: Payload) => Effect.Effect<void>
   // Keeps the next Run open, so a test can look at the surface mid-stream.
   readonly hold: () => { readonly release: () => void }
@@ -147,6 +149,11 @@ const fakeApi = Effect.fn("test.api")(function* (racing = false): Effect.fn.Retu
     get cancelled() {
       return argsOf<CancelCause>("cancel")
     },
+    get attached() {
+      return memory.calls
+        .filter((one) => one.method === "attach")
+        .map((one) => one.args[0] as SessionID)
+    },
     publish: (payload: Payload) => memory.say(payload),
     drop: transport.drop,
     restore: transport.restore,
@@ -176,6 +183,9 @@ interface SurfaceOver {
   // A Session API that closes the Run before the watcher has subscribed,
   // and how long the surface waits for a drain that will never come.
   readonly racing?: boolean
+  // How a line runs, when it does not run in this process. It is what an
+  // attached terminal is handed.
+  readonly run?: Running
   readonly settle?: number
 }
 
@@ -198,11 +208,12 @@ const withSurface = <A>(
           renderer: fake.renderer,
           commands: Effect.succeed(commands),
           keymap: Effect.succeed(over.keymap ?? KEYMAP),
-          directory: "/somewhere",
+          where: { kind: "directory", path: "/somewhere" },
           version: "0.0.0",
           ...(over.notices === undefined ? {} : { notices: over.notices }),
           ...(over.theme === undefined ? {} : { theme: over.theme }),
           ...(over.settle === undefined ? {} : { settle: over.settle }),
+          ...(over.run === undefined ? {} : { run: over.run }),
           now: over.now ?? (() => 0),
         })
         // Let the loop reach its first prompt before anything is typed.
@@ -613,6 +624,83 @@ describe("a slash command", () => {
     })
 
     expect(written).toContain("/cost does nothing in this build")
+  })
+})
+
+/**
+ * A line that runs where the Domains are: what an attached terminal is
+ * handed, because a command changes state where it runs.
+ *
+ * Whether the line is a command at all is decided here, so a Prompt never
+ * crosses the wire to be told it is a Prompt — and the rows this process
+ * holds are never resolved against, because they are the wrong process's.
+ */
+describe("a line that runs somewhere else", () => {
+  const HERE: readonly CommandInfo[] = [
+    { id: "mode", description: "x", run: () => Effect.die("dispatched in the wrong process") },
+  ]
+
+  it("sends a command line over, and shows what it wrote", async () => {
+    const sent: string[] = []
+    const written = await withSurface(
+      HERE,
+      async (fake) => {
+        fake.press("/mode read-only")
+        await settle()
+        return fake.written()
+      },
+      {
+        run: (_session, line) =>
+          Effect.sync(() => {
+            sent.push(line)
+            return { wrote: "mode → read-only\n" }
+          }),
+      },
+    )
+
+    expect(sent).toEqual(["/mode read-only"])
+    expect(written).toContain("mode → read-only")
+  })
+
+  // A line that names no command is a Prompt, and a Prompt is not a write to
+  // send and take back.
+  it("submits a plain line as a Prompt, and sends nothing over", async () => {
+    const sent: string[] = []
+    const submitted = await withSurface(
+      HERE,
+      async (fake, spy) => {
+        fake.press("what is this")
+        await settle()
+        return spy.submitted
+      },
+      {
+        run: (_session, line) =>
+          Effect.sync(() => void sent.push(line)).pipe(Effect.as({ wrote: "" })),
+      },
+    )
+
+    expect(submitted).toEqual([{ kind: "prompt", text: "what is this" }])
+    expect(sent).toEqual([])
+  })
+
+  // A command that opened a Session says so, and the screen follows it —
+  // which is what `/clear` looks like from the far side.
+  it("follows the Session a command over there opened", async () => {
+    const next = sessionID("sess_next")
+    const attached = await withSurface(
+      HERE,
+      async (fake, spy) => {
+        fake.press("/clear")
+        await heldWhere(
+          () => spy.attached,
+          (rows) => rows.includes(next),
+        )
+        return spy.attached
+      },
+      { run: () => Effect.succeed({ wrote: "", selected: next }) },
+    )
+
+    expect(attached.at(-1)).toBe(next)
   })
 })
 
@@ -1097,7 +1185,7 @@ describe("the surface", () => {
             renderer: fake.renderer,
             commands: Effect.succeed([]),
             keymap: Effect.succeed(KEYMAP),
-            directory: "/somewhere",
+            where: { kind: "directory", path: "/somewhere" },
             version: "0.0.0",
             now: () => 0,
           })
@@ -1127,7 +1215,7 @@ describe("the surface", () => {
             keymap: Effect.succeed([
               { id: "quit", binding: "ctrl+q", command: "app.quit", surface: "eva.tui" },
             ]),
-            directory: "/somewhere",
+            where: { kind: "directory", path: "/somewhere" },
             version: "0.0.0",
             now: () => 0,
           })

@@ -282,6 +282,52 @@ describe("eva serve", () => {
   })
 })
 
+describe("eva attach", () => {
+  it("reads the address the runtime serves", () => {
+    expect(ran(["attach", "http://127.0.0.1:7777"]).invocation).toEqual({
+      kind: "attach",
+      url: "http://127.0.0.1:7777",
+      overlays: {},
+    })
+  })
+
+  // Every call is the origin and a path, so a trailing slash here would be a
+  // request to a path with two of them.
+  it("keeps the origin and drops what is after it", () => {
+    expect(ran(["attach", "http://127.0.0.1:7777/"]).invocation).toMatchObject({
+      url: "http://127.0.0.1:7777",
+    })
+  })
+
+  it("carries the global flags as overlays", () => {
+    expect(
+      ran(["attach", "http://127.0.0.1:7777", "--without-plugin", "eva.web"]).invocation,
+    ).toMatchObject({ kind: "attach", overlays: { noPlugin: ["eva.web"] } })
+  })
+
+  /**
+   * A word nothing can dial is a parse error, so no kernel boots for it. It
+   * used to be a run that started, opened a Session against nowhere, and
+   * waited for a pipe that was never going to answer.
+   */
+  it.each(["localhost:7777", "ftp://here", "not a url", ""])(
+    "refuses %s as an address, naming it",
+    (given) => {
+      const found = ran(["attach", given])
+      expect(found.invocation).toEqual({ kind: "answered", code: 1 })
+      expect(found.err).toContain("eva attach takes the address a runtime serves")
+    },
+  )
+
+  it("refuses an attach with no address", () => {
+    expect(ran(["attach"]).invocation).toEqual({ kind: "answered", code: 1 })
+  })
+
+  it("names attach for the word that likely meant it", () => {
+    expect(ran(["attch"]).err).toContain("did you mean attach?")
+  })
+})
+
 describe("eva --web", () => {
   it("runs the page beside the terminal, and leaves the bind to the surface", () => {
     expect(ran(["--web"]).invocation).toEqual({ kind: "interactive", overlays: {}, web: true })
