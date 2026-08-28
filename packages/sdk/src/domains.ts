@@ -63,6 +63,16 @@ export interface PickRow {
   readonly label: string
   readonly detail?: string
   /**
+   * The vendor's published rate, when the row names a model the Catalog
+   * prices. It travels with the row because the Catalog is the one place that
+   * holds it: a surface across a wire has no Catalog, and a second table of
+   * rates on that side would be a second answer to what a model costs.
+   *
+   * A rate reaches an estimate and never a `costTicks`. Nothing derived from
+   * it is written to the Trace.
+   */
+  readonly price?: ModelPrice
+  /**
    * The colors this row would paint, when the row names a theme. A surface
    * that paints shows them while the row is under the selection — a theme is
    * looked at before it is chosen — and taking the row is still what applies
@@ -242,6 +252,7 @@ export const modelRows = (catalog: CatalogState): readonly PickRow[] =>
       id: `${provider}/${model.id}`,
       label: `${provider}/${model.id}`,
       detail: modelDetail(model),
+      ...(model.price === undefined ? {} : { price: model.price }),
     })),
   )
 

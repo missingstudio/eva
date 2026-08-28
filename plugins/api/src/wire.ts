@@ -1,3 +1,4 @@
+import type { StreamFrame } from "@missingstudio/eva-client-runtime"
 import {
   ResumeTooFarBehind,
   type CancelCause,
@@ -13,6 +14,7 @@ import {
   sessionID,
   type Cursor,
   type Event,
+  type ModelPrice,
   type Payload,
   type SessionID,
 } from "@missingstudio/eva-schema"
@@ -80,13 +82,19 @@ export const CURSOR = "last-event-id"
  */
 export const IDEMPOTENCY = "idempotency-key"
 
-// A position is a whole number and may sit behind the record's start, which
-// is exactly the case a refusal answers. Anything else names no position.
-export const cursorIn = (value: string | undefined): number | undefined => {
-  if (value === undefined) return undefined
-  const seq = Number(value.trim())
-  return Number.isSafeInteger(seq) ? seq : undefined
-}
+/**
+ * The framing this stream speaks is the client runtime's: the ask channel in
+ * `eva.web` frames the same way, and a plugin may not import a plugin, so the
+ * one spelling lives below both. It is said again here so a caller of this
+ * wire reads one file for the whole agreement.
+ */
+export {
+  cursorIn,
+  EVENT_STREAM,
+  framesIn,
+  frameOut,
+  type StreamFrame,
+} from "@missingstudio/eva-client-runtime"
 
 /**
  * What travels: the contract's own shapes, with nothing wrapped around them.
@@ -94,9 +102,17 @@ export const cursorIn = (value: string | undefined): number | undefined => {
  * envelope and no rendering — and the half that reads a shape is the half
  * that says whether what arrived is one.
  *
- * The readers live beside the paths rather than in the client, because both
- * halves of one wire have to agree about a shape and a copy of an agreement
- * is one that keeps passing after the agreement moves.
+ * Each shape is one pair here: the writer that spells it onto the wire and
+ * the reader that judges what arrived. Both live beside the paths rather
+ * than at the call sites, because both halves of one wire have to agree
+ * about a shape and a copy of an agreement is one that keeps passing after
+ * the agreement moves. Neither `routes.ts` nor `client/transport.ts` names a
+ * field: the server writes through the writers, the client reads through the
+ * readers, and the agreement moves in this file or not at all.
+ *
+ * A writer spells its shape field by field and asserts the rest empty, so a
+ * field the contract grows is a compile error in this file rather than a
+ * silent drop on the far side of the wire.
  */
 const objectIn = (value: unknown): Record<string, unknown> | undefined =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -108,6 +124,25 @@ const stringAt = (row: Record<string, unknown>, name: string): string | undefine
   return typeof found === "string" ? found : undefined
 }
 
+const booleanAt = (row: Record<string, unknown>, name: string): boolean | undefined => {
+  const found = row[name]
+  return typeof found === "boolean" ? found : undefined
+}
+
+export const headerOut = (header: SessionHeader): Record<string, unknown> => {
+  const { id, title, updatedAt, retired, ...rest } = header
+  void (rest satisfies Record<string, never>)
+  return {
+    id,
+    ...(title === undefined ? {} : { title }),
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+    ...(retired === undefined ? {} : { retired }),
+  }
+}
+
+export const headersOut = (rows: readonly SessionHeader[]): readonly Record<string, unknown>[] =>
+  rows.map(headerOut)
+
 export const headerIn = (value: unknown): SessionHeader | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
@@ -116,10 +151,12 @@ export const headerIn = (value: unknown): SessionHeader | undefined => {
 
   const title = stringAt(row, "title")
   const updatedAt = stringAt(row, "updatedAt")
+  const retired = booleanAt(row, "retired")
   return {
     id: sessionID(id),
     ...(title === undefined ? {} : { title }),
     ...(updatedAt === undefined ? {} : { updatedAt }),
+    ...(retired === undefined ? {} : { retired }),
   }
 }
 
@@ -138,6 +175,12 @@ export const headersIn = (value: unknown): readonly SessionHeader[] | undefined 
   return rows
 }
 
+export const modelOut = (model: ModelRef): Record<string, unknown> => {
+  const { provider, model: name, ...rest } = model
+  void (rest satisfies Record<string, never>)
+  return { provider, model: name }
+}
+
 export const modelIn = (value: unknown): ModelRef | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
@@ -154,6 +197,85 @@ export const modelIn = (value: unknown): ModelRef | undefined => {
  */
 export type { PickRow }
 
+const numberAt = (row: Record<string, unknown>, name: string): number | undefined => {
+  const found = row[name]
+  return typeof found === "number" && Number.isFinite(found) ? found : undefined
+}
+
+/**
+ * A model's published rate, as this wire carries it. The two counters every
+ * vendor bills are required and the other three are not: a rate that named no
+ * input and no output would price nothing, and a rate missing a cache figure
+ * prices what it can and leaves the rest at nothing.
+ *
+ * A price this cannot read is no price. It is dropped rather than half-read,
+ * because half a rate produces an estimate that is wrong rather than absent.
+ */
+const priceIn = (value: unknown): ModelPrice | undefined => {
+  const row = objectIn(value)
+  if (row === undefined) return undefined
+
+  const inputTicks = numberAt(row, "inputTicks")
+  const outputTicks = numberAt(row, "outputTicks")
+  if (inputTicks === undefined || outputTicks === undefined) return undefined
+
+  const cacheReadTicks = numberAt(row, "cacheReadTicks")
+  const cacheWriteTicks = numberAt(row, "cacheWriteTicks")
+  const reasoningTicks = numberAt(row, "reasoningTicks")
+  return {
+    inputTicks,
+    outputTicks,
+    ...(cacheReadTicks === undefined ? {} : { cacheReadTicks }),
+    ...(cacheWriteTicks === undefined ? {} : { cacheWriteTicks }),
+    ...(reasoningTicks === undefined ? {} : { reasoningTicks }),
+  }
+}
+
+const priceOut = (price: ModelPrice): Record<string, unknown> => {
+  const { inputTicks, outputTicks, cacheReadTicks, cacheWriteTicks, reasoningTicks, ...rest } =
+    price
+  void (rest satisfies Record<string, never>)
+  return {
+    inputTicks,
+    outputTicks,
+    ...(cacheReadTicks === undefined ? {} : { cacheReadTicks }),
+    ...(cacheWriteTicks === undefined ? {} : { cacheWriteTicks }),
+    ...(reasoningTicks === undefined ? {} : { reasoningTicks }),
+  }
+}
+
+/**
+ * The colors a row would paint, when it names a theme. A value that is not
+ * a name-to-color table is no colors: it is dropped rather than half-read,
+ * the way a half rate is, because a screen painted from half a theme is
+ * wrong rather than plain.
+ */
+const colorsIn = (value: unknown): Record<string, string> | undefined => {
+  const row = objectIn(value)
+  if (row === undefined) return undefined
+  const colors: Record<string, string> = {}
+  for (const [name, color] of Object.entries(row)) {
+    if (typeof color !== "string") return undefined
+    colors[name] = color
+  }
+  return colors
+}
+
+export const modelRowOut = (row: PickRow): Record<string, unknown> => {
+  const { id, label, detail, price, colors, ...rest } = row
+  void (rest satisfies Record<string, never>)
+  return {
+    id,
+    label,
+    ...(detail === undefined ? {} : { detail }),
+    ...(price === undefined ? {} : { price: priceOut(price) }),
+    ...(colors === undefined ? {} : { colors }),
+  }
+}
+
+export const modelRowsOut = (rows: readonly PickRow[]): readonly Record<string, unknown>[] =>
+  rows.map(modelRowOut)
+
 export const modelRowIn = (value: unknown): PickRow | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
@@ -162,7 +284,15 @@ export const modelRowIn = (value: unknown): PickRow | undefined => {
   if (id === undefined || label === undefined) return undefined
 
   const detail = stringAt(row, "detail")
-  return { id, label, ...(detail === undefined ? {} : { detail }) }
+  const price = priceIn(row["price"])
+  const colors = colorsIn(row["colors"])
+  return {
+    id,
+    label,
+    ...(detail === undefined ? {} : { detail }),
+    ...(price === undefined ? {} : { price }),
+    ...(colors === undefined ? {} : { colors }),
+  }
 }
 
 export const modelRowsIn = (value: unknown): readonly PickRow[] | undefined => {
@@ -191,6 +321,9 @@ export const modelRowsIn = (value: unknown): readonly PickRow[] | undefined => {
  * only a `location` that is there and is not a string — the one disagreement
  * about a shape that this side can really see.
  */
+export const locationOut = (location: string | undefined): Record<string, unknown> =>
+  location === undefined ? {} : { location }
+
 export const locationIn = (value: unknown): { readonly location?: string } | undefined => {
   if (value === undefined) return {}
   const row = objectIn(value)
@@ -202,6 +335,8 @@ export const locationIn = (value: unknown): { readonly location?: string } | und
 
 // The Session a `create` opened. It travels as the string it is, because a
 // `SessionID` is a branded string and an envelope around one would say no more.
+export const sessionOut = (session: SessionID): string => session
+
 export const sessionIn = (value: unknown): SessionID | undefined =>
   typeof value === "string" ? sessionID(value) : undefined
 
@@ -210,13 +345,21 @@ export const sessionIn = (value: unknown): SessionID | undefined =>
  * here: `dispatch` owns what a line means, and a wire that parsed one would
  * be a second parser to keep in step with the first.
  */
+export const lineOut = (line: string): Record<string, unknown> => ({ line })
+
 export const lineIn = (value: unknown): string | undefined => {
   const row = objectIn(value)
   return row === undefined ? undefined : stringAt(row, "line")
 }
 
-// What running a line came to, read off the wire. The shape is the sdk's, so
-// the wire and the door that draws the answer read one agreement.
+// What running a line came to. The shape is the sdk's, so the wire and the
+// door that draws the answer read one agreement.
+export const ranOut = (ran: Ran): Record<string, unknown> => {
+  const { wrote, selected, ...rest } = ran
+  void (rest satisfies Record<string, never>)
+  return { wrote, ...(selected === undefined ? {} : { selected }) }
+}
+
 export const ranIn = (value: unknown): Ran | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
@@ -238,6 +381,17 @@ export const ranIn = (value: unknown): Ran | undefined => {
  * write. It is the rule `headersIn` keeps pointed the other way: a shape half
  * understood is worse than a call that says it was not understood.
  */
+export const submitInputOut = (input: SubmitInput): Record<string, unknown> => {
+  if (input.kind === "prompt") {
+    const { kind, text, harness, ...rest } = input
+    void (rest satisfies Record<string, never>)
+    return { kind, text, ...(harness === undefined ? {} : { harness }) }
+  }
+  const { kind, text, target, ...rest } = input
+  void (rest satisfies Record<string, never>)
+  return { kind, text, target }
+}
+
 export const submitInputIn = (value: unknown): SubmitInput | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
@@ -261,8 +415,31 @@ export const submitInputIn = (value: unknown): SubmitInput | undefined => {
   return undefined
 }
 
+// A cause travels as the word it is.
+export const cancelCauseOut = (cause: CancelCause): string => cause
+
 export const cancelCauseIn = (value: unknown): CancelCause | undefined =>
   value === "user" || value === "budget" || value === "shutdown" ? value : undefined
+
+export const answerOut = (answer: FrontendAnswer): Record<string, unknown> => {
+  switch (answer.kind) {
+    case "permission": {
+      const { kind, optionId, ...rest } = answer
+      void (rest satisfies Record<string, never>)
+      return { kind, optionId }
+    }
+    case "text": {
+      const { kind, text, ...rest } = answer
+      void (rest satisfies Record<string, never>)
+      return { kind, text }
+    }
+    case "cancelled": {
+      const { kind, ...rest } = answer
+      void (rest satisfies Record<string, never>)
+      return { kind }
+    }
+  }
+}
 
 export const answerIn = (value: unknown): FrontendAnswer | undefined => {
   const row = objectIn(value)
@@ -310,29 +487,17 @@ export const eventsIn = (value: unknown): readonly Event[] | undefined => {
   return record
 }
 
-/**
- * One frame of the stream: what was said, and where it sits in the record.
- * `Frame` is the terminal's screen contract, so this one says which frame it
- * is — the two are not the same thing and never meet.
- *
- * `seq` is absent for a watch that carries no Cursor, and that absence is the
- * point. A frame with a made-up position is a position a page would resume
- * from, and it would resume past what it never saw — see `watchFor` for where
- * the counting happens and why only one form of it can count.
- */
-export interface StreamFrame {
-  readonly seq?: number
-  readonly data: string
-}
-
-// What a stream answers with, and what a refused Cursor answers with. Both
-// halves read them, so both halves hold one spelling of each.
-export const EVENT_STREAM = "text/event-stream"
+// What a refused Cursor answers with. Both halves read it, so both halves
+// hold one spelling.
 export const CURSOR_REFUSED = 409
 
-export const frameOut = (frame: StreamFrame): string =>
-  `${frame.seq === undefined ? "" : `id: ${frame.seq}\n`}data: ${frame.data}\n\n`
-
+/**
+ * The payload a frame's data carries. `seq` is absent for a watch that
+ * carries no Cursor, and that absence is the point: a frame with a made-up
+ * position is a position a page would resume from, and it would resume past
+ * what it never saw — see `watchFor` for where the counting happens and why
+ * only one form of it can count.
+ */
 export const payloadIn = (frame: StreamFrame): Payload | undefined => {
   try {
     return decodePayloadLine(frame.data)
@@ -342,34 +507,6 @@ export const payloadIn = (frame: StreamFrame): Payload | undefined => {
     // would say there was one.
     return undefined
   }
-}
-
-// One block between two blank lines, read as a frame. A block with no `data`
-// is a comment or a keep-alive and names no payload, so it is not one.
-const frameIn = (block: string): readonly StreamFrame[] => {
-  let seq: number | undefined
-  const said: string[] = []
-
-  for (const line of block.split("\n")) {
-    const row = line.endsWith("\r") ? line.slice(0, -1) : line
-    if (row.startsWith("data:")) said.push(row.slice("data:".length).trimStart())
-    else if (row.startsWith("id:")) seq = cursorIn(row.slice("id:".length))
-  }
-
-  return said.length === 0 ? [] : [{ ...(seq === undefined ? {} : { seq }), data: said.join("\n") }]
-}
-
-/**
- * The frames whole in what has arrived, and what is left of one that is not.
- * A socket hands over bytes and not frames, so the reader keeps the remainder
- * and asks again: a frame split across two reads is still one frame.
- */
-export const framesIn = (
-  text: string,
-): { readonly frames: readonly StreamFrame[]; readonly rest: string } => {
-  const blocks = text.split("\n\n")
-  const rest = blocks.pop() ?? ""
-  return { frames: blocks.flatMap(frameIn), rest }
 }
 
 /**

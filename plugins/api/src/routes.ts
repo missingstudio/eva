@@ -18,13 +18,18 @@ import {
   eventsOut,
   EVENT_STREAM,
   frameOut,
+  headersOut,
   IDEMPOTENCY,
   lineIn,
   locationIn,
   modelIn,
+  modelOut,
+  modelRowsOut,
   MODELS,
+  ranOut,
   refusalOut,
   REQUESTS,
+  sessionOut,
   SESSIONS,
   submitInputIn,
   type StreamFrame,
@@ -147,7 +152,7 @@ const commanded =
 
       return {
         status: 200,
-        body: { wrote, ...(selected === undefined ? {} : { selected }) },
+        body: ranOut({ wrote, ...(selected === undefined ? {} : { selected }) }),
       }
     })
 
@@ -237,7 +242,7 @@ export const routeFor = (
 
   if (method === "GET") {
     if (path === SESSIONS) {
-      return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: rows }))
+      return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: headersOut(rows) }))
     }
 
     /**
@@ -249,7 +254,8 @@ export const routeFor = (
      * A `PickRow` is JSON already, so the wire adds no envelope here either.
      */
     if (path === MODELS) {
-      return () => Effect.map(catalog, (state) => ({ status: 200, body: modelRows(state) }))
+      return () =>
+        Effect.map(catalog, (state) => ({ status: 200, body: modelRowsOut(modelRows(state)) }))
     }
 
     const attaching = askedFor(SESSION, path)
@@ -273,17 +279,19 @@ export const routeFor = (
     const session = askedFor(MODEL, path)
     if (session !== undefined) {
       const asked = sessionID(session)
-      return (api) => Effect.map(api.model.get(asked), (found) => ({ status: 200, body: found }))
+      return (api) =>
+        Effect.map(api.model.get(asked), (found) => ({ status: 200, body: modelOut(found) }))
     }
 
     return undefined
   }
 
   /**
-   * A `POST` opens or stops work and a `PUT` sets a value. So asking twice is
-   * what tells the two apart: the same `PUT` twice leaves the same model and
-   * the same answer, and the same `POST` twice would be a second Run — which
-   * is what the idempotency key exists for.
+   * A `POST` opens or stops work, a `PUT` sets a value, and a `DELETE` puts a
+   * Session away. So asking twice is what tells them apart: the same `PUT` or
+   * `DELETE` twice leaves the same state and the same answer, and the same
+   * `POST` twice would be a second Run — which is what the idempotency key
+   * exists for.
    */
   if (method === "POST") {
     /**
@@ -295,7 +303,8 @@ export const routeFor = (
       const opening = locationIn(body)
       if (opening === undefined) return refusing
       const where = opening.location ?? directory()
-      return (api) => Effect.map(api.create(where), (made) => ({ status: 200, body: made }))
+      return (api) =>
+        Effect.map(api.create(where), (made) => ({ status: 200, body: sessionOut(made) }))
     }
 
     const prompting = askedFor(SESSION, path)
@@ -327,6 +336,19 @@ export const routeFor = (
     }
 
     return undefined
+  }
+
+  /**
+   * The one method that names a Session and carries nothing. Putting a
+   * Session away acts on the path and on no body, and asking twice leaves it
+   * exactly where asking once left it — which is what tells a `DELETE` from
+   * the `POST`s above, where a second ask would be a second Run.
+   */
+  if (method === "DELETE") {
+    const retiring = askedFor(SESSION, path)
+    if (retiring === undefined) return undefined
+    const asked = sessionID(retiring)
+    return (api) => Effect.as(api.retire(asked), DONE)
   }
 
   if (method === "PUT") {

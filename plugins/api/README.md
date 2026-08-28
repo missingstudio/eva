@@ -47,19 +47,20 @@ curl http://127.0.0.1:7777/api/sessions
 [{"id":"ses_019a","title":"read the trace back over HTTP"}]
 ```
 
-| Method      | Route                            | What                                     |
-| ----------- | -------------------------------- | ---------------------------------------- |
-| `list`      | `GET /api/sessions`              | every Session, each with its Header      |
-| `attach`    | `GET /api/sessions/:id`          | that Session's record, as events         |
-| `watch`     | `GET /api/sessions/:id/watch`    | what commits after a Cursor, as a stream |
-| `model.get` | `GET /api/sessions/:id/model`    | the model that Session is kept at        |
-| `create`    | `POST /api/sessions`             | opens a Session, and answers which       |
-| `submit`    | `POST /api/sessions/:id`         | opens a Run in that Session              |
-| `cancel`    | `POST /api/sessions/:id/cancel`  | stops the Run open in it                 |
-| command     | `POST /api/sessions/:id/command` | runs a line where the Domains are        |
-| `model.set` | `PUT /api/sessions/:id/model`    | keeps that Session at another model      |
-| `answer`    | `PUT /api/requests/:id`          | answers what a Run asked a person        |
-| —           | `GET /api/models`                | every model the Catalog knows, as rows   |
+| Method      | Route                            | What                                      |
+| ----------- | -------------------------------- | ----------------------------------------- |
+| `list`      | `GET /api/sessions`              | every Session, each with its Header       |
+| `attach`    | `GET /api/sessions/:id`          | that Session's record, as events          |
+| `watch`     | `GET /api/sessions/:id/watch`    | what commits after a Cursor, as a stream  |
+| `model.get` | `GET /api/sessions/:id/model`    | the model that Session is kept at         |
+| `create`    | `POST /api/sessions`             | opens a Session, and answers which        |
+| `submit`    | `POST /api/sessions/:id`         | opens a Run in that Session               |
+| `cancel`    | `POST /api/sessions/:id/cancel`  | stops the Run open in it                  |
+| command     | `POST /api/sessions/:id/command` | runs a line where the Domains are         |
+| `model.set` | `PUT /api/sessions/:id/model`    | keeps that Session at another model       |
+| `answer`    | `PUT /api/requests/:id`          | answers what a Run asked a person         |
+| `retire`    | `DELETE /api/sessions/:id`       | puts that Session away, off every listing |
+| —           | `GET /api/models`                | every model the Catalog knows, as rows    |
 
 What travels is the contract's own shapes, with no envelope around them and no
 rendering in them. A `SubmitInput` body _is_ the Prompt and a `CancelCause`
@@ -69,10 +70,13 @@ answered 404 here rather than left to fall through, because the page's own
 server answers an unknown path with the page — and a call answered with HTML
 reads as a broken parse instead of as a miss.
 
-A `POST` opens or stops work and a `PUT` sets a value, so asking twice is what
-tells the two apart. `answer` is the one call keyed by a `RequestID` rather
-than by a Session, so it sits outside the listing: the id is the tool call's,
-which the `tool_call` record named before anybody was asked.
+A `POST` opens or stops work, a `PUT` sets a value, and a `DELETE` puts a
+Session away, so asking twice is what tells them apart. `retire` carries no
+body at all: what it acts on is the path, and it cuts nothing — the Session
+leaves every listing while its record stays whole, so `attach` still folds it
+and `watch` still follows it. `answer` is the one call keyed by a `RequestID`
+rather than by a Session, so it sits outside the listing: the id is the tool
+call's, which the `tool_call` record named before anybody was asked.
 
 Two routes here are no `SessionAPI` method. The command route is one of them. A
 command resolves through the rows a process holds and reaches the Domains
@@ -234,7 +238,7 @@ slower, never differently typed** — the rule `droppableTransport` states, kept
 by the filler that really has a pipe. `SessionAPI` has no error channel and
 this keeps it that way.
 
-This wire carries all nine methods, so there is no method left that answers at
+This wire carries all ten methods, so there is no method left that answers at
 once with a defect saying it is not carried. The one defect it raises is a
 write the far side read and refused, because a shape the two halves disagree
 about would be refused again however often it is sent.
@@ -266,20 +270,28 @@ about would be refused again however often it is sent.
   `modelPath(session)`, `watchPath(session)`, `cancelPath(session)`,
   `commandPath(session)`, `answerPath(request)` — the id and the paths, rooted
   so no address is built into the page.
-- `headerIn`, `headersIn`, `modelIn`, `sessionIn`, `modelRowIn`, `modelRowsIn`,
-  `eventsIn` — what a body has to be to be an answer. `eventsOut` is the record
-  on its way out, and `PickRow` is said again here so the page names the row
-  shape off this wire.
-- `Ran`, `ranIn` — what running a line came to: the text it wrote, and the
-  Session it opened when it opened one.
-- `submitInputIn`, `cancelCauseIn`, `answerIn`, `locationIn`, `lineIn` — what a body has
-  to be to be a write. `modelIn` reads both directions, because `model.set`
-  sends back what `model.get` answers, and `locationIn` is the one that accepts
-  an absent body: only a `location` that is there and is not a string refuses.
+- `headerIn`/`headersOut`, `modelIn`/`modelOut`, `sessionIn`/`sessionOut`,
+  `modelRowIn`/`modelRowsOut`, `eventsIn`/`eventsOut` — one pair per shape: the
+  writer that spells it onto the wire and the reader that judges what arrived.
+  A writer spells its shape field by field and asserts the rest empty, so a
+  field the contract grows is a compile error in `wire.ts` rather than a
+  silent drop on the far side. `PickRow` is said again here so the page names
+  the row shape off this wire.
+- `Ran`, `ranIn`/`ranOut` — what running a line came to: the text it wrote,
+  and the Session it opened when it opened one.
+- `submitInputIn`/`submitInputOut`, `cancelCauseIn`/`cancelCauseOut`,
+  `answerIn`/`answerOut`, `locationIn`/`locationOut`, `lineIn`/`lineOut` — what
+  a body has to be to be a write, and the writer beside each reader. `modelIn`
+  reads both directions, because `model.set` sends back what `model.get`
+  answers, and `locationIn` is the one that accepts an absent body: only a
+  `location` that is there and is not a string refuses.
 - `CURSOR`, `cursorIn(value)`, `IDEMPOTENCY`, `StreamFrame`, `frameOut(frame)`,
   `framesIn(text)`, `payloadIn(frame)`, `refusalOut(refused)`,
   `refusalIn(from, body)` — the headers and the stream's own shapes, read by
-  both halves for the reason the paths are.
+  both halves for the reason the paths are. The framing itself lives in
+  `@missingstudio/eva-client-runtime`, below both wires — the ask channel in
+  `eva.web` frames the same way, and a plugin may not import a plugin — and is
+  said again here so a caller reads one file for the whole agreement.
 - `httpTransport(options)`, `readModels(options)` — from
   `@missingstudio/eva-api/client`. The first answers an `HttpTransport`: the
   seam's `Transport`, and `command(session, line)` beside it. A command is not
