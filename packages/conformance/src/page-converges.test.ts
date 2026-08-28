@@ -242,11 +242,14 @@ describe("the page, over the wire", () => {
     expect(found.folded).toBe(2)
     expect(found.attached).toBe(2)
     /**
-     * Each watch named the position its own fold ended at, and the second is
-     * past the first. That is the convergence: the page asked for what it had
-     * not seen, and for nothing it had.
+     * The two watches, and the pair is the whole rule. A page that has not
+     * lost its place names no position: it reads the live stream, which is
+     * how the word before the drop arrived as a word rather than as the block
+     * it commits in. A page that has lost one names the position its fresh
+     * fold ended at — that is the convergence, and it asked for what it had
+     * not seen and for nothing it had.
      */
-    expect(found.resumed).toEqual([1, 3])
+    expect(found.resumed).toEqual([undefined, 3])
     /**
      * What a reader was told, in order. A page frozen on a dead pipe reads as
      * a Session that stopped, so the page says which of the two it is — and it
@@ -312,14 +315,20 @@ describe("the page, over the wire", () => {
     // included. No gap.
     expect(found.words).toBe("askpartial")
     /**
-     * And its watch replayed none of it. Two folds, two positions, and the
-     * second names where the first ended plus what commit while nobody was
-     * reading — which is the whole of what a reload costs.
+     * And its watch replayed none of it. Two folds, and the second carried
+     * where the first ended plus what commit while nobody was reading — which
+     * is the whole of what a reload costs.
+     *
+     * Neither page names a position. Neither has lost one: a page that opens
+     * folds the record whole and then reads the live stream, so what a reload
+     * costs is the fold, and the watch behind it adds only what follows. A
+     * position is what a page that dropped asks with, and neither of these
+     * dropped.
      */
     expect(found.replayed).toBe("")
     expect(found.said).toBe(" and on")
     expect(found.attached).toBe(2)
-    expect(found.resumed).toEqual([1, 3])
+    expect(found.resumed).toEqual([undefined, undefined])
   })
 
   /**
@@ -327,6 +336,11 @@ describe("the page, over the wire", () => {
    * the fold and the watch that resumed from it, so the far side answers the
    * subscription with a status and no stream — and the page answers that with
    * a fresh fold rather than with a gap.
+   *
+   * A page reaches a Cursor at all only once it has lost its place: while it
+   * still has one it reads the live stream, and a live watch names no position
+   * to refuse. So the drop comes first, and the refusal lands on the watch
+   * that carries the recovery.
    *
    * `refuse(1)` is the filler's way of reaching the bound without writing a
    * thousand events.
@@ -336,12 +350,21 @@ describe("the page, over the wire", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const { memory, wire } = yield* wired()
-          const client = yield* makeClient(wire)
+          const { transport, client } = yield* droppable(wire)
           yield* memory.say({ kind: "started", intent: "ask" })
-          memory.refuse(1)
 
           const page = yield* opened(client, memory.session)
-          yield* until("the fold that answers the refusal", () => folds(page.held) === 2)
+          yield* until("the fold the page opened on", () => folds(page.held) === 1)
+          yield* until("a live watch", () => memory.open() > 0)
+
+          // The far side is waited on: a drop the watch has not felt yet is a
+          // drop that has not happened, and the refusal would land on nothing.
+          yield* transport.drop
+          yield* until("the far side let the watch go", () => memory.open() === 0)
+          memory.refuse(1)
+          yield* transport.restore
+
+          yield* until("the fold that answers the refusal", () => folds(page.held) === 3)
 
           // The watch behind the second fold followed the record, which is
           // what says the page is reading again and not merely repainted.
@@ -360,9 +383,10 @@ describe("the page, over the wire", () => {
       ),
     )
 
-    // One fold for the refused watch, and one that answers the refusal.
-    expect(found.attached).toBe(2)
-    expect(found.folded).toBe(2)
+    // One the page opened on, one the recovery took, and one that answers the
+    // refusal of the watch behind it.
+    expect(found.attached).toBe(3)
+    expect(found.folded).toBe(3)
     // Nothing was lost to the refusal, and nothing of it reached the page.
     expect(found.words).toBe("ask")
     expect(found.said).toBe(" and on")

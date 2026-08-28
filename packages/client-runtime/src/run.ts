@@ -117,6 +117,47 @@ const resumed = (over: RunOver, from: Cursor): Stream.Stream<RunSignal, ResumeTo
   )
 
 /**
+ * The live deltas of the Run that is open, to its close, and the fold behind
+ * them.
+ *
+ * It is `resumed`'s shape on the cursor-free watch, and the two differ in what
+ * they are for rather than in how they are built. A cursor watch carries
+ * committed groups, which a Trace writes one per block: a whole answer commits
+ * when its block ends, so a reader on that watch waits through the answer and
+ * then receives all of it. The live watch carries what `report` emits, which
+ * is every delta as the Provider says it.
+ *
+ * A follower that has not lost its place reads the words. One that has lost it
+ * cannot — its only honest positions are folds — so it converges on the cursor
+ * watch instead, which is `RunSignal`'s own account of the pair: committed
+ * groups are "coarser than the live deltas that preceded the drop".
+ *
+ * The gap this leaves is the one the fold closes. The watch subscribes after
+ * `attach` answered, so a delta said in between reaches no tail — it is in the
+ * next fold, and a tail is what a fold replaces. What a reader loses is the
+ * start of one answer, once, and only when a Run was already open as they
+ * arrived.
+ */
+const streaming = (over: RunOver): Stream.Stream<RunSignal> =>
+  Stream.unwrap(
+    Effect.sync(() => {
+      let closed = false
+      const watching = Stream.tap(over.transport.api.watch(over.session), (payload) =>
+        Effect.sync(() => {
+          if (payload.kind === "finished") closed = true
+        }),
+      )
+      return Stream.concat(
+        Stream.map(
+          Stream.takeUntil(watching, (payload) => payload.kind === "finished"),
+          heard,
+        ),
+        Stream.suspend(() => again(over, closed)),
+      )
+    }),
+  )
+
+/**
  * The fold after a watch ended, and whether it is a recovery.
  *
  * A Run that closed is the ordinary course, so the fold that replaces its
@@ -128,10 +169,18 @@ const resumed = (over: RunOver, from: Cursor): Stream.Stream<RunSignal, ResumeTo
 const again = (over: RunOver, closed: boolean): Stream.Stream<RunSignal> => refolded(over, !closed)
 
 /**
- * Fold fresh, then watch from the fold's own position. Never a remembered
- * live position: a client that was reading live deltas holds no honest
- * cursor, and its only honest positions are folds. See
- * [decisions.md](../../../docs/decisions.md) for why.
+ * Fold fresh, then watch: live while the follower still has its place, and
+ * from the fold's own position once it has lost one.
+ *
+ * Never a remembered live position. A client that was reading live deltas
+ * holds no honest cursor, and its only honest positions are folds — so a
+ * recovery resumes from the fold it just took and never from where the deltas
+ * had reached.
+ *
+ * A follower that has not dropped is not recovering, and it reads the live
+ * stream: a Trace commits one record per block, so a cursor watch would hand
+ * a reader the whole of an answer at the moment its block closed and nothing
+ * before that. The next clean close puts a recovered follower back on it.
  *
  * Nothing here waits on the health of the pipe. `attach` is the wait: a call
  * made while the pipe is down is slower and never differently typed, and a
@@ -149,7 +198,7 @@ const refolded = (over: RunOver, recovering: boolean): Stream.Stream<RunSignal> 
         Stream.unwrap(
           Effect.as(
             recovering ? SubscriptionRef.set(over.state, "ready") : Effect.void,
-            resumed(over, transcript.at),
+            recovering ? resumed(over, transcript.at) : streaming(over),
           ),
         ),
       )
@@ -165,6 +214,22 @@ const refolded = (over: RunOver, recovering: boolean): Stream.Stream<RunSignal> 
   )
 
 /**
+ * Whether a Run is open, from the two payloads that bracket one. The record
+ * says nothing about a Run that has not closed, so it is read off the live
+ * stream — and it says so for a Run any door opened.
+ *
+ * A follower that subscribed while a Run was already going learns of it at
+ * the next `started`: the payload that opened it was folded before the
+ * follower attached, and reading it back out of the fold would be a second
+ * fold of the record.
+ */
+const openOf = (running: boolean, payload: Payload): boolean => {
+  if (payload.kind === "started") return true
+  if (payload.kind === "finished") return false
+  return running
+}
+
+/**
  * One Session, followed for as long as the caller wants it: fold, watch to the
  * close of the Run that is open, fold again. It never ends on its own, so a
  * caller stops it by interrupting.
@@ -173,12 +238,24 @@ const refolded = (over: RunOver, recovering: boolean): Stream.Stream<RunSignal> 
  * rather than at a surface because it is the runtime's: which positions are
  * honest, what a refused Cursor means, and when the pipe is worth mentioning.
  * A surface that spelled it again would be a second answer to keep in step.
+ *
+ * `running` rides beside every signal for the same reason: whether a Run is
+ * open is read off the payloads that bracket one, and a surface that derived
+ * it for itself would be a second reading of the same stream. It holds
+ * through a fold, because a fold arrives at the close of a Run and, after a
+ * drop, with the Run still going.
  */
 export const followSession = Effect.fn("eva.client.follow")(function* (
   over: RunOver,
-  each: (signal: RunSignal) => void,
+  each: (signal: RunSignal, running: boolean) => void,
 ) {
-  yield* Stream.runForEach(refolded(over, false), (signal) => Effect.sync(() => each(signal)))
+  let running = false
+  yield* Stream.runForEach(refolded(over, false), (signal) =>
+    Effect.sync(() => {
+      if (signal.kind === "payload") running = openOf(running, signal.payload)
+      each(signal, running)
+    }),
+  )
 })
 
 /**

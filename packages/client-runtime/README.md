@@ -68,7 +68,9 @@ const record =
 ```
 
 A surface that only reads a Session takes `follow` instead. It answers the same
-two signals and never ends on its own, so a caller stops it by interrupting:
+two signals — with whether a Run is open riding beside each, read off the
+payloads that bracket one, so no surface derives it from the stream a second
+time — and it never ends on its own, so a caller stops it by interrupting:
 
 ```ts
 const following = yield * Effect.forkChild(client.follow(session, each))
@@ -148,10 +150,23 @@ no Run is open there is nothing to synchronize, so `ready` follows
 Why each of those is the answer rather than another one is in
 [decisions.md](../../docs/decisions.md).
 
+### The composer loop
+
+What a typed line means is a fold, and the walk beside it performs what the
+fold decides. `stepped(state, step)` answers with every action a step asks
+for, in order; `walk(state, step, doing)` carries them out through the
+`Doing` a door hands it, and walks what dispatching found out back through
+the same fold. So no door owns an ordering rule: the terminal's doing holds
+fibers and the page's holds promises, while the queue, the Run numbering and
+the cancel-drops-the-queue rule live here once. `waitingText` says the queue
+in the same words at every door.
+
 ## What it does not do
 
 It draws nothing and imports nothing that draws. It speaks no wire: the seam is
-the shape a wire plugs into, not an HTTP client. It does not retry, back off, or
+the shape a wire plugs into, not an HTTP client — though the framing both wires
+speak lives here in `frames.ts`, because a plugin may not import a plugin and
+one spelling of a frame has to sit below both. It does not retry, back off, or
 probe — the local pipe cannot flap and the double drops when told, so a backoff
 ladder and a foreground probe are tuned to nothing here; they arrive with the
 filler that has a wire. It caches nothing: the record is folded on demand,

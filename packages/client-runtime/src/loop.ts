@@ -1,16 +1,20 @@
 /**
- * The loop's own rules, as a fold. The Console says what the screen shows;
- * this says what the loop does next — which Run is open, which lines are
- * waiting behind it, and which `settled` closes which Run.
+ * The loop's own rules, as a fold, and the walk that performs them. The
+ * Console says what the screen shows; this says what the loop does next —
+ * which Run is open, which lines are waiting behind it, and which `settled`
+ * closes which Run — and `walk` carries each answer out through the `Doing`
+ * a door hands it.
  *
  * It is here for the reason the Console fold is: those rules are where the
  * races live, and until this they were mutable locals inside the surface,
  * reachable only through a real renderer, a real Client and a real event
  * loop. Their suite slept for them. This one does not.
  *
- * Nothing here touches a fiber, the Session API or the clock. It is handed
- * what happened and answers with what to do; the surface does it.
+ * Nothing here touches a fiber, the Session API or the clock. What reaches
+ * outside is a `Doing` callback, so the fold and the walk are provable with
+ * nothing behind them.
  */
+import { Effect } from "effect"
 
 // Where the loop stands.
 export interface LoopState {
@@ -180,3 +184,111 @@ export const stepped = (state: LoopState, step: LoopStep): Stepped => {
     }
   }
 }
+
+/**
+ * What the queue says, and nothing while nothing waits. A queue a reader
+ * cannot see is a line they type a second time, and two Runs is not what they
+ * asked for. The words live beside the queue that holds the lines, so every
+ * door says them the same way.
+ */
+export const waitingText = (waiting: number): string | undefined =>
+  waiting === 0 ? undefined : `${waiting} waiting`
+
+// What dispatching a line turned out to mean: whether a command answered it,
+// and whether that command opened another Session.
+export interface Handled {
+  readonly ran: boolean
+  readonly moved: boolean
+}
+
+/**
+ * What a door does with each action, handed in rather than reached for, so
+ * the walk is provable with no Client standing behind it. A door with nothing
+ * to do for one says so with an empty effect in its own code — the page holds
+ * no fiber, so `interrupt` and `settle` are nothing there — rather than by
+ * leaving the action on the floor.
+ *
+ * `open` opens a Run under the number the fold gave it; the door says
+ * `settled` back through another walk when that Run has closed, because only
+ * the door hears its own fiber or its own `submit` answer.
+ */
+export interface Doing<E = never> {
+  // The line answers the open question.
+  readonly answer: (line: string) => Effect.Effect<void, E>
+  // Dispatch the line: run the command it names, or say it named none. What
+  // it turned out to mean walks on from here.
+  readonly handle: (line: string) => Effect.Effect<Handled, E>
+  readonly open: (run: number, line: string) => Effect.Effect<void, E>
+  // Steer the Run that is open. It opens no Run, so it takes no number.
+  readonly steer: (line: string) => Effect.Effect<void, E>
+  // Fold the record onto the screen, because the Session moved.
+  readonly refresh: () => Effect.Effect<void, E>
+  // Stop this Run.
+  readonly interrupt: (run: number) => Effect.Effect<void, E>
+  // Read how this Run ended, and say so if it failed.
+  readonly settle: (run: number) => Effect.Effect<void, E>
+  // Tell Eva the person cancelled.
+  readonly cancelled: () => Effect.Effect<void, E>
+}
+
+export interface Walked {
+  readonly state: LoopState
+  // Whether the loop was asked to leave. A door that never quits ignores it.
+  readonly stopped: boolean
+}
+
+/**
+ * One step, and everything it asked for, in the order it asked — including
+ * every step the doing turned out to mean. The fold decides, this performs,
+ * and what dispatching found out walks on through the same fold, so no door
+ * carries the ordering rule for itself and none can drop an action on the
+ * way out.
+ */
+export const walk = <E = never>(
+  state: LoopState,
+  step: LoopStep,
+  doing: Doing<E>,
+): Effect.Effect<Walked, E> =>
+  Effect.gen(function* () {
+    let standing = state
+    let stopped = false
+    const steps: LoopStep[] = [step]
+    for (let next = steps.shift(); next !== undefined; next = steps.shift()) {
+      const answered = stepped(standing, next)
+      standing = answered.state
+      for (const action of answered.actions) {
+        switch (action.kind) {
+          case "answer":
+            yield* doing.answer(action.line)
+            break
+          case "handle": {
+            const handled = yield* doing.handle(action.line)
+            steps.push({ kind: "handled", line: action.line, ...handled })
+            break
+          }
+          case "open":
+            yield* doing.open(action.run, action.line)
+            break
+          case "steer":
+            yield* doing.steer(action.line)
+            break
+          case "refresh":
+            yield* doing.refresh()
+            break
+          case "interrupt":
+            yield* doing.interrupt(action.run)
+            break
+          case "settle":
+            yield* doing.settle(action.run)
+            break
+          case "cancelled":
+            yield* doing.cancelled()
+            break
+          case "stop":
+            stopped = true
+            break
+        }
+      }
+    }
+    return { state: standing, stopped }
+  })
