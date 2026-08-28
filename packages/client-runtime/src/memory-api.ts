@@ -1,6 +1,7 @@
 import {
   foldTranscript,
   headerOf,
+  kept,
   newSessionID,
   ResumeTooFarBehind,
   WATCH_REPLAY_BOUND,
@@ -40,6 +41,7 @@ import { Effect, Fiber, PubSub, Stream } from "effect"
 export type Method =
   | "create"
   | "list"
+  | "retire"
   | "attach"
   | "watch"
   | "submit"
@@ -196,10 +198,25 @@ export const memorySessionAPI = (
 
       list: Effect.sync(() => {
         took("list")
-        return [...sessions].map(([id, state]) =>
-          headerOf(id, state.committed),
+        return kept(
+          [...sessions].map(([id, state]) => headerOf(id, state.committed)),
         ) satisfies readonly SessionHeader[]
       }),
+
+      /**
+       * A Session put away, as the kernel's filler puts one away: a whole Run
+       * that opens, records the fact and closes. The three payloads are said
+       * here rather than one, because a filler that wrote less would leave
+       * the record in a shape the kernel's never reaches — and the record is
+       * what the contract suite reads back.
+       */
+      retire: (id: SessionID) =>
+        Effect.gen(function* () {
+          took("retire", id)
+          yield* sayTo(id, { kind: "started", intent: "retire this Session" })
+          yield* sayTo(id, { kind: "info", retired: true })
+          yield* sayTo(id, { kind: "finished", claim: { result: "done" } })
+        }),
 
       attach: (id: SessionID) =>
         Effect.map(of(id), (state) => {

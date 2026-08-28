@@ -370,7 +370,7 @@ the next Prompt.
 **The write half of the Session API** ships as `eva.api`: `submit`, `cancel`,
 `answer` and setting the model, over the socket W1 opened. Sends carry a
 client-minted idempotency key, so a retry after a flaky reconnect is one Run.
-The contract suite crosses the wire for all nine methods, and the records a
+The contract suite crosses the wire for all ten methods, and the records a
 Run leaves are the same whichever door drove it.
 
 **Both surfaces draw the stage's work.** The page answers a permission request
@@ -389,7 +389,7 @@ request is named by a tool call id, which repeats across Runs
 steer, stop, and a model picker — and `eva --web` runs the web row beside the
 terminal row in one process, so two doors race one gate. `create`, the Catalog's
 rows, and a command line all cross the wire, and the contract suite runs the
-nine methods over the socket. The stage exits on two deterministic gates in
+ten methods over the socket. The stage exits on two deterministic gates in
 `verify`. `packages/conformance/src/w2-exit.test.ts` is the ledger for the
 roadmap's exit test: it says where each clause is proven, and it fails when a
 clause or a proof moves. `packages/conformance/src/parity.test.ts` is the ledger

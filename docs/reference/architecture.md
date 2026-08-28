@@ -2246,6 +2246,7 @@ There is one of it.
 export interface SessionAPI {
   readonly create: (location: LocationID) => Effect.Effect<SessionID>
   readonly list: Effect.Effect<readonly SessionHeader[]>
+  readonly retire: (session: SessionID) => Effect.Effect<void>
 
   readonly attach: (session: SessionID) => Effect.Effect<Transcript, never, Scope.Scope>
   readonly watch: (session: SessionID, from?: Cursor) => Stream.Stream<Payload>
@@ -2265,13 +2266,20 @@ export interface SessionAPI {
 A surface reads **two** sources and never confuses them: `watch` while a Run is
 open, `attach` for everything committed. The stream is never the record.
 
-**All nine are on the socket, both halves.** `list`, `attach`, `watch` and
+**All ten are on the socket, both halves.** `list`, `attach`, `watch` and
 `model.get` are `GET`s; `create` is a `POST` on the listing, and `submit` and
 `cancel` are `POST`s on the Session they act in; `model.set` and `answer` are
-`PUT`s, because asking twice sets the same value. `create` is the one write
-that answers a value, and its `location` is optional: a browser holds no honest
-path, so a caller that names none opens the Session where the serving process
-is.
+`PUT`s, because asking twice sets the same value, and `retire` is a `DELETE`
+on the Session for the same reason. `create` is the one write that answers a
+value, and its `location` is optional: a browser holds no honest path, so a
+caller that names none opens the Session where the serving process is.
+
+`retire` is what a person reaches for as deleting, and it cuts nothing. It
+records that the Session was put away, and every listing honours that fact —
+so the Session leaves the rail while `attach` still folds the whole record and
+`watch` still follows it. A method that cut the Trace would be the one write
+Eva could not explain afterwards, which is the rule "what a trace cannot
+rebuild is a bug" read from the other end.
 
 What travels is the contract's own shapes, with no envelope: a `SubmitInput`
 body _is_ the Prompt, and a write answers a status and nothing else. A body the

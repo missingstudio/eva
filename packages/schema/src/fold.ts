@@ -255,6 +255,12 @@ export const costFold = (events: readonly Event[], priceOf?: PriceLookup): CostS
 export interface Header {
   readonly title?: string
   readonly updatedAt?: string
+  /**
+   * Whether a person has put this Session away. A listing leaves a retired
+   * Session out; nothing else about it moves, and the Trace still holds
+   * every event it ever had.
+   */
+  readonly retired?: boolean
 }
 
 /**
@@ -263,7 +269,7 @@ export interface Header {
  * older rule is found and folded again rather than read as current. Bump it
  * in the same commit that changes `headerStep`.
  */
-export const HEADER_RULE = 2
+export const HEADER_RULE = 3
 
 /**
  * One event applied to a Header, so a store that keeps a Header beside the
@@ -280,7 +286,15 @@ export const headerStep = (header: Header, event: Event): Header => {
       : (header.title ?? (payload.kind === "started" ? payload.intent : undefined))
   const updatedAt =
     payload.kind === "info" && payload.updatedAt !== undefined ? payload.updatedAt : event.at.wall
-  return { ...(title === undefined ? {} : { title }), updatedAt }
+  // A level, so the last `info` that named it wins and taking a Session back
+  // out of retirement is the same field saying so.
+  const retired =
+    payload.kind === "info" && payload.retired !== undefined ? payload.retired : header.retired
+  return {
+    ...(title === undefined ? {} : { title }),
+    ...(retired === undefined ? {} : { retired }),
+    updatedAt,
+  }
 }
 
 // Folds one session's events into its Header, one `headerStep` at a time.

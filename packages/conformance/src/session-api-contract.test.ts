@@ -101,12 +101,12 @@ const memoryFiller: Filler = {
 
 /**
  * The wire in front of the in-memory one. No clause of this suite is read-half
- * only — every one of them writes — so a filler that answers a part of nine
+ * only — every one of them writes — so a filler that answers a part of ten
  * methods is stood up by writing through the API the wire reads and reading
  * back over the socket. Every clause then passes unchanged, which is the
  * strongest thing that can be said about a seam surviving its second filler.
  *
- * Nine of the nine methods cross the socket here — both halves, and nothing
+ * Ten of the ten methods cross the socket here — both halves, and nothing
  * beside them. There is no field below that reads the in-memory filler, so a
  * clause that passes is a clause the wire carried whole.
  *
@@ -157,6 +157,7 @@ const httpFiller: Filler = {
           const over: SessionAPI = {
             create: transport.api.create,
             list: transport.api.list,
+            retire: transport.api.retire,
             attach: transport.api.attach,
             model: transport.api.model,
             // Cast because the two forms differ in their error channel and
@@ -367,6 +368,53 @@ describe.each([kernelFiller, memoryFiller, httpFiller])(
 
       expect(listed.ids).toContain(listed.one)
       expect(listed.ids).toContain(listed.other)
+    })
+
+    /**
+     * A Session put away is a fold and not an erasure. The listing leaves it
+     * out and the record it made is still there to attach to — a method that
+     * cut the Trace would keep the first half of this clause and lose the
+     * second, which is the whole reason the fact rides the record.
+     */
+    it("puts a Session away, and keeps every word it said on the record", async () => {
+      const found = await filler.with([[text("said before")]], (api) =>
+        Effect.gen(function* () {
+          const away = yield* api.create("/here")
+          const held = yield* api.create("/there")
+          yield* api.submit(away, { kind: "prompt", text: "ask" })
+          yield* api.retire(away)
+
+          const rows = yield* api.list
+          const record = yield* Effect.scoped(api.attach(away))
+          return {
+            ids: rows.map((row) => row.id),
+            away,
+            held,
+            said: wordsIn(record.events().map((event) => event.payload)),
+          }
+        }),
+      )
+
+      expect(found.ids).not.toContain(found.away)
+      // Every other Session is where it was. Putting one away says nothing
+      // about the rest of the listing.
+      expect(found.ids).toContain(found.held)
+      expect(found.said).toBe("said before")
+    })
+
+    // Asking twice is a person pressing twice, or one write asked again after
+    // its answer was lost. Neither may take the Session anywhere new.
+    it("leaves a Session put away twice where the first ask left it", async () => {
+      const found = await filler.with([], (api) =>
+        Effect.gen(function* () {
+          const away = yield* api.create("/here")
+          yield* api.retire(away)
+          yield* api.retire(away)
+          return { ids: (yield* api.list).map((row) => row.id), away }
+        }),
+      )
+
+      expect(found.ids).not.toContain(found.away)
     })
   },
 )

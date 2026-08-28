@@ -99,6 +99,18 @@ export const headerOf = (session: SessionID, events: readonly Event[]): SessionH
 })
 
 /**
+ * What a listing shows: every Session a person has not put away. Retirement
+ * is a fold over the Trace as the title is, and the listing is the one place
+ * it is honoured — a store still holds every Session, so what was put away
+ * is folded, attached and watched exactly as it was.
+ *
+ * It sits beside `byRecency` because it is the same kind of rule: something
+ * every listing owes, written once so two listings cannot disagree.
+ */
+export const kept = (headers: readonly SessionHeader[]): readonly SessionHeader[] =>
+  headers.filter((header) => header.retired !== true)
+
+/**
  * The order `SessionStore.list` promises: most recently updated first, id
  * as the tiebreak, newer first. `updatedAt` is an ISO-8601 UTC timestamp,
  * so the wall order is the string order. A Header with none — a Session

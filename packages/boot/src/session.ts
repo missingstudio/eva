@@ -1,6 +1,8 @@
 import {
   byRecency,
   foldTranscript,
+  headerOf,
+  kept,
   newSessionID,
   recordRun,
   ResumeTooFarBehind,
@@ -362,16 +364,45 @@ export const makeSessionAPI = (
         return made
       }),
 
-      // A build with no store lists what this process opened. The order is
-      // the same order a store owes, because a listing states one order
-      // whatever produced it.
+      /**
+       * A build with no store lists what this process opened. The order is
+       * the same order a store owes, because a listing states one order
+       * whatever produced it, and each Header is folded off the Trace —
+       * which is where a retirement is, so the one listing rule holds
+       * whether a store answered or this process did.
+       */
       list: Effect.fn("session.list")(function* () {
         const store = yield* kernel.slot.sessionStore.peek
-        if (store !== undefined) return yield* store.list
-        return [...live.keys()]
-          .map((id) => ({ id }))
-          .sort(byRecency) satisfies readonly SessionHeader[]
+        if (store !== undefined) return kept(yield* store.list)
+        const headers: SessionHeader[] = []
+        for (const id of live.keys()) headers.push(headerOf(id, yield* events(id)))
+        return kept(headers.sort(byRecency)) satisfies readonly SessionHeader[]
       })(),
+
+      /**
+       * Putting a Session away is a whole Run: it opens with what was asked
+       * and closes with a Claim, so a person reading the record back finds
+       * the retirement in it — the way `/mode` is on the Trace.
+       *
+       * The `info` is the fact `list` honours, and it is committed rather
+       * than held here: another process lists this Session by reading the
+       * Trace, and a flag kept in this map would be a flag only this
+       * process could see.
+       */
+      retire: Effect.fn("session.retire")(function* (id: SessionID) {
+        const recorder = yield* kernel.slot.recorder.peek
+        const state = yield* of(id)
+        yield* recordRun(
+          recorder,
+          id,
+          [
+            { kind: "started", intent: "retire this Session" },
+            { kind: "info", retired: true },
+            { kind: "finished", claim: { result: "done" } },
+          ],
+          emitTo(state),
+        )
+      }),
 
       attach: Effect.fn("session.attach")(function* (id: SessionID): Effect.fn.Return<Transcript> {
         const store = yield* kernel.slot.sessionStore.peek

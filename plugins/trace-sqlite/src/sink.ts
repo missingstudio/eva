@@ -85,6 +85,12 @@ export const makeSqliteSink = (
     if (!held.some((column) => column.name === "rule")) {
       db.exec("ALTER TABLE session_head ADD COLUMN rule INTEGER NOT NULL DEFAULT 0")
     }
+    // A head table written before the Header carried retirement gets the
+    // column at nothing, which is what every row there means: no Session was
+    // put away under a rule that could not say it.
+    if (!held.some((column) => column.name === "retired")) {
+      db.exec("ALTER TABLE session_head ADD COLUMN retired INTEGER NOT NULL DEFAULT 0")
+    }
 
     // `DO NOTHING` on the id alone: a record already stored is a re-commit
     // and says so by changing nothing, while a taken trace position is a
@@ -97,10 +103,12 @@ export const makeSqliteSink = (
     )
     const readHead = db.prepare("SELECT * FROM session_head WHERE session = ?")
     const upsertHead = db.prepare(
-      `INSERT INTO session_head (session, seq, title, updated_at, rule) VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO session_head (session, seq, title, updated_at, retired, rule)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT (session) DO UPDATE SET
          seq = excluded.seq, title = excluded.title,
-         updated_at = excluded.updated_at, rule = excluded.rule`,
+         updated_at = excluded.updated_at, retired = excluded.retired,
+         rule = excluded.rule`,
     )
     const readEvents = db.prepare("SELECT * FROM event WHERE session = ? ORDER BY seq")
     const readSessions = db.prepare("SELECT session FROM session_head")
@@ -117,7 +125,7 @@ export const makeSqliteSink = (
 
     const writeHead = (session: SessionID, head: Head): void => {
       const row = headRowOf(session, head)
-      upsertHead.run(row.session, row.seq, row.title, row.updated_at, row.rule)
+      upsertHead.run(row.session, row.seq, row.title, row.updated_at, row.retired, row.rule)
     }
 
     // Returns false when the id was already stored, so the caller can tell

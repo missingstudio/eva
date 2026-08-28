@@ -71,6 +71,7 @@ export const droppableTransport = (api: SessionAPI): Effect.Effect<DroppableTran
     const wrapped: SessionAPI = {
       create: (location) => held(() => api.create(location)),
       list: held(() => api.list),
+      retire: (session) => held(() => api.retire(session)),
       attach: (session) => held(() => api.attach(session)),
       /**
        * Asking for a stream is not making a call: the description is built

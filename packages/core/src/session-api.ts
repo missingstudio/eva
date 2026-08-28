@@ -58,6 +58,19 @@ export interface SessionAPI {
    */
   readonly create: (location?: string) => Effect.Effect<SessionID>
   readonly list: Effect.Effect<readonly SessionHeader[]>
+  /**
+   * Puts a Session away. It goes off `list` and nothing else about it moves:
+   * `attach` still folds the whole record and `watch` still follows it.
+   *
+   * What a person reaches for as deleting is this. The Trace is not cut —
+   * the retirement is one more record on it, so the fold that hides the
+   * Session is rebuildable from the same events every other fold reads. A
+   * method that cut the Trace would be the one write Eva cannot explain
+   * afterwards.
+   *
+   * Asking twice leaves the Session where the first ask left it.
+   */
+  readonly retire: (session: SessionID) => Effect.Effect<void>
   readonly attach: (session: SessionID) => Effect.Effect<Transcript, never, Scope.Scope>
   /**
    * Without a cursor: the live stream, from here on. With one: the record —
