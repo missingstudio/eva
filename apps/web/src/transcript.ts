@@ -29,6 +29,22 @@ export const tailOf = (said: string, payload: Payload): string =>
   payload.kind === "text" && payload.content.type === "text" ? said + payload.content.text : said
 
 /**
+ * Whether a Run is open, from the two payloads that bracket one. The record
+ * says nothing about a Run that has not closed, and the page opens no Run of
+ * its own to hold — so this is what tells it there is something to stop, and
+ * it says so for a Run any door opened.
+ *
+ * A page opened while a Run was already going learns of it at the next
+ * `started`: the payload that opened it was folded before this page attached,
+ * and reading it back out of the fold would be a second fold of the record.
+ */
+export const openOf = (running: boolean, payload: Payload): boolean => {
+  if (payload.kind === "started") return true
+  if (payload.kind === "finished") return false
+  return running
+}
+
+/**
  * What one Run signal changes about what the page holds. A fold replaces the
  * tail, so the tail goes with it; a payload of the live stream grows it.
  *
@@ -41,14 +57,20 @@ export const tailOf = (said: string, payload: Payload): string =>
 const readingOf =
   (signal: RunSignal) =>
   (was: Reading): Reading => {
-    if (signal.kind === "payload") return { ...was, said: tailOf(was.said, signal.payload) }
+    if (signal.kind === "payload") {
+      return {
+        ...was,
+        running: openOf(was.running, signal.payload),
+        said: tailOf(was.said, signal.payload),
+      }
+    }
     const folded: Folded = {
       kind: "folded",
       at: signal.transcript.at,
       turns: blocksOf(signal.transcript),
       cost: signal.transcript.cost(),
     }
-    return { folded, said: "" }
+    return { ...was, folded, said: "" }
   }
 
 /**
@@ -95,7 +117,11 @@ const whileDrawn = (over: (one: Client) => Effect.Effect<unknown>): (() => void)
  * The cost is the Transcript's own fold and nothing here prices anything.
  */
 export const useTranscript = (session: SessionID): Reading => {
-  const [reading, setReading] = useState<Reading>({ folded: { kind: "folding" }, said: "" })
+  const [reading, setReading] = useState<Reading>({
+    folded: { kind: "folding" },
+    said: "",
+    running: false,
+  })
 
   // Nothing is caught here. A refused Cursor and a pipe that went are both
   // answered inside the follow, by folding fresh.

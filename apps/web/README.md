@@ -1,7 +1,7 @@
 # @missingstudio/eva-web-app
 
 The Session page for [Eva](../../README.md): a browser reads one Session
-live, and writes nothing. It is one artifact, and
+live, and says something to it. It is one artifact, and
 [`eva.web`](../../plugins/web/README.md) serves it without building it — the
 posture, single-tenant or multi-tenant, is read when the surface starts.
 
@@ -14,8 +14,13 @@ that go around that Client is zero, which is a check that fails rather than a
 habit. The glossary in [docs/context.md](../../docs/context.md) defines
 **Session**, **Surface**, **Transcript** and **Block**.
 
-The page takes no input of any kind: no prompt box, no permission answer, no
-model switch. Those are W2's, and they wait for the permission gate.
+At W2 it prompts. The composer sends a line, queues one typed while a Run is
+open, and stops what is open — through the same one Client, while `follow`
+goes on drawing. The rules are not this page's: `packages/client-runtime`
+holds the composer fold the terminal steps, so a line typed at either door
+means one thing. Send is off while the pipe is down, and the reason is drawn
+beside it — a send that spooled behind a dead pipe and said nothing would read
+as a Run that started.
 
 ## What a Session page draws
 
@@ -180,6 +185,8 @@ cd apps/web && bun run dev
 | `src/page.tsx`      | the listing: the build, and the Sessions Eva holds           |
 | `src/session.tsx`   | one Session: which it is, what was said, what it cost        |
 | `src/blocks.tsx`    | one Block, in page primitives                                |
+| `src/composer.tsx`  | what to say next: the line, the send, the stop, the queue    |
+| `src/composing.ts`  | the composer fold, driven — and the calls its actions make   |
 | `src/title.ts`      | what to call a Session, in one line                          |
 | `src/eva.ts`        | the one Client, over the same-origin wire                    |
 | `src/sessions.ts`   | what the page reads: the Sessions, or not yet                |
@@ -212,7 +219,9 @@ browser gets is proven against a real socket in
 [src/page.test.tsx](src/page.test.tsx) holds the listing,
 [src/blocks.test.tsx](src/blocks.test.tsx) the Block mapping,
 [src/session.test.tsx](src/session.test.tsx) the Header before the fold, the
-tail after it and the cost line,
+tail after it, the cost line and what the page offers,
+[src/composer.test.tsx](src/composer.test.tsx) the queue, the cancel that
+drops it and the send a dead pipe refuses,
 [src/transcript.test.ts](src/transcript.test.ts) the follow itself — the fold,
 the tail, and the fold that replaces it —
 [src/title.test.ts](src/title.test.ts) the shaping of a title, and
