@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { apiWire } from "@missingstudio/eva-api"
-import { httpTransport } from "@missingstudio/eva-api/client"
+import { httpTransport, type Request } from "@missingstudio/eva-api/client"
 import { approval } from "@missingstudio/eva-approval"
 import { makeSessionAPI, overSurface, type Kernel } from "@missingstudio/eva-boot"
 import {
@@ -91,6 +91,60 @@ const inProcess: Door = { name: "in this process", of: (api) => Effect.succeed(a
 const overWire: Door = { name: "over the socket", of: overSocket }
 const doors: readonly Door[] = [inProcess, overWire]
 
+// How many times a pipe was asked, and the one answer it loses.
+interface Flaky {
+  readonly door: Door
+  readonly asked: () => number
+  // The next answer is thrown away after the far side wrote it. No caller can
+  // tell that from a request that never left, which is the whole case.
+  readonly lose: () => void
+}
+
+/**
+ * The socket, over a pipe that loses one answer. It is the same door
+ * `overWire` is — `eva.web` serving `eva.api`'s handler — with the request
+ * function handed over, because a suite that must take a pipe away does it
+ * there and not with a firewall.
+ */
+const flaky = (): Flaky => {
+  let asked = 0
+  let losing = false
+
+  const request = (async (...given: Parameters<Request>) => {
+    asked += 1
+    const answered = await fetch(...given)
+    if (!losing) return answered
+    losing = false
+    throw new Error("socket hang up")
+  }) as Request
+
+  const of = (api: SessionAPI): Effect.Effect<SessionAPI, never, Scope.Scope> =>
+    Effect.gen(function* () {
+      const said: string[] = []
+      yield* serveWeb({
+        root: join(tmpdir(), "eva-write-half-no-page"),
+        bind: { host: "127.0.0.1", port: 0 },
+        posture: "local",
+        api: apiWire(api),
+        write: (line) => void said.push(line),
+      })
+      // Shorter than the transport's own gap, so a clause reaches the answer
+      // rather than the default.
+      const transport = yield* httpTransport({
+        origin: said.join("").split(" ")[0] ?? "",
+        gap: 1,
+        request,
+      })
+      return transport.api
+    })
+
+  return {
+    door: { name: "over a socket that drops an answer", of },
+    asked: () => asked,
+    lose: () => void (losing = true),
+  }
+}
+
 /**
  * The Session is opened through the door too, because `create` is on both
  * halves of the wire now: a page names a Session by opening one. So a clause
@@ -154,6 +208,82 @@ describe("a Prompt, through each door", () => {
     const over = await opened(overWire)
 
     expect(over).toEqual(direct)
+  })
+})
+
+/**
+ * The whole of what a page does with a Session it opened, in the order a page
+ * does it. `create` is a write and the rest are reads, so this is the one
+ * clause that holds the two halves of the wire to each other: the id the far
+ * side minted is the id the listing carries and the id the fold answers to.
+ *
+ * Nothing is opened beside the door. A page holds no honest path, so it names
+ * none — and the Session it gets back is the only handle it has.
+ */
+describe("a Session opened over the wire", () => {
+  it("is listed, attached and finished through the door that opened it", async () => {
+    const found = await writing(
+      overWire,
+      [trace, traceMemory, scripted([{ payloads: [text("an answer")] }]).plugin],
+      (writes) =>
+        Effect.gen(function* () {
+          const session = yield* writes.create()
+          const listed = yield* writes.list
+          yield* writes.submit(session, { kind: "prompt", text: "ask" })
+          const folded = yield* Effect.scoped(writes.attach(session))
+          return {
+            session,
+            listed: listed.map((one) => one.id),
+            folded: folded.session,
+            answer: folded.answer(),
+            said: payloadsOf(folded.events()),
+          }
+        }),
+    )
+
+    expect(found.listed).toEqual([found.session])
+    expect(found.folded).toBe(found.session)
+    expect(found.answer).toEqual({
+      claim: { result: "done", summary: "answered" },
+      text: "an answer",
+    })
+    expect(found.said[0]).toEqual({ kind: "started", intent: "ask" })
+    expect(found.said.at(-1)).toMatchObject({ kind: "finished" })
+  })
+})
+
+/**
+ * The case the idempotency key exists for, over a live kernel.
+ *
+ * `plugins/api`'s own suite proves the rule against a filler that counts the
+ * calls it was handed. What a filler cannot say is what the Trace holds — and
+ * a `submit` whose answer was lost, asked again, would put a second Run on it.
+ * A write has no error channel, so asking again is not optional: the key is
+ * what makes it safe.
+ */
+describe("a submit whose answer was lost", () => {
+  it("opens one Run on the Trace, however often the caller asks again", async () => {
+    const pipe = flaky()
+    const said = await writing(
+      pipe.door,
+      [trace, traceMemory, scripted([{ payloads: [text("an answer")] }]).plugin],
+      (writes, kernel) =>
+        Effect.gen(function* () {
+          const session = yield* writes.create()
+          const opened = pipe.asked()
+          pipe.lose()
+          yield* writes.submit(session, { kind: "prompt", text: "ask" })
+          return { record: payloadsOf(yield* committed(kernel)), asked: pipe.asked() - opened }
+        }),
+    )
+
+    // Asked twice and run once. A second Run would be a second `started`, and
+    // the script holds one turn — so a second one would fail loudly as well.
+    expect(said.asked).toBe(2)
+    expect(said.record.filter((one) => one.kind === "started")).toEqual([
+      { kind: "started", intent: "ask" },
+    ])
+    expect(said.record.filter((one) => one.kind === "finished")).toHaveLength(1)
   })
 })
 
