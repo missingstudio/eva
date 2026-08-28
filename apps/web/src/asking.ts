@@ -1,5 +1,6 @@
+import type { FrontendRequest } from "@missingstudio/eva-sdk"
 import type { Asking } from "@missingstudio/eva-session-view"
-import { watchAsking, type AskedQuestion } from "@missingstudio/eva-web/client"
+import { watchAsking } from "@missingstudio/eva-web/client"
 import { Effect } from "effect"
 import { useEffect, useState } from "react"
 import { client } from "./eva.js"
@@ -19,10 +20,10 @@ import { client } from "./eva.js"
  * call and every one of those goes through `client-runtime`.
  */
 
-// The Block shape, from the frame shape. The two spellings are one field
-// apart: the wire says `id`, because the frame is a permission request without
-// its kind, and a Block says `request`, because that is what it is the id of.
-const asked = (one: AskedQuestion): Asking => ({ request: one.id, question: one.question })
+// The Block shape, from the request that travelled whole. A Block says
+// `request` where the contract says `id`, because that is what it is the id
+// of — the one translation on this channel, and it is the drawing's.
+const asked = (one: FrontendRequest): Asking => ({ request: one.id, question: one.question })
 
 // The questions that stand, for as long as the page is drawn.
 export const useAsking = (): readonly Asking[] => {

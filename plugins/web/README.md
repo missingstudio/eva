@@ -110,10 +110,11 @@ from.
 - **`GET /asking`** is an event stream of the questions that stand. Every frame
   carries the **whole set**, so a page holds no bookkeeping: a question
   withdrawn is a set with one fewer in it, and a page that joined late reads the
-  same frame as one that was there. One question is `{ id, question }` — a
-  permission request without its kind, and no option list, because the four
-  options are `PERMISSION_OPTIONS` in `packages/core` and every surface already
-  holds them.
+  same frame as one that was there. One question is a whole `FrontendRequest` —
+  `{ kind, id, question }`, unchanged from the shape `Frontend.ask` takes, so a
+  door at the far end asks with the kind the gate asked it with. No option
+  list, because the four options are `PERMISSION_OPTIONS` in `packages/core`
+  and every surface already holds them.
 - The path sits **outside `/api`**, which [`eva.api`](../api/README.md) claims
   whole. It is this surface's own door and not a Session API method.
 - **The stream is also the presence signal**, and that is what makes the row

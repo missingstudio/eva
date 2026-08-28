@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import type { FrontendRequest } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { serveWeb } from "./serve.js"
@@ -52,7 +53,7 @@ const reading = async (url: string) => {
   const stopping = new AbortController()
   const response = await fetch(`${url}${ASKING_PATH}`, { signal: stopping.signal })
   const reader = response.body?.pipeThrough(new TextDecoderStream()).getReader()
-  const frames: (readonly { readonly id: string; readonly question: string }[])[] = []
+  const frames: (readonly FrontendRequest[])[] = []
 
   const pump = async () => {
     let held = ""
@@ -98,9 +99,9 @@ describe("the frame the page reads", () => {
   // The whole set every time, so a page holds no bookkeeping and a page that
   // joined late reads the same frame as one that was there.
   it("carries every question that stands, and reads back as it was written", () => {
-    const asking = [
-      { id: "call_1", question: "run git push?" },
-      { id: "call_2", question: "write .npmrc?" },
+    const asking: readonly FrontendRequest[] = [
+      { kind: "permission", id: "call_1", question: "run git push?" },
+      { kind: "question", id: "call_2", question: "which of the two?" },
     ]
     const frame = askFrame(asking)
 
@@ -111,12 +112,16 @@ describe("the frame the page reads", () => {
   // A frame nothing can read is not an empty set. The caller keeps what it
   // had, so a reader looking at a question does not watch it vanish because
   // a byte was wrong.
-  it.each(['{"asking":1}', '{"asking":[{"id":1}]}', "not json", "[]"])(
-    "reads no set out of %s",
-    (text) => {
-      expect(askingIn(text)).toBeUndefined()
-    },
-  )
+  it.each([
+    '{"asking":1}',
+    '{"asking":[{"id":1}]}',
+    // A row with no kind is a question this side cannot ask as it was asked.
+    '{"asking":[{"id":"call_1","question":"run git push?"}]}',
+    "not json",
+    "[]",
+  ])("reads no set out of %s", (text) => {
+    expect(askingIn(text)).toBeUndefined()
+  })
 })
 
 describe("an ask with no page open", () => {
@@ -141,7 +146,7 @@ describe("an ask with a page open", () => {
     expect(await page.until(1)).toEqual([])
 
     const asked = Effect.runFork(served.frontend.ask(REQUEST))
-    expect(await page.until(2)).toEqual([{ id: "call_1", question: "run git push?" }])
+    expect(await page.until(2)).toEqual([REQUEST])
     // Still waiting: the answer comes back over the socket, not from here.
     expect(await Effect.runPromise(settledOr(asked, "waiting"))).toBe("waiting")
 
