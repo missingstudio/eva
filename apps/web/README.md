@@ -25,10 +25,14 @@ as a Run that started.
 Beside it is a command line — `/mode`, `/undo` and every other row, run where
 the Domains live rather than where the page is. It is the one write here that
 is not a Session API call: the contract has no command method, so it rides
-beside the Client on the same transport rather than through it. What the page
-puts into Eva is small and counted all the same — a line, a stop, an answer to
-a permission request that stands, and a command. A model switch is the rest of
-W2's.
+beside the Client on the same transport rather than through it.
+
+The page also switches the model this Session is kept at. The model is chosen
+from what the Catalog knows and never typed: `GET /api/models` answers the rows
+`/model` picks from in a terminal, so the two doors offer one list.
+
+What the page puts into Eva is small and counted all the same — a line, a stop,
+an answer to a permission request that stands, a command, and a model.
 
 ## What a Session page draws
 
@@ -195,6 +199,7 @@ cd apps/web && bun run dev
 | `src/blocks.tsx`    | one Block, in page primitives                                |
 | `src/composer.tsx`  | what to say next: the line, the send, the stop, the queue    |
 | `src/composing.ts`  | the composer fold, driven — and the calls its actions make   |
+| `src/models.tsx`    | the model picker: the Catalog's rows, and the one chosen     |
 | `src/title.ts`      | what to call a Session, in one line                          |
 | `src/command.tsx`   | a command line, and what the last one wrote                  |
 | `src/eva.ts`        | the one Client, over the same-origin wire                    |
@@ -231,6 +236,8 @@ browser gets is proven against a real socket in
 tail after it, the cost line and what the page offers,
 [src/composer.test.tsx](src/composer.test.tsx) the queue, the cancel that
 drops it and the send a dead pipe refuses,
+[src/models.test.tsx](src/models.test.tsx) the picker and the rows it shares
+with the terminal's panel,
 [src/transcript.test.ts](src/transcript.test.ts) the follow itself — the fold,
 the tail, and the fold that replaces it —
 [src/command.test.tsx](src/command.test.tsx) the command line and what it

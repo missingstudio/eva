@@ -1,41 +1,26 @@
 import { modelRef } from "@missingstudio/eva-core"
-import { toUsd } from "@missingstudio/eva-schema"
 import {
   define,
   helpText,
+  modelRows,
   type CatalogState,
   type CommandContext,
   type CommandInfo,
-  type ModelInfo,
-  type PickRow,
 } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
+
+/**
+ * The rows `/model` picks from, said again here because this is where a
+ * caller found them. They moved down to the sdk when the wire started to
+ * answer them too: the terminal reads a Catalog in process and a page holds
+ * none, and one function is what keeps the two pickers from drifting.
+ */
+export { modelRows }
 
 // One block of lines, said once. A surface shows what it is given, so what
 // is one answer arrives as one answer.
 const wrote = (ctx: CommandContext, lines: readonly string[]): void =>
   ctx.write(`${lines.join("\n")}\n`)
-
-// What the Catalog knows about a model that helps somebody choose one. A
-// fact the Catalog does not hold is left unsaid rather than guessed at.
-const modelDetail = (model: ModelInfo): string =>
-  [
-    model.contextWindow === undefined ? "" : `${Math.round(model.contextWindow / 1000)}k context`,
-    model.price === undefined ? "" : `$${toUsd(model.price.inputTicks).toFixed(2)}/Mtok in`,
-  ]
-    .filter((part) => part !== "")
-    .join(" · ")
-
-// Every model this build can reach, named the way a person types one — so
-// the row a panel takes is the argument the line would have carried.
-export const modelRows = (catalog: CatalogState): readonly PickRow[] =>
-  [...catalog.models].flatMap(([provider, models]) =>
-    [...models.values()].map((model) => ({
-      id: `${provider}/${model.id}`,
-      label: `${provider}/${model.id}`,
-      detail: modelDetail(model),
-    })),
-  )
 
 const setModel = Effect.fn("eva.commands.model.set")(function* (
   ctx: CommandContext,

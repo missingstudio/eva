@@ -9,7 +9,7 @@ import {
   type SessionAPI,
   type ToolInfo,
 } from "@missingstudio/eva-core"
-import type { ModelPrice, PriceLookup, SessionID } from "@missingstudio/eva-schema"
+import { toUsd, type ModelPrice, type PriceLookup, type SessionID } from "@missingstudio/eva-schema"
 import type { Effect, Scope } from "effect"
 import type { Frontend } from "./frontend.js"
 
@@ -216,6 +216,34 @@ export const priceLookup =
       offered.get(reference.model.replace(RELEASED, ""))?.price
     )
   }
+
+// What the Catalog knows about a model that helps somebody choose one. A
+// fact the Catalog does not hold is left unsaid rather than guessed at.
+const modelDetail = (model: ModelInfo): string =>
+  [
+    model.contextWindow === undefined ? "" : `${Math.round(model.contextWindow / 1000)}k context`,
+    model.price === undefined ? "" : `$${toUsd(model.price.inputTicks).toFixed(2)}/Mtok in`,
+  ]
+    .filter((part) => part !== "")
+    .join(" · ")
+
+/**
+ * Every model this build can reach, named the way a person types one — so
+ * the row a panel takes is the argument the line would have carried.
+ *
+ * It lives here, beside the Catalog it reads, and not beside the command that
+ * first drew it: a wire answers these rows to a surface that holds no
+ * Catalog, and a picker on a page and a panel in a terminal reading two
+ * spellings would disagree the first week a Provider ships a model.
+ */
+export const modelRows = (catalog: CatalogState): readonly PickRow[] =>
+  [...catalog.models].flatMap(([provider, models]) =>
+    [...models.values()].map((model) => ({
+      id: `${provider}/${model.id}`,
+      label: `${provider}/${model.id}`,
+      detail: modelDetail(model),
+    })),
+  )
 
 /**
  * The domain table: every domain of plain rows, against the Info it holds.

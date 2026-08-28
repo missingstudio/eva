@@ -16,6 +16,7 @@ import {
   type Payload,
   type SessionID,
 } from "@missingstudio/eva-schema"
+import type { PickRow } from "@missingstudio/eva-sdk"
 
 export const API_PLUGIN = "eva.api"
 
@@ -33,6 +34,13 @@ export const SESSIONS = `${API_ROOT}/sessions`
  * person, and a person may answer it from a page that never named a Session.
  */
 export const REQUESTS = `${API_ROOT}/requests`
+
+/**
+ * What the Catalog knows, and the one path here that names no Session. A
+ * model is a fact of the build and not of a Session, so the rows are read
+ * once and every Session on this runtime is offered the same ones.
+ */
+export const MODELS = `${API_ROOT}/models`
 
 export const sessionPath = (session: string): string => `${SESSIONS}/${encodeURIComponent(session)}`
 
@@ -136,6 +144,41 @@ export const modelIn = (value: unknown): ModelRef | undefined => {
   const provider = stringAt(row, "provider")
   const model = stringAt(row, "model")
   return provider === undefined || model === undefined ? undefined : { provider, model }
+}
+
+/**
+ * One model, as a picker draws it. `PickRow` is the command vocabulary's own
+ * shape, and it is said again here so the page names it off this wire: the
+ * rows a page shows are the rows `/model` picks from, and a second shape for
+ * them would be a second answer to what this build can run.
+ */
+export type { PickRow }
+
+export const modelRowIn = (value: unknown): PickRow | undefined => {
+  const row = objectIn(value)
+  if (row === undefined) return undefined
+  const id = stringAt(row, "id")
+  const label = stringAt(row, "label")
+  if (id === undefined || label === undefined) return undefined
+
+  const detail = stringAt(row, "detail")
+  return { id, label, ...(detail === undefined ? {} : { detail }) }
+}
+
+export const modelRowsIn = (value: unknown): readonly PickRow[] | undefined => {
+  if (!Array.isArray(value)) return undefined
+  const listed: readonly unknown[] = value
+
+  const rows: PickRow[] = []
+  for (const one of listed) {
+    const row = modelRowIn(one)
+    // One row this cannot read makes the whole listing unreadable, as a
+    // listing of Sessions does. A model dropped in silence is a model a
+    // person cannot choose and is never told about.
+    if (row === undefined) return undefined
+    rows.push(row)
+  }
+  return rows
 }
 
 /**

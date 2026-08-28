@@ -30,6 +30,7 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@missingstudio/eva-testkit": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   }

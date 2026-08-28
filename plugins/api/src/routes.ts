@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { ResumeTooFarBehind, SessionAPI } from "@missingstudio/eva-core"
 import { encodePayloadLine, sessionID, type SessionID } from "@missingstudio/eva-schema"
-import { dispatch, type CommandInfo } from "@missingstudio/eva-sdk"
+import { dispatch, modelRows, type CatalogState, type CommandInfo } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Stream } from "effect"
 import {
   answerIn,
@@ -17,6 +17,7 @@ import {
   lineIn,
   locationIn,
   modelIn,
+  MODELS,
   refusalOut,
   REQUESTS,
   SESSIONS,
@@ -146,6 +147,16 @@ const commanded =
     })
 
 /**
+ * The Catalog a caller that handed none over is answered from. A build that
+ * loaded no Provider knows no model, so an empty listing is the truth and
+ * never a miss: the wire carries the read, and what it reads may be nothing.
+ */
+const NOTHING: Effect.Effect<CatalogState> = Effect.succeed({
+  providers: new Map(),
+  models: new Map(),
+})
+
+/**
  * Both halves `eva.api` carries as a body. `watch` is in neither: it answers
  * a stream rather than a body, so it has a table of its own that is matched
  * first.
@@ -161,7 +172,9 @@ const commanded =
  *
  * `commands` is the fifth, and it is an Effect rather than a list because the
  * rows are read at the moment a line runs: a plugin that registers a command
- * after the wire was built is still a command this wire carries.
+ * after the wire was built is still a command this wire carries. `catalog` is
+ * the sixth, read the same way and for the same reason, and it is the one read
+ * here that is not a Session API call at all.
  */
 export const routeFor = (
   method: string,
@@ -169,10 +182,23 @@ export const routeFor = (
   body?: unknown,
   directory: () => string = HERE,
   commands: Effect.Effect<readonly CommandInfo[]> = NO_COMMANDS,
+  catalog: Effect.Effect<CatalogState> = NOTHING,
 ): Route | undefined => {
   if (method === "GET") {
     if (path === SESSIONS) {
       return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: rows }))
+    }
+
+    /**
+     * What this build can run, as the rows a picker draws. The terminal reads
+     * its own Catalog in process and a page holds none, so this is the read
+     * half of one fact — and it is `modelRows` and not a second derivation of
+     * it, which is what stops the two pickers from offering different models.
+     *
+     * A `PickRow` is JSON already, so the wire adds no envelope here either.
+     */
+    if (path === MODELS) {
+      return () => Effect.map(catalog, (state) => ({ status: 200, body: modelRows(state) }))
     }
 
     const attaching = askedFor(SESSION, path)
@@ -458,11 +484,16 @@ interface Once {
  * which is the whole of why a command crosses the wire at all: a door that
  * ran `/mode` for itself would change the approval state of the process it
  * runs in, and the Run is in this one.
+ *
+ * `catalog` is what this build can run, handed in from the same context and
+ * for the same reason: a wire may not import the plugin that fills the
+ * Catalog, and a plugin reads every Domain from the context it loads with.
  */
 export const apiWire = (
   api: SessionAPI,
   directory?: () => string,
   commands?: Effect.Effect<readonly CommandInfo[]>,
+  catalog?: Effect.Effect<CatalogState>,
 ): Answering => {
   /**
    * The write each path is answering, under the key its caller named. A write
@@ -512,7 +543,7 @@ export const apiWire = (
     const read = method === "GET" ? Effect.succeed(undefined) : bodyOf(request)
     Effect.runFork(
       Effect.flatMap(read, (body) => {
-        const route = routeFor(method, asked, body, directory, commands)
+        const route = routeFor(method, asked, body, directory, commands, catalog)
         const answered =
           route === undefined
             ? Effect.succeed(MISS)

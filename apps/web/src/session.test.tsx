@@ -306,14 +306,15 @@ describe("the cost line", () => {
  * What is counted is the rule and not a proxy for it. A field is no longer
  * the rule — there is one, and the composer is what it is for — so what is
  * counted is every reach for Eva, read off what ships. Most of them go
- * through the one Client and are written `one.api.X`. The command line does
- * not: the contract has no command method, so it comes off the transport
- * beside the Client and is written `command()`. Both spellings are grepped,
+ * through the one Client and are written `one.api.X`. Two do not, because
+ * neither is a Session API method: a command line comes off the transport
+ * beside the Client and is written `command()`, and the Catalog's rows are
+ * read beside it and written `models()`. All three spellings are grepped,
  * because a reach this count cannot see is the defect the count exists for.
  *
  * `eva.ts` is where every door is opened, so its exports are counted too. A
- * third door would be a reach `one.api.` and `command()` both miss, and it
- * lands on that line before it lands anywhere else.
+ * fourth door would be a reach all three spellings miss, and it lands on that
+ * line before it lands anywhere else.
  *
  * Each surface is drawn in the state a reader sees it in. `renderToStaticMarkup`
  * runs no effect, so `Page` draws only the words it says before the listing has
@@ -330,13 +331,15 @@ describe("what the page offers", () => {
       .sort()
 
   // The grep, written once so a reviewer can run the same one by hand.
-  const REACH = /one\.api\.[a-z.]+|\bcommand\(\)/g
+  const REACH = /one\.api\.[a-z.]+|\bcommand\(\)|\bmodels\(\)/g
 
   const calls = (): readonly string[] => {
     const found = new Set<string>()
     for (const path of shipped()) {
       for (const said of readFileSync(path, "utf8").match(REACH) ?? []) {
-        found.add(said.startsWith("one.api.") ? said.slice("one.api.".length) : "command")
+        // A door is named by the call without its parentheses; a Client call
+        // by the method under `one.api.`.
+        found.add(said.startsWith("one.api.") ? said.slice("one.api.".length) : said.slice(0, -2))
       }
     }
     return [...found].sort()
@@ -361,19 +364,31 @@ describe("what the page offers", () => {
   /**
    * `create` opens a Session, `submit` says something in one, `cancel` stops
    * what is open and `answer` answers a question that stands. `list` is the
-   * listing, which is the read this page opened with. `command` is the odd
-   * one: it is no Session API method at all, and it runs a line where the
-   * Domains live. Nothing else: a model switch is still to come, and it
-   * belongs on this line the day it lands.
+   * listing, which is the read this page opened with. `model.get` and
+   * `model.set` are the picker: what this Session is kept at, and the row a
+   * reader chose. `command` and `models` are the odd two — neither is a
+   * Session API method at all. One runs a line where the Domains live, and
+   * the other reads what the Catalog knows. Nothing else.
    */
   it("makes these calls on Eva and no others", () => {
-    expect(calls()).toEqual(["answer", "cancel", "command", "create", "list", "submit"])
+    expect(calls()).toEqual([
+      "answer",
+      "cancel",
+      "command",
+      "create",
+      "list",
+      "model.get",
+      "model.set",
+      "models",
+      "submit",
+    ])
   })
 
-  // Two doors, and `eva.ts` holds both. A third would be a call the count
-  // above is blind to, which is the one failure this suite must not allow.
+  // Three doors, and `eva.ts` holds all of them. A fourth would be a call the
+  // count above is blind to, which is the one failure this suite must not
+  // allow.
   it("reaches Eva through these doors and no others", () => {
-    expect(doors()).toEqual(["client", "command"])
+    expect(doors()).toEqual(["client", "command", "models"])
   })
 
   // The composer is the field, and it is the only one. A page with two ways

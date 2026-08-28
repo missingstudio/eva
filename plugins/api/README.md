@@ -59,6 +59,7 @@ curl http://127.0.0.1:7777/api/sessions
 | command     | `POST /api/sessions/:id/command` | runs a line where the Domains are        |
 | `model.set` | `PUT /api/sessions/:id/model`    | keeps that Session at another model      |
 | `answer`    | `PUT /api/requests/:id`          | answers what a Run asked a person        |
+| —           | `GET /api/models`                | every model the Catalog knows, as rows   |
 
 What travels is the contract's own shapes, with no envelope around them and no
 rendering in them. A `SubmitInput` body _is_ the Prompt and a `CancelCause`
@@ -73,10 +74,11 @@ tells the two apart. `answer` is the one call keyed by a `RequestID` rather
 than by a Session, so it sits outside the listing: the id is the tool call's,
 which the `tool_call` record named before anybody was asked.
 
-The command route is the one that is not a `SessionAPI` method. A command
-resolves through the rows a process holds and reaches the Domains beside them,
-so a door that ran `/mode` for itself would change the approval state of its
-own process and leave the Run under the mode it already had. The body is
+Two routes here are no `SessionAPI` method. The command route is one of them. A
+command resolves through the rows a process holds and reaches the Domains
+beside them, so a door that ran `/mode` for itself would change the approval
+state of its own process and leave the Run under the mode it already had. The
+body is
 `{"line"}` — the line whole, because `dispatch` owns what a line means and a
 second parser would be one to keep in step. The answer is `{"wrote", "selected"?}`:
 `CommandContext.write` collected as one block of text, and the Session the
@@ -85,6 +87,17 @@ have asked lists its options instead — the contract already says a command
 answers in words where a capability is missing, so no command needs work of its
 own to cross this wire. Nothing here can fault: a line no row answers is
 answered in words with the same status as one that ran.
+
+`GET /api/models` is the other. A model is a fact of the build and not of a
+Session, so the rows are the Catalog's and every Session on this runtime is
+offered the same ones. They are `modelRows` from the sdk — the rows `/model`
+picks from in a terminal — so a picker on a page and a panel on a screen cannot
+offer different models. A build that loaded no Provider answers an empty
+listing, which is what it knows.
+
+Nothing sets a model by name here. `PUT /api/sessions/:id/model` carries a
+`ModelRef` and refuses anything else, so a line a person typed reaches this
+wire as a row that was picked or it does not reach it at all.
 
 `create` is the one write that answers a value, because a status alone would
 not say which Session was opened. Its body is `{"location"?}` and the field is
@@ -231,28 +244,32 @@ about would be refused again however often it is sent.
 - `makeApi({ serve, directory })` — the plugin, id `eva.api`. It registers no
   row: a wire is not a Domain, and the plugin id is what a person turns off.
   `directory` is where a Session goes when the caller named nowhere, and it is
-  the serving process's own when nobody hands one over. It reads its own
-  `ctx.command.get` for the rows a line resolves through, because
-  `PluginContext` extends `Domains` — so the wire reaches the commands without
-  importing the plugins that register them.
-- `apiWire(api, directory, commands)` — the request handler, answering from any
-  filler of the Session API. It says whether it answered, so the server that
-  owns the socket can serve the page with what falls past it.
-- `routeFor(method, path, body, directory, commands)` — the route table, as a
-  pure function. The body arrives as a third argument the way `watchFor` takes
-  its Cursor, so a write route is still a description of an answer and never a
-  write itself; the directory arrives as a fourth, because where the serving
-  process is is a fact of that process and not of the request; the commands
-  arrive as a fifth, as an Effect rather than a list, because the rows are read
-  at the moment a line runs.
+  the serving process's own when nobody hands one over. Neither the commands
+  nor the Catalog is an option: the plugin reads `ctx.command.get` and
+  `ctx.catalog.get` from its own context, because `PluginContext` extends
+  `Domains` — so the wire reaches both without importing the plugins that fill
+  them.
+- `apiWire(api, directory, commands, catalog)` — the request handler, answering
+  from any filler of the Session API. It says whether it answered, so the
+  server that owns the socket can serve the page with what falls past it.
+- `routeFor(method, path, body, directory, commands, catalog)` — the route
+  table, as a pure function. The body arrives as a third argument the way
+  `watchFor` takes its Cursor, so a write route is still a description of an
+  answer and never a write itself; the directory arrives as a fourth, because
+  where the serving process is is a fact of that process and not of the
+  request; the commands arrive as a fifth and the Catalog as a sixth, each an
+  Effect rather than a list, because both are read at the moment a request asks
+  for them.
 - `watchFor(method, path, from)` — the same, for the one method that answers a
   stream. It is matched first, because a `Route` answers a body.
-- `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `REQUESTS`, `sessionPath(session)`,
+- `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `REQUESTS`, `MODELS`, `sessionPath(session)`,
   `modelPath(session)`, `watchPath(session)`, `cancelPath(session)`,
   `commandPath(session)`, `answerPath(request)` — the id and the paths, rooted
   so no address is built into the page.
-- `headerIn`, `headersIn`, `modelIn`, `sessionIn`, `eventsIn` — what a body has
-  to be to be an answer. `eventsOut` is the record on its way out.
+- `headerIn`, `headersIn`, `modelIn`, `sessionIn`, `modelRowIn`, `modelRowsIn`,
+  `eventsIn` — what a body has to be to be an answer. `eventsOut` is the record
+  on its way out, and `PickRow` is said again here so the page names the row
+  shape off this wire.
 - `Ran`, `ranIn` — what running a line came to: the text it wrote, and the
   Session it opened when it opened one.
 - `submitInputIn`, `cancelCauseIn`, `answerIn`, `locationIn`, `lineIn` — what a body has
@@ -263,10 +280,14 @@ about would be refused again however often it is sent.
   `framesIn(text)`, `payloadIn(frame)`, `refusalOut(refused)`,
   `refusalIn(from, body)` — the headers and the stream's own shapes, read by
   both halves for the reason the paths are.
-- `httpTransport(options)` — from `@missingstudio/eva-api/client`. It answers
-  an `HttpTransport`: the seam's `Transport`, and `command(session, line)`
-  beside it. A command is not a `SessionAPI` method and is not going to become
-  one, so it rides beside the contract rather than inside it.
+- `httpTransport(options)`, `readModels(options)` — from
+  `@missingstudio/eva-api/client`. The first answers an `HttpTransport`: the
+  seam's `Transport`, and `command(session, line)` beside it. A command is not
+  a `SessionAPI` method and is not going to become one, so it rides beside the
+  contract rather than inside it. The second is beside the Transport for the
+  same reason: a Catalog is a fact of the build and not of a Session. Nothing
+  is what a wire that did not answer rows gives back, so a picker with nothing
+  to show says so.
 
 ## Development
 

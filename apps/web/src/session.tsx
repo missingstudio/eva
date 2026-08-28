@@ -13,6 +13,7 @@ import {
   ContextOutputUsage,
   ContextReasoningUsage,
 } from "./components/ai-elements/context.js"
+import { Models } from "./models.js"
 import { titleLine } from "./title.js"
 
 /**
@@ -190,6 +191,11 @@ export const Live = ({ said }: { readonly said: string }) =>
  * in it, then the questions that stand, then what the open Run is saying, then
  * what it cost — and under all of it, what to say next.
  *
+ * The page writes four things: a prompt, an answer to a permission request
+ * that stands, a command line, and the model this Session is kept at. A
+ * question that stands blocks a Run, and a reader watching it blocked is the
+ * person the Run is waiting on.
+ *
  * The composer is drawn outside the fold, because saying something needs no
  * record: a page still reading a long Session can already prompt it.
  *
@@ -222,6 +228,7 @@ export const Session = ({
   <main className="mx-auto max-w-measure px-6 py-16">
     <Named session={session} header={header} />
     <Notice pipe={pipe} />
+    <Models session={session} />
     {command}
     {reading.folded.kind === "folding" ? (
       <p aria-busy="true" className="mt-6 text-muted-foreground" role="status">

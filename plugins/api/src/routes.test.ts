@@ -3,7 +3,12 @@ import type { AddressInfo } from "node:net"
 import { memorySessionAPI, type MemorySession } from "@missingstudio/eva-client-runtime"
 import { WATCH_REPLAY_BOUND, type ModelRef } from "@missingstudio/eva-core"
 import { SCHEMA_VERSION } from "@missingstudio/eva-schema"
-import type { CommandInfo } from "@missingstudio/eva-sdk"
+import {
+  modelRows,
+  type CatalogState,
+  type CommandInfo,
+  type ModelInfo,
+} from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { apiWire, routeFor, watchFor } from "./routes.js"
@@ -15,12 +20,41 @@ import {
   CURSOR,
   IDEMPOTENCY,
   modelPath,
+  MODELS,
   sessionPath,
   SESSIONS,
   watchPath,
 } from "./wire.js"
 
 const MODEL: ModelRef = { provider: "wire", model: "one" }
+
+/**
+ * A Catalog with models in it, the way a Provider's plugin fills one: one
+ * model the build knows a context window for and one it knows a rate for, so
+ * a row that says only what is held can be told from a row that guesses.
+ */
+const CATALOG: CatalogState = {
+  providers: new Map(),
+  models: new Map<string, Map<string, ModelInfo>>([
+    [
+      "openai",
+      new Map([["gpt-5.6-terra", { id: "gpt-5.6-terra", name: "Terra", contextWindow: 400_000 }]]),
+    ],
+    [
+      "anthropic",
+      new Map([
+        [
+          "claude-opus-5",
+          {
+            id: "claude-opus-5",
+            name: "Opus 5",
+            price: { inputTicks: 30_000_000_000, outputTicks: 150_000_000_000 },
+          },
+        ],
+      ]),
+    ],
+  ]),
+}
 
 const held = (): Promise<MemorySession> =>
   Effect.runPromise(memorySessionAPI(() => Effect.void, { model: MODEL }))
@@ -34,8 +68,14 @@ const standing = async (
   memory: MemorySession,
   directory?: () => string,
   commands?: Effect.Effect<readonly CommandInfo[]>,
+  catalog?: CatalogState,
 ) => {
-  const wire = apiWire(memory.api, directory, commands)
+  const wire = apiWire(
+    memory.api,
+    directory,
+    commands,
+    catalog === undefined ? undefined : Effect.succeed(catalog),
+  )
   const server = createServer((request, response) => {
     if (wire(request, response)) return
     response.writeHead(200, { "content-type": "text/plain; charset=utf-8" })
@@ -156,6 +196,42 @@ describe("the read half, over a socket", () => {
     const response = await fetch(`${served.origin}${modelPath(memory.session)}`)
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(MODEL)
+
+    await served.close()
+  })
+
+  /**
+   * The rows a picker draws, and the same ones `/model` picks from: they are
+   * `modelRows` and not a second derivation of it, so a page and a terminal
+   * against one runtime cannot offer different models. The order is the
+   * Catalog's own — provider first, then the models under it — because a
+   * listing that reordered itself between two doors is a listing a person
+   * reads twice.
+   */
+  it("answers every model the Catalog knows, as the rows the panel picks from", async () => {
+    const memory = await held()
+    const served = await standing(memory, undefined, undefined, CATALOG)
+
+    const response = await fetch(`${served.origin}${MODELS}`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(modelRows(CATALOG))
+    expect(modelRows(CATALOG).map((row) => row.id)).toEqual([
+      "openai/gpt-5.6-terra",
+      "anthropic/claude-opus-5",
+    ])
+
+    await served.close()
+  })
+
+  // A build that loaded no Provider knows no model. That is a listing of
+  // none and never a miss: the read happened, and nothing is what it found.
+  it("answers no rows for a build that knows no model, rather than a miss", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const response = await fetch(`${served.origin}${MODELS}`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual([])
 
     await served.close()
   })
@@ -331,10 +407,11 @@ describe("the stream, over a socket", () => {
  * carries is read here and the socket is only what carries it.
  */
 describe("the route table", () => {
-  it("carries the listing, one Session's record, and its model, and nothing else", () => {
+  it("carries the listing, one Session's record, its model, and the Catalog's", () => {
     expect(routeFor("GET", SESSIONS)).toBeTypeOf("function")
     expect(routeFor("GET", sessionPath("ses_1"))).toBeTypeOf("function")
     expect(routeFor("GET", modelPath("ses_1"))).toBeTypeOf("function")
+    expect(routeFor("GET", MODELS)).toBeTypeOf("function")
     expect(routeFor("GET", `${SESSIONS}/ses_1/events`)).toBeUndefined()
   })
 
@@ -376,6 +453,25 @@ describe("the route table", () => {
     expect(routeFor("POST", SESSIONS, undefined, () => "/pinned")).toBeTypeOf("function")
 
     const refusing = routeFor("POST", SESSIONS, { location: 7 })
+    const answer = await Effect.runPromise(refusing?.(memory.api) ?? Effect.succeed(undefined))
+
+    expect(answer).toEqual({ status: 400, body: { error: "the wire cannot read this body" } })
+    expect(memory.calls).toEqual([])
+  })
+
+  /**
+   * A model is picked and never typed. The Catalog holds the rows, and this
+   * wire takes a `ModelRef` — so a name a person wrote by hand reaches it as
+   * a row that was chosen or it does not reach it at all. Nothing is set on
+   * the way past.
+   */
+  it.each([
+    ["a bare name", "anthropic/claude-opus-5"],
+    ["half a reference", { model: "claude-opus-5" }],
+    ["a row a picker draws", { id: "anthropic/claude-opus-5", label: "anthropic/claude-opus-5" }],
+  ])("refuses a model set as %s, and sets none", async (_said, body) => {
+    const memory = await held()
+    const refusing = routeFor("PUT", modelPath(memory.session), body)
     const answer = await Effect.runPromise(refusing?.(memory.api) ?? Effect.succeed(undefined))
 
     expect(answer).toEqual({ status: 400, body: { error: "the wire cannot read this body" } })
