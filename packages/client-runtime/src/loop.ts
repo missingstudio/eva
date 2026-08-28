@@ -36,9 +36,18 @@ export const idle: LoopState = { pending: [], runs: 0 }
  * turned out to mean.
  */
 export type LoopStep =
-  // A line left the editor. `asking` is whether a question is open, because
-  // a line then answers it rather than meaning anything else.
-  | { readonly kind: "line"; readonly line: string; readonly asking: boolean }
+  /**
+   * A line left the editor. `asking` is whether a question is open, because
+   * a line then answers it rather than meaning anything else. `steer` is
+   * whether the person used the steer gesture instead of submitting, which
+   * is a different thing to mean and not the queue.
+   */
+  | {
+      readonly kind: "line"
+      readonly line: string
+      readonly asking: boolean
+      readonly steer?: boolean
+    }
   /**
    * The line was dispatched. `ran` says a command answered it, so no Run
    * opens; `moved` says that command opened another Session, so the screen
@@ -64,6 +73,11 @@ export type LoopAction =
   | { readonly kind: "answer"; readonly line: string }
   // Dispatch the line: run the command it names, or report it opened a Run.
   | { readonly kind: "handle"; readonly line: string }
+  /**
+   * Steer with this line. A steer rides the Run that is open and returns at
+   * once, so it opens no Run, takes no number and leaves the queue alone.
+   */
+  | { readonly kind: "steer"; readonly line: string }
   // Open a Run on this line, under this number.
   | { readonly kind: "open"; readonly run: number; readonly line: string }
   // Fold the record onto the screen, because the Session moved.
@@ -104,6 +118,9 @@ export const stepped = (state: LoopState, step: LoopStep): Stepped => {
     case "line": {
       // A question outranks everything a line could otherwise mean.
       if (step.asking) return only(state, { kind: "answer", line: step.line })
+      // A steered line is the gesture the person made, open Run or not. It
+      // changes nothing here, because steering opens no Run.
+      if (step.steer === true) return only(state, { kind: "steer", line: step.line })
       // A line typed during a Run waits its turn rather than racing it.
       if (state.open !== undefined) {
         return only({ ...state, pending: [...state.pending, step.line] })

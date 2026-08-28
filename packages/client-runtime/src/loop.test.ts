@@ -16,6 +16,8 @@ const walk = (
 
 const typed = (line: string): LoopStep => ({ kind: "line", line, asking: false })
 
+const steered = (line: string): LoopStep => ({ kind: "line", line, asking: false, steer: true })
+
 const opened = (line: string): LoopStep => ({ kind: "handled", line, ran: false, moved: false })
 
 const commanded = (line: string, moved = false): LoopStep => ({
@@ -44,6 +46,25 @@ describe("a line", () => {
     const after = walk(running(), typed("second"), typed("third"))
     expect(after.actions).toEqual([])
     expect(after.state.pending).toEqual(["second", "third"])
+  })
+
+  it("steers rather than dispatches when the person steered it", () => {
+    const after = walk(idle, steered("go left"))
+    expect(after.actions).toEqual([{ kind: "steer", line: "go left" }])
+    expect(after.state).toEqual(idle)
+  })
+
+  it("steers the open Run rather than waiting behind it", () => {
+    const open = running("first")
+    const after = walk(open, steered("go left"))
+    // A steer opens no Run, so it takes no number and moves no queue.
+    expect(after.actions).toEqual([{ kind: "steer", line: "go left" }])
+    expect(after.state).toEqual(open)
+  })
+
+  it("answers the open question first, however the line was sent", () => {
+    const asked: LoopStep = { kind: "line", line: "yes", asking: true, steer: true }
+    expect(stepped(idle, asked).actions).toEqual([{ kind: "answer", line: "yes" }])
   })
 })
 
