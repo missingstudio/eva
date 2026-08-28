@@ -47,6 +47,7 @@ export const HEAD_COLUMNS = `
   seq        INTEGER NOT NULL,
   title      TEXT,
   updated_at TEXT NOT NULL,
+  retired    INTEGER NOT NULL,
   rule       INTEGER NOT NULL`
 
 export interface EventRow {
@@ -66,6 +67,10 @@ export interface HeadRow {
   seq: number
   title: string | null
   updated_at: string
+  // Whether a person has put the Session away, as the two stores hold a
+  // boolean: 0 or 1. Zero reads back as absent, because a Session that is
+  // not retired says nothing about it.
+  retired: number
   rule: number
 }
 
@@ -120,6 +125,7 @@ export const columnsOf = (event: Event): EventRow => {
  */
 const headerIn = (row: HeadRow): Header => ({
   ...(row.title === null ? {} : { title: row.title }),
+  ...(row.retired === 0 ? {} : { retired: true }),
   ...(row.updated_at === "" ? {} : { updatedAt: row.updated_at }),
 })
 
@@ -134,6 +140,7 @@ export const headRowOf = (session: SessionID, head: Head): HeadRow => ({
   seq: head.seq,
   title: head.header.title ?? null,
   updated_at: head.header.updatedAt ?? "",
+  retired: head.header.retired === true ? 1 : 0,
   rule: HEADER_RULE,
 })
 

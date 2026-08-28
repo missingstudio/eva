@@ -80,6 +80,13 @@ export const makePostgresSink = (
         `ALTER TABLE ${schema}.session_head
          ADD COLUMN IF NOT EXISTS rule INTEGER NOT NULL DEFAULT 0`,
       )
+      // A head table written before the Header carried retirement gets the
+      // column at nothing, which is what every row there means: no Session
+      // was put away under a rule that could not say it.
+      await sql.unsafe(
+        `ALTER TABLE ${schema}.session_head
+         ADD COLUMN IF NOT EXISTS retired INTEGER NOT NULL DEFAULT 0`,
+      )
     })
 
     /**
@@ -98,10 +105,10 @@ export const makePostgresSink = (
         const heads = new Map<SessionID, Head>()
         for (const session of sessionsOf(group)) {
           const [row] = await tx<HeadRow[]>`
-            INSERT INTO session_head AS h (session, seq, title, updated_at, rule)
-            VALUES (${session}, 0, null, '', ${HEADER_RULE})
+            INSERT INTO session_head AS h (session, seq, title, updated_at, retired, rule)
+            VALUES (${session}, 0, null, '', 0, ${HEADER_RULE})
             ON CONFLICT (session) DO UPDATE SET seq = h.seq
-            RETURNING session, seq, title, updated_at, rule`
+            RETURNING session, seq, title, updated_at, retired, rule`
           heads.set(session, headOf(row))
         }
 
@@ -122,7 +129,8 @@ export const makePostgresSink = (
           await tx`
             UPDATE session_head
             SET seq = ${row.seq}, title = ${row.title},
-                updated_at = ${row.updated_at}, rule = ${row.rule}
+                updated_at = ${row.updated_at}, retired = ${row.retired},
+                rule = ${row.rule}
             WHERE session = ${session}`
         }
         return stamped
@@ -147,7 +155,8 @@ export const makePostgresSink = (
         await sql`
           UPDATE session_head
           SET seq = ${row.seq}, title = ${row.title},
-              updated_at = ${row.updated_at}, rule = ${row.rule}
+              updated_at = ${row.updated_at}, retired = ${row.retired},
+              rule = ${row.rule}
           WHERE session = ${id}`
       }
       return stale.length

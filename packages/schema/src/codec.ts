@@ -126,6 +126,7 @@ const bodies = {
   info: z.strictObject({
     title: z.string().exactOptional(),
     updatedAt: z.string().exactOptional(),
+    retired: z.boolean().exactOptional(),
     costTicks: z.number().int().nonnegative().exactOptional(),
   }),
   usage: z.strictObject({

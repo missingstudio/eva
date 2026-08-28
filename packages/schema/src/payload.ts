@@ -157,6 +157,17 @@ export type Payload =
       readonly kind: "info"
       readonly title?: string
       readonly updatedAt?: string
+      /**
+       * Whether a person has put this Session away. It is a fact on the
+       * record and not a row taken out of a store, so the Trace still
+       * rebuilds everything that happened — this included — and a listing
+       * that leaves the Session out is a fold rather than an erasure.
+       *
+       * A level and not an increment: a later record replaces an earlier
+       * one, so putting a Session away and taking it back out are the one
+       * field saying two things.
+       */
+      readonly retired?: boolean
       // What the Session has cost so far, as the producer counts it. This is
       // a level and not an increment: a later record replaces an earlier one
       // and nothing adds two together.
