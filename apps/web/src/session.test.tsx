@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { foldTranscript, PERMISSION_OPTIONS, type SessionHeader } from "@missingstudio/eva-core"
 import {
   eventID,
@@ -10,6 +12,7 @@ import {
 import { blocksOf } from "@missingstudio/eva-session-view"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
+import type { Composing } from "./composer.js"
 import { Listing, Page } from "./page.js"
 import {
   Cost,
@@ -55,12 +58,20 @@ const read = (): Folded => {
   return { kind: "folded", at: record.at, turns: blocksOf(record), cost: record.cost() }
 }
 
-const folding: Reading = { folded: { kind: "folding" }, said: "" }
+const folding: Reading = { folded: { kind: "folding" }, said: "", running: false }
 
-const reading = (said = ""): Reading => ({ folded: read(), said })
+const reading = (said = "", running = false): Reading => ({ folded: read(), said, running })
 
 // A pipe that has never gone, which is the one state with nothing to say.
 const READY: Pipe = { at: "ready", dropped: false }
+
+// A composer with somewhere to send a line, and nothing waiting.
+const COMPOSING: Composing = {
+  pending: [],
+  open: false,
+  send: () => undefined,
+  stop: () => undefined,
+}
 
 const EMPTY_COST: CostSummary = {
   inputTokens: null,
@@ -286,72 +297,133 @@ describe("the cost line", () => {
 })
 
 /**
- * The page writes one thing: an answer to a permission request that stands. No
- * prompt box, no model switch — those are W2's — so the count of ways to put
- * something into Eva from this page is one, and it is a check that fails rather
- * than a habit.
+ * The page prompts now, so the count this suite kept is inverted rather than
+ * dropped. It used to be a count of the ways to put something into Eva from
+ * here — zero, checked rather than remembered. It is now a count of the ways
+ * this page names, and the same rule holds: a way in that nobody wrote down
+ * is a way in nobody reviewed.
  *
- * What is counted is the rule and not a proxy for it. A field is input: an
- * `<input>`, a `<textarea>`, a `<form>` and a `<select>` are each a way to
- * type or pick something and send it, and none of them belongs here.
- *
- * A `<button>` is not. A transcript folds its reasoning away and opens a tool
- * call, and both of those are buttons — a disclosure is a view control, it
- * changes what a reader is looking at, and it says nothing to Eva. Banning the
- * element banned the wrong thing: it would have stopped a triangle and let a
- * prompt box through under an `<a>`.
- *
- * So the write half of the Session API is what is counted instead. `create`,
- * `submit`, `cancel` and `model.set` are the calls that open, stop or change a
- * Session, and a page that named one would be a page with something to press.
- * `answer` is the one that is left, and it is drawn only where a question
- * stands — a card with four options and no field on it.
+ * What is counted is the rule and not a proxy for it. A field is no longer
+ * the rule — there is one, and the composer is what it is for — so what is
+ * counted is the write half of the Session API, read off what ships. There is
+ * one Client and every call goes through it, so `one.api.` names every one of
+ * them and a grep is how a reviewer repeats the count by hand.
  *
  * Each surface is drawn in the state a reader sees it in. `renderToStaticMarkup`
  * runs no effect, so `Page` draws only the words it says before the listing has
  * answered — the drawn listing is `Listing`, and it is handed the rows.
  */
 describe("what the page offers", () => {
-  const drawings = () => [
+  const SRC = new URL(".", import.meta.url).pathname
+
+  const shipped = (): readonly string[] =>
+    readdirSync(SRC, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+      .filter((entry) => !/\.test\.tsx?$/.test(entry.name))
+      .map((entry) => join(SRC, entry.name))
+      .sort()
+
+  const calls = (): readonly string[] => {
+    const found = new Set<string>()
+    for (const path of shipped()) {
+      for (const said of readFileSync(path, "utf8").match(/one\.api\.[a-z.]+/g) ?? []) {
+        found.add(said.slice("one.api.".length))
+      }
+    }
+    return [...found].sort()
+  }
+
+  const page = (composer?: Composing) =>
     renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} reading={reading()} pipe={READY} />,
-    ),
-    renderToStaticMarkup(<Page />),
-    renderToStaticMarkup(<Listing sessions={[HEADER]} />),
-  ]
+      <Session
+        header={HEADER}
+        pipe={READY}
+        reading={reading()}
+        session={SESSION}
+        {...(composer === undefined ? {} : { composer })}
+      />,
+    )
 
-  it.each(["<input", "<textarea", "<form", "<select"])(
-    "no %s, on the Session or the listing",
-    (field) => {
-      for (const drawn of drawings()) expect(drawn).not.toContain(field)
-    },
-  )
+  /**
+   * `create` opens a Session, `submit` says something in one, `cancel` stops
+   * what is open and `answer` answers a question that stands. `list` is the
+   * listing, which is the read this page opened with. Nothing else: a model
+   * switch and a command are still to come, and each of them belongs on this
+   * line the day it lands.
+   */
+  it("makes these calls on Eva and no others", () => {
+    expect(calls()).toEqual(["answer", "cancel", "create", "list", "submit"])
+  })
 
-  it.each(["create", "submit", "cancel", "model.set"])(
-    "and no way to %s: nothing on the page opens, stops or changes a Session",
-    (call) => {
-      for (const drawn of drawings()) expect(drawn).not.toContain(call)
-    },
-  )
+  // The composer is the field, and it is the only one. A page with two ways
+  // to type a line is a page with two answers to what Enter means.
+  it("offers one field, and it is the composer", () => {
+    const drawn = page(COMPOSING)
+
+    expect(drawn.match(/<textarea/g)).toHaveLength(1)
+    expect(drawn).not.toContain("<input")
+    expect(drawn).not.toContain("<select")
+    expect(drawn).toContain("Send")
+  })
+
+  /**
+   * And no `<form>`. Enter is read on the field, so the page never hands a
+   * line to the browser to send: a form that submitted would leave the page
+   * and lose the Session the reader is watching.
+   */
+  it("sends through the Client and never through the browser", () => {
+    expect(page(COMPOSING)).not.toContain("<form")
+  })
+
+  // The listing offers the one write it has: another Session.
+  it("offers a new Session on the listing", () => {
+    expect(renderToStaticMarkup(<Page />)).toContain("New Session")
+    expect(renderToStaticMarkup(<Listing sessions={[HEADER]} />)).not.toContain("New Session")
+  })
+
+  // A line typed during a Run waits, and the wait is on the page. A queue
+  // nobody can see is a line a person types a second time.
+  it("says how many lines wait behind the Run that is open", () => {
+    expect(page({ ...COMPOSING, open: true, pending: ["and rename it"] })).toContain("1 waiting")
+  })
+
+  /**
+   * A send that reached nothing and said nothing would read as a Run that
+   * started. So the send is off and the reason is drawn, on the same page as
+   * the notice about the pipe.
+   */
+  it("refuses a send while the pipe is down, and says why", () => {
+    const drawn = renderToStaticMarkup(
+      <Session
+        composer={COMPOSING}
+        header={HEADER}
+        pipe={{ at: "disconnected", dropped: true }}
+        reading={reading()}
+        session={SESSION}
+      />,
+    )
+
+    expect(drawn).toContain("The line waits here")
+    expect(drawn).toContain('data-disabled=""')
+  })
 
   // Nothing is offered while nothing is standing. A page that always drew
   // four options would be asking a reader to answer a question nobody asked.
   it("offers no answer while no question stands", () => {
-    for (const drawn of drawings()) {
-      for (const option of PERMISSION_OPTIONS) expect(drawn).not.toContain(option.name)
-    }
+    for (const option of PERMISSION_OPTIONS) expect(page(COMPOSING)).not.toContain(option.name)
   })
 
   /**
-   * The one write. It is four options and the question they answer, and it is
-   * still no field: a reader picks one of four words the gate already knows,
-   * and there is nothing to type.
+   * The four options where a question stands, and the composer under them. A
+   * reader picks one of four words the gate already knows, and a line typed
+   * at the field answers the same question rather than opening a Run.
    */
-  it("offers the four options where a question stands, and no field", () => {
+  it("offers the four options where a question stands", () => {
     const drawn = renderToStaticMarkup(
       <Session
         answer={() => undefined}
         asking={[{ request: "call_1", question: "edit may change something. Run it?" }]}
+        composer={COMPOSING}
         header={HEADER}
         pipe={READY}
         reading={reading()}
@@ -361,13 +433,10 @@ describe("what the page offers", () => {
 
     expect(drawn).toContain("edit may change something. Run it?")
     for (const option of PERMISSION_OPTIONS) expect(drawn).toContain(option.name)
-    for (const field of ["<input", "<textarea", "<form", "<select"]) {
-      expect(drawn).not.toContain(field)
-    }
   })
 
   // The rows are on the page this was read from, so a listing that drew
-  // nothing could not pass the clause above by drawing nothing.
+  // nothing could not pass the clauses above by drawing nothing.
   it("draws the Sessions it was handed", () => {
     const drawn = renderToStaticMarkup(<Listing sessions={[HEADER]} />)
 

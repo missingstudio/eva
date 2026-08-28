@@ -1,5 +1,7 @@
 import type { SessionHeader } from "@missingstudio/eva-core"
+import { Button } from "@missingstudio/ui/components/button"
 import { buildLine } from "./build.js"
+import { opening } from "./composing.js"
 import { sessionHref } from "./paths.js"
 import { useSessions } from "./sessions.js"
 import { titleLine } from "./title.js"
@@ -48,8 +50,20 @@ export const Listing = ({ sessions }: { readonly sessions: readonly SessionHeade
   )
 
 /**
- * W1's first read: the page lists the Sessions Eva holds, over the wire
- * `eva.api` serves and through the Client that answers for it.
+ * Open a Session from here. It is handed what to do rather than reaching for
+ * the Client, so what the listing offers is provable without a socket — and a
+ * button drawn with nowhere to send a press says so rather than looking live.
+ */
+export const Opening = ({ open }: { readonly open?: () => void }) => (
+  <Button className="mt-6" disabled={open === undefined} onClick={() => open?.()} size="sm">
+    New Session
+  </Button>
+)
+
+/**
+ * The Sessions Eva holds, and a way to open one more. The listing was W1's
+ * first read, over the wire `eva.api` serves and through the Client that
+ * answers for it; the door beside it is W2's first write from this page.
  */
 export const Page = () => {
   const listing = useSessions()
@@ -58,8 +72,9 @@ export const Page = () => {
     <main className="mx-auto max-w-measure px-6 py-16">
       <h1 className="d-3">Eva</h1>
       <p className="text-muted-foreground text-sm">
-        the page that watches · build <code>{buildLine()}</code>
+        the page that prompts · build <code>{buildLine()}</code>
       </p>
+      <Opening open={opening} />
       {listing.kind === "reading" ? (
         <p aria-busy="true" className="mt-6 text-muted-foreground" role="status">
           Reading the Sessions…

@@ -13,6 +13,7 @@
  * a reload means.
  */
 export * from "./blocks.js"
+export * from "./composer.js"
 export * from "./paths.js"
 export * from "./session.js"
 export * from "./title.js"

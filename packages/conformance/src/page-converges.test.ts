@@ -117,7 +117,7 @@ const droppable = Effect.fn("test.droppable")(function* (wire: Transport) {
  */
 const opened = Effect.fn("test.opened")(function* (one: Client, session: SessionID) {
   const held: Reading[] = []
-  let now: Reading = { folded: { kind: "folding" }, said: "" }
+  let now: Reading = { folded: { kind: "folding" }, said: "", running: false }
   const following = yield* Effect.forkChild(
     follow(one, session, (next) => {
       now = next(now)

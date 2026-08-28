@@ -3,6 +3,7 @@ import type { SessionHeader } from "@missingstudio/eva-core"
 import { spendOf, spendText, type CostSummary, type Cursor } from "@missingstudio/eva-schema"
 import { askingOf, type Asking, type Turn } from "@missingstudio/eva-session-view"
 import { Turns } from "./blocks.js"
+import { Composer, type Composing } from "./composer.js"
 import {
   Context,
   ContextCacheUsage,
@@ -35,10 +36,17 @@ export type Folded =
  *
  * `said` is what the open Run has streamed so far. It grows by append within
  * one Run and it is empty again exactly when the fold has replaced it.
+ *
+ * `running` is whether a Run is open, whichever door opened it. The fold says
+ * nothing about a Run that has not closed, so it is read off the payloads that
+ * bracket one — which is also why it holds through a fold: a fold arrives at
+ * the close of a Run, after the payload that closed it, and after a drop it
+ * arrives with the Run still going.
  */
 export interface Reading {
   readonly folded: Folded
   readonly said: string
+  readonly running: boolean
 }
 
 /**
@@ -179,11 +187,10 @@ export const Live = ({ said }: { readonly said: string }) =>
 /**
  * One Session, read: which Session it is, what the pipe is, then what was said
  * in it, then the questions that stand, then what the open Run is saying, then
- * what it cost.
+ * what it cost — and under all of it, what to say next.
  *
- * The one thing this page writes is an answer to a permission request. A
- * prompt and a model switch are W2's; a question that stands blocks a Run, and
- * a reader watching it blocked is the person the Run is waiting on.
+ * The composer is drawn outside the fold, because saying something needs no
+ * record: a page still reading a long Session can already prompt it.
  *
  * The questions are drawn after the record and never inside it. They are the
  * second source — the same separation the tail of an open Run has — and they
@@ -197,6 +204,7 @@ export const Session = ({
   pipe,
   asking = [],
   answer,
+  composer,
 }: {
   readonly session: string
   readonly header: SessionHeader | undefined
@@ -204,6 +212,7 @@ export const Session = ({
   readonly pipe: Pipe
   readonly asking?: readonly Asking[]
   readonly answer?: (request: string, optionId: string) => void
+  readonly composer?: Composing
 }) => (
   <main className="mx-auto max-w-measure px-6 py-16">
     <Named session={session} header={header} />
@@ -222,5 +231,10 @@ export const Session = ({
         <Cost cost={reading.folded.cost} ran={reading.folded.at.seq > 0} />
       </>
     )}
+    <Composer
+      pipe={pipe}
+      running={reading.running}
+      {...(composer === undefined ? {} : { composer })}
+    />
   </main>
 )

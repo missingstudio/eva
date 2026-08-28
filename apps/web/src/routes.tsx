@@ -7,6 +7,7 @@ import {
   useParams,
 } from "@tanstack/react-router"
 import { answer, useAsking } from "./asking.js"
+import { useComposer } from "./composing.js"
 import { Page } from "./page.js"
 import { SESSION_ROUTE } from "./paths.js"
 import { Session } from "./session.js"
@@ -21,15 +22,21 @@ const Shell = () => <Outlet />
  * four reads, because the Header is drawn before the fold has arrived, the
  * pipe is drawn whatever the fold is doing, and a question is not on the
  * record at all.
+ *
+ * The composer is the fifth, and the one that writes. It is given the
+ * questions because a line typed while one stands answers it rather than
+ * opening a Run, which is the fold's rule and not this page's.
  */
 const Read = () => {
   const params = useParams({ from: SESSION_ROUTE })
   const session = sessionID(params.session)
+  const asking = useAsking()
 
   return (
     <Session
       answer={answer}
-      asking={useAsking()}
+      asking={asking}
+      composer={useComposer(session, asking)}
       header={useHeader(session)}
       pipe={usePipe()}
       reading={useTranscript(session)}

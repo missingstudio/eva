@@ -33,7 +33,7 @@ const followed = (
     const client = yield* makeClient(yield* localTransport(memory.api))
 
     const held: Reading[] = []
-    let reading: Reading = { folded: { kind: "folding" }, said: "" }
+    let reading: Reading = { folded: { kind: "folding" }, said: "", running: false }
     const following = yield* Effect.forkChild(
       follow(client, memory.session, (next) => {
         reading = next(reading)
@@ -138,7 +138,9 @@ describe("following one Session", () => {
     // And the fold that arrived after the close has them, with an empty tail.
     const after = held.at(-1)
     expect(after?.said).toBe("")
-    expect(wordsIn(after ?? { folded: { kind: "folding" }, said: "" })).toContain("an answer")
+    expect(wordsIn(after ?? { folded: { kind: "folding" }, said: "", running: false })).toContain(
+      "an answer",
+    )
   })
 
   /**
@@ -156,7 +158,7 @@ describe("following one Session", () => {
           yield* memory.say({ kind: "started", intent: "folded already" })
 
           const held: Reading[] = []
-          let reading: Reading = { folded: { kind: "folding" }, said: "" }
+          let reading: Reading = { folded: { kind: "folding" }, said: "", running: false }
           const following = yield* Effect.forkChild(
             follow(client, memory.session, (next) => {
               reading = next(reading)
@@ -200,7 +202,7 @@ describe("a Cursor the far side refuses", () => {
           memory.refuse(1)
 
           const held: Reading[] = []
-          let reading: Reading = { folded: { kind: "folding" }, said: "" }
+          let reading: Reading = { folded: { kind: "folding" }, said: "", running: false }
           const following = yield* Effect.forkChild(
             follow(client, memory.session, (next) => {
               reading = next(reading)
@@ -252,7 +254,7 @@ describe("a reload", () => {
 
           // The first page: it folds what is there and hears what follows.
           const first: Reading[] = []
-          let reading: Reading = { folded: { kind: "folding" }, said: "" }
+          let reading: Reading = { folded: { kind: "folding" }, said: "", running: false }
           const before = yield* Effect.forkChild(
             follow(client, memory.session, (next) => {
               reading = next(reading)
@@ -271,7 +273,7 @@ describe("a reload", () => {
           // over: a reload starts from the record, as a fresh page does.
           const replayed = heard.length
           const second: Reading[] = []
-          let after: Reading = { folded: { kind: "folding" }, said: "" }
+          let after: Reading = { folded: { kind: "folding" }, said: "", running: false }
           const again = yield* Effect.forkChild(
             follow(client, memory.session, (next) => {
               after = next(after)
