@@ -13,9 +13,9 @@ import {
   type ToolCall,
 } from "@missingstudio/eva-core"
 import { sessionID } from "@missingstudio/eva-schema"
-import type { Frontend } from "@missingstudio/eva-sdk"
+import type { Frontend, FrontendRequest } from "@missingstudio/eva-sdk"
 import { makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
-import { watchAsking, type AskedQuestion } from "@missingstudio/eva-web/client"
+import { watchAsking } from "@missingstudio/eva-web/client"
 import { Effect, Exit, Fiber, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 
@@ -96,7 +96,7 @@ const bench = async () => {
   const url = said.join("").split(" ")[0] ?? ""
 
   // The page's own two halves: the surface's ask channel, and the wire.
-  const heard: (readonly AskedQuestion[])[] = []
+  const heard: (readonly FrontendRequest[])[] = []
   const stopReading = watchAsking((asking) => void heard.push(asking), { origin: url })
   const page = await Effect.runPromise(Effect.flatMap(httpTransport({ origin: url }), makeClient))
 
@@ -119,7 +119,7 @@ const bench = async () => {
   )
 
   // The set the page last heard, once it holds what the caller is waiting for.
-  const until = async (holds: (asking: readonly AskedQuestion[]) => boolean) => {
+  const until = async (holds: (asking: readonly FrontendRequest[]) => boolean) => {
     for (let tries = 0; tries < 400; tries += 1) {
       const last = heard.at(-1)
       if (last !== undefined && holds(last)) return last
@@ -183,7 +183,7 @@ describe("a permission request the page answers", () => {
     const desk = await bench()
     const asked = desk.ask()
 
-    expect(await desk.asked()).toEqual([{ id: CALL, question: QUESTION }])
+    expect(await desk.asked()).toEqual([{ kind: "permission", id: CALL, question: QUESTION }])
 
     await Effect.runPromise(
       desk.page.api.answer(CALL, { kind: "permission", optionId: "allow_once" }),

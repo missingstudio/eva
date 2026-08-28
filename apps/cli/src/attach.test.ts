@@ -12,7 +12,7 @@ import { diff } from "@missingstudio/eva-diff"
 import { harnessLoop, LOOP_HARNESS_ID } from "@missingstudio/eva-harness-loop"
 import { BINDINGS } from "@missingstudio/eva-keymap"
 import type { Event, Payload } from "@missingstudio/eva-schema"
-import { define, type Frontend, type Plugin } from "@missingstudio/eva-sdk"
+import { define, type Frontend, type FrontendRequest, type Plugin } from "@missingstudio/eva-sdk"
 import { sched } from "@missingstudio/eva-sched"
 import {
   committed,
@@ -27,7 +27,7 @@ import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { ASKING, makeSurface, TUI_SURFACE, type SurfaceDeps } from "@missingstudio/eva-tui-surface"
 import { makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
-import { watchAsking, type AskedQuestion } from "@missingstudio/eva-web/client"
+import { watchAsking } from "@missingstudio/eva-web/client"
 import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { attached } from "./attach.js"
@@ -246,13 +246,13 @@ const bench = async (options: BenchOptions = {}) => {
 
   // The page beside it: `eva.api`'s wire to write and answer through, and
   // `eva.web`'s ask channel to read the questions that stand.
-  const heard: (readonly AskedQuestion[])[] = []
+  const heard: (readonly FrontendRequest[])[] = []
   let stopReading: (() => void) | undefined
   const reading = () => {
     stopReading ??= watchAsking((asking) => void heard.push(asking), { origin })
     return Effect.runPromise(httpTransport({ origin }))
   }
-  const until = async (holds: (asking: readonly AskedQuestion[]) => boolean) => {
+  const until = async (holds: (asking: readonly FrontendRequest[]) => boolean) => {
     const deadline = Date.now() + 4_000
     for (;;) {
       const last = heard.at(-1)
@@ -547,7 +547,7 @@ describe("an attached terminal and a page over one runtime", () => {
     await drawnWhere(desk.fake, (frame) => frame?.status.mode === ASKING)
     // The page is reading the same question off the same channel.
     expect(await desk.page.until((asking) => asking.length > 0)).toEqual([
-      { id: CALL, question: expect.stringContaining("edit changes one.md") },
+      { kind: "permission", id: CALL, question: expect.stringContaining("edit changes one.md") },
     ])
 
     await Effect.runPromise(page.api.answer(CALL, { kind: "permission", optionId: "allow_once" }))

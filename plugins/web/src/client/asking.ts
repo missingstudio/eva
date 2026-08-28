@@ -1,4 +1,6 @@
-import { askingIn, ASKING_PATH, EVENT_STREAM, type AskedQuestion } from "../wire.js"
+import { framesIn } from "@missingstudio/eva-client-runtime"
+import type { FrontendRequest } from "@missingstudio/eva-sdk"
+import { askingIn, ASKING_PATH, EVENT_STREAM } from "../wire.js"
 
 /**
  * The page's half of the ask channel. It lives with the surface that serves
@@ -33,7 +35,7 @@ export interface AskingOptions {
  * runtime of its own.
  */
 export const watchAsking = (
-  each: (asking: readonly AskedQuestion[]) => void,
+  each: (asking: readonly FrontendRequest[]) => void,
   options: AskingOptions = {},
 ): (() => void) => {
   const origin = options.origin ?? ""
@@ -49,20 +51,17 @@ export const watchAsking = (
     const body = response.body
     if (body === null) return
 
+    // The framing is the client runtime's: a frame split across two reads is
+    // still one frame, and the remainder rule that says so lives there once.
     const reader = body.pipeThrough(new TextDecoderStream()).getReader()
     let held = ""
     for (;;) {
       const { done, value } = await reader.read()
       if (done === true) return
-      held += value
-      // A frame ends at the blank line, so what is before the last one is
-      // whole and what is after it is the start of the next.
-      const parts = held.split("\n\n")
-      held = parts.pop() ?? ""
-      for (const part of parts) {
-        const line = part.split("\n").find((one) => one.startsWith("data:"))
-        if (line === undefined) continue
-        const asking = askingIn(line.slice("data:".length).trim())
+      const found = framesIn(held + value)
+      held = found.rest
+      for (const frame of found.frames) {
+        const asking = askingIn(frame.data)
         if (asking !== undefined) each(asking)
       }
     }

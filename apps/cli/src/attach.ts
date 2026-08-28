@@ -1,7 +1,7 @@
 import type { HttpTransport } from "@missingstudio/eva-api/client"
 import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
-import type { Frontend } from "@missingstudio/eva-sdk"
-import { watchAsking, type AskedQuestion } from "@missingstudio/eva-web/client"
+import type { Frontend, FrontendRequest } from "@missingstudio/eva-sdk"
+import { watchAsking } from "@missingstudio/eva-web/client"
 import { Effect, Fiber, Queue } from "effect"
 import { runInteractive } from "./interactive.js"
 import type { Started } from "./run.js"
@@ -41,28 +41,26 @@ const relaying = (
   origin: string,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const frames = yield* Queue.unbounded<readonly AskedQuestion[]>()
+    const frames = yield* Queue.unbounded<readonly FrontendRequest[]>()
     const stop = watchAsking((asking) => void Queue.offerUnsafe(frames, asking), { origin })
     // The ask each question is standing on here, so a question withdrawn can
     // retire the one prompt it opened.
     const standing = new Map<string, Fiber.Fiber<void>>()
 
-    const offer = (one: AskedQuestion) =>
+    // The request travelled whole, so it is asked as it arrived: this door
+    // answers a question with the kind the gate asked it with.
+    const offer = (one: FrontendRequest) =>
       Effect.gen(function* () {
         const surface = surfaces()[0]
         if (surface === undefined) return
-        const given = yield* surface.ask({
-          kind: "permission",
-          id: one.id,
-          question: one.question,
-        })
+        const given = yield* surface.ask(one)
         yield* client.api.answer(one.id, given)
       })
 
     // A frame carries the whole set, so what is new is asked and what is gone
     // is retired. Nothing is remembered between frames but the asks
     // themselves.
-    const heard = (asking: readonly AskedQuestion[]) =>
+    const heard = (asking: readonly FrontendRequest[]) =>
       Effect.gen(function* () {
         const open = new Set(asking.map((one) => one.id))
         for (const [id, fiber] of standing) {

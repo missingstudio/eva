@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
-import type { Frontend } from "@missingstudio/eva-sdk"
+import type { Frontend, FrontendRequest } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-import { askFrame, ASKING_PATH, EVENT_STREAM, type AskedQuestion } from "./wire.js"
+import { askFrame, ASKING_PATH, EVENT_STREAM } from "./wire.js"
 
 /**
  * How Eva asks the person at the page, and how it knows there is one.
@@ -50,13 +50,13 @@ export const NOBODY: Frontend["ask"] = () => Effect.succeed({ kind: "cancelled" 
 
 export const askChannel = (): AskChannel => {
   const readers = new Set<ServerResponse>()
-  // The questions that stand, so a page that opens second reads them too.
-  const standing = new Map<string, string>()
+  // The questions that stand, whole, so a page that opens second reads them
+  // too — and reads each with the kind the gate asked it with.
+  const standing = new Map<string, FrontendRequest>()
   // What to say when the last reader goes: every ask that is still waiting.
   const waiting = new Set<() => void>()
 
-  const stated = (): readonly AskedQuestion[] =>
-    [...standing].map(([id, question]) => ({ id, question }))
+  const stated = (): readonly FrontendRequest[] => [...standing.values()]
 
   const broadcast = () => {
     const frame = askFrame(stated())
@@ -88,7 +88,7 @@ export const askChannel = (): AskChannel => {
 
       let said: (() => void) | undefined
       const held = Effect.callback<{ readonly kind: "cancelled" }>((resume) => {
-        standing.set(request.id, request.question)
+        standing.set(request.id, request)
         broadcast()
         said = () => resume(Effect.succeed({ kind: "cancelled" as const }))
         waiting.add(said)

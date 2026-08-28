@@ -10,7 +10,13 @@ import type { FrontendAnswer, ModelRef, ProposedCall, SessionAPI } from "@missin
 import { diff } from "@missingstudio/eva-diff"
 import { harnessLoop, LOOP_HARNESS_ID } from "@missingstudio/eva-harness-loop"
 import type { Event, Payload, SessionID } from "@missingstudio/eva-schema"
-import { define, type Frontend, type Plugin, type SurfaceInfo } from "@missingstudio/eva-sdk"
+import {
+  define,
+  type Frontend,
+  type FrontendRequest,
+  type Plugin,
+  type SurfaceInfo,
+} from "@missingstudio/eva-sdk"
 import { sched } from "@missingstudio/eva-sched"
 import {
   committed,
@@ -24,7 +30,7 @@ import { toolRead } from "@missingstudio/eva-tool-read"
 import { trace } from "@missingstudio/eva-trace"
 import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
-import { watchAsking, type AskedQuestion } from "@missingstudio/eva-web/client"
+import { watchAsking } from "@missingstudio/eva-web/client"
 import { Deferred, Effect, Exit, Fiber, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 
@@ -209,11 +215,11 @@ const bench = async (options: BenchOptions = {}) => {
 
   // The page's own two halves: the ask channel it reads, and the wire it
   // answers, commands and writes through.
-  const heard: (readonly AskedQuestion[])[] = []
+  const heard: (readonly FrontendRequest[])[] = []
   const stopReading = watchAsking((asking) => void heard.push(asking), { origin })
   const page = await Effect.runPromise(httpTransport({ origin }))
 
-  const until = async (holds: (asking: readonly AskedQuestion[]) => boolean) => {
+  const until = async (holds: (asking: readonly FrontendRequest[]) => boolean) => {
     for (let tries = 0; tries < 600; tries += 1) {
       const last = heard.at(-1)
       if (last !== undefined && holds(last)) return last
@@ -288,7 +294,7 @@ describe("a Session the terminal starts and the browser answers", () => {
     const running = prompting(desk, session)
 
     expect(await desk.asked()).toEqual([
-      { id: CALL, question: expect.stringContaining("edit changes one.md") },
+      { kind: "permission", id: CALL, question: expect.stringContaining("edit changes one.md") },
     ])
     await Effect.runPromise(
       desk.page.api.answer(CALL, { kind: "permission", optionId: "allow_once" }),
