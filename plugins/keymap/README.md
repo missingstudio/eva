@@ -1,7 +1,7 @@
 # @missingstudio/eva-keymap
 
 The default key bindings for [Eva](../../README.md)'s terminal surface. It
-answers the question "what does enter do, and how do I quit" by shipping six
+answers the question "what does enter do, and how do I quit" by shipping seven
 Bindings — each a key chord tied to a named command — as data other plugins
 and a person's config can override.
 
@@ -36,17 +36,23 @@ package from another workspace package, add it as a dependency:
 
 ## Usage
 
-The plugin takes no options and reads no config keys. It writes these six
+The plugin takes no options and reads no config keys. It writes these seven
 rows, every one scoped to the `eva.tui` surface:
 
 | Binding       | Command           | What it does             |
 | ------------- | ----------------- | ------------------------ |
 | `enter`       | `session.submit`  | Submit the line          |
 | `shift+enter` | `input.newline`   | Break the line           |
+| `ctrl+s`      | `session.steer`   | Steer the open Run       |
 | `ctrl+c`      | `session.cancel`  | Cancel the open Run      |
 | `ctrl+d`      | `app.quit`        | Quit                     |
 | `escape`      | `surface.back`    | Step back                |
 | `ctrl+k`      | `surface.palette` | Open the command palette |
+
+A line submitted with `enter` waits its turn behind the Run that is open; one
+sent with `ctrl+s` rides it instead. The two mean different things, so they
+are two keys: steering is a deliberate gesture and never what a plain line
+does by accident.
 
 One row covers every meaning of escape: what stepping back steps back from is
 the surface's to decide. To rebind a key, write a row in a `.eva` config
@@ -74,7 +80,7 @@ until a person presses it.
 
 - `keymap` — the plugin definition, id `eva.keymap`. It writes `BINDINGS`
   into the keymap Domain.
-- `BINDINGS` — the six shipped rows, as `KeymapInfo` values.
+- `BINDINGS` — the seven shipped rows, as `KeymapInfo` values.
 
 ## Development
 

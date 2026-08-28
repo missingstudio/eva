@@ -32,6 +32,17 @@ import { sessionHref } from "./paths.js"
 const prompted = (session: SessionID, line: string): Promise<void> =>
   client().then((one) => Effect.runPromise(one.api.submit(session, { kind: "prompt", text: line })))
 
+/**
+ * A steer, which rides the Run that is open. `submit` for a steer answers at
+ * once rather than when a Run closed, so nothing waits on it and no Run
+ * number is taken. The Run says the line back as a `message`, which the fold
+ * already draws as the human-authored message it is.
+ */
+const steered = (session: SessionID, line: string): void =>
+  void client().then((one) =>
+    Effect.runPromise(one.api.submit(session, { kind: "steer", text: line, target: "next-step" })),
+  )
+
 const stopped = (session: SessionID): void =>
   void client().then((one) => Effect.runPromise(one.api.cancel(session, "user")))
 
@@ -78,6 +89,9 @@ export interface Doing {
   // Open a Run on this line, under the number the fold gave it, and say when
   // that Run has closed.
   readonly open: (run: number, line: string) => void
+  // Steer the Run that is open with this line. It opens no Run, so it takes
+  // no number and there is nothing to wait for.
+  readonly steer: (line: string) => void
   readonly cancel: () => void
   readonly answer: (line: string) => void
 }
@@ -103,6 +117,14 @@ const performed = (action: LoopAction, doing: Doing): LoopStep | undefined => {
       doing.open(action.run, action.line)
       return undefined
     /**
+     * The gesture, made. A steer rides the open Run and returns at once, and
+     * the Run says the line back as a `message`, so the page draws nothing of
+     * its own for it.
+     */
+    case "steer":
+      doing.steer(action.line)
+      return undefined
+    /**
      * Eva is told the person stopped. The `interrupt` beside it is a fiber
      * the terminal holds and this page does not — the page submits and does
      * not run the Run — so telling Eva is the whole of what a stop is here.
@@ -112,13 +134,12 @@ const performed = (action: LoopAction, doing: Doing): LoopStep | undefined => {
       return undefined
     /**
      * Nothing. `settle` reads how a fiber ended, `interrupt` stops one,
-     * `refresh` follows a Session a command moved, `steer` is a gesture this
-     * page does not make yet, and `stop` leaves a loop it does not run.
+     * `refresh` follows a Session a command moved, and `stop` leaves a loop
+     * this page does not run.
      */
     case "settle":
     case "interrupt":
     case "refresh":
-    case "steer":
     case "stop":
       return undefined
   }
@@ -142,7 +163,7 @@ export const walk = (state: LoopState, step: LoopStep, doing: Doing): LoopState 
 }
 
 /**
- * The composer's half of one Session: what waits, what is open, and the two
+ * The composer's half of one Session: what waits, what is open, and the
  * gestures. The loop is held in a ref because it is what the page is doing
  * and not what it is drawing; what is drawn is the state each walk left.
  */
@@ -158,6 +179,7 @@ export const useComposer = (session: SessionID, asking: readonly Asking[] = []):
     held.current = walk(held.current, step, {
       open: (run, line) =>
         void prompted(session, line).finally(() => drive({ kind: "settled", run })),
+      steer: (line) => steered(session, line),
       cancel: () => stopped(session),
       answer: (line) => {
         if (standing !== undefined) replied(standing, line)
@@ -170,6 +192,7 @@ export const useComposer = (session: SessionID, asking: readonly Asking[] = []):
     pending: shown.pending,
     open: shown.open !== undefined,
     send: (line) => drive({ kind: "line", line, asking: standing !== undefined }),
+    steer: (line) => drive({ kind: "line", line, asking: standing !== undefined, steer: true }),
     stop: () => drive({ kind: "cancel" }),
   }
 }

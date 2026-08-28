@@ -8,6 +8,9 @@ import { Effect } from "effect"
 export const BINDINGS: readonly KeymapInfo[] = [
   { id: "submit", binding: "enter", command: "session.submit", surface: "eva.tui" },
   { id: "newline", binding: "shift+enter", command: "input.newline", surface: "eva.tui" },
+  // A plain line queues behind the open Run; this steers it. The two mean
+  // different things, so they are two keys and not one.
+  { id: "steer", binding: "ctrl+s", command: "session.steer", surface: "eva.tui" },
   { id: "cancel", binding: "ctrl+c", command: "session.cancel", surface: "eva.tui" },
   { id: "quit", binding: "ctrl+d", command: "app.quit", surface: "eva.tui" },
   // One key, one meaning: step back. What it steps back from is the

@@ -23,6 +23,9 @@ export type LineAction =
   // Open the panel over every command there is.
   | { readonly kind: "palette" }
   | { readonly kind: "submit"; readonly line: string }
+  // The same line, sent as a steer. A plain line queues behind the open Run;
+  // this rides it, which is a different thing to mean.
+  | { readonly kind: "steer"; readonly line: string }
   | { readonly kind: "cancel" }
   | { readonly kind: "quit" }
 
@@ -107,9 +110,11 @@ export const edit = (
       cursor: cursor + Array.from(text).length,
     })
 
-  const submit = (): LineAction => {
+  // A line that leaves the editor, however it was sent. An empty line is not
+  // one, so a stray chord opens no Run and steers with nothing.
+  const sent = (kind: "submit" | "steer"): LineAction => {
     const trimmed = line.buffer.trim()
-    return trimmed === "" ? held(line) : { kind: "submit", line: trimmed }
+    return trimmed === "" ? held(line) : { kind, line: trimmed }
   }
 
   switch (keymap.lookup(key)) {
@@ -118,7 +123,9 @@ export const edit = (
     case "app.quit":
       return { kind: "quit" }
     case "session.submit":
-      return submit()
+      return sent("submit")
+    case "session.steer":
+      return sent("steer")
     case "input.newline":
       return put("\n")
     case "surface.back":

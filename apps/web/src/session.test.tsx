@@ -70,6 +70,7 @@ const COMPOSING: Composing = {
   pending: [],
   open: false,
   send: () => undefined,
+  steer: () => undefined,
   stop: () => undefined,
 }
 

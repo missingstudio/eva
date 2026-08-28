@@ -40,8 +40,10 @@ package, add it as a dependency:
 ### At the terminal
 
 Run `eva` with no arguments. Type a prompt and press enter to submit it; the
-answer streams into the live area. A line starting with `/` runs a Command
-(`/help` lists them), and ctrl+k opens the palette. The default chords come
+answer streams into the live area. A line typed while a Run is open waits its
+turn behind it — press ctrl+s instead and the line steers the Run that is
+going, which is a deliberate gesture and not what enter does. A line starting
+with `/` runs a Command (`/help` lists them), and ctrl+k opens the palette. The default chords come
 from [`eva.keymap`](../keymap/README.md). Slash commands are local: they never
 reach a model and cost nothing.
 

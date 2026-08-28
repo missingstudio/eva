@@ -349,8 +349,11 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     if (action.kind === "cancel" || action.kind === "quit") abandon()
 
     // A line that left the editor is a line the history keeps, whatever it
-    // turns out to mean: a command recalled is as useful as a prompt.
-    if (action.kind === "submit") on({ kind: "submitted", line: action.line })
+    // turns out to mean: a command recalled is as useful as a prompt, and a
+    // steer is as useful as either.
+    if (action.kind === "submit" || action.kind === "steer") {
+      on({ kind: "submitted", line: action.line })
+    }
 
     on({ kind: "typed", buffer: "", cursor: 0 })
     Queue.offerUnsafe(keys, action)
@@ -740,7 +743,14 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
             ? { kind: "quit" }
             : signal.kind === "cancel"
               ? { kind: "cancel" }
-              : { kind: "line", line: signal.line, asking: state.asking }
+              : // A steered line is the same line with the gesture on it. The
+                // fold reads the gesture; the surface only reports it.
+                {
+                  kind: "line",
+                  line: signal.line,
+                  asking: state.asking,
+                  steer: signal.kind === "steer",
+                }
       if (yield* walk(step)) return
     }
   })
