@@ -267,15 +267,15 @@ Factory and surface stages both belong here, and this table is the only place
 in `docs/` that says done — every other document describes the work, and none
 of them tracks it.
 
-| Stage                      | State   | What is left                                                                                                  |
-| -------------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
-| 0 — Wire                   | done    | nothing                                                                                                       |
-| 1 — Workflow               | done    | nothing                                                                                                       |
-| C0 — Console               | done    | nothing                                                                                                       |
-| W0 — Client runtime        | done    | nothing                                                                                                       |
-| W1 — The wire and the page | done    | nothing                                                                                                       |
-| 2 — Tools and the loop     | done    | nothing                                                                                                       |
-| W2 — The page that prompts | started | everything: create on the wire, the shared composer fold, the composer, two doors in one process, conformance |
+| Stage                      | State | What is left                                                            |
+| -------------------------- | ----- | ----------------------------------------------------------------------- |
+| 0 — Wire                   | done  | nothing                                                                 |
+| 1 — Workflow               | done  | nothing                                                                 |
+| C0 — Console               | done  | nothing                                                                 |
+| W0 — Client runtime        | done  | nothing                                                                 |
+| W1 — The wire and the page | done  | nothing                                                                 |
+| 2 — Tools and the loop     | done  | nothing                                                                 |
+| W2 — The page that prompts | done  | seven parity cells name what is absent rather than a proof or a refusal |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
@@ -384,3 +384,22 @@ the OpenAI adapters carry no tools
 ([provider-openai](../plugins/provider-openai/README.md)); and a permission
 request is named by a tool call id, which repeats across Runs
 ([boot](../packages/boot/README.md)).
+
+**W2 — The page that prompts.** Done. The page has a composer — prompt, queue,
+steer, stop, and a model picker — and `eva --web` runs the web row beside the
+terminal row in one process, so two doors race one gate. `create`, the Catalog's
+rows, and a command line all cross the wire, and the contract suite runs the
+nine methods over the socket. The stage exits on two deterministic gates in
+`verify`. `packages/conformance/src/w2-exit.test.ts` is the ledger for the
+roadmap's exit test: it says where each clause is proven, and it fails when a
+clause or a proof moves. `packages/conformance/src/parity.test.ts` is the ledger
+for the parity goal: it reads the matrix in
+[reference/parity.md](reference/parity.md) and fails when a cell's proof is
+renamed or deleted.
+
+That matrix does not come out full, and it says so rather than rounding up.
+Seven of its thirty-two cells name what is absent instead of a proof or a
+refusal: the terminal and the pipe see no Session list, the pipe queues no line
+and steers none, no test pairs `--model` with `--print`, the wire holds no queue
+behind an open Run, and cost does not cross the wire. `eva attach <url>` follows
+the exit test rather than gating it.

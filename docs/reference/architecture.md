@@ -2176,6 +2176,9 @@ HTTP server, a web page. "Every user interface is a plugin" is only true if a
 user interface has somewhere to plug in and something to plug into, so this
 section says what both are.
 
+This section says how a surface is built. What each one can do, and the test
+that proves each of those, is [parity.md](parity.md).
+
 Two contracts cross this seam, and they run in opposite directions. Keeping them
 apart is the whole of the section.
 
