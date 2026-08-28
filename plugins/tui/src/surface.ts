@@ -1,8 +1,8 @@
 import {
   idle,
-  stepped,
+  walk,
   type Client,
-  type LoopAction,
+  type Doing,
   type LoopStep,
 } from "@missingstudio/eva-client-runtime"
 import { optionFor, type FrontendAnswer, type Transcript } from "@missingstudio/eva-core"
@@ -587,7 +587,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     // The runtime owns the Run, from the input that opens it to the record
     // that replaces its stream. Every payload it hears feeds the Live area;
     // the spinner and the close are this surface's own.
-    yield* deps.client.run(
+    const outcome = yield* deps.client.run(
       state.session,
       { kind: "prompt", text: line },
       (one) => {
@@ -601,8 +601,14 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     )
     yield* Fiber.interrupt(turning)
     on({ kind: "closed", at: now() })
-    // The fold replaces the stream. What stays on screen is the record.
-    yield* refresh(true)
+    /**
+     * The fold replaces the stream. The protocol already took it — the
+     * outcome carries the record as of the close — so nothing folds a second
+     * time here. The model is read again, because a command at another door
+     * may have moved it while the Run was open.
+     */
+    const model = (yield* deps.client.api.model.get(state.session)).model
+    on(painted(outcome.transcript, model, true))
   })
 
   const loop = Effect.fn("eva.tui.loop")(function* () {
@@ -617,63 +623,54 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     /**
      * Where the loop stands, and the fibers behind the numbers it holds.
      * The composer fold in `@missingstudio/eva-client-runtime` owns every
-     * rule about them; this owns the fibers, because a fiber is not
-     * something a fold can hold.
+     * rule about them and walks its own answers out; this supplies the doing,
+     * because a fiber is not something a fold can hold.
      */
     let standing = idle
     const fibers = new Map<number, Fiber.Fiber<void>>()
 
-    // A line does what it says. Which it is, is the command Domain's answer,
-    // and what follows from that answer is the fold's.
-    const handle = Effect.fn("eva.tui.line")(function* (line: string): Effect.fn.Return<void> {
-      const before = state.session
-      const ran = yield* runCommand(line)
-      yield* walk({ kind: "handled", line, ran, moved: state.session !== before })
-    })
-
-    // One action, performed. Nothing here decides anything.
-    const perform = Effect.fn("eva.tui.act")(function* (
-      action: LoopAction,
-    ): Effect.fn.Return<void> {
-      switch (action.kind) {
-        case "answer":
-          return yield* answer(action.line)
-        case "handle":
-          return yield* handle(action.line)
-        case "steer":
-          /**
-           * A steer rides the Run that is open and returns at once, so it
-           * opens no fiber and takes no Run number. The Run it lands in says
-           * the line back as a `message`, so nothing is put on the screen
-           * here.
-           */
-          return yield* deps.client.api.submit(state.session, {
-            kind: "steer",
-            text: action.line,
-            target: "next-step",
-          })
-        case "open": {
-          const { run } = action
+    // What this door does with each action. Nothing here decides anything.
+    const doing = {
+      answer: (line: string) => answer(line),
+      // A line does what it says. Which it is, is the command Domain's
+      // answer, and what follows from that answer is the fold's.
+      handle: Effect.fn("eva.tui.line")(function* (line: string) {
+        const before = state.session
+        const ran = yield* runCommand(line)
+        return { ran, moved: state.session !== before }
+      }),
+      /**
+       * A steer rides the Run that is open and returns at once, so it opens
+       * no fiber and takes no Run number. The Run it lands in says the line
+       * back as a `message`, so nothing is put on the screen here.
+       */
+      steer: (line: string) =>
+        deps.client.api.submit(state.session, {
+          kind: "steer",
+          text: line,
+          target: "next-step",
+        }),
+      open: (run: number, line: string) =>
+        Effect.gen(function* () {
           const fiber = yield* Effect.forkChild(
             Effect.ensuring(
-              runPrompt(action.line),
+              runPrompt(line),
               Effect.sync(() => Queue.offerUnsafe(keys, { kind: "settled", run })),
             ),
           )
           fibers.set(run, fiber)
-          return
-        }
-        case "refresh":
-          return yield* refresh()
-        case "interrupt": {
-          const fiber = fibers.get(action.run)
-          fibers.delete(action.run)
+        }),
+      refresh: () => refresh(),
+      interrupt: (run: number) =>
+        Effect.gen(function* () {
+          const fiber = fibers.get(run)
+          fibers.delete(run)
           if (fiber !== undefined) yield* Fiber.interrupt(fiber)
-          return
-        }
-        case "settle": {
-          const fiber = fibers.get(action.run)
-          fibers.delete(action.run)
+        }),
+      settle: (run: number) =>
+        Effect.gen(function* () {
+          const fiber = fibers.get(run)
+          fibers.delete(run)
           if (fiber === undefined) return
           // A Run that died says so; one that was interrupted was cancelled,
           // and the cancel already spoke.
@@ -685,24 +682,25 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
               text: `the Run failed: ${squashed instanceof Error ? squashed.message : String(squashed)}`,
             })
           }
-          return
-        }
-        case "cancelled": {
+        }),
+      cancelled: () =>
+        Effect.gen(function* () {
           yield* deps.client.api.cancel(state.session, "user")
           on({ kind: "cancelled" })
-          return yield* refresh(true)
-        }
-        case "stop":
-          return
-      }
-    })
+          yield* refresh(true)
+        }),
+    } satisfies Doing<unknown>
 
     // One step, and everything it asked for, in the order it asked.
-    const walk = Effect.fn("eva.tui.step")(function* (step: LoopStep): Effect.fn.Return<boolean> {
-      const next = stepped(standing, step)
-      standing = next.state
-      for (const action of next.actions) yield* perform(action)
-      return next.actions.some((action) => action.kind === "stop")
+    const walked = Effect.fn("eva.tui.step")(function* (step: LoopStep): Effect.fn.Return<boolean> {
+      const after = yield* walk(standing, step, doing)
+      // The queue's count is said to the screen when it moves, so a line
+      // waiting its turn is a line a person can see waiting.
+      if (after.state.pending.length !== standing.pending.length) {
+        on({ kind: "queued", waiting: after.state.pending.length })
+      }
+      standing = after.state
+      return after.stopped
     })
 
     /**
@@ -779,7 +777,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
       on({ kind: "typed", buffer: "", cursor: 0 })
       // Through the fold like any other line, so a row taken while a Run is
       // open waits its turn rather than opening a second one over it.
-      yield* walk({ kind: "line", line: run, asking: state.asking })
+      yield* walked({ kind: "line", line: run, asking: state.asking })
     })
 
     // The panel's three touch nothing the fold holds, so they are answered
@@ -813,7 +811,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
                   asking: state.asking,
                   steer: signal.kind === "steer",
                 }
-      if (yield* walk(step)) return
+      if (yield* walked(step)) return
     }
   })
 
