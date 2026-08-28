@@ -35,9 +35,16 @@ export interface ApiOptions {
  * The Session API, over HTTP. It registers no row: a wire is not a Domain, the
  * socket is `eva.web`'s, and the contract is the Client's — so loading is the
  * whole of what this plugin does, and the plugin id is what a person turns off.
+ *
+ * The commands are this plugin's own context, read at the moment a line runs.
+ * A command reaches Domains, and the Domains are here — so a door that ran
+ * `/mode` for itself would change the approval state of its own process and
+ * leave the Run under the mode it already had. `PluginContext` extends
+ * `Domains`, so this reads its own and imports no plugin to do it.
  */
 export const makeApi = (options: ApiOptions): Plugin =>
   define({
     id: API_PLUGIN,
-    effect: () => Effect.sync(() => options.serve((api) => apiWire(api, options.directory))),
+    effect: (ctx) =>
+      Effect.sync(() => options.serve((api) => apiWire(api, options.directory, ctx.command.get))),
   })

@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net"
 import { memorySessionAPI, type MemorySession } from "@missingstudio/eva-client-runtime"
 import { WATCH_REPLAY_BOUND, type ModelRef } from "@missingstudio/eva-core"
 import { SCHEMA_VERSION } from "@missingstudio/eva-schema"
+import type { CommandInfo } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { apiWire, routeFor, watchFor } from "./routes.js"
@@ -10,6 +11,7 @@ import {
   answerPath,
   API_ROOT,
   cancelPath,
+  commandPath,
   CURSOR,
   IDEMPOTENCY,
   modelPath,
@@ -28,8 +30,12 @@ const held = (): Promise<MemorySession> =>
  * plugin, so the socket here is bare — and what falls past the wire is
  * `eva.web`'s to answer, said in one line so a test can tell that it fell.
  */
-const standing = async (memory: MemorySession, directory?: () => string) => {
-  const wire = apiWire(memory.api, directory)
+const standing = async (
+  memory: MemorySession,
+  directory?: () => string,
+  commands?: Effect.Effect<readonly CommandInfo[]>,
+) => {
+  const wire = apiWire(memory.api, directory, commands)
   const server = createServer((request, response) => {
     if (wire(request, response)) return
     response.writeHead(200, { "content-type": "text/plain; charset=utf-8" })
@@ -343,12 +349,13 @@ describe("the route table", () => {
 
   // The other half, and the same rule: a method and a path this does not
   // carry is a miss, whatever body arrived with it.
-  it("carries the five calls that write, and nothing else", () => {
+  it("carries the six calls that write, and nothing else", () => {
     expect(routeFor("POST", SESSIONS, {})).toBeTypeOf("function")
     expect(routeFor("POST", sessionPath("ses_1"), { kind: "prompt", text: "ask" })).toBeTypeOf(
       "function",
     )
     expect(routeFor("POST", cancelPath("ses_1"), "user")).toBeTypeOf("function")
+    expect(routeFor("POST", commandPath("ses_1"), { line: "/mode" })).toBeTypeOf("function")
     expect(routeFor("PUT", modelPath("ses_1"), MODEL)).toBeTypeOf("function")
     expect(routeFor("PUT", answerPath("call_1"), { kind: "cancelled" })).toBeTypeOf("function")
 
@@ -589,6 +596,231 @@ describe("the write half, over a socket", () => {
     await wrote(served.origin, "POST", sessionPath(memory.session), prompt, "key_2")
 
     expect(memory.calls.filter((one) => one.method === "submit")).toHaveLength(2)
+
+    await served.close()
+  })
+})
+
+/**
+ * A command is not a `SessionAPI` method, and it crosses this wire for the
+ * reason the methods do: the rows it resolves through are the serving
+ * process's, and so is everything they touch. A door that ran `/mode` for
+ * itself would change the approval state of its own process and leave the Run
+ * under the mode it already had.
+ */
+describe("a command, over a socket", () => {
+  // What the plugins that own these commands hold. A plugin's test may not
+  // import another plugin, so the behaviour `eva.approval` and `eva.tool-edit`
+  // register is written here — a mode kept for the process, and a write that
+  // can be reversed.
+  interface Serving {
+    mode: string
+    readonly writes: string[]
+  }
+
+  const MODES = ["default", "read-only"]
+
+  const rowsOf = (serving: Serving): readonly CommandInfo[] => [
+    {
+      id: "mode",
+      description: "names the permission mode this Session runs under",
+      argumentHint: "mode",
+      run: (command) =>
+        Effect.sync(() => {
+          const named = command.argument
+          if (named === undefined) {
+            command.write(`mode: ${serving.mode}`)
+            for (const one of MODES) command.write(`  ${one}`)
+            return
+          }
+          if (!MODES.includes(named)) {
+            command.write(`no mode is named ${named}: ${MODES.join(", ")}`)
+            return
+          }
+          serving.mode = named
+          command.write(`mode: ${named}`)
+        }),
+    },
+    {
+      id: "undo",
+      description: "reverses the last write",
+      run: (command) =>
+        Effect.sync(() => {
+          const last = serving.writes.pop()
+          command.write(last === undefined ? "nothing to undo" : `undone: ${last}`)
+        }),
+    },
+    {
+      // The shape every command that offers a choice has: a panel where the
+      // surface draws one, and the same answer in words where it does not.
+      id: "model",
+      description: "Show or set the session model",
+      run: Effect.fn("wire.test.model")(function* (command) {
+        const rows = [
+          { id: "wire/one", label: "wire/one" },
+          { id: "wire/another", label: "wire/another" },
+        ]
+        if (command.pick === undefined) {
+          const current = yield* command.api.model.get(command.session)
+          command.write(
+            `${current.provider}/${current.model}\n${rows.map((row) => `  ${row.label}`).join("\n")}\n`,
+          )
+          return
+        }
+        // Nothing on this door reaches here, and a door that did would wait
+        // on the person rather than on the wire.
+        yield* command.pick("model", rows)
+      }),
+    },
+    {
+      id: "clear",
+      description: "Open a new Session",
+      run: Effect.fn("wire.test.clear")(function* (command) {
+        command.select(yield* command.api.create("/there"))
+      }),
+    },
+  ]
+
+  const ran = (origin: string, session: string, line: unknown): Promise<Response> =>
+    fetch(`${origin}${commandPath(session)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ line }),
+    })
+
+  const serving = async (mode = "default", writes: string[] = []) => {
+    const state: Serving = { mode, writes }
+    const memory = await held()
+    const served = await standing(memory, undefined, Effect.succeed(rowsOf(state)))
+    return { state, memory, served }
+  }
+
+  /**
+   * The clause the route exists for. The mode is the serving process's, so a
+   * line sent from another door is answered by changing this one — and the
+   * next read of it, from anywhere, sees what the line said.
+   */
+  it("runs the line where the rows are, so the mode a page names is the serving process's", async () => {
+    const { state, served } = await serving()
+
+    const response = await ran(served.origin, "ses_1", "/mode read-only")
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ wrote: "mode: read-only" })
+    expect(state.mode).toBe("read-only")
+
+    // And it stayed changed, which is what "the same runtime" means.
+    expect(await (await ran(served.origin, "ses_1", "/mode")).json()).toEqual({
+      wrote: "mode: read-only\n  default\n  read-only",
+    })
+
+    await served.close()
+  })
+
+  it("reverses a write the serving process made", async () => {
+    const { state, served } = await serving("default", ["notes.md", "wire.ts"])
+
+    expect(await (await ran(served.origin, "ses_1", "/undo")).json()).toEqual({
+      wrote: "undone: wire.ts",
+    })
+    expect(state.writes).toEqual(["notes.md"])
+
+    await served.close()
+  })
+
+  /**
+   * `dispatch` has no error channel, so a line no row answers is answered in
+   * words. A wire that faulted on a misspelling would make a typing mistake
+   * read as a runtime that had gone.
+   */
+  it("answers a command it does not know in words, and never with a fault", async () => {
+    const { state, served } = await serving()
+
+    const missed = await ran(served.origin, "ses_1", "/mdoe read-only")
+    expect(missed.status).toBe(200)
+    expect(await missed.json()).toEqual({
+      wrote: "no such command: /mdoe, did you mean /mode?",
+    })
+
+    const nothing = await ran(served.origin, "ses_1", "/nonesuch")
+    expect(nothing.status).toBe(200)
+    expect(await nothing.json()).toEqual({ wrote: "no such command: /nonesuch" })
+
+    // Nothing ran, so nothing changed.
+    expect(state.mode).toBe("default")
+
+    await served.close()
+  })
+
+  // A line that names no command is a Prompt, and a Prompt is submitted
+  // rather than run. So this route says so instead of opening a Run of its own.
+  it("answers a line that names no command, and opens nothing", async () => {
+    const { memory, served } = await serving()
+
+    expect(await (await ran(served.origin, "ses_1", "read the trace")).json()).toEqual({
+      wrote: "not a command: a line that names none is a Prompt",
+    })
+    expect(memory.calls).toEqual([])
+
+    await served.close()
+  })
+
+  /**
+   * `pick` is a capability rather than an obligation, and this door supplies
+   * none. So a command that would have asked says its answer in words — which
+   * is the contract's own degradation, and needs no work per command.
+   */
+  it("lists what it would have asked, because this door draws no panel", async () => {
+    const { served } = await serving()
+
+    const response = await ran(served.origin, "ses_1", "/model")
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      wrote: "wire/one\n  wire/one\n  wire/another\n",
+    })
+
+    await served.close()
+  })
+
+  // A command that opens a Session says which. A door told only that the line
+  // ran would be looking at the Session the person just left.
+  it("says which Session a command opened", async () => {
+    const { memory, served } = await serving()
+
+    const answered = (await (await ran(served.origin, "ses_1", "/clear")).json()) as {
+      readonly wrote: string
+      readonly selected?: string
+    }
+
+    expect(answered.wrote).toBe("")
+    expect(memory.calls).toEqual([{ method: "create", args: ["/there"] }])
+    expect(answered.selected).toBe(memory.opened()[0])
+
+    await served.close()
+  })
+
+  it("refuses a body that names no line, and runs nothing", async () => {
+    const { state, served } = await serving()
+
+    const response = await ran(served.origin, "ses_1", 7)
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: "the wire cannot read this body" })
+    expect(state.mode).toBe("default")
+
+    await served.close()
+  })
+
+  // A build that carries no command row still answers. There is nothing for a
+  // line to resolve through, which is a thing to say and not a fault.
+  it("answers a line against a build that registered no command", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    expect(await (await ran(served.origin, "ses_1", "/mode")).json()).toEqual({
+      wrote: "no such command: /mode",
+    })
 
     await served.close()
   })

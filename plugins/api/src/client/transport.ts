@@ -10,6 +10,7 @@ import { Effect, Schedule, Scope, Stream, SubscriptionRef } from "effect"
 import {
   answerPath,
   cancelPath,
+  commandPath,
   CURSOR,
   CURSOR_REFUSED,
   eventsIn,
@@ -20,11 +21,13 @@ import {
   modelIn,
   modelPath,
   payloadIn,
+  ranIn,
   refusalIn,
   sessionIn,
   sessionPath,
   SESSIONS,
   watchPath,
+  type Ran,
 } from "../wire.js"
 
 // How long a call that could not reach the far side waits before it asks
@@ -66,12 +69,26 @@ class Unreachable extends Error {
   override readonly name = "Unreachable"
 }
 
+// A line, run where the Domains are, and what it wrote back.
+export type Commanding = (session: SessionID, line: string) => Effect.Effect<Ran>
+
+/**
+ * The transport, and the one thing beside the contract that crosses this
+ * wire. A command is not a `SessionAPI` method and it is not going to become
+ * one: it reaches Domains rather than a Session, and `Transport` is the seam
+ * the runtime reads. So it rides beside `api` — a caller that holds this
+ * filler can run a line, and one that holds only the seam cannot.
+ */
+export interface HttpTransport extends Transport {
+  readonly command: Commanding
+}
+
 /**
  * The whole Session API over HTTP, and the one fact `client-runtime` reads
  * about the pipe. It is the seam's second filler: the runtime calls the
  * contract and never learns that this answer crossed a socket.
  */
-export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transport> =>
+export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTransport> =>
   Effect.gen(function* () {
     const health = yield* SubscriptionRef.make<TransportHealth>("ready")
     const origin = options.origin ?? ""
@@ -355,5 +372,13 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<Transpor
       answer: (request, given) => write("PUT", answerPath(request), given),
     }
 
-    return { api, health }
+    /**
+     * A line, sent whole for the far side to parse. It is a write like the
+     * others, key and all: `/undo` asked twice would reverse two writes, and
+     * the key is what makes asking again after a lost answer safe.
+     */
+    const command: Commanding = (session, line) =>
+      writing("POST", commandPath(session), { line }, ranIn)
+
+    return { api, health, command }
   })

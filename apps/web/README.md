@@ -22,6 +22,14 @@ means one thing. Send is off while the pipe is down, and the reason is drawn
 beside it — a send that spooled behind a dead pipe and said nothing would read
 as a Run that started.
 
+Beside it is a command line — `/mode`, `/undo` and every other row, run where
+the Domains live rather than where the page is. It is the one write here that
+is not a Session API call: the contract has no command method, so it rides
+beside the Client on the same transport rather than through it. What the page
+puts into Eva is small and counted all the same — a line, a stop, an answer to
+a permission request that stands, and a command. A model switch is the rest of
+W2's.
+
 ## What a Session page draws
 
 Reading is progressive. The page says which Session it is from the id it was
@@ -188,6 +196,7 @@ cd apps/web && bun run dev
 | `src/composer.tsx`  | what to say next: the line, the send, the stop, the queue    |
 | `src/composing.ts`  | the composer fold, driven — and the calls its actions make   |
 | `src/title.ts`      | what to call a Session, in one line                          |
+| `src/command.tsx`   | a command line, and what the last one wrote                  |
 | `src/eva.ts`        | the one Client, over the same-origin wire                    |
 | `src/sessions.ts`   | what the page reads: the Sessions, or not yet                |
 | `src/transcript.ts` | what it reads of one Session: the Header, the fold, the tail |
@@ -224,7 +233,9 @@ tail after it, the cost line and what the page offers,
 drops it and the send a dead pipe refuses,
 [src/transcript.test.ts](src/transcript.test.ts) the follow itself — the fold,
 the tail, and the fold that replaces it —
-[src/title.test.ts](src/title.test.ts) the shaping of a title, and
+[src/command.test.tsx](src/command.test.tsx) the command line and what it
+says when it reaches nothing, [src/title.test.ts](src/title.test.ts) the
+shaping of a title, and
 [src/fold.test.ts](src/fold.test.ts) the count of folds. Run the suite from the
 repository root:
 

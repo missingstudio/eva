@@ -42,6 +42,14 @@ export const watchPath = (session: string): string => `${sessionPath(session)}/w
 
 export const cancelPath = (session: string): string => `${sessionPath(session)}/cancel`
 
+/**
+ * A command is not a `SessionAPI` method, and it is under the Session all the
+ * same: a line runs against one Session, and the rows it resolves through
+ * belong to the process that holds the Domains. A door that ran the line for
+ * itself would change its own process and not the one the Run is in.
+ */
+export const commandPath = (session: string): string => `${sessionPath(session)}/command`
+
 export const answerPath = (request: string): string => `${REQUESTS}/${encodeURIComponent(request)}`
 
 /**
@@ -153,6 +161,40 @@ export const locationIn = (value: unknown): { readonly location?: string } | und
 // `SessionID` is a branded string and an envelope around one would say no more.
 export const sessionIn = (value: unknown): SessionID | undefined =>
   typeof value === "string" ? sessionID(value) : undefined
+
+/**
+ * The line a person typed, whole. The name and the argument are not split
+ * here: `dispatch` owns what a line means, and a wire that parsed one would
+ * be a second parser to keep in step with the first.
+ */
+export const lineIn = (value: unknown): string | undefined => {
+  const row = objectIn(value)
+  return row === undefined ? undefined : stringAt(row, "line")
+}
+
+/**
+ * What running a line came to. `write` is a capability a surface supplies, so
+ * over the wire it is collected and answered as one block of text — which is
+ * also the answer a command gives a door that cannot draw a panel.
+ *
+ * `selected` is the Session a command opened, when it opened one. A `/clear`
+ * that said nothing would otherwise read as a command that did nothing.
+ */
+export interface Ran {
+  readonly wrote: string
+  readonly selected?: SessionID
+}
+
+export const ranIn = (value: unknown): Ran | undefined => {
+  const row = objectIn(value)
+  if (row === undefined) return undefined
+  const wrote = stringAt(row, "wrote")
+  if (wrote === undefined) return undefined
+
+  if (row["selected"] === undefined) return { wrote }
+  const selected = stringAt(row, "selected")
+  return selected === undefined ? undefined : { wrote, selected: sessionID(selected) }
+}
 
 /**
  * What a write carries, read the way an answer is. The shapes are the

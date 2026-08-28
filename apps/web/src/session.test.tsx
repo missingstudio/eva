@@ -305,9 +305,15 @@ describe("the cost line", () => {
  *
  * What is counted is the rule and not a proxy for it. A field is no longer
  * the rule — there is one, and the composer is what it is for — so what is
- * counted is the write half of the Session API, read off what ships. There is
- * one Client and every call goes through it, so `one.api.` names every one of
- * them and a grep is how a reviewer repeats the count by hand.
+ * counted is every reach for Eva, read off what ships. Most of them go
+ * through the one Client and are written `one.api.X`. The command line does
+ * not: the contract has no command method, so it comes off the transport
+ * beside the Client and is written `command()`. Both spellings are grepped,
+ * because a reach this count cannot see is the defect the count exists for.
+ *
+ * `eva.ts` is where every door is opened, so its exports are counted too. A
+ * third door would be a reach `one.api.` and `command()` both miss, and it
+ * lands on that line before it lands anywhere else.
  *
  * Each surface is drawn in the state a reader sees it in. `renderToStaticMarkup`
  * runs no effect, so `Page` draws only the words it says before the listing has
@@ -323,15 +329,23 @@ describe("what the page offers", () => {
       .map((entry) => join(SRC, entry.name))
       .sort()
 
+  // The grep, written once so a reviewer can run the same one by hand.
+  const REACH = /one\.api\.[a-z.]+|\bcommand\(\)/g
+
   const calls = (): readonly string[] => {
     const found = new Set<string>()
     for (const path of shipped()) {
-      for (const said of readFileSync(path, "utf8").match(/one\.api\.[a-z.]+/g) ?? []) {
-        found.add(said.slice("one.api.".length))
+      for (const said of readFileSync(path, "utf8").match(REACH) ?? []) {
+        found.add(said.startsWith("one.api.") ? said.slice("one.api.".length) : "command")
       }
     }
     return [...found].sort()
   }
+
+  const doors = (): readonly string[] =>
+    (readFileSync(join(SRC, "eva.ts"), "utf8").match(/export const [a-z]+/g) ?? [])
+      .map((said) => said.slice("export const ".length))
+      .sort()
 
   const page = (composer?: Composing) =>
     renderToStaticMarkup(
@@ -347,12 +361,19 @@ describe("what the page offers", () => {
   /**
    * `create` opens a Session, `submit` says something in one, `cancel` stops
    * what is open and `answer` answers a question that stands. `list` is the
-   * listing, which is the read this page opened with. Nothing else: a model
-   * switch and a command are still to come, and each of them belongs on this
-   * line the day it lands.
+   * listing, which is the read this page opened with. `command` is the odd
+   * one: it is no Session API method at all, and it runs a line where the
+   * Domains live. Nothing else: a model switch is still to come, and it
+   * belongs on this line the day it lands.
    */
   it("makes these calls on Eva and no others", () => {
-    expect(calls()).toEqual(["answer", "cancel", "create", "list", "submit"])
+    expect(calls()).toEqual(["answer", "cancel", "command", "create", "list", "submit"])
+  })
+
+  // Two doors, and `eva.ts` holds both. A third would be a call the count
+  // above is blind to, which is the one failure this suite must not allow.
+  it("reaches Eva through these doors and no others", () => {
+    expect(doors()).toEqual(["client", "command"])
   })
 
   // The composer is the field, and it is the only one. A page with two ways

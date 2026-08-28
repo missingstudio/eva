@@ -47,17 +47,18 @@ curl http://127.0.0.1:7777/api/sessions
 [{"id":"ses_019a","title":"read the trace back over HTTP"}]
 ```
 
-| Method      | Route                           | What                                     |
-| ----------- | ------------------------------- | ---------------------------------------- |
-| `list`      | `GET /api/sessions`             | every Session, each with its Header      |
-| `attach`    | `GET /api/sessions/:id`         | that Session's record, as events         |
-| `watch`     | `GET /api/sessions/:id/watch`   | what commits after a Cursor, as a stream |
-| `model.get` | `GET /api/sessions/:id/model`   | the model that Session is kept at        |
-| `create`    | `POST /api/sessions`            | opens a Session, and answers which       |
-| `submit`    | `POST /api/sessions/:id`        | opens a Run in that Session              |
-| `cancel`    | `POST /api/sessions/:id/cancel` | stops the Run open in it                 |
-| `model.set` | `PUT /api/sessions/:id/model`   | keeps that Session at another model      |
-| `answer`    | `PUT /api/requests/:id`         | answers what a Run asked a person        |
+| Method      | Route                            | What                                     |
+| ----------- | -------------------------------- | ---------------------------------------- |
+| `list`      | `GET /api/sessions`              | every Session, each with its Header      |
+| `attach`    | `GET /api/sessions/:id`          | that Session's record, as events         |
+| `watch`     | `GET /api/sessions/:id/watch`    | what commits after a Cursor, as a stream |
+| `model.get` | `GET /api/sessions/:id/model`    | the model that Session is kept at        |
+| `create`    | `POST /api/sessions`             | opens a Session, and answers which       |
+| `submit`    | `POST /api/sessions/:id`         | opens a Run in that Session              |
+| `cancel`    | `POST /api/sessions/:id/cancel`  | stops the Run open in it                 |
+| command     | `POST /api/sessions/:id/command` | runs a line where the Domains are        |
+| `model.set` | `PUT /api/sessions/:id/model`    | keeps that Session at another model      |
+| `answer`    | `PUT /api/requests/:id`          | answers what a Run asked a person        |
 
 What travels is the contract's own shapes, with no envelope around them and no
 rendering in them. A `SubmitInput` body _is_ the Prompt and a `CancelCause`
@@ -71,6 +72,19 @@ A `POST` opens or stops work and a `PUT` sets a value, so asking twice is what
 tells the two apart. `answer` is the one call keyed by a `RequestID` rather
 than by a Session, so it sits outside the listing: the id is the tool call's,
 which the `tool_call` record named before anybody was asked.
+
+The command route is the one that is not a `SessionAPI` method. A command
+resolves through the rows a process holds and reaches the Domains beside them,
+so a door that ran `/mode` for itself would change the approval state of its
+own process and leave the Run under the mode it already had. The body is
+`{"line"}` — the line whole, because `dispatch` owns what a line means and a
+second parser would be one to keep in step. The answer is `{"wrote", "selected"?}`:
+`CommandContext.write` collected as one block of text, and the Session the
+command opened when it opened one. `pick` is absent, so a command that would
+have asked lists its options instead — the contract already says a command
+answers in words where a capability is missing, so no command needs work of its
+own to cross this wire. Nothing here can fault: a line no row answers is
+answered in words with the same status as one that ran.
 
 `create` is the one write that answers a value, because a status alone would
 not say which Session was opened. Its body is `{"location"?}` and the field is
@@ -217,24 +231,31 @@ about would be refused again however often it is sent.
 - `makeApi({ serve, directory })` — the plugin, id `eva.api`. It registers no
   row: a wire is not a Domain, and the plugin id is what a person turns off.
   `directory` is where a Session goes when the caller named nowhere, and it is
-  the serving process's own when nobody hands one over.
-- `apiWire(api, directory)` — the request handler, answering from any filler of
-  the Session API. It says whether it answered, so the server that owns the
-  socket can serve the page with what falls past it.
-- `routeFor(method, path, body, directory)` — the route table, as a pure
-  function. The body arrives as a third argument the way `watchFor` takes its
-  Cursor, so a write route is still a description of an answer and never a
+  the serving process's own when nobody hands one over. It reads its own
+  `ctx.command.get` for the rows a line resolves through, because
+  `PluginContext` extends `Domains` — so the wire reaches the commands without
+  importing the plugins that register them.
+- `apiWire(api, directory, commands)` — the request handler, answering from any
+  filler of the Session API. It says whether it answered, so the server that
+  owns the socket can serve the page with what falls past it.
+- `routeFor(method, path, body, directory, commands)` — the route table, as a
+  pure function. The body arrives as a third argument the way `watchFor` takes
+  its Cursor, so a write route is still a description of an answer and never a
   write itself; the directory arrives as a fourth, because where the serving
-  process is is a fact of that process and not of the request.
+  process is is a fact of that process and not of the request; the commands
+  arrive as a fifth, as an Effect rather than a list, because the rows are read
+  at the moment a line runs.
 - `watchFor(method, path, from)` — the same, for the one method that answers a
   stream. It is matched first, because a `Route` answers a body.
 - `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `REQUESTS`, `sessionPath(session)`,
   `modelPath(session)`, `watchPath(session)`, `cancelPath(session)`,
-  `answerPath(request)` — the id and the paths, rooted so no address is built
-  into the page.
+  `commandPath(session)`, `answerPath(request)` — the id and the paths, rooted
+  so no address is built into the page.
 - `headerIn`, `headersIn`, `modelIn`, `sessionIn`, `eventsIn` — what a body has
   to be to be an answer. `eventsOut` is the record on its way out.
-- `submitInputIn`, `cancelCauseIn`, `answerIn`, `locationIn` — what a body has
+- `Ran`, `ranIn` — what running a line came to: the text it wrote, and the
+  Session it opened when it opened one.
+- `submitInputIn`, `cancelCauseIn`, `answerIn`, `locationIn`, `lineIn` — what a body has
   to be to be a write. `modelIn` reads both directions, because `model.set`
   sends back what `model.get` answers, and `locationIn` is the one that accepts
   an absent body: only a `location` that is there and is not a string refuses.
@@ -242,7 +263,10 @@ about would be refused again however often it is sent.
   `framesIn(text)`, `payloadIn(frame)`, `refusalOut(refused)`,
   `refusalIn(from, body)` — the headers and the stream's own shapes, read by
   both halves for the reason the paths are.
-- `httpTransport(options)` — from `@missingstudio/eva-api/client`.
+- `httpTransport(options)` — from `@missingstudio/eva-api/client`. It answers
+  an `HttpTransport`: the seam's `Transport`, and `command(session, line)`
+  beside it. A command is not a `SessionAPI` method and is not going to become
+  one, so it rides beside the contract rather than inside it.
 
 ## Development
 

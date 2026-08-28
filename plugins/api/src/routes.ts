@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { ResumeTooFarBehind, SessionAPI } from "@missingstudio/eva-core"
-import { encodePayloadLine, sessionID } from "@missingstudio/eva-schema"
+import { encodePayloadLine, sessionID, type SessionID } from "@missingstudio/eva-schema"
+import { dispatch, type CommandInfo } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Stream } from "effect"
 import {
   answerIn,
@@ -13,6 +14,7 @@ import {
   EVENT_STREAM,
   frameOut,
   IDEMPOTENCY,
+  lineIn,
   locationIn,
   modelIn,
   refusalOut,
@@ -47,6 +49,7 @@ const SESSION = new RegExp(`^${SESSIONS}/([^/]+)$`)
 const MODEL = new RegExp(`^${SESSIONS}/([^/]+)/model$`)
 const WATCH = new RegExp(`^${SESSIONS}/([^/]+)/watch$`)
 const CANCEL = new RegExp(`^${SESSIONS}/([^/]+)/cancel$`)
+const COMMAND = new RegExp(`^${SESSIONS}/([^/]+)/command$`)
 const REQUEST = new RegExp(`^${REQUESTS}/([^/]+)$`)
 
 // A segment is a name, and a name that is not valid percent-encoding names
@@ -88,6 +91,60 @@ const refusing: Route = () => Effect.succeed(UNREADABLE)
  */
 const HERE = (): string => process.cwd()
 
+// A build that registered no command row. Every line is then a line no
+// command answers, which `dispatch` says in words.
+const NO_COMMANDS: Effect.Effect<readonly CommandInfo[]> = Effect.succeed([])
+
+/**
+ * What a command wrote, as one block. A command writes the lines it has as it
+ * has them, and some end in a newline and some do not — so a newline is added
+ * only where the writer left one out.
+ */
+const joined = (said: readonly string[]): string =>
+  said.reduce(
+    (all, text) => (all === "" || all.endsWith("\n") ? all + text : `${all}\n${text}`),
+    "",
+  )
+
+/**
+ * A line, run where the Domains are. The wire supplies the `CommandContext`,
+ * so what a command can reach here is what this door can do: `write` is
+ * collected as the text of the answer, `select` names the Session a command
+ * opened, and `pick` is absent — the contract says a command that finds a
+ * capability absent answers in words instead, so a door that draws no panel
+ * gets a listing rather than a wait for an answer that cannot arrive.
+ *
+ * `dispatch` has no error channel, so this route cannot fault: a line no
+ * command answers is answered in words, with the same status as one that ran.
+ */
+const commanded =
+  (commands: Effect.Effect<readonly CommandInfo[]>, session: SessionID, line: string): Route =>
+  (api) =>
+    Effect.gen(function* () {
+      const said: string[] = []
+      let selected: SessionID | undefined
+
+      const outcome = yield* dispatch(yield* commands, line, (parsed) => ({
+        api,
+        session,
+        ...(parsed.argument === undefined ? {} : { argument: parsed.argument }),
+        write: (text: string) => void said.push(text),
+        select: (next: SessionID) => void (selected = next),
+      }))
+
+      const wrote =
+        outcome.kind === "ran"
+          ? joined(said)
+          : outcome.kind === "said"
+            ? outcome.text
+            : "not a command: a line that names none is a Prompt"
+
+      return {
+        status: 200,
+        body: { wrote, ...(selected === undefined ? {} : { selected }) },
+      }
+    })
+
 /**
  * Both halves `eva.api` carries as a body. `watch` is in neither: it answers
  * a stream rather than a body, so it has a table of its own that is matched
@@ -101,12 +158,17 @@ const HERE = (): string => process.cwd()
  * `directory` is the fourth for the same reason: where the serving process is
  * is a fact of that process and not of the request, so it arrives beside the
  * request rather than being read from inside a route.
+ *
+ * `commands` is the fifth, and it is an Effect rather than a list because the
+ * rows are read at the moment a line runs: a plugin that registers a command
+ * after the wire was built is still a command this wire carries.
  */
 export const routeFor = (
   method: string,
   path: string,
   body?: unknown,
   directory: () => string = HERE,
+  commands: Effect.Effect<readonly CommandInfo[]> = NO_COMMANDS,
 ): Route | undefined => {
   if (method === "GET") {
     if (path === SESSIONS) {
@@ -173,6 +235,18 @@ export const routeFor = (
       if (cause === undefined) return refusing
       const asked = sessionID(stopping)
       return (api) => Effect.as(api.cancel(asked, cause), DONE)
+    }
+
+    /**
+     * A `POST`, because a line does work: `/mode` records a Run and `/undo`
+     * reverses a write, so asking twice is two of each — which is what the
+     * idempotency key already answers for every other write here.
+     */
+    const running = askedFor(COMMAND, path)
+    if (running !== undefined) {
+      const line = lineIn(body)
+      if (line === undefined) return refusing
+      return commanded(commands, sessionID(running), line)
     }
 
     return undefined
@@ -379,8 +453,17 @@ interface Once {
  * `directory` is where a Session goes when the caller named nowhere, and it
  * is the serving process's own by default. A caller may hand over another,
  * as the composition root hands `eva.web` a bind and a writer.
+ *
+ * `commands` is the rows a line resolves through. They are this process's,
+ * which is the whole of why a command crosses the wire at all: a door that
+ * ran `/mode` for itself would change the approval state of the process it
+ * runs in, and the Run is in this one.
  */
-export const apiWire = (api: SessionAPI, directory?: () => string): Answering => {
+export const apiWire = (
+  api: SessionAPI,
+  directory?: () => string,
+  commands?: Effect.Effect<readonly CommandInfo[]>,
+): Answering => {
   /**
    * The write each path is answering, under the key its caller named. A write
    * has no error channel, so a caller that could not reach this side waits
@@ -429,7 +512,7 @@ export const apiWire = (api: SessionAPI, directory?: () => string): Answering =>
     const read = method === "GET" ? Effect.succeed(undefined) : bodyOf(request)
     Effect.runFork(
       Effect.flatMap(read, (body) => {
-        const route = routeFor(method, asked, body, directory)
+        const route = routeFor(method, asked, body, directory, commands)
         const answered =
           route === undefined
             ? Effect.succeed(MISS)

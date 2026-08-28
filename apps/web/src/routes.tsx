@@ -7,6 +7,7 @@ import {
   useParams,
 } from "@tanstack/react-router"
 import { answer, useAsking } from "./asking.js"
+import { Commands } from "./command.js"
 import { useComposer } from "./composing.js"
 import { Page } from "./page.js"
 import { SESSION_ROUTE } from "./paths.js"
@@ -36,6 +37,7 @@ const Read = () => {
     <Session
       answer={answer}
       asking={asking}
+      command={<Commands session={session} />}
       composer={useComposer(session, asking)}
       header={useHeader(session)}
       pipe={usePipe()}
