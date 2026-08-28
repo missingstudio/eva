@@ -11,8 +11,8 @@ close that a watcher which subscribed too late never hears. This package holds
 the protocol once. It knows what the server needs to hear about, and no
 pixels — it imports the contracts and nothing that draws.
 
-It starts with two domains — the Run, and the connection it runs over — and
-takes another when a real consumer needs one.
+It starts with three domains — the Run, the connection it runs over, and the
+composer loop over both — and takes another when a real consumer needs one.
 
 ## Prerequisites
 
@@ -164,7 +164,9 @@ The protocol's rules live in [run.test.ts](src/run.test.ts), the handle's in
 [client.test.ts](src/client.test.ts), the seam's in
 [transport.test.ts](src/transport.test.ts) and the reconnect's in
 [reconnect.test.ts](src/reconnect.test.ts), all against the fake `SessionAPI`
-in [fake-api.ts](src/fake-api.ts). Run the suite from the repository root:
+in [fake-api.ts](src/fake-api.ts). The composer loop's rules live in
+[loop.test.ts](src/loop.test.ts), which needs no API at all. Run the suite from
+the repository root:
 
 ```bash
 bun run test

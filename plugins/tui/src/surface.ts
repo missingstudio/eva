@@ -1,4 +1,10 @@
-import type { Client } from "@missingstudio/eva-client-runtime"
+import {
+  idle,
+  stepped,
+  type Client,
+  type LoopAction,
+  type LoopStep,
+} from "@missingstudio/eva-client-runtime"
 import { optionFor, type FrontendAnswer, type Transcript } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import {
@@ -32,7 +38,6 @@ import {
 import { branchOf, shortPath } from "./banner.js"
 import { apply, backStep, frameOf, initial, type ConsoleEvent, type Place } from "./console.js"
 import { edit, pasted, type LineAction, type LineCommand } from "./line.js"
-import { idle, stepped, type LoopAction, type LoopStep } from "./loop.js"
 import {
   commandRows,
   completed,
@@ -546,8 +551,9 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
 
     /**
      * Where the loop stands, and the fibers behind the numbers it holds.
-     * `loop.ts` owns every rule about them; this owns the fibers, because a
-     * fiber is not something a fold can hold.
+     * The composer fold in `@missingstudio/eva-client-runtime` owns every
+     * rule about them; this owns the fibers, because a fiber is not
+     * something a fold can hold.
      */
     let standing = idle
     const fibers = new Map<number, Fiber.Fiber<void>>()
@@ -569,6 +575,18 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
           return yield* answer(action.line)
         case "handle":
           return yield* handle(action.line)
+        case "steer":
+          /**
+           * A steer rides the Run that is open and returns at once, so it
+           * opens no fiber and takes no Run number. The Run it lands in says
+           * the line back as a `message`, so nothing is put on the screen
+           * here.
+           */
+          return yield* deps.client.api.submit(state.session, {
+            kind: "steer",
+            text: action.line,
+            target: "next-step",
+          })
         case "open": {
           const { run } = action
           const fiber = yield* Effect.forkChild(
