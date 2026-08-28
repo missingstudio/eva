@@ -9,7 +9,9 @@ import type { Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
 import type { Running } from "@missingstudio/eva-sdk"
 import { Effect, Schedule, Scope, Stream, SubscriptionRef } from "effect"
 import {
+  answerOut,
   answerPath,
+  cancelCauseOut,
   cancelPath,
   commandPath,
   CURSOR,
@@ -19,7 +21,10 @@ import {
   framesIn,
   headersIn,
   IDEMPOTENCY,
+  lineOut,
+  locationOut,
   modelIn,
+  modelOut,
   modelPath,
   modelRowsIn,
   MODELS,
@@ -29,6 +34,7 @@ import {
   sessionIn,
   sessionPath,
   SESSIONS,
+  submitInputOut,
   watchPath,
   type PickRow,
 } from "../wire.js"
@@ -70,7 +76,7 @@ const settled = (options: HttpOptions) => ({
  * a report into a hang.
  *
  * It is the only defect this filler raises. `SessionAPI` is one interface and
- * a filler answers all of it, and this one now reaches all nine methods — so
+ * a filler answers all of it, and this one now reaches all ten methods — so
  * there is no method left that says it is not carried.
  */
 export class Refused extends Error {
@@ -373,16 +379,24 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
 
     const api: SessionAPI = {
       list: call(SESSIONS, headersIn),
+      /**
+       * The one write with no body at all. What a `DELETE` acts on is the
+       * path, so there is nothing left to carry — and it is a `DELETE` and
+       * not a `POST` because asking twice leaves the Session exactly where
+       * asking once left it, which is the line this wire draws between the
+       * two.
+       */
+      retire: (session) => write("DELETE", sessionPath(session), null),
       model: {
         get: (session) => call(modelPath(session), modelIn),
-        set: (session, model) => write("PUT", modelPath(session), model),
+        set: (session, model) => write("PUT", modelPath(session), modelOut(model)),
       },
       /**
        * The one write that answers a value. A page holds no honest path, so
        * the location it names is the one it was given — and a page that names
        * none leaves the serving process to answer with its own directory.
        */
-      create: (location) => writing("POST", SESSIONS, { location }, sessionIn),
+      create: (location) => writing("POST", SESSIONS, locationOut(location), sessionIn),
       /**
        * The record arrives and the fold happens here. So the Cursor is not
        * read off the wire either — this fold ends where the far side's ended,
@@ -407,9 +421,9 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
        * connection that drops meanwhile costs a repaint and not the Run: the
        * far side goes on, and a Cursor is how a page catches up.
        */
-      submit: (session, input) => write("POST", sessionPath(session), input),
-      cancel: (session, cause) => write("POST", cancelPath(session), cause),
-      answer: (request, given) => write("PUT", answerPath(request), given),
+      submit: (session, input) => write("POST", sessionPath(session), submitInputOut(input)),
+      cancel: (session, cause) => write("POST", cancelPath(session), cancelCauseOut(cause)),
+      answer: (request, given) => write("PUT", answerPath(request), answerOut(given)),
     }
 
     /**
@@ -418,7 +432,7 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
      * the key is what makes asking again after a lost answer safe.
      */
     const command: Running = (session, line) =>
-      writing("POST", commandPath(session), { line }, ranIn)
+      writing("POST", commandPath(session), lineOut(line), ranIn)
 
     return { api, health, command }
   })

@@ -416,7 +416,7 @@ describe("the route table", () => {
 
   // The other half, and the same rule: a method and a path this does not
   // carry is a miss, whatever body arrived with it.
-  it("carries the six calls that write, and nothing else", () => {
+  it("carries the seven calls that write, and nothing else", () => {
     expect(routeFor("POST", SESSIONS, {})).toBeTypeOf("function")
     expect(routeFor("POST", sessionPath("ses_1"), { kind: "prompt", text: "ask" })).toBeTypeOf(
       "function",
@@ -425,10 +425,14 @@ describe("the route table", () => {
     expect(routeFor("POST", commandPath("ses_1"), { line: "/mode" })).toBeTypeOf("function")
     expect(routeFor("PUT", modelPath("ses_1"), MODEL)).toBeTypeOf("function")
     expect(routeFor("PUT", answerPath("call_1"), { kind: "cancelled" })).toBeTypeOf("function")
+    // The one write with no body. What it acts on is the path, so it is
+    // carried whether a body arrived with it or not.
+    expect(routeFor("DELETE", sessionPath("ses_1"), undefined)).toBeTypeOf("function")
 
     expect(routeFor("POST", modelPath("ses_1"), MODEL)).toBeUndefined()
     expect(routeFor("PUT", sessionPath("ses_1"), {})).toBeUndefined()
-    expect(routeFor("DELETE", sessionPath("ses_1"), undefined)).toBeUndefined()
+    expect(routeFor("DELETE", SESSIONS, undefined)).toBeUndefined()
+    expect(routeFor("DELETE", cancelPath("ses_1"), undefined)).toBeUndefined()
     expect(watchFor("POST", watchPath("ses_1"), undefined)).toBeUndefined()
   })
 
@@ -605,6 +609,24 @@ describe("the write half, over a socket", () => {
 
     expect(response.status).toBe(200)
     expect(memory.calls).toEqual([{ method: "cancel", args: [memory.session, "budget"] }])
+
+    await served.close()
+  })
+
+  /**
+   * The one write that names a Session and carries nothing. What it acts on
+   * is the path, so the listing behind the wire drops the Session and the
+   * body says nothing either way.
+   */
+  it("puts a Session away, and the listing behind the wire leaves it out", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const response = await wrote(served.origin, "DELETE", sessionPath(memory.session), null)
+
+    expect(response.status).toBe(200)
+    expect(memory.calls[0]).toEqual({ method: "retire", args: [memory.session] })
+    expect(await (await fetch(`${served.origin}${SESSIONS}`)).json()).toEqual([])
 
     await served.close()
   })
