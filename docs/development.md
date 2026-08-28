@@ -267,14 +267,15 @@ Factory and surface stages both belong here, and this table is the only place
 in `docs/` that says done — every other document describes the work, and none
 of them tracks it.
 
-| Stage                      | State | What is left |
-| -------------------------- | ----- | ------------ |
-| 0 — Wire                   | done  | nothing      |
-| 1 — Workflow               | done  | nothing      |
-| C0 — Console               | done  | nothing      |
-| W0 — Client runtime        | done  | nothing      |
-| W1 — The wire and the page | done  | nothing      |
-| 2 — Tools and the loop     | done  | nothing      |
+| Stage                      | State   | What is left                                                                                                  |
+| -------------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| 0 — Wire                   | done    | nothing                                                                                                       |
+| 1 — Workflow               | done    | nothing                                                                                                       |
+| C0 — Console               | done    | nothing                                                                                                       |
+| W0 — Client runtime        | done    | nothing                                                                                                       |
+| W1 — The wire and the page | done    | nothing                                                                                                       |
+| 2 — Tools and the loop     | done    | nothing                                                                                                       |
+| W2 — The page that prompts | started | everything: create on the wire, the shared composer fold, the composer, two doors in one process, conformance |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
