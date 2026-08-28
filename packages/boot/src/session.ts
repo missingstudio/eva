@@ -355,7 +355,7 @@ export const makeSessionAPI = (
       // The directory is what a harness will take as its `cwd`. A native
       // harness answers inside this Session rather than opening one of its
       // own, so nothing reads it yet and the Session is opened here.
-      create: Effect.fn("session.create")(function* (_location: string) {
+      create: Effect.fn("session.create")(function* (_location?: string) {
         const store = yield* kernel.slot.sessionStore.peek
         const made = store === undefined ? newSessionID() : (yield* store.create).id
         yield* of(made)

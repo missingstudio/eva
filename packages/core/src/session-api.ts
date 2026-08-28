@@ -51,7 +51,12 @@ export type RequestID = string
  * `watch` while a Run is open, `attach` for everything committed.
  */
 export interface SessionAPI {
-  readonly create: (location: string) => Effect.Effect<SessionID>
+  /**
+   * Opens a Session in the directory a harness will take as its `cwd`. A
+   * caller that names none is answered in the directory the process is in,
+   * because a browser holds no honest path.
+   */
+  readonly create: (location?: string) => Effect.Effect<SessionID>
   readonly list: Effect.Effect<readonly SessionHeader[]>
   readonly attach: (session: SessionID) => Effect.Effect<Transcript, never, Scope.Scope>
   /**

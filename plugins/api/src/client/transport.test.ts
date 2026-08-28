@@ -46,12 +46,13 @@ const CATALOG: CatalogState = {
 // asked for here, so what would fall past it never comes up.
 const standing = async (
   memory: MemorySession,
+  directory?: () => string,
   commands?: Effect.Effect<readonly CommandInfo[]>,
   catalog?: CatalogState,
 ) => {
   const wire = apiWire(
     memory.api,
-    undefined,
+    directory,
     commands,
     catalog === undefined ? undefined : Effect.succeed(catalog),
   )
@@ -161,6 +162,24 @@ describe("the wire, read as a Transport", () => {
 
     expect(found.listed).toContain(found.made)
     expect(memory.calls).toContainEqual({ method: "create", args: ["/there"] })
+
+    await served.close()
+  })
+
+  // A browser holds no honest path, so the page names none and the serving
+  // process answers in the directory it is in.
+  it("opens a Session where the process is when the caller names no directory", async () => {
+    const memory = await held()
+    const served = await standing(memory, () => "/pinned")
+
+    const made = await Effect.runPromise(
+      Effect.flatMap(httpTransport({ origin: served.origin }), (transport) =>
+        transport.api.create(),
+      ),
+    )
+
+    expect(made).toBeTypeOf("string")
+    expect(memory.calls).toContainEqual({ method: "create", args: ["/pinned"] })
 
     await served.close()
   })
@@ -601,7 +620,7 @@ describe("a command, read as a Transport", () => {
   it("runs a line where the rows are, and hands back what it wrote", async () => {
     const memory = await held()
     const state = { mode: "default" }
-    const served = await standing(memory, Effect.succeed(rowsOf(state)))
+    const served = await standing(memory, undefined, Effect.succeed(rowsOf(state)))
 
     const answered = await Effect.runPromise(
       Effect.flatMap(httpTransport({ origin: served.origin, gap: 1 }), (transport) =>
@@ -625,6 +644,7 @@ describe("a command, read as a Transport", () => {
     let ran = 0
     const served = await standing(
       memory,
+      undefined,
       Effect.succeed([
         {
           id: "undo",
@@ -707,7 +727,7 @@ describe("what the wire carries", () => {
 describe("the models, read beside the Transport", () => {
   it("reads every model the Catalog behind the wire knows", async () => {
     const memory = await held()
-    const served = await standing(memory, undefined, CATALOG)
+    const served = await standing(memory, undefined, undefined, CATALOG)
 
     const rows = await Effect.runPromise(readModels({ origin: served.origin }))
 

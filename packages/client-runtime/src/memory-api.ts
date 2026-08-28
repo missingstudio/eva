@@ -185,7 +185,7 @@ export const memorySessionAPI = (
     }
 
     const api: SessionAPI = {
-      create: (location: string) =>
+      create: (location?: string) =>
         Effect.gen(function* () {
           took("create", location)
           const made = newSessionID()
