@@ -1,5 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
-import type { ResumeTooFarBehind, SessionAPI } from "@missingstudio/eva-core"
+import {
+  formatModelRef,
+  type ModelRef,
+  type ResumeTooFarBehind,
+  type SessionAPI,
+} from "@missingstudio/eva-core"
 import { encodePayloadLine, sessionID, type SessionID } from "@missingstudio/eva-schema"
 import { dispatch, modelRows, type CatalogState, type CommandInfo } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Stream } from "effect"
@@ -157,6 +162,56 @@ const NOTHING: Effect.Effect<CatalogState> = Effect.succeed({
 })
 
 /**
+ * Whether the Catalog holds this model. A Catalog with nothing in it is a
+ * build that loaded no Provider: it knows of no model, so it can call none of
+ * them wrong — which is the reading `NOTHING` already takes for the read half,
+ * where a listing of none is the truth and never a miss.
+ */
+const holds = (state: CatalogState, model: ModelRef): boolean =>
+  state.models.size === 0 || state.models.get(model.provider)?.get(model.model) !== undefined
+
+/**
+ * A model this build cannot run. The body is readable and the wire refuses it
+ * all the same: a remote door picks from the rows `GET /api/models` answered,
+ * so a reference off that list is a page and a Catalog that disagree, and a
+ * Session left at a model nothing can serve fails at the next Run instead of
+ * here.
+ *
+ * It is this route's refusal and not the contract's. At the terminal an
+ * unlisted reference still runs — a Provider answers anything in its
+ * namespace — and `/model` reaches the Domains where the Run is, through the
+ * command route and never through this one.
+ */
+const unheld = (model: ModelRef): Answer => ({
+  status: 400,
+  body: { error: `the Catalog does not hold ${formatModelRef(model)}` },
+})
+
+/**
+ * What the process serving this wire is, as against what a request carries.
+ * All three are facts of that process and of no request — where it is, which
+ * command rows it loaded, what its Catalog holds — so they arrive beside the
+ * request rather than being read from inside a route, and they travel as one
+ * thing because they never travel apart.
+ *
+ * `commands` and `catalog` are Effects rather than values because both are
+ * read at the moment a request asks for them: a plugin that registers a row
+ * after the wire was built is still a row this wire carries.
+ */
+export interface WireOptions {
+  /**
+   * Where a Session goes when the caller named nowhere. A page holds no honest
+   * path, so the default is the directory the serving process is in — read at
+   * the moment of the call, and handed in rather than reached for, so a suite
+   * can pin it as it pins a bind.
+   */
+  readonly directory?: () => string
+  readonly commands?: Effect.Effect<readonly CommandInfo[]>
+  // The one read on this wire that is not a Session API call at all.
+  readonly catalog?: Effect.Effect<CatalogState>
+}
+
+/**
  * Both halves `eva.api` carries as a body. `watch` is in neither: it answers
  * a stream rather than a body, so it has a table of its own that is matched
  * first.
@@ -166,24 +221,20 @@ const NOTHING: Effect.Effect<CatalogState> = Effect.succeed({
  * and this table is still a pure function — the socket reads the bytes and
  * this decides what they mean.
  *
- * `directory` is the fourth for the same reason: where the serving process is
- * is a fact of that process and not of the request, so it arrives beside the
- * request rather than being read from inside a route.
- *
- * `commands` is the fifth, and it is an Effect rather than a list because the
- * rows are read at the moment a line runs: a plugin that registers a command
- * after the wire was built is still a command this wire carries. `catalog` is
- * the sixth, read the same way and for the same reason, and it is the one read
- * here that is not a Session API call at all.
+ * The serving process arrives as the fourth, whole. A wire that took its
+ * three facts as three trailing arguments made every call site name the ones
+ * it did not care about.
  */
 export const routeFor = (
   method: string,
   path: string,
   body?: unknown,
-  directory: () => string = HERE,
-  commands: Effect.Effect<readonly CommandInfo[]> = NO_COMMANDS,
-  catalog: Effect.Effect<CatalogState> = NOTHING,
+  serving: WireOptions = {},
 ): Route | undefined => {
+  const directory = serving.directory ?? HERE
+  const commands = serving.commands ?? NO_COMMANDS
+  const catalog = serving.catalog ?? NOTHING
+
   if (method === "GET") {
     if (path === SESSIONS) {
       return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: rows }))
@@ -284,7 +335,12 @@ export const routeFor = (
       const model = modelIn(body)
       if (model === undefined) return refusing
       const asked = sessionID(session)
-      return (api) => Effect.as(api.model.set(asked, model), DONE)
+      return (api) =>
+        Effect.flatMap(catalog, (state) =>
+          holds(state, model)
+            ? Effect.as(api.model.set(asked, model), DONE)
+            : Effect.succeed(unheld(model)),
+        )
     }
 
     // A `RequestID` is not a `SessionID`, so this is the one write that sits
@@ -476,9 +532,10 @@ interface Once {
  * filler that is — the kernel's, or one a suite stands up — is not a fact
  * this wire holds: it calls the Session API as any other caller does.
  *
- * `directory` is where a Session goes when the caller named nowhere, and it
- * is the serving process's own by default. A caller may hand over another,
- * as the composition root hands `eva.web` a bind and a writer.
+ * `serving` is what the process behind this wire is. `directory` is where a
+ * Session goes when the caller named nowhere, and it is that process's own by
+ * default; a caller may hand over another, as the composition root hands
+ * `eva.web` a bind and a writer.
  *
  * `commands` is the rows a line resolves through. They are this process's,
  * which is the whole of why a command crosses the wire at all: a door that
@@ -489,12 +546,7 @@ interface Once {
  * for the same reason: a wire may not import the plugin that fills the
  * Catalog, and a plugin reads every Domain from the context it loads with.
  */
-export const apiWire = (
-  api: SessionAPI,
-  directory?: () => string,
-  commands?: Effect.Effect<readonly CommandInfo[]>,
-  catalog?: Effect.Effect<CatalogState>,
-): Answering => {
+export const apiWire = (api: SessionAPI, serving: WireOptions = {}): Answering => {
   /**
    * The write each path is answering, under the key its caller named. A write
    * has no error channel, so a caller that could not reach this side waits
@@ -543,7 +595,7 @@ export const apiWire = (
     const read = method === "GET" ? Effect.succeed(undefined) : bodyOf(request)
     Effect.runFork(
       Effect.flatMap(read, (body) => {
-        const route = routeFor(method, asked, body, directory, commands, catalog)
+        const route = routeFor(method, asked, body, serving)
         const answered =
           route === undefined
             ? Effect.succeed(MISS)

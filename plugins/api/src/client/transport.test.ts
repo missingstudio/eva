@@ -23,7 +23,7 @@ import {
 import { modelRows, type CatalogState, type CommandInfo } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Stream, SubscriptionRef } from "effect"
 import { describe, expect, it } from "vitest"
-import { apiWire } from "../routes.js"
+import { apiWire, type WireOptions } from "../routes.js"
 import { commandPath, CURSOR, frameOut, modelPath, MODELS, sessionPath, SESSIONS } from "../wire.js"
 import { httpTransport, readModels, type Request } from "./transport.js"
 
@@ -44,18 +44,8 @@ const CATALOG: CatalogState = {
 
 // The wire on a port, and nothing else on it. Only the wire's own paths are
 // asked for here, so what would fall past it never comes up.
-const standing = async (
-  memory: MemorySession,
-  directory?: () => string,
-  commands?: Effect.Effect<readonly CommandInfo[]>,
-  catalog?: CatalogState,
-) => {
-  const wire = apiWire(
-    memory.api,
-    directory,
-    commands,
-    catalog === undefined ? undefined : Effect.succeed(catalog),
-  )
+const standing = async (memory: MemorySession, serving: WireOptions = {}) => {
+  const wire = apiWire(memory.api, serving)
   const server = createServer((request, response) => void wire(request, response))
 
   await new Promise<void>((settle) => void server.listen(0, "127.0.0.1", () => settle()))
@@ -170,7 +160,7 @@ describe("the wire, read as a Transport", () => {
   // process answers in the directory it is in.
   it("opens a Session where the process is when the caller names no directory", async () => {
     const memory = await held()
-    const served = await standing(memory, () => "/pinned")
+    const served = await standing(memory, { directory: () => "/pinned" })
 
     const made = await Effect.runPromise(
       Effect.flatMap(httpTransport({ origin: served.origin }), (transport) =>
@@ -620,7 +610,7 @@ describe("a command, read as a Transport", () => {
   it("runs a line where the rows are, and hands back what it wrote", async () => {
     const memory = await held()
     const state = { mode: "default" }
-    const served = await standing(memory, undefined, Effect.succeed(rowsOf(state)))
+    const served = await standing(memory, { commands: Effect.succeed(rowsOf(state)) })
 
     const answered = await Effect.runPromise(
       Effect.flatMap(httpTransport({ origin: served.origin, gap: 1 }), (transport) =>
@@ -642,10 +632,8 @@ describe("a command, read as a Transport", () => {
   it("asks again for a line the pipe lost, and runs it once", async () => {
     const memory = await held()
     let ran = 0
-    const served = await standing(
-      memory,
-      undefined,
-      Effect.succeed([
+    const served = await standing(memory, {
+      commands: Effect.succeed<readonly CommandInfo[]>([
         {
           id: "undo",
           description: "reverses the last write",
@@ -656,7 +644,7 @@ describe("a command, read as a Transport", () => {
             }),
         },
       ]),
-    )
+    })
 
     let asked = 0
     const request = (async (...given: Parameters<Request>) => {
@@ -727,7 +715,7 @@ describe("what the wire carries", () => {
 describe("the models, read beside the Transport", () => {
   it("reads every model the Catalog behind the wire knows", async () => {
     const memory = await held()
-    const served = await standing(memory, undefined, undefined, CATALOG)
+    const served = await standing(memory, { catalog: Effect.succeed(CATALOG) })
 
     const rows = await Effect.runPromise(readModels({ origin: served.origin }))
 

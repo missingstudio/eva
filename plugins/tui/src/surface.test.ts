@@ -7,12 +7,12 @@ import {
   type Method,
 } from "@missingstudio/eva-client-runtime"
 import { sessionID, type Payload, type SessionID } from "@missingstudio/eva-schema"
-import type { CommandInfo, Frontend, KeymapInfo, PickRow } from "@missingstudio/eva-sdk"
+import type { CommandInfo, Frontend, KeymapInfo, PickRow, Running } from "@missingstudio/eva-sdk"
 import type { Frame, KeyPress, Renderer, ThemeColors } from "@missingstudio/eva-tui-core"
 import { Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 import { ARMED, ASKING, DISCONNECTED, SYNCHRONIZING } from "./console.js"
-import { makeSurface, TICK, type Running } from "./surface.js"
+import { makeSurface, TICK } from "./surface.js"
 
 // What a Run closes with. The surface reads the Claim off it; the record
 // keeps it.

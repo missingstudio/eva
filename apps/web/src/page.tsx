@@ -1,7 +1,7 @@
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { Button } from "@missingstudio/ui/components/button"
 import { buildLine } from "./build.js"
-import { opening } from "./composing.js"
+import { opening } from "./sessions.js"
 import { sessionHref } from "./paths.js"
 import { useSessions } from "./sessions.js"
 import { titleLine } from "./title.js"

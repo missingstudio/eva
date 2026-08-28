@@ -50,6 +50,12 @@ export const makeApi = (options: ApiOptions): Plugin =>
     // The context is read on load and closed over, so both reads stay late.
     effect: (ctx) =>
       Effect.sync(() =>
-        options.serve((api) => apiWire(api, options.directory, ctx.command.get, ctx.catalog.get)),
+        options.serve((api) =>
+          apiWire(api, {
+            ...(options.directory === undefined ? {} : { directory: options.directory }),
+            commands: ctx.command.get,
+            catalog: ctx.catalog.get,
+          }),
+        ),
       ),
   })

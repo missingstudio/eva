@@ -2,6 +2,7 @@ import type { SessionHeader } from "@missingstudio/eva-core"
 import { Effect } from "effect"
 import { useEffect, useState } from "react"
 import { client } from "./eva.js"
+import { sessionHref } from "./paths.js"
 
 /**
  * What the page has: the Sessions Eva holds, or not yet. There is no third
@@ -29,3 +30,18 @@ export const useSessions = (): Listing => {
 
   return listing
 }
+
+/**
+ * Open a Session, then go and read it. A plain load, because the rows on the
+ * listing are plain anchors for the same reason: `eva.web` answers a path
+ * with no extension with the page, so the route is resolved on the load.
+ *
+ * The call names no directory. A browser holds no honest path, so the
+ * Session opens where the process answering the call is.
+ */
+export const opening = (): void =>
+  void client()
+    .then((one) => Effect.runPromise(one.api.create()))
+    .then((made) => {
+      window.location.assign(sessionHref(made))
+    })

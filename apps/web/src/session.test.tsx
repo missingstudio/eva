@@ -12,7 +12,7 @@ import {
 import { blocksOf } from "@missingstudio/eva-session-view"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
-import type { Composing } from "./composer.js"
+import type { Composing } from "./composing.js"
 import { Listing, Page } from "./page.js"
 import {
   Cost,
@@ -351,14 +351,22 @@ describe("what the page offers", () => {
       .map((said) => said.slice("export const ".length))
       .sort()
 
-  const page = (composer?: Composing) =>
+  /**
+   * The Session page, composed the way `routes.tsx` composes it: every prop
+   * that route hands over and no prop it does not. A page drawn without one
+   * of them is a page this build never renders, and a guard on it guards
+   * nothing.
+   */
+  const page = (composer: Composing) =>
     renderToStaticMarkup(
       <Session
+        answer={() => undefined}
+        asking={[]}
+        composer={composer}
         header={HEADER}
         pipe={READY}
         reading={reading()}
         session={SESSION}
-        {...(composer === undefined ? {} : { composer })}
       />,
     )
 
@@ -392,15 +400,27 @@ describe("what the page offers", () => {
     expect(doors()).toEqual(["client", "command", "models"])
   })
 
-  // The composer is the field, and it is the only one. A page with two ways
-  // to type a line is a page with two answers to what Enter means.
+  /**
+   * The composer is the field, and it is the only one. A page with two ways
+   * to type a line is a page with two answers to what Enter means — which is
+   * why a line naming a command runs through this field and not a second one.
+   *
+   * The `<select>` this clause used to forbid is the model picker, and it is
+   * on this page: the picker was absent from the drawing only because nothing
+   * had answered its rows. A model is picked and never typed, which is the
+   * refusal ticket 005 asks for, and `models.test.tsx` › "offers no field to
+   * type a model into" holds the control to it. So what is counted here is
+   * fields, and a picker is not one.
+   */
   it("offers one field, and it is the composer", () => {
     const drawn = page(COMPOSING)
 
     expect(drawn.match(/<textarea/g)).toHaveLength(1)
     expect(drawn).not.toContain("<input")
-    expect(drawn).not.toContain("<select")
     expect(drawn).toContain("Send")
+    // The picker, mounted beside it. It says it is reading until the wire has
+    // answered, and draws its `<select>` from the rows that answer.
+    expect(drawn).toContain("Reading the models…")
   })
 
   /**

@@ -1,26 +1,126 @@
+import { idle, type LoopState, type LoopStep } from "@missingstudio/eva-client-runtime"
+import { optionFor } from "@missingstudio/eva-core"
+import type { SessionID } from "@missingstudio/eva-schema"
+import type { Asking } from "@missingstudio/eva-session-view"
 import { Button } from "@missingstudio/ui/components/button"
 import { Textarea } from "@missingstudio/ui/components/textarea"
-import { useState } from "react"
+import { Effect } from "effect"
+import { useRef, useState } from "react"
+import { Wrote } from "./command.js"
+import { walk, type Composing } from "./composing.js"
+import { client, command } from "./eva.js"
+import { sessionHref } from "./paths.js"
 import type { Pipe } from "./session.js"
 
 /**
- * What the page can do with a line, and what it is holding while it does. The
- * composer is handed this rather than reaching for the Client, so what it
- * offers is provable without a socket — and one drawn with nowhere to send a
- * line says so rather than looking live, which is the rule the permission
- * card already keeps.
+ * The composer: what a line typed here does, and how it is drawn. The rules a
+ * line is read by are `composing.ts`'s and the fold's behind it; what is here
+ * is the doing — the calls each of the fold's actions turns into, all of them
+ * through the one Client.
  */
-export interface Composing {
-  // The lines typed while a Run was open, oldest first. They wait their turn
-  // rather than racing it.
-  readonly pending: readonly string[]
-  // Whether a Run this page opened is still open.
-  readonly open: boolean
-  readonly send: (line: string) => void
-  // The same line, meant as a steer: it rides the Run that is open rather
-  // than waiting behind it.
-  readonly steer: (line: string) => void
-  readonly stop: () => void
+
+/**
+ * A Prompt, and the Run it opened. `submit` answers when that Run has closed
+ * — the contract every filler of the Session API keeps — so it is also what
+ * says the queue may move, and the page needs no fiber of its own to hear it.
+ */
+const prompted = (session: SessionID, line: string): Promise<void> =>
+  client().then((one) => Effect.runPromise(one.api.submit(session, { kind: "prompt", text: line })))
+
+/**
+ * A steer, which rides the Run that is open. `submit` for a steer answers at
+ * once rather than when a Run closed, so nothing waits on it and no Run
+ * number is taken. The Run says the line back as a `message`, which the fold
+ * already draws as the human-authored message it is.
+ */
+const steered = (session: SessionID, line: string): void =>
+  void client().then((one) =>
+    Effect.runPromise(one.api.submit(session, { kind: "steer", text: line, target: "next-step" })),
+  )
+
+const stopped = (session: SessionID): void =>
+  void client().then((one) => Effect.runPromise(one.api.cancel(session, "user")))
+
+/**
+ * A line, run where the Domains are. A command reaches Domains rather than a
+ * Session, so it goes over the transport beside the Client and never through
+ * it — and it runs on the far side because a page that ran `/mode` for itself
+ * would move the approval state of the process nobody is talking to.
+ *
+ * What it wrote is said back to the composer, which is where a reader is
+ * looking. A command that opened a Session is followed there, the way the
+ * terminal follows the `select` a local dispatch gives it: a `/clear` the page
+ * stayed put for would read as a command that did nothing.
+ */
+const ran = (session: SessionID, line: string, said: (wrote: string) => void): void =>
+  void command().then((over) =>
+    Effect.runPromise(over(session, line)).then((answer) => {
+      said(answer.wrote)
+      if (answer.selected !== undefined) window.location.assign(sessionHref(answer.selected))
+    }),
+  )
+
+/**
+ * The line, as an answer to the question that stands. The four options are
+ * words a person can type, so the line is read for one first and a line that
+ * names none goes as the text it is — which is how the terminal reads a line
+ * typed at a standing question, and the gate reads both back the same way.
+ */
+const replied = (request: string, line: string): void => {
+  const option = optionFor(line)
+  void client().then((one) =>
+    Effect.runPromise(
+      one.api.answer(
+        request,
+        option === undefined
+          ? { kind: "text", text: line }
+          : { kind: "permission", optionId: option },
+      ),
+    ),
+  )
+}
+
+/**
+ * The composer's half of one Session: what waits, what is open, and the
+ * gestures. The loop is held in a ref because it is what the page is doing
+ * and not what it is drawing; what is drawn is the state each walk left.
+ */
+export const useComposer = (session: SessionID, asking: readonly Asking[] = []): Composing => {
+  const held = useRef<LoopState>(idle)
+  const [shown, setShown] = useState<LoopState>(idle)
+  /**
+   * What the last command wrote. A command answers in words and the words
+   * arrive nowhere else — it is the one write on this page whose outcome is
+   * not on the record — so it is held here until the next line replaces it.
+   */
+  const [wrote, setWrote] = useState<string>()
+
+  // The question a typed line answers is the first one standing, which is the
+  // one the terminal answers too.
+  const standing = asking[0]?.request
+
+  const drive = (step: LoopStep): void => {
+    held.current = walk(held.current, step, {
+      open: (run, line) =>
+        void prompted(session, line).finally(() => drive({ kind: "settled", run })),
+      steer: (line) => steered(session, line),
+      cancel: () => stopped(session),
+      answer: (line) => {
+        if (standing !== undefined) replied(standing, line)
+      },
+      run: (line) => ran(session, line, setWrote),
+    })
+    setShown(held.current)
+  }
+
+  return {
+    pending: shown.pending,
+    open: shown.open !== undefined,
+    ...(wrote === undefined ? {} : { wrote }),
+    send: (line) => drive({ kind: "line", line, asking: standing !== undefined }),
+    steer: (line) => drive({ kind: "line", line, asking: standing !== undefined, steer: true }),
+    stop: () => drive({ kind: "cancel" }),
+  }
 }
 
 /**
@@ -45,6 +145,9 @@ export const refusalOf = (pipe: Pipe): string | undefined =>
 
 /**
  * What to say next: the line, how to send it, and how to stop what is open.
+ * One field, because one line means one thing — a line that names a command
+ * runs it where the Domains are and answers in words, and any other line is a
+ * Prompt.
  *
  * `running` is what the record says — a Run any door opened is streaming into
  * this page — and `Composing.open` is what this page opened itself. Either is
@@ -92,6 +195,9 @@ export const Composer = ({
 
   return (
     <section aria-label="what to say next" className="mt-8 border-graphite border-t pt-4">
+      {/* Above the field, where the tail of an open Run is: it is the last
+          thing the program said, and the field is for the next thing. */}
+      <Wrote {...(composer?.wrote === undefined ? {} : { text: composer.wrote })} />
       <Textarea
         aria-label="a line for Eva"
         disabled={off}

@@ -1,3 +1,4 @@
+import type { SessionID } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
 import type { CommandContext, CommandInfo } from "./domains.js"
 import { nearest } from "./suggest.js"
@@ -33,6 +34,32 @@ const parseCommand = (line: string): Parsed | undefined => {
  * from the one module that holds it, so the two doors cannot drift.
  */
 export const namesCommand = (line: string): boolean => parseCommand(line) !== undefined
+
+/**
+ * What running a line came to, for a door that ran it somewhere else.
+ *
+ * `write` is a capability a surface supplies, so a line that ran in another
+ * process answers with everything it wrote as one block — which is also the
+ * answer a command gives a door that can draw no panel. `selected` is the
+ * Session a command opened, when it opened one: a `/clear` that said nothing
+ * would otherwise read as a command that did nothing.
+ *
+ * It lives here, beside `dispatch`, because both ends of that hop read it:
+ * the wire that collects the writing and the door that draws it. Two copies
+ * would be two agreements, and two names for it would read as two things.
+ */
+export interface Ran {
+  readonly wrote: string
+  readonly selected?: SessionID
+}
+
+/**
+ * A line, run where the Domains are. It is what a door holds instead of a
+ * command registry when the registry is in another process: a `/mode`
+ * dispatched locally would move the approval state of the process nobody is
+ * talking to.
+ */
+export type Running = (session: SessionID, line: string) => Effect.Effect<Ran>
 
 const resolveCommand = (rows: readonly CommandInfo[], name: string): CommandInfo | undefined =>
   rows.find((row) => row.id === name || (row.aliases ?? []).includes(name))
