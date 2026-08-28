@@ -266,7 +266,7 @@ describe("a permission answered through each door", () => {
 
           const calls = calling(kernel, {
             approving: overSurface(kernel, {
-              frontend: Effect.succeed(waiting(TERMINAL)),
+              frontends: Effect.succeed([waiting(TERMINAL)]),
               // The request is open from the call and not from when its fiber
               // runs, so an answer cannot arrive before there is something to
               // answer. This is what says it is open.

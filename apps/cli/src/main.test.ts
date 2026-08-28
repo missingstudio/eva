@@ -801,3 +801,91 @@ describe("a bind that needs a token", () => {
     expect(found.err).toContain("no eva.web surface is registered")
   })
 })
+
+/**
+ * One process, both rows. `eva --web` holds the terminal and the page at once,
+ * which is what lets a request asked in the terminal be answered in the
+ * browser — the two are not two processes with a Session each.
+ */
+describe("eva --web", () => {
+  /**
+   * The terminal's id, answered by a row that looks and then ends. The
+   * interactive row is what the run waits on, so this is where the page can be
+   * caught while the terminal still holds the process.
+   */
+  const terminalThatLooks = (look: () => Promise<void>) =>
+    define({
+      id: "eva.tui",
+      effect: Effect.fn("eva.tui")(function* (ctx) {
+        yield* ctx.surface.transform((draft) => {
+          draft.set({
+            id: "eva.tui",
+            interactive: true,
+            streaming: true,
+            images: false,
+            start: () =>
+              Effect.succeed({
+                id: "eva.tui",
+                ask: () => Effect.succeed({ kind: "cancelled" as const }),
+                done: Effect.promise(look),
+              }),
+          })
+        })
+      }),
+    })
+
+  it("binds the page beside the terminal, says where it is, and lets it go", async () => {
+    const port = await freePort()
+    const directory = scratch()
+    write(directory, "user.yaml", contained(directory))
+    const held: boolean[] = []
+
+    const found = await ran(
+      ["--web", "--port", String(port)],
+      directory,
+      {},
+      {
+        build: buildOf([
+          ...BUILT_IN.filter((plugin) => plugin.id !== "eva.tui"),
+          ...OPTIONAL,
+          terminalThatLooks(async () => void held.push(await listening(port))),
+        ]),
+      },
+    )
+
+    expect(found.code).toBe(0)
+    // The page says where it bound, on the stream the run writes to. The raw
+    // `eva.web` entry has no writer at all, so this is also what says the
+    // build was rebuilt the way `eva serve --web` rebuilds it.
+    expect(found.out).toContain(`http://127.0.0.1:${port}`)
+    // Bound while the terminal row still held the process, and gone with it.
+    expect(held).toEqual([true])
+    expect(await listening(port)).toBe(false)
+  })
+
+  // The flag names a surface this build has not, and is told what the verb
+  // that names it is told. Nothing is started: the terminal is refused too.
+  it("refuses on a build with no page, and names the surfaces it does have", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", contained(directory))
+
+    const found = await ran(["--web", "--without-plugin", "eva.web"], directory)
+
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("no eva.web surface is registered")
+    expect(found.err).toContain("eva.tui")
+  })
+
+  // The same refusal `eva serve --web` gets, from the same rule, before
+  // anything boots — so the flag cannot open the door the verb cannot.
+  it("refuses a non-local bind, and opens no port", async () => {
+    const port = await freePort()
+
+    const found = await ran(["--web", "--host", "0.0.0.0", "--port", String(port)], scratch())
+
+    expect(found.code).toBe(1)
+    expect(found.err).toContain("a non-local bind needs a token")
+    expect(found.out).toBe("")
+    expect(await listening(port)).toBe(false)
+  })
+})

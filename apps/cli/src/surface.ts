@@ -33,13 +33,14 @@ import type { Started } from "./run.js"
  * into the person's own home directory from a suite that had been handed a
  * scratch directory for exactly that reason.
  *
- * The surface is read through the cell rather than captured, because it is
- * started after the API is built and may be stopped and started again.
+ * The surfaces are read through the cell rather than captured, because they
+ * start after the API is built and may be stopped and started again — and
+ * because a run that named a second door holds two of them at once.
  */
 export const gateFor =
-  (kernel: Kernel, surface: () => Frontend | undefined, env: NodeJS.ProcessEnv): Gate =>
+  (kernel: Kernel, surfaces: () => readonly Frontend[], env: NodeJS.ProcessEnv): Gate =>
   (request) =>
-    remembering(overSurface(kernel, { frontend: Effect.sync(surface), request }), env)
+    remembering(overSurface(kernel, { frontends: Effect.sync(surfaces), request }), env)
 
 // The first row that is interactive and knows how to start. Registration
 // order decides, so a config that loads its own surface last wins.
@@ -50,66 +51,105 @@ export const pickSurface = (rows: readonly SurfaceInfo[]): SurfaceInfo | undefin
  * The Client this run drives Eva through: the Session API over this kernel,
  * behind the local transport, under the gate.
  *
- * A door with no Surface hands over nothing, and an `ask` is then a denial
- * that says nobody is there — which is the same sentence a Surface that takes
- * no input gets, from the same gate, rather than a second denial worded
+ * A door with no Surface hands over an empty set, and an `ask` is then a
+ * denial that says nobody is there — which is the same sentence a Surface that
+ * takes no input gets, from the same gate, rather than a second denial worded
  * somewhere else.
  */
 export const openClient = Effect.fn("cli.openClient")(function* (
   started: Started,
   scope: Scope.Scope,
-  surface: () => Frontend | undefined = () => undefined,
+  surfaces: () => readonly Frontend[] = () => [],
 ) {
   const api = yield* makeSessionAPI(started.kernel, started.model, scope, {
-    gate: gateFor(started.kernel, surface, started.env),
+    gate: gateFor(started.kernel, surfaces, started.env),
     ...(started.harness === undefined ? {} : { harness: started.harness }),
   })
   return yield* makeClient(yield* localTransport(api.session))
 })
 
+// A row this build can run: the row itself, with the factory proven present.
+export type Startable = SurfaceInfo & { readonly start: NonNullable<SurfaceInfo["start"]> }
+
 /**
- * Runs one Surface until it stops. The Surface owns the loop; this hands it
- * the client runtime and waits.
+ * Runs the Surfaces a door named, until the one that holds the person stops.
+ * A Surface owns its own loop; this hands each of them the client runtime and
+ * waits on the first.
  *
- * Which row is chosen is the door's own rule — the terminal takes the first
- * interactive one, `eva serve` names `eva.web` by id — and what happens after
- * the choice is the same for both.
+ * Which rows are chosen is the door's own rule — the terminal takes the first
+ * interactive one, `eva serve` names `eva.web` by id, `eva --web` takes the
+ * terminal and the page — and what happens after the choice is the same for
+ * all of them.
+ *
+ * One Client, one scope, one wait. Every row starts against the same Client,
+ * so two rows watch one Session rather than one each; the run ends when the
+ * row that holds the person ends, because a page holds nobody to end it; and
+ * the scope is what lets the rows beside it go.
  */
 export const runSurface = Effect.fn("cli.runSurface")(function* (
   started: Started,
-  chosen: SurfaceInfo & { readonly start: NonNullable<SurfaceInfo["start"]> },
+  chosen: Startable,
+  beside: readonly Startable[] = [],
 ) {
   const scope = yield* Scope.make()
-  // Filled the moment the surface starts, which is after the API it answers
-  // through is built. Until then an ask has nobody to reach, which is a denial.
-  let surface: Frontend | undefined
-  const client = yield* openClient(started, scope, () => surface)
+  // Filled as each surface starts, which is after the API they answer through
+  // is built. Until then an ask has nobody to reach, which is a denial.
+  const live: Frontend[] = []
+  const client = yield* openClient(started, scope, () => live)
   const frontend = yield* Effect.provideService(chosen.start(client), Scope.Scope, scope)
-  surface = frontend
+  live.push(frontend)
+  for (const row of beside) {
+    live.push(yield* Effect.provideService(row.start(client), Scope.Scope, scope))
+  }
   yield* Effect.ensuring(frontend.done, Scope.close(scope, Exit.void))
   return chosen.id
 })
 
 /**
- * Runs the surface this door names, whichever door named it.
+ * A door: which row it wants, and what it says when this build has no such
+ * row. It owns those two things and nothing else.
+ */
+export interface Door {
+  readonly choose: (rows: readonly SurfaceInfo[]) => SurfaceInfo | undefined
+  readonly refuse: (known: readonly string[]) => Error
+}
+
+// The row a door named, or that door's own refusal when this build carries
+// none it can start.
+const rowFor = (door: Door, rows: readonly SurfaceInfo[]): Effect.Effect<Startable, Error> => {
+  const chosen = door.choose(rows)
+  return chosen?.start === undefined
+    ? Effect.fail(door.refuse(rows.map((row) => row.id)))
+    : Effect.succeed({ ...chosen, start: chosen.start })
+}
+
+/**
+ * Runs the surfaces this door names, whichever door named it.
  *
- * A door owns two things and nothing else: which row it wants, and what it
- * says when this build has no such row. Everything after the choice — the
- * `start`-is-absent refusal, the Client, the scope, the wait — is the same for
- * every one of them, so `--acp` at a later stage adds a predicate rather than
- * a third module.
+ * Everything after the choice — the `start`-is-absent refusal, the Client, the
+ * scope, the wait — is the same for every door, so `--acp` at a later stage
+ * adds a door rather than a third module.
+ *
+ * `beside` is the rows a flag named: `eva --web` is the terminal's door with
+ * the page's beside it. They are doors of the same shape, because a flag that
+ * names a surface this build does not have is refused in the same words as a
+ * verb that named it. A row named twice is started once — with no terminal in
+ * the build, `eva --web` takes the page as its interactive row and the flag
+ * has nothing left to add.
  */
 export const runDoor = Effect.fn("cli.runDoor")(function* (
   started: Started,
-  choose: (rows: readonly SurfaceInfo[]) => SurfaceInfo | undefined,
-  refuse: (known: readonly string[]) => Error,
+  door: Door,
+  beside: readonly Door[] = [],
 ) {
   const rows = yield* started.kernel.domains.surface.get
-  const chosen = choose(rows)
-  if (chosen?.start === undefined) {
-    return yield* Effect.fail(refuse(rows.map((row) => row.id)))
-  }
-  return yield* runSurface(started, { ...chosen, start: chosen.start })
+  const chosen = yield* rowFor(door, rows)
+  const extra = yield* Effect.forEach(beside, (one) => rowFor(one, rows))
+  return yield* runSurface(
+    started,
+    chosen,
+    extra.filter((row) => row.id !== chosen.id),
+  )
 })
 
 /**

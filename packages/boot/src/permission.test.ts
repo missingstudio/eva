@@ -80,7 +80,7 @@ const asking = (options: {
       const opened = yield* Deferred.make<void>()
 
       const approving = overSurface(kernel, {
-        frontend: Effect.succeed(options.frontend),
+        frontends: Effect.succeed(options.frontend === undefined ? [] : [options.frontend]),
         request: (id: RequestID) =>
           Effect.andThen(Deferred.succeed(opened, undefined), api.request(id)),
       })

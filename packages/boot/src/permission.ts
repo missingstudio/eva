@@ -13,16 +13,18 @@ import type { Kernel } from "./boot.js"
  * The permission request, whole: how a tool call's `ask` opens one, how the
  * two doors answer it, and how it retires.
  *
- * There are two doors and one request. `Frontend.ask` is the direct call to
- * the surface that holds a person, and it already carries what an ask needs:
- * the request id and the question. `SessionAPI.answer` is the other door — a
+ * There is one request and as many doors as this run holds open.
+ * `Frontend.ask` is the direct call to a surface that holds a person, and it
+ * already carries what an ask needs: the request id and the question. One run
+ * may hold more than one such surface — `eva --web` holds the terminal and the
+ * page — and each of them is a door. `SessionAPI.answer` is one more: a
  * surface at the end of a socket cannot have a method called on it, so it
- * answers by naming the request. Both are answers to the same request, so
- * `overSurface` races them and the first one wins.
+ * answers by naming the request. Every one of them answers the same request,
+ * so `overSurface` races them all and the first answer wins.
  *
  * The lifecycle is `makeAsking`'s: a request is open exactly while somebody
  * waits on it, the first answer settles it, and it retires however the wait
- * ends — so the door that lost the race is interrupted, a stale answer lands
+ * ends — so every door that lost the race is interrupted, a stale answer lands
  * on nothing, and each door's only obligations are the two `Frontend.ask`
  * states.
  *
@@ -33,10 +35,11 @@ import type { Kernel } from "./boot.js"
 
 export interface Asked {
   /**
-   * The surface Eva asks, read at the moment of use rather than captured: a
-   * surface is started, stopped, and started again.
+   * The surfaces Eva asks, read at the moment of use rather than captured: a
+   * surface is started, stopped, and started again, and one run holds as many
+   * of them at once as its door named.
    */
-  readonly frontend: Effect.Effect<Frontend | undefined>
+  readonly frontends: Effect.Effect<readonly Frontend[]>
   // Opens the request and waits for an answer. `Asking.request` is this.
   readonly request: (id: RequestID) => Effect.Effect<FrontendAnswer>
 }
@@ -101,6 +104,13 @@ const refused = (reason: string) => Effect.succeed({ kind: "reject_once", reason
 const takesInput = (rows: readonly SurfaceInfo[], id: string): boolean =>
   rows.find((row) => row.id === id)?.interactive === true
 
+// Why nobody can answer: either no surface is running, or the ones that are
+// say on their rows that they take no input.
+const nobody = (live: readonly Frontend[]): string =>
+  live.length === 0
+    ? "nobody is there to answer"
+    : `${live.map((one) => one.id).join(", ")} takes no input, so nobody can answer`
+
 // The option this answer named, whichever way the surface spelled it. A
 // terminal that offers the four as words answers with the words.
 const namedIn = (answer: FrontendAnswer): string => {
@@ -135,8 +145,13 @@ const outcomeOf = (answer: FrontendAnswer, question: string) => {
 
 /**
  * The gate's answering half, over the seam that already exists. A permission
- * request with nobody to answer it is a denial: no surface running, or a
- * surface whose row takes no input, is `reject_once` and the reason says so.
+ * request with nobody to answer it is a denial: no surface running, or every
+ * surface that is running takes no input, is `reject_once` and the reason says
+ * which of the two it was.
+ *
+ * A row that takes no input takes one door out of the race and never the
+ * whole call, because the doors beside it can still answer. A run that holds
+ * a terminal and a page asks both, and the first answer is the answer.
  *
  * This is the shape `HarnessClient.requestPermission` takes, so the ACP
  * client half at a later stage asks through this gate rather than getting one
@@ -148,21 +163,20 @@ export const overSurface =
   (request) =>
     Effect.gen(function* () {
       const question = request.toolCall.title
-      const surface = yield* asked.frontend
-      if (surface === undefined) return yield* refused(`nobody is there to answer: ${question}`)
-
+      const live = yield* asked.frontends
       const rows = yield* kernel.domains.surface.get
-      if (!takesInput(rows, surface.id)) {
-        return yield* refused(`${surface.id} takes no input, so nobody can answer: ${question}`)
-      }
+      const asking = live.filter((one) => takesInput(rows, one.id))
+      if (asking.length === 0) return yield* refused(`${nobody(live)}: ${question}`)
 
-      const answer = yield* Effect.race(
-        surface.ask({
-          kind: "permission",
-          id: request.toolCall.toolCallId,
-          question,
-        }),
+      const answer = yield* Effect.raceAll([
+        ...asking.map((one) =>
+          one.ask({
+            kind: "permission",
+            id: request.toolCall.toolCallId,
+            question,
+          }),
+        ),
         asked.request(request.toolCall.toolCallId),
-      )
+      ])
       return outcomeOf(answer, question)
     })

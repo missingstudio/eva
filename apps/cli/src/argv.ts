@@ -15,7 +15,22 @@ import type { World } from "./world.js"
 export type Invocation =
   // The command line answered itself: the help, the version, or a parse error.
   | { readonly kind: "answered"; readonly code: number }
-  | { readonly kind: "interactive"; readonly overlays: Overlays }
+  /**
+   * `eva`, and with `--web` the page running beside the terminal. One process
+   * holds both rows, so a request asked in the terminal is answerable in the
+   * browser.
+   *
+   * The bind is spelled as the serve member spells it, because a page binds
+   * the same way whichever door named it — and it is absent when the command
+   * line named none, so the surface keeps the one default there is.
+   */
+  | {
+      readonly kind: "interactive"
+      readonly overlays: Overlays
+      readonly web?: boolean
+      readonly host?: string
+      readonly port?: number
+    }
   | { readonly kind: "print"; readonly prompt: string; readonly overlays: Overlays }
   | { readonly kind: "showConfig"; readonly overlays: Overlays }
   | { readonly kind: "trust" }
@@ -72,6 +87,9 @@ interface RootOptions {
   readonly plugin?: readonly string[]
   readonly withoutPlugin?: readonly string[]
   readonly print?: string
+  readonly web?: boolean
+  readonly host?: string
+  readonly port?: string
 }
 
 // The flags the kernel merges as one layer, in the shape it takes them.
@@ -149,12 +167,37 @@ interface ServeOptions {
  * and a NaN port binds a random one — which is a page at an address nobody
  * asked for.
  */
-const portOf = (value: string | undefined, command: Command): number | undefined => {
+const portOf = (value: string | undefined, command: Command, where: string): number | undefined => {
   if (value === undefined) return undefined
   const port = Number(value)
   return Number.isInteger(port) && port >= 0 && port <= 65535
     ? port
-    : command.error(`eva serve takes a port from 0 to 65535; it got ${value}`)
+    : command.error(`${where} takes a port from 0 to 65535; it got ${value}`)
+}
+
+/**
+ * The page `eva --web` runs beside the terminal, and where it binds.
+ *
+ * A bind with no page to bind it is refused rather than passed over. `--port`
+ * on its own names an address nothing is served at, and a person who asked
+ * for one and was given silence has been told the page is there.
+ */
+const pageOf = (
+  options: RootOptions,
+  command: Command,
+): { web?: boolean; host?: string; port?: number } => {
+  const port = portOf(options.port, command, "eva")
+  if (options.web !== true) {
+    if (options.host !== undefined || port !== undefined) {
+      command.error("eva binds --host and --port with --web; on its own it serves no page")
+    }
+    return {}
+  }
+  return {
+    web: true,
+    ...(options.host === undefined ? {} : { host: options.host }),
+    ...(port === undefined ? {} : { port }),
+  }
 }
 
 // The three variables the resolution order reads. Commander knows the flags
@@ -192,6 +235,9 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
     .option("--plugin <id>", "load a plugin for this run", collect)
     .option("--without-plugin <id>", "skip a plugin for this run", collect)
     .option("-p, --print <prompt>", "answer once and exit")
+    .option("--web", "run the page beside the terminal")
+    .option("--host <host>", `the address the page binds, ${DEFAULT_HOST} by default`)
+    .option("--port <port>", `the port the page binds, ${DEFAULT_PORT} by default`)
     .addHelpText("after", ENVIRONMENT)
 
   // No prompt means the interactive surface, so the root is what runs when
@@ -199,9 +245,15 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
   root.action((options: RootOptions, command: Command) => {
     reportStray(command.args, world)
     const overlays = overlaysOf(options)
+    const page = pageOf(options, command)
+    // A page has nobody to hold it open here: `--print` answers once and
+    // exits, and a flag that is passed over reads as a flag that was honoured.
+    if (options.print !== undefined && options.web === true) {
+      command.error("eva --print answers once and exits; eva serve --web is the page on its own")
+    }
     record(
       options.print === undefined
-        ? { kind: "interactive", overlays }
+        ? { kind: "interactive", overlays, ...page }
         : { kind: "print", prompt: options.print, overlays },
     )
   })
@@ -229,11 +281,19 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
     .option("--web", "serve the page that watches a Session")
     .option("--host <host>", `the address to bind, ${DEFAULT_HOST} by default`)
     .option("--port <port>", `the port to bind, ${DEFAULT_PORT} by default`)
-    .action((options: ServeOptions, command: Command) => {
+    .action((_given: ServeOptions, command: Command) => {
+      /**
+       * Read through the globals, because the root spells these three flags
+       * too: `eva --web` runs the page beside the terminal. Commander hands a
+       * flag both levels declare to the root, and the merge finds it wherever
+       * it landed — so the declarations above are what `eva serve --help` says
+       * about them, and this is what reads them.
+       */
+      const options: ServeOptions = command.optsWithGlobals()
       // `--acp` is the next answer to "serve what", so a posture is named
       // rather than defaulted: a default would start a surface nobody chose.
       if (options.web !== true) command.error("eva serve takes a posture: --web")
-      const port = portOf(options.port, command)
+      const port = portOf(options.port, command, "eva serve")
       record({
         kind: "serve",
         overlays: overlaysOf(command.optsWithGlobals()),
