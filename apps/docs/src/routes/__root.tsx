@@ -8,6 +8,11 @@ import appCss from "../styles/app.css?url"
 // once, so a move of the domain is a move of one line.
 const ogImage = `${origin.web}/brand/og.png`
 
+// The Google Analytics property this origin reports to. Each origin is read,
+// and counted, on its own, so this is not the marketing site's property. The
+// value is public: it ships in the page it measures.
+const measurementId = "G-DBW4DSZSDE"
+
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -32,6 +37,22 @@ export const Route = createRootRoute({
       // rather than on a site root, so every page names the catalog.
       { rel: "ard", href: `${origin.docs}/.well-known/ard.json` },
     ],
+    // Page views, counted by Google Analytics. A local run reports nothing,
+    // so development traffic stays out of the numbers. `scripts` here is the
+    // head list; the route option of the same name renders in the body.
+    scripts: import.meta.env.DEV
+      ? []
+      : [
+          { src: `https://www.googletagmanager.com/gtag/js?id=${measurementId}`, async: true },
+          {
+            children: [
+              "window.dataLayer = window.dataLayer || [];",
+              "function gtag(){dataLayer.push(arguments);}",
+              "gtag('js', new Date());",
+              `gtag('config', '${measurementId}');`,
+            ].join("\n"),
+          },
+        ],
   }),
   component: RootComponent,
 })

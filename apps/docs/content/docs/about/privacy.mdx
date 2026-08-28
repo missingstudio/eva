@@ -4,30 +4,47 @@ description: What this documentation site stores, what Eva itself writes to disk
 source: docs/about/privacy.md
 ---
 
-This site stores nothing, sends nothing to a third party, and has no analytics.
-The same policy covers the marketing site at
-[evafactory.co/privacy](https://evafactory.co/privacy); this page states it for
-the domain you are reading.
+This site counts page views with Google Analytics, and does nothing else with
+you. The marketing site at evafactory.co counts its own, in a separate
+property; [its privacy page](https://evafactory.co/privacy) states the same
+policy for that domain.
 
-## No cookies
+## What this site measures
 
-This site sets no cookie and writes nothing to your browser's storage. There is
-no theme control because there is no theme to record: the site is dark only,
-the same surface the program itself draws.
+Every page loads the Google Analytics tag, which reports the visit: the address
+of the page, the page you arrived from, and what a browser tells any server
+about itself — its language, its screen, and an approximate location worked out
+from the network address. Google holds that record; missing studio reads the
+totals.
 
-Search is the one thing that reads a file. It downloads an index once and
-searches it in your browser, so a query never reaches a server and no record of
-what you searched for exists anywhere.
+Search is not part of it. The site downloads a search index once and searches
+it in your browser, so a query never reaches a server, never enters an address,
+and is never reported.
+
+Block googletagmanager.com and every page still works the same.
+
+## Cookies
+
+Google Analytics writes two cookies, `_ga` and `_ga_DBW4DSZSDE`. They tell one
+browser from another and one visit from the next, so a reader who comes back is
+not counted as a new one.
+
+Nothing else writes to your browser's storage. There is no theme control
+because there is no theme to record: the site is dark only, the same surface
+the program itself draws.
 
 ## What this site does not do
 
-- No analytics, no tracking pixel, and no session recording.
 - No advertising, and no data sold or shared with an advertiser.
+- No session recording, and no map of what you click.
 - No account, and no form that asks for a name or an address.
-- No third-party fonts or scripts. The typeface is served from this origin, so
-  no other company sees your request.
+- No third-party font. The typeface is served from this origin, so no other
+  company sees that request.
 
 ## Where a request does leave
+
+Google receives the analytics request described above, and its own policy
+governs what it does with it.
 
 Links to GitHub, npm, and the license text go to those companies, and their own
 policies apply once you follow one. Nothing is sent to them until you do.

@@ -4,20 +4,37 @@ import type { Prose } from "./prose.js"
 /*
   Everything on this page is a statement about what the code in this repository
   does. It carries no claim that cannot be checked against the tree: the
-  typeface is a file in packages/ui/fonts, no cookie is written anywhere, and
-  there is no analytics call anywhere in either site. A page that promised
-  more than that would be marketing copy.
+  typeface is a file in packages/ui/fonts, and the one third-party script is
+  the Google Analytics tag in src/routes/__root.tsx. A page that promised more
+  than that would be marketing copy.
 */
 export const privacy: Prose = {
   title: "Privacy",
   description: `What ${origin.web} stores, and what it sends elsewhere.`,
-  lede: "This site stores nothing, sends nothing to a third party, and has no analytics.",
+  lede: "This site counts page views with Google Analytics, and does nothing else with you.",
   sections: [
     {
-      heading: "No cookies",
+      heading: "What this site measures",
       blocks: [
         {
-          p: "This site sets no cookie and writes nothing to your browser’s storage. There is no theme control because there is no theme to record: the site is dark only, the same surface the program itself draws.",
+          p: "Every page loads the Google Analytics tag, which reports the visit: the address of the page, the page you arrived from, and what a browser tells any server about itself — its language, its screen, and an approximate location worked out from the network address. Google holds that record; missing studio reads the totals.",
+        },
+        {
+          p: "Those totals answer one question, which is which pages people read. Nothing on this site asks who you are, so there is no name to attach to a visit and nothing is joined to a record held elsewhere.",
+        },
+        {
+          p: "Block googletagmanager.com and every page still works the same.",
+        },
+      ],
+    },
+    {
+      heading: "Cookies",
+      blocks: [
+        {
+          p: "Google Analytics writes two cookies, _ga and _ga_349PSFMKTG. They tell one browser from another and one visit from the next, so a reader who comes back is not counted as a new one.",
+        },
+        {
+          p: "Nothing else writes to your browser’s storage. There is no theme control because there is no theme to record: the site is dark only, the same surface the program itself draws.",
         },
       ],
     },
@@ -26,10 +43,10 @@ export const privacy: Prose = {
       blocks: [
         {
           list: [
-            "No analytics, no tracking pixel, and no session recording.",
             "No advertising, and no data sold or shared with an advertiser.",
+            "No session recording, and no map of what you click.",
             "No account, and no form that asks for a name or an address.",
-            "No third-party fonts or scripts. The typeface is served from this origin, so no other company sees your request.",
+            "No third-party font. The typeface is served from this origin, so no other company sees that request.",
           ],
         },
       ],
@@ -37,6 +54,9 @@ export const privacy: Prose = {
     {
       heading: "Where a request does leave",
       blocks: [
+        {
+          p: "Google receives the analytics request described above, and its own policy governs what it does with it.",
+        },
         {
           p: "Links to GitHub, npm, and the license text go to those companies, and their own policies apply once you follow one. Nothing is sent to them until you do.",
         },
@@ -49,7 +69,7 @@ export const privacy: Prose = {
       heading: "Eva, the program",
       blocks: [
         {
-          p: "Eva runs on your machine. It writes its sessions to disk under your home directory and reads a repository’s configuration only after you grant it. This page covers this website; what the program stores is documented with the program.",
+          p: "Eva runs on your machine and reports nothing to anybody. It writes its sessions to disk under your home directory and reads a repository’s configuration only after you grant it. This page covers this website; what the program stores is documented with the program.",
         },
       ],
     },
