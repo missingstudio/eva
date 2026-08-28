@@ -146,6 +146,25 @@ const ADDED: readonly Clause[] = [
       },
     ],
   },
+  /**
+   * The parity goal, made falsifiable. The clauses above are one scene between
+   * two doors; this one is every basic interaction at every door, and it is a
+   * clause rather than a claim because `docs/reference/parity.md` names a proof
+   * or a refusal in each cell and a suite resolves them.
+   */
+  {
+    says: "and every row of the basic interaction set has, for every door, a proof or a refusal that names itself.",
+    proofs: [
+      {
+        file: "packages/conformance/src/parity.test.ts",
+        test: "carries the eight interactions, in the set's own words",
+      },
+      {
+        file: "packages/conformance/src/parity.test.ts",
+        test: "$file holds $needle",
+      },
+    ],
+  },
 ]
 
 /**

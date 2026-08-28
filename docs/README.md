@@ -32,6 +32,7 @@ Then, as you need them:
 | Build or test the repo      | [reference/toolchain.md](reference/toolchain.md)             |
 | Ship a release, install Eva | [reference/ci-cd.md](reference/ci-cd.md)                     |
 | Deploy a website            | [reference/hosting.md](reference/hosting.md)                 |
+| Know what a door can do     | [reference/parity.md](reference/parity.md)                   |
 | Know why something is so    | `adr/` — decision records, local to a checkout               |
 | Know what Eva is for        | [product.md](product.md)                                     |
 
@@ -52,7 +53,8 @@ docs/
     ├── command-line.md    every command and flag, and how they are parsed
     ├── toolchain.md       Vite+, Bun, TypeScript, CI, day-to-day commands
     ├── ci-cd.md           the workflow fleet, the release, every install channel
-    └── hosting.md         the two websites, and how each one is deployed
+    ├── hosting.md         the two websites, and how each one is deployed
+    └── parity.md          what each door can do, and where each cell is proven
 ```
 
 ## Conventions
@@ -77,6 +79,7 @@ to that document. Two copies of a fact become two different facts.
 | `command-line.md`    | every command and flag, and the parse        |
 | `toolchain.md`       | how to build and test, and CI's jobs         |
 | `ci-cd.md`           | the workflows, the release, the channels     |
+| `parity.md`          | what each door can do, and its proof         |
 | `roadmap.md`         | what each stage is, and what it must prove   |
 | `plan.md`            | what is next, the order, and where code goes |
 | `development.md`     | how a change is made, and each stage's state |
