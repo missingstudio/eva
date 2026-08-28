@@ -1,10 +1,11 @@
 /**
- * Vendored from `ai-elements@latest add message`, then retyped against Eva.
+ * Vendored from `ai-elements@latest add message`, then retyped.
  *
- * Changed: `from` is Eva's ActorKind rather than the AI SDK's UIMessage role;
- * the branch, action and toolbar families are removed, because the page takes
- * no input; the Streamdown plugin set is removed, so the markdown is GFM and
- * nothing that loads a second renderer; the palette is Eva's brand tokens.
+ * Changed: `from` is a union declared here rather than the AI SDK's UIMessage
+ * role; the branch, action and toolbar families are removed, because the page
+ * takes no input; the Streamdown plugin set is removed, so the markdown is GFM
+ * and nothing that loads a second renderer; the palette is the bridge's
+ * semantic names, so one markup follows whichever skin an app is wearing.
  *
  * `MessageResponse` is given four settings upstream leaves at their default.
  * `mode="static"` because these words are a committed fold and never a stream
@@ -14,15 +15,25 @@
  * tab, and a modal is a second thing to answer on a page that asks nothing.
  * And `components`, which is where the code that follows is handed over.
  */
-import type { ActorKind } from "@missingstudio/eva-schema"
 import type { ComponentProps, HTMLAttributes } from "react"
 import { memo } from "react"
 import { Streamdown } from "streamdown"
 
-import { cn } from "@missingstudio/ui/lib/utils"
+import { cn } from "../../lib/utils.js"
+
+/**
+ * Who wrote the words. It is declared here rather than imported from a
+ * product's schema, the way upstream types against the AI SDK rather than
+ * against any app: this package is the design system, and a surface that
+ * imports it must not thereby import somebody's domain.
+ *
+ * A caller's own union arrives structurally, and it is type-only — so a shape
+ * that drifts fails to compile at the call site, and nothing fails at runtime.
+ */
+export type MessageAuthor = "human" | "agent" | "system"
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
-  from: ActorKind
+  from: MessageAuthor
 }
 
 export const Message = ({ className, from, ...props }: MessageProps) => (
@@ -41,7 +52,7 @@ export type MessageContentProps = HTMLAttributes<HTMLDivElement>
 export const MessageContent = ({ children, className, ...props }: MessageContentProps) => (
   <div
     className={cn(
-      "flex w-full min-w-0 max-w-full flex-col gap-2 overflow-hidden text-bone text-sm",
+      "flex w-full min-w-0 max-w-full flex-col gap-2 overflow-hidden text-foreground text-sm",
       "group-[.is-user]:rounded-lg group-[.is-user]:bg-card group-[.is-user]:px-4 group-[.is-user]:py-3",
       className,
     )}
@@ -78,9 +89,9 @@ type MarkdownCodeProps = ComponentProps<"code"> & { readonly node?: unknown }
 const MarkdownCode = ({ children, className, node: _node, ...props }: MarkdownCodeProps) => {
   const language = LANGUAGE.exec(className ?? "")?.[1]
   return "data-block" in props ? (
-    <div className="my-4 overflow-hidden rounded-lg border border-graphite bg-card">
+    <div className="my-4 overflow-hidden rounded-lg border border-border bg-card">
       {language === undefined ? null : (
-        <p className="border-graphite border-b px-3 py-1 font-mono text-muted-foreground text-xs">
+        <p className="border-border border-b px-3 py-1 font-mono text-muted-foreground text-xs">
           {language}
         </p>
       )}

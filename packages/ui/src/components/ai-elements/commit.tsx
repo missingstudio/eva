@@ -1,25 +1,24 @@
 /**
  * Vendored from `ai-elements@latest add commit`, then cut to the file row.
  *
- * Eva's record holds no commit: an `edit` says which file changed and how many
- * hunks changed in it, and nothing about a hash, an author or a time. So the
- * hash, author, timestamp, copy button and the collapsible around them are
- * removed, and what is left is the row this component draws a changed file
- * with. `CommitFileStatus` keeps its four letters; the page draws `M`, because
- * an edit is a modification and the record names no other kind. The palette is
- * Eva's brand tokens.
+ * A code agent's record may hold no commit: an edit says which file changed
+ * and how many hunks changed in it, and nothing about a hash, an author or a
+ * time. So the hash, author, timestamp, copy button and the collapsible around
+ * them are removed, and what is left is the row this component draws a changed
+ * file with. `CommitFileStatus` keeps its four letters. The palette is the
+ * bridge's semantic names, so one markup follows whichever skin an app wears.
  */
 import { FileIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes } from "react"
 
-import { cn } from "@missingstudio/ui/lib/utils"
+import { cn } from "../../lib/utils.js"
 
 export type CommitFileProps = HTMLAttributes<HTMLDivElement>
 
 export const CommitFile = ({ className, children, ...props }: CommitFileProps) => (
   <div
     className={cn(
-      "flex items-center justify-between gap-2 rounded border border-graphite px-2 py-1 text-sm",
+      "flex items-center justify-between gap-2 rounded border border-border px-2 py-1 text-sm",
       className,
     )}
     {...props}
@@ -36,9 +35,9 @@ export const CommitFileInfo = ({ className, children, ...props }: CommitFileInfo
   </div>
 )
 
-// Upstream colours the four letters green, red, yellow and blue. Eva's
-// palette carries one accent and one warning, and a letter is the label
-// already, so the colour is dropped rather than invented.
+// Upstream colours the four letters green, red, yellow and blue. A letter is
+// the label already, so the colour is dropped rather than invented, and a
+// surface that wants one paints it.
 const fileStatusLabels = {
   added: "A",
   deleted: "D",
