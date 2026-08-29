@@ -1,5 +1,6 @@
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { sessionID } from "@missingstudio/eva-schema"
+import { titleLine } from "@missingstudio/eva-sdk"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +18,6 @@ import { buildLine } from "./build.js"
 import { filtered, grouped, movedAt } from "./grouping.js"
 import { SESSION_ROUTE, sessionHref } from "./paths.js"
 import { opening, retiring, useSessions, type Listing } from "./sessions.js"
-import { titleLine } from "./title.js"
 
 /**
  * The frame both routes are drawn inside: the Sessions on a rail that is

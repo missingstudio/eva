@@ -66,9 +66,12 @@ answer.
 
 A Session's title is the intent a Run opened on until an `info` gives a better
 one, and an intent is a whole prompt. `headerFold` is right to hold all of it;
-a heading is the wrong place to draw all of it. So `src/title.ts` shapes one
-line for the heading and for the listing row, and the record's own text stays
-on the element behind it.
+a heading is the wrong place to draw all of it. So `titleLine` in
+[`@missingstudio/eva-sdk`](../../packages/sdk/README.md) shapes one line for
+the heading and for the listing row, and the record's own text stays on the
+element behind it. The rule lives in the SDK because the terminal's
+`/sessions` panel names the same Sessions, and two doors must not name one
+Session two ways.
 
 A Block the page cannot draw is drawn as one it could not draw. A Surface may
 render less than another; it may never know more — so nothing is dropped, and
@@ -203,7 +206,6 @@ cd apps/web && bun run dev
 | `src/blocks.tsx`    | one Block, in page primitives                                |
 | `src/composer.tsx`  | what to say next: the line, the send, the stop, the queue    |
 | `src/models.tsx`    | the model picker: the Catalog's rows, and the one chosen     |
-| `src/title.ts`      | what to call a Session, in one line                          |
 | `src/eva.ts`        | the one Client, over the same-origin wire                    |
 | `src/sessions.ts`   | what the page reads: the Sessions, or not yet                |
 | `src/transcript.ts` | what it reads of one Session: the Header, the fold, the tail |
@@ -243,8 +245,7 @@ with the terminal's panel,
 [src/transcript.test.ts](src/transcript.test.ts) the follow itself — the fold,
 the tail, and the fold that replaces it —
 [src/command.test.tsx](src/command.test.tsx) the command line and what it
-says when it reaches nothing, [src/title.test.ts](src/title.test.ts) the
-shaping of a title, and
+says when it reaches nothing, and
 [src/fold.test.ts](src/fold.test.ts) the count of folds. Run the suite from the
 repository root:
 

@@ -1,6 +1,7 @@
 import type { ClientState } from "@missingstudio/eva-client-runtime"
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { spendOf, spendText, type CostSummary, type Cursor } from "@missingstudio/eva-schema"
+import { titleLine } from "@missingstudio/eva-sdk"
 import { askingOf, type Asking, type Turn } from "@missingstudio/eva-session-view"
 import { Turns } from "./blocks.js"
 import { Composer, type Composing } from "./composer.js"
@@ -21,7 +22,6 @@ import { MessageResponse } from "@missingstudio/ui/components/ai-elements/messag
 import { ModelPicker, type Choosing } from "./models.js"
 import { priced } from "./pricing.js"
 import { Main, stampText, TopBar } from "./shell.js"
-import { titleLine } from "./title.js"
 
 /**
  * What the page has of one Session's record: the fold, or not yet. It is a

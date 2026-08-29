@@ -122,6 +122,12 @@ rather than coercing one written in another shape — `"8"` is not a number.
 - `modelRows(state)` — every model the build can reach, as the `PickRow`s a
   picker draws. `/model` and `GET /api/models` both read it, so the panel in
   a terminal and the picker on a page offer one list.
+- `sessionRows(headers)` — every Session Eva holds, as the `PickRow`s a picker
+  draws, named by `titleLine`. It is beside `modelRows` for the same reason:
+  `/sessions` in a terminal and the rail on a page offer one list.
+- `titleLine(title)` / `NO_TITLE` — what to call a Session, in one line: the
+  first line that says something, cut at a word when it is long, and a name
+  for a Session that has heard nothing yet.
 - `overFiles(deps, use)` / `textIn(input, key)` — one call of a tool that
   reads the `FileSystem` slot, and one string argument of that call. Every
   file tool answers the same sentence for an empty slot and the same
@@ -151,7 +157,8 @@ rather than coercing one written in another shape — `"8"` is not a number.
 Tests live beside the sources: [options.test.ts](src/options.test.ts) holds
 the shape rules, [prompt.test.ts](src/prompt.test.ts) the Template and Gap
 rules, [command.test.ts](src/command.test.ts) the dispatch rules, and
-[domains.test.ts](src/domains.test.ts) the price lookup. The context itself
+[domains.test.ts](src/domains.test.ts) the price lookup, and
+[title.test.ts](src/title.test.ts) the shaping of a Session's name. The context itself
 is assembled and exercised where the kernel and the SDK meet, in
 [packages/boot/src/boot.test.ts](../boot/src/boot.test.ts). Run the suite
 from the repository root:

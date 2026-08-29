@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { sessionID } from "@missingstudio/eva-schema"
+import { NO_TITLE } from "@missingstudio/eva-sdk"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { renderToStaticMarkup } from "react-dom/server"
@@ -8,7 +9,6 @@ import { afterEach, describe, expect, it } from "vitest"
 import { buildLine } from "./build.js"
 import type { Listing } from "./sessions.js"
 import { Sidebar, TopBar } from "./shell.js"
-import { NO_TITLE } from "./title.js"
 
 /**
  * The rail, which is where the listing lives now.

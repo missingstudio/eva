@@ -7,11 +7,13 @@ import {
   type ModelRef,
   type Row,
   type SessionAPI,
+  type SessionHeader,
   type ToolInfo,
 } from "@missingstudio/eva-core"
 import { toUsd, type ModelPrice, type PriceLookup, type SessionID } from "@missingstudio/eva-schema"
 import type { Effect, Scope } from "effect"
 import type { Frontend } from "./frontend.js"
+import { titleLine } from "./title.js"
 
 export interface ProviderInfo {
   id: string
@@ -255,6 +257,23 @@ export const modelRows = (catalog: CatalogState): readonly PickRow[] =>
       ...(model.price === undefined ? {} : { price: model.price }),
     })),
   )
+
+/**
+ * Every Session Eva holds, as the rows a panel picks from. It lives here for
+ * the reason `modelRows` does: a panel in a terminal and a rail on a page that
+ * named one Session two ways would be two answers to what a Session is called.
+ *
+ * The label is the title in one line. The detail is when the Session last
+ * moved, because two Sessions with no title yet are told apart by nothing
+ * else. The order is the order the listing came in: `SessionStore.list`
+ * promises the most recently updated first, and a picker does not sort again.
+ */
+export const sessionRows = (headers: readonly SessionHeader[]): readonly PickRow[] =>
+  headers.map((header) => ({
+    id: header.id,
+    label: titleLine(header.title),
+    ...(header.updatedAt === undefined ? {} : { detail: header.updatedAt }),
+  }))
 
 /**
  * The domain table: every domain of plain rows, against the Info it holds.
