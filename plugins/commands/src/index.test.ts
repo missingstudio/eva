@@ -1,4 +1,4 @@
-import type { ModelRef, SessionAPI } from "@missingstudio/eva-core"
+import type { ModelRef, SessionAPI, SessionHeader } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import { define, modelRows, type CommandContext, type PickRow } from "@missingstudio/eva-sdk"
 import { describe, expect, it } from "vitest"
@@ -7,8 +7,8 @@ import { Effect } from "effect"
 import { COMMANDS, commands } from "./index.js"
 
 describe("COMMANDS", () => {
-  it("names the four the product ships", () => {
-    expect(COMMANDS.map((one) => one.id)).toEqual(["model", "cost", "clear", "help"])
+  it("names the five the product ships", () => {
+    expect(COMMANDS.map((one) => one.id)).toEqual(["model", "cost", "clear", "sessions", "help"])
   })
 
   it("resolves an alias to its command", () => {
@@ -38,6 +38,7 @@ interface Watched {
   readonly written: () => string
   readonly offered: () => readonly PickRow[]
   readonly model: () => ModelRef
+  readonly followed: () => SessionID | undefined
 }
 
 /**
@@ -45,14 +46,19 @@ interface Watched {
  * supplies; a test that leaves it out is the print surface, where the same
  * command has to answer in words.
  */
-const watched = (takes?: (rows: readonly PickRow[]) => PickRow | undefined): Watched => {
+const watched = (
+  takes?: (rows: readonly PickRow[]) => PickRow | undefined,
+  held: readonly SessionHeader[] = [],
+): Watched => {
   const said: string[] = []
   let offered: readonly PickRow[] = []
   let model: ModelRef = { provider: "fake", model: "model" }
+  let followed: SessionID | undefined
   // Only the half `/model` reaches: the rest of the Session API is not what
   // this command is, and a stub of it would only be a second thing to keep
   // in step.
   const api = {
+    list: Effect.succeed(held),
     model: {
       get: () => Effect.succeed(model),
       set: (_session: SessionID, next: ModelRef) => Effect.sync(() => void (model = next)),
@@ -64,7 +70,7 @@ const watched = (takes?: (rows: readonly PickRow[]) => PickRow | undefined): Wat
       api,
       session: "sess_test" as SessionID,
       write: (text) => void said.push(text),
-      select: () => {},
+      select: (session) => void (followed = session),
       ...(takes === undefined
         ? {}
         : {
@@ -77,6 +83,7 @@ const watched = (takes?: (rows: readonly PickRow[]) => PickRow | undefined): Wat
     written: () => said.join(""),
     offered: () => offered,
     model: () => model,
+    followed: () => followed,
   }
 }
 
@@ -195,5 +202,67 @@ describe("/model", () => {
 
     expect(seen.written()).toContain("fake/model")
     expect(seen.written()).toContain("anthropic/claude-opus-5")
+  })
+})
+
+describe("/sessions", () => {
+  // Two Sessions, the way a listing hands them over: most recently updated
+  // first, and one of them with nothing said in it yet.
+  const HELD: readonly SessionHeader[] = [
+    {
+      id: "sess_two" as SessionID,
+      title: "read the trace back",
+      updatedAt: "2026-08-29T10:00:00Z",
+    },
+    { id: "sess_one" as SessionID },
+  ]
+
+  // The picker is what this command is where there is a panel to draw it.
+  it("offers every Session Eva holds, and follows the one that is taken", async () => {
+    const seen = watched((rows) => rows[0], HELD)
+    await ran("sessions", seen.ctx)
+
+    expect(seen.offered().map((row) => row.label)).toEqual(["read the trace back", "no title yet"])
+    expect(seen.followed()).toBe("sess_two")
+  })
+
+  // A Session that has heard nothing is named, rather than left out of the
+  // listing it is in.
+  it("names a Session with no title yet, and tells it apart by when it moved", async () => {
+    const seen = watched((rows) => rows[1], HELD)
+    await ran("sessions", seen.ctx)
+
+    expect(seen.offered()[0]?.detail).toBe("2026-08-29T10:00:00Z")
+    expect(seen.followed()).toBe("sess_one")
+  })
+
+  // Nothing chosen is what staying where you are is called.
+  it("follows nothing when nobody chooses", async () => {
+    const seen = watched(() => undefined, HELD)
+    await ran("sessions", seen.ctx)
+
+    expect(seen.followed()).toBeUndefined()
+  })
+
+  // The same command under a surface that draws no panels: it writes the rows
+  // instead, and the answer is the same answer.
+  it("writes the Sessions where nothing can pick", async () => {
+    const seen = watched(undefined, HELD)
+    await ran("sessions", seen.ctx)
+
+    expect(seen.written()).toContain("read the trace back")
+    expect(seen.written()).toContain("no title yet")
+    expect(seen.followed()).toBeUndefined()
+  })
+
+  // A panel over no rows takes no press. A listing of nothing is said in
+  // words, so no door answers this command with silence.
+  it("says Eva holds no Session rather than drawing an empty panel", async () => {
+    const seen = watched((rows) => rows[0])
+    await ran("sessions", seen.ctx)
+
+    expect(seen.written()).toBe("no Sessions yet\n")
+    expect(seen.offered()).toEqual([])
+    expect(seen.followed()).toBeUndefined()
   })
 })

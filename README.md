@@ -102,8 +102,8 @@ eva run release-notes --input CHANGELOG.md # or --input
 One route at a time — two at once is refused with both named.
 [eva-workflow](plugins/workflow/README.md) is the whole surface.
 
-In the chat, type `/` for the local commands: `/help`, `/model`, `/cost`, and
-`/clear`. They never reach a model, so they cost nothing. `eva -p` and
+In the chat, type `/` for the local commands: `/help`, `/model`, `/cost`,
+`/clear`, and `/sessions`. They never reach a model, so they cost nothing. `eva -p` and
 `eva run` exit non-zero when the answer fails, which makes them safe in a
 pipeline.
 

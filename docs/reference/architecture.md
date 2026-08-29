@@ -1254,12 +1254,12 @@ Hosted by `eva.harness.loop`, and reachable only through it:
 
 **Agents, commands, appearance**
 
-| Plugin id      | Package        | Contributes                                     |
-| -------------- | -------------- | ----------------------------------------------- |
-| `eva.agents`   | `eva-agents`   | built-in agent definitions                      |
-| `eva.commands` | `eva-commands` | `/model`, `/cost`, `/clear`, `/help`, `/plugin` |
-| `eva.themes`   | `eva-themes`   | built-in themes                                 |
-| `eva.keymap`   | `eva-keymap`   | default key bindings                            |
+| Plugin id      | Package        | Contributes                                                  |
+| -------------- | -------------- | ------------------------------------------------------------ |
+| `eva.agents`   | `eva-agents`   | built-in agent definitions                                   |
+| `eva.commands` | `eva-commands` | `/model`, `/cost`, `/clear`, `/sessions`, `/help`, `/plugin` |
+| `eva.themes`   | `eva-themes`   | built-in themes                                              |
+| `eva.keymap`   | `eva-keymap`   | default key bindings                                         |
 
 **Surfaces**
 

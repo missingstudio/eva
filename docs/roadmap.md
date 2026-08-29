@@ -121,7 +121,7 @@ a good terminal.
 ```
 eva > explain what this project does
   ← streamed markdown answer; cost line: 1.2k in / 340 out · cost unreported
-eva > /model  /cost  /clear  /help
+eva > /model  /cost  /clear  /sessions  /help
   ← switch model mid-session; the session's spend on demand
 ```
 

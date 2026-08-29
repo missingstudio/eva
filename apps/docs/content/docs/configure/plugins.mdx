@@ -16,32 +16,32 @@ The built-in table, in load order. Order is precedence: a later plugin's
 registrations win over an earlier one's, which is why `eva.config` — your
 config — loads near the end.
 
-| Plugin                    | Contributes                                 |
-| ------------------------- | ------------------------------------------- |
-| `eva.trace`               | the one path events take to the trace       |
-| `eva.trace.sqlite`        | the default trace store, one SQLite file    |
-| `eva.session.jsonl`       | the session store, a fold over the trace    |
-| `eva.auth`                | credentials, read from the environment      |
-| `eva.catalog.models`      | the built-in model catalog                  |
-| `eva.catalog.prices`      | vendored prices — no network at boot        |
-| `eva.provider.anthropic`  | the Anthropic provider                      |
-| `eva.provider.openai`     | the OpenAI provider                         |
-| `eva.provider.compatible` | a provider per compatible endpoint you name |
-| `eva.provider.retry`      | backoff for calls that may be retried       |
-| `eva.usage`               | normalizes usage numbers                    |
-| `eva.budget`              | token, time, and step ceilings              |
-| `eva.validator`           | judges output against a JSON Schema         |
-| `eva.diff`                | previews an edit, applies it, reverses it   |
-| `eva.commands`            | `/model`, `/cost`, `/clear`, `/help`        |
-| `eva.themes`              | the three built-in themes, and `/theme`     |
-| `eva.keymap`              | the default key bindings                    |
-| `eva.prompt`              | prompt templates                            |
-| `eva.workflow`            | declared workflows, for `eva run`           |
-| `eva.config`              | projects your config into the domains       |
-| `eva.print`               | the `--print` surface                       |
-| `eva.tui`                 | the interactive console                     |
-| `eva.api`                 | the read-only session API                   |
-| `eva.web`                 | the page that watches a session             |
+| Plugin                    | Contributes                                       |
+| ------------------------- | ------------------------------------------------- |
+| `eva.trace`               | the one path events take to the trace             |
+| `eva.trace.sqlite`        | the default trace store, one SQLite file          |
+| `eva.session.jsonl`       | the session store, a fold over the trace          |
+| `eva.auth`                | credentials, read from the environment            |
+| `eva.catalog.models`      | the built-in model catalog                        |
+| `eva.catalog.prices`      | vendored prices — no network at boot              |
+| `eva.provider.anthropic`  | the Anthropic provider                            |
+| `eva.provider.openai`     | the OpenAI provider                               |
+| `eva.provider.compatible` | a provider per compatible endpoint you name       |
+| `eva.provider.retry`      | backoff for calls that may be retried             |
+| `eva.usage`               | normalizes usage numbers                          |
+| `eva.budget`              | token, time, and step ceilings                    |
+| `eva.validator`           | judges output against a JSON Schema               |
+| `eva.diff`                | previews an edit, applies it, reverses it         |
+| `eva.commands`            | `/model`, `/cost`, `/clear`, `/sessions`, `/help` |
+| `eva.themes`              | the three built-in themes, and `/theme`           |
+| `eva.keymap`              | the default key bindings                          |
+| `eva.prompt`              | prompt templates                                  |
+| `eva.workflow`            | declared workflows, for `eva run`                 |
+| `eva.config`              | projects your config into the domains             |
+| `eva.print`               | the `--print` surface                             |
+| `eva.tui`                 | the interactive console                           |
+| `eva.api`                 | the read-only session API                         |
+| `eva.web`                 | the page that watches a session                   |
 
 Three more ride in the box without loading: `eva.trace.jsonl`,
 `eva.trace.memory`, and `eva.trace.postgres`. They are alternative trace

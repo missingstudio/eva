@@ -60,7 +60,8 @@ Your key never reaches a settings file, a log, or the session record.
 `eva run` takes its one input from a positional file, `--input <file>`, or
 piped standard input — one route at a time, and two at once is refused with
 both named. In the chat, type `/` for the local commands: `/help`, `/model`,
-`/cost`, and `/clear`. They never reach a model, so they cost nothing.
+`/cost`, `/clear`, and `/sessions`. They never reach a model, so they cost
+nothing.
 `eva -p` exits non-zero when the answer fails, which makes it safe in a
 pipeline.
 

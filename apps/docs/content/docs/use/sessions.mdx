@@ -29,6 +29,16 @@ stores a Header. It is a fold over the Trace, like every other projection.
 `/new` is the same command. It opens a new Session; it does not erase the old
 one.
 
+## Go back to one
+
+```
+/sessions
+```
+
+It lists the Sessions Eva holds, most recently moved first, and the one you
+take is the one the console follows. A Session with nothing said in it yet is
+listed too, named by when it moved.
+
 ## Where they live
 
 Sessions are written under Eva's state directory, as JSONL. One file, appended

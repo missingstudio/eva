@@ -267,15 +267,15 @@ Factory and surface stages both belong here, and this table is the only place
 in `docs/` that says done — every other document describes the work, and none
 of them tracks it.
 
-| Stage                      | State | What is left                                                            |
-| -------------------------- | ----- | ----------------------------------------------------------------------- |
-| 0 — Wire                   | done  | nothing                                                                 |
-| 1 — Workflow               | done  | nothing                                                                 |
-| C0 — Console               | done  | nothing                                                                 |
-| W0 — Client runtime        | done  | nothing                                                                 |
-| W1 — The wire and the page | done  | nothing                                                                 |
-| 2 — Tools and the loop     | done  | nothing                                                                 |
-| W2 — The page that prompts | done  | seven parity cells name what is absent rather than a proof or a refusal |
+| Stage                      | State | What is left                                                           |
+| -------------------------- | ----- | ---------------------------------------------------------------------- |
+| 0 — Wire                   | done  | nothing                                                                |
+| 1 — Workflow               | done  | nothing                                                                |
+| C0 — Console               | done  | nothing                                                                |
+| W0 — Client runtime        | done  | nothing                                                                |
+| W1 — The wire and the page | done  | nothing                                                                |
+| 2 — Tools and the loop     | done  | nothing                                                                |
+| W2 — The page that prompts | done  | four parity cells name what is absent rather than a proof or a refusal |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
@@ -398,8 +398,16 @@ for the parity goal: it reads the matrix in
 renamed or deleted.
 
 That matrix does not come out full, and it says so rather than rounding up.
-Seven of its thirty-two cells name what is absent instead of a proof or a
-refusal: the terminal and the pipe see no Session list, the pipe queues no line
-and steers none, no test pairs `--model` with `--print`, the wire holds no queue
-behind an open Run, and cost does not cross the wire. `eva attach <url>` follows
-the exit test rather than gating it.
+Four of its thirty-two cells name what is absent instead of a proof or a
+refusal: the pipe lists no Session, it queues no line and steers none, and it
+cannot say a connection dropped; and the wire holds no queue behind an open Run.
+The pipe's three are refusals nobody has written down — it answers once and
+exits, and its connection is the process — and the wire's one waits on what a
+second `submit` during an open Run is to do. `eva attach <url>` follows the exit
+test rather than gating it.
+
+Three cells that were absent are now proven. The terminal reads the listing
+with `/sessions` and opens the row it takes, `--model` is paired with `--print`,
+and what a Provider reported crosses the wire and folds back on the far side.
+The estimate stays behind: it is priced from a Catalog, and the far side holds
+none.

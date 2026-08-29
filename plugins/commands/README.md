@@ -1,7 +1,7 @@
 # @missingstudio/eva-commands
 
 The built-in slash commands for [Eva](../../README.md): `/model`, `/cost`,
-`/clear`, and `/help`. A slash command is a line a person types at the
+`/clear`, `/sessions`, and `/help`. A slash command is a line a person types at the
 Console with a leading `/`. It is handled locally — it never reaches a model
 and costs nothing.
 
@@ -38,12 +38,13 @@ package from another workspace package, add it as a dependency:
 The plugin takes no options and reads no config keys. In the interactive
 surface, type:
 
-| Command              | What it does                     |
-| -------------------- | -------------------------------- |
-| `/model [ref]`       | Show or set the Session's model  |
-| `/cost`              | Show what this Session has spent |
-| `/clear` (or `/new`) | Open a new Session and select it |
-| `/help`              | List every registered command    |
+| Command              | What it does                              |
+| -------------------- | ----------------------------------------- |
+| `/model [ref]`       | Show or set the Session's model           |
+| `/cost`              | Show what this Session has spent          |
+| `/clear` (or `/new`) | Open a new Session and select it          |
+| `/sessions`          | Show the Sessions Eva holds, and open one |
+| `/help`              | List every registered command             |
 
 `/model` with an argument sets the model the `provider/model` reference names
 and says so in words, so a pipe transcript is never poorer than a screen.
@@ -51,6 +52,13 @@ With no argument it asks: a surface that supplies a panel lists every model
 the Catalog holds, with context window and input price as the detail; a
 surface without one writes the current model and the list as words. Choosing
 nothing changes nothing.
+
+`/sessions` asks the same way `/model` does. A surface that supplies a panel
+lists every Session Eva holds, named by its title, with when it last moved as
+the detail; a surface without one writes the same list as words. Taking a row
+opens that Session, which is what `/clear` does with the Session it makes.
+Choosing nothing stays where you are, and a build that holds no Session says
+so rather than drawing an empty panel.
 
 `/help` prints over the Domain's rows, so a command any plugin registers is
 listed. `eva.config` projects a person's `commands:` mapping onto this same
@@ -79,19 +87,22 @@ the plugin-extensible surface.
 ## API
 
 - `commands` — the plugin definition, id `eva.commands`. It registers the
-  four rows and edits in the `/help` and `/model` handlers.
-- `COMMANDS` — the table of the four rows, as `CommandInfo` values.
+  five rows and edits in the `/help` and `/model` handlers.
+- `COMMANDS` — the table of the five rows, as `CommandInfo` values.
 - `modelRows(catalog)` — every model the build can reach as `PickRow`s, each
   named `provider/model` the way the line names one. It lives in
   `@missingstudio/eva-sdk` and is said again here, because `eva.api` answers
   the same rows to a surface that holds no Catalog.
+- `sessionRows(headers)` — every Session Eva holds as `PickRow`s, named by
+  title. It lives beside `modelRows` for the same reason: a panel in a
+  terminal and a rail on a page must not name one Session two ways.
 
 ## Development
 
 Tests live in [src/index.test.ts](src/index.test.ts): the table names exactly
-the four commands, `new` resolves to `/clear`, a booted kernel holds every
-row, and `/model` behaves with and without an argument, with and without a
-panel. Run the suite from the repository root:
+the five commands, `new` resolves to `/clear`, a booted kernel holds every
+row, and `/model` and `/sessions` behave with and without a panel — `/model`
+with and without an argument, `/sessions` over a listing and over none. Run the suite from the repository root:
 
 ```bash
 bun run test

@@ -221,6 +221,44 @@ describe("the wire, read as a Transport", () => {
     await served.close()
   })
 
+  /**
+   * What a Provider reported rides the record, so it crosses the wire with
+   * every other event and this side reads it back whole. The estimate is the
+   * one figure that does not cross: it is priced from a Catalog, and this side
+   * holds none, so a reader here is shown the reported figure or nothing.
+   */
+  it("reads back what a Provider reported, and prices nothing itself", async () => {
+    const memory = await held()
+    await Effect.runPromise(memory.say({ kind: "started", intent: "change it" }))
+    await Effect.runPromise(
+      memory.say({
+        kind: "usage",
+        model: "wire/one",
+        inputTokens: 10,
+        outputTokens: 4,
+        cacheWriteTokens: null,
+        cacheReadTokens: 0,
+        costTicks: 120,
+      }),
+    )
+    const served = await standing(memory)
+
+    const found = await Effect.runPromise(
+      Effect.gen(function* () {
+        const transport = yield* httpTransport({ origin: served.origin })
+        const record = yield* Effect.scoped(transport.api.attach(memory.session))
+        return record.cost()
+      }),
+    )
+
+    expect(found.costTicks).toBe(120)
+    expect(found.inputTokens).toBe(10)
+    expect(found.outputTokens).toBe(4)
+    expect(found.estimatedCostTicks).toBeNull()
+
+    await served.close()
+  })
+
   it("is ready before anything has been asked", async () => {
     const transport = await Effect.runPromise(httpTransport({ origin: "http://eva.invalid" }))
     expect(await Effect.runPromise(SubscriptionRef.get(transport.health))).toBe("ready")

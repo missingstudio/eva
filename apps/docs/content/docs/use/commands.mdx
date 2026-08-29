@@ -11,20 +11,24 @@ Type `/` to open the palette. <kbd>Enter</kbd> runs the selected row, and <kbd>T
 
 ## The commands
 
-| Command  | Argument         | What it does                     |
-| -------- | ---------------- | -------------------------------- |
-| `/help`  | —                | list the commands                |
-| `/model` | `provider/model` | show or set the session model    |
-| `/cost`  | —                | show what this session has spent |
-| `/theme` | `theme`          | show or set the theme            |
-| `/clear` | —                | open a new Session               |
-| `/new`   | —                | an alias for `/clear`            |
+| Command     | Argument         | What it does                              |
+| ----------- | ---------------- | ----------------------------------------- |
+| `/help`     | —                | list the commands                         |
+| `/model`    | `provider/model` | show or set the session model             |
+| `/cost`     | —                | show what this session has spent          |
+| `/theme`    | `theme`          | show or set the theme                     |
+| `/clear`    | —                | open a new Session                        |
+| `/new`      | —                | an alias for `/clear`                     |
+| `/sessions` | —                | show the Sessions Eva holds, and open one |
 
 ## Commands that take an argument
 
 `/model` and `/theme` both name an argument, and both answer a bare line with a
 choice of their own. Running `/model` with no argument opens the model picker
 rather than complaining.
+
+`/sessions` takes no argument and always asks: it opens a picker over the
+Sessions Eva holds, and the row you take is the Session the console follows.
 
 An argument hint says what an argument would look like. It never says one is
 required.

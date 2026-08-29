@@ -41,6 +41,19 @@ describe("parseArgv", () => {
     expect(ran(["--print=hello"]).invocation).toMatchObject({ kind: "print", prompt: "hello" })
   })
 
+  /**
+   * `--model` is a root flag and the pipe is a root invocation, so one action
+   * reads both. The pipe carries the model whichever side of the prompt it was
+   * typed on, and the flag then wins the resolution:
+   * `packages/kernel/src/resolution.test.ts` gives it the last word.
+   */
+  it("carries --model into the invocation behind --print", () => {
+    const asked = { kind: "print", prompt: "hello", overlays: { model: "a/b" } }
+
+    expect(ran(["--model", "a/b", "--print", "hello"]).invocation).toEqual(asked)
+    expect(ran(["--print", "hello", "--model", "a/b"]).invocation).toEqual(asked)
+  })
+
   it.each(["trust", "untrust"] as const)("reads the %s command", (verb) => {
     expect(ran([verb]).invocation).toEqual({ kind: verb })
   })
