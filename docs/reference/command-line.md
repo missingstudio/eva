@@ -49,13 +49,19 @@ eva                                 start the interactive surface
 eva --print <prompt>                answer once and exit
 eva --web                           run the page beside the terminal
 eva run <name> [file]               run a workflow: one input in, the last Run's text out
-eva serve --web                     serve the page that watches a Session
+eva serve --web                     serve the page and its API, with no terminal
 eva attach <url>                    drive a runtime another process serves, from this terminal
 eva trust                           read this directory's .eva, and record the grant
 eva untrust                         drop the grant for this directory
-eva config show                     print the resolved config, and where each key came from
+eva config show [--json]            print the resolved config, and where each key came from
 eva policy check [file]             validate a rule set, and name the fault in a malformed one
 ```
+
+The page has two spellings and they are not the same run. `eva --web` runs the
+page beside the terminal, in one process and against one Session, so a request
+asked in the terminal is answerable in the browser. `eva serve --web` serves
+the page and its API with no terminal. [parity.md](parity.md) section 1 grades
+the two as different doors for that reason.
 
 `eva run` names a harness row. A trailing `.yaml` or `.yml` is stripped before
 the lookup, because `.eva/workflows/release-notes.yaml` is keyed by its base
@@ -70,6 +76,13 @@ bare answers with its own help on standard output and exits 0, exactly as
 `eva config --help` does: asking what a group holds is a question, and only a
 mistake is written where a failure is read.
 
+`show` takes `--json`, and the answer is then one object rather than columns:
+the config as it resolved, the source that last set each key, the plugin list a
+run would load, and where it read from. Nothing is cut to fit a column, because
+this is the output that goes whole into a bug report. What the config sweep
+found still goes to the error stream, so standard output holds one JSON
+document and nothing else.
+
 `eva policy` is a group in the same shape, and `check` is the one thing in it.
 It reads the rules under the `policy` key of a config file — `.eva/config.yaml`
 when nothing names one, because that is the profile a run reads — and writes
@@ -83,15 +96,16 @@ It answers from the rule set alone: no kernel, no model, no Session. The faults
 are `eva.tool.policy`'s to find and this command's to print, so CI and the gate
 at `tool.execute.before` cannot disagree about what a malformed rule set is.
 
-`eva serve` takes the posture as a flag: `--web` is the page that watches a
-Session, and `--acp` at 9c is the next answer to "serve what". A serve that
-names no posture is refused rather than defaulted, because a default would
-start a surface nobody chose. The verb starts the `eva.web` row **by id** —
-`eva` with no verb takes the first interactive surface, and that row is
-registered after the terminal's, so registration order is what says a person
-who typed `eva` gets the terminal. `--host` and `--port` ride the invocation and reach the
-plugin through the build, because a surface row is started with a Client and
-nothing else, so the bind is closed over when the plugin is made.
+`eva serve` takes the posture as a flag: `--web` serves the page and its API
+with no terminal, and `--acp` at 9c is the next answer to "serve what". A
+serve that names no posture is refused rather than defaulted, because a
+default would start a surface nobody chose. The verb starts the `eva.web` row
+**by id** — `eva` with no verb takes the first interactive surface, and that
+row is registered after the terminal's, so registration order is what says a
+person who typed `eva` gets the terminal. `--host` and `--port` ride the
+invocation and reach the plugin through the build, because a surface row is
+started with a Client and nothing else, so the bind is closed over when the
+plugin is made.
 
 A local page binds to loopback, and a non-local `--host` is **refused** before
 anything boots: a remote page needs a token, and stage 9b is what issues one.
@@ -119,7 +133,7 @@ A positional argument is safe under `eva run` and it is not safe at the root:
 the verb is already named, so the positional cannot swallow a misspelled one.
 The rule below about the bare prompt still holds where it was made.
 
-Global flags. They are valid on every command, before it or after it:
+The root's flags. They are written before a command or after it:
 
 | Flag                       | Repeatable | What it does                     |
 | -------------------------- | ---------- | -------------------------------- |
@@ -133,6 +147,20 @@ Global flags. They are valid on every command, before it or after it:
 | `--port <port>`            | no         | the port the page binds          |
 | `-v, --version`            | no         | print the version and exit       |
 | `-h, --help`               | no         | print the help and exit          |
+
+The first four reach every command, because a command reads its own options
+together with the root's. The rest belong to the root run itself: `--web` there
+is the page beside the terminal, and `eva serve` declares `--web`, `--host` and
+`--port` again in its own words, for the page it serves with no terminal.
+
+A command's own flags:
+
+| Command           | Flag                              | What it does                                               |
+| ----------------- | --------------------------------- | ---------------------------------------------------------- |
+| `eva run`         | `--input <file>`                  | the one input, read from a file                            |
+| `eva serve`       | `--web`                           | serve the page and its API, with no terminal               |
+| `eva serve`       | `--host <host>` · `--port <port>` | the address and the port to bind                           |
+| `eva config show` | `--json`                          | print it as one object, with nothing shortened to a column |
 
 `--without-plugin` replaces `--no-plugin`. §8.1 says why the old spelling cannot
 survive, and §9 says why nothing forwards it.

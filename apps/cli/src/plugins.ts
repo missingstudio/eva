@@ -272,6 +272,50 @@ export const BUILT_IN: readonly Plugin[] = [
 ]
 
 /**
+ * The six ids this app knows by name, and what it does with each.
+ *
+ * Every other capability is a plugin the table happens to carry: a run that
+ * drops one with `--without-plugin` is smaller and still whole, and nothing
+ * in this app knows the id. These six are the exceptions to that claim, and
+ * they are written down here because a builder who is not told about them
+ * finds them out by reading our source.
+ *
+ * Three are rebuilt by this app, because what they need is a fact of a run
+ * rather than of a build:
+ *
+ * - `eva.web` and `eva.api`, in `serving` and `besideTerminal`: one run's
+ *   bind, its writer, and the cell that joins the two halves of one port.
+ * - `eva.tui`, in `attaching` and `besideTerminal`: the renderer, the place a
+ *   line runs, and what a row beside it has to say.
+ *
+ * Three run whether or not the plugin they belong to loaded, which is the
+ * sharper exception — a run with one of them disabled is degraded in a way it
+ * cannot report:
+ *
+ * - `eva.approval`: `apps/cli/src/surface.ts` wraps every gate in
+ *   `remembering`, so `--without-plugin eva.approval` drops the mandate and
+ *   keeps the grant memory. The rule language a grant is written in is that
+ *   plugin's, and boot may import no plugin, so the two meet here.
+ * - `eva.tool.policy`: `eva policy check` reads a rule set with `checkRules`
+ *   before any kernel boots, so CI and the gate at `tool.execute.before`
+ *   cannot disagree about what a malformed rule set is.
+ * - `eva.catalog.models`: `DEFAULT_MODEL` is what a config naming no model
+ *   resolves to, and the resolution answers with no kernel, so the default is
+ *   read from the package and not from a loaded Catalog.
+ *
+ * Moving one behind a seam is a change to this list, and the test beside it
+ * is what keeps the list the truth.
+ */
+export const REQUIRED: readonly string[] = [
+  web.id,
+  api.id,
+  tui.id,
+  approval.id,
+  toolPolicy.id,
+  catalogModels.id,
+]
+
+/**
  * Available by id but not loaded unless config asks for it. The other three
  * trace sinks live here: SQLite is the default, and swapping it is two
  * lines of config — disable `eva.trace.sqlite`, name the one wanted.

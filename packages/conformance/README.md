@@ -117,6 +117,7 @@ priced and accepted, and a test is what keeps it a decision.
 | `harness-loop.test.ts`         | The loop, the execution, the gate and a mode, end to end with no model                           |
 | `stage-2-exit.test.ts`         | The Stage 2 exit clauses against the roadmap's words, and where each is proven                   |
 | `w2-exit.test.ts`              | The W2 exit clauses against the roadmap's words, and where each is proven                        |
+| `parity.test.ts`               | Every cell of the parity matrix, and the test each one names                                     |
 | `tui.test.ts`                  | The shipped bindings against the surface, the shipped theme against the renderer's palette       |
 | `session-view.test.tsx`        | The terminal's mapping and the page's, over one fold of one Trace                                |
 
@@ -135,6 +136,15 @@ rules are the ones above. The two clauses the stage plan added — a retried
 submit lands once, and a Session opened over the wire is listed, attached and
 finished — are held outside the comparison against the roadmap's words,
 because a plan's sentence is not one of them.
+
+`parity.test.ts` is a third ledger of the same shape, and it answers to
+[docs/reference/parity.md](../../docs/reference/parity.md) rather than to the
+roadmap. That page grades what each of the four doors can do; this suite
+carries the same rows, doors, verdicts and citations as TypeScript, and each
+row names a test that has to exist. It reads no document — a suite that parses
+prose makes a page a build gate — so the page and the suite are kept together
+by hand: a cell edited on one is edited on the other, and the cell count the
+page spells out in words is asserted here.
 
 The two suites that gate Stage 1's exit live in
 `workflow-validator.test.ts`: a refused Candidate repairs exactly once, with

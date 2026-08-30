@@ -12,6 +12,7 @@ import {
   BUILT_IN,
   BUILT_IN_IDS,
   byID,
+  REQUIRED,
   tui,
   uncarriedOf,
   web,
@@ -144,5 +145,40 @@ describe("the build eva --web runs", () => {
     const built = besideTerminal(buildOf([...BUILT_IN.filter((one) => one !== tui), stranger]), {})
 
     expect(built.all).toContain(stranger)
+  })
+})
+
+/**
+ * The claim this tree makes is that every capability is a plugin. It is true
+ * of everything but the six ids the composition root knows by name, and those
+ * are written down beside the table rather than left for a builder to find in
+ * the source. This is what holds the list to what the root actually does.
+ */
+describe("the ids this app knows by name", () => {
+  it("names the six, and no others", () => {
+    expect(REQUIRED).toEqual([
+      "eva.web",
+      "eva.api",
+      "eva.tui",
+      "eva.approval",
+      "eva.tool.policy",
+      "eva.catalog.models",
+    ])
+  })
+
+  // Named or not, this build has to carry them: the root reaches into each
+  // one, so a table without one is a build that cannot run its own doors.
+  it("carries every one of them in the built-in table", () => {
+    for (const id of REQUIRED) expect(BUILT_IN_IDS).toContain(id)
+  })
+
+  // The three the root rebuilds are rebuilt by id, so the list and the
+  // rebuild cannot drift apart without this saying so.
+  it("names every row the serving rebuild replaces", () => {
+    const rebuilt = besideTerminal(buildOf([...BUILT_IN]), {})
+    for (const plugin of BUILT_IN) {
+      if (rebuilt.all.includes(plugin)) continue
+      expect(REQUIRED).toContain(plugin.id)
+    }
   })
 })

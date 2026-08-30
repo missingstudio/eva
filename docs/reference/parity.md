@@ -8,8 +8,11 @@ The matrix holds forty-eight cells: thirty-one are proven, one is a refusal
 that names itself, and sixteen are neither. The sixteen are the work this page
 exists to find, and section 3 says what is absent in each.
 
-This page is written by hand. Every citation on it names a test in the tree,
-and section 5 says the rules a change to it holds.
+This page is written by hand, and
+[../../packages/conformance/src/parity.test.ts](../../packages/conformance/src/parity.test.ts)
+carries the same matrix as TypeScript. A citation here is a citation there, and
+a proof that is renamed or deleted fails the build. Section 5 says the rules a
+change to this page holds.
 
 ## 1. The four doors
 
@@ -276,7 +279,9 @@ filter at call time.
 
 ## 5. How this page is kept
 
-No suite reads this page. A change to it holds five rules:
+No suite reads this page, because a page that cannot be reworded is a page
+nobody improves. A change to it holds five rules, and they are a reader's to
+keep:
 
 1. The matrix carries the twelve interactions, in the set's own words.
 2. Every interaction has a section, and every section covers the four doors.
@@ -284,8 +289,13 @@ No suite reads this page. A change to it holds five rules:
 4. A cell that reads `proven` or `refused` names at least one citation.
 5. A cell that reads `none` says what is absent.
 
-A citation names a file that exists and a test that file holds. Follow a proof
-that is renamed or deleted to this page, because nothing else will.
+A citation names a file that exists and a test that file holds, and that half
+is held by a machine. `packages/conformance/src/parity.test.ts` carries every
+row, door, verdict and citation of this page as TypeScript, and reads only the
+files it names. **A cell edited here is edited there, and a citation added
+there is added here.** Change one alone and the suite fails: a moved proof
+fails on the citation, and a row added on one side fails on the count this page
+spells out above.
 
 `packages/conformance/src/w2-exit.test.ts` is the other ledger, and it answers
 to the roadmap rather than to this page: it carries the clauses of the W2 exit

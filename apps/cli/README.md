@@ -101,6 +101,14 @@ before the kernel boots. And the Build is closed — config decides what loads,
 but only among the ids the table carries; an id this build has no
 implementation for is reported as a Finding, never fetched.
 
+Every capability is a plugin, and six ids are the exception: this app knows
+them by name. `eva.web`, `eva.api` and `eva.tui` are rebuilt here with one
+run's bind, writer, renderer and wire; `eva.approval`, `eva.tool.policy` and
+`eva.catalog.models` have code this app calls whether or not the plugin
+loaded, so a run that disabled one of those three is degraded in a way it
+cannot report. `REQUIRED` in `src/plugins.ts` is the list, with what each one
+is for, and [src/plugins.test.ts](src/plugins.test.ts) holds it to the table.
+
 ## Development
 
 Run the CLI from source at the repository root with `bun run eva`. Tests
