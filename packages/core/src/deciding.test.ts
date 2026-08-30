@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  answerFor,
   editOf,
   settled,
   looksOnly,
@@ -67,6 +68,39 @@ describe("the options a person is offered", () => {
     expect(optionFor("allow_always")).toBe("allow_always")
     expect(optionFor("  Reject Once ")).toBe("reject_once")
     expect(optionFor("maybe")).toBeUndefined()
+  })
+})
+
+/**
+ * The line a person typed, read once for every door. A terminal and a page
+ * that read one line their own way answer one question two ways, which is the
+ * drift this exists to stop.
+ */
+describe("a line, as the answer it is", () => {
+  it.each(PERMISSION_OPTIONS)("reads $optionId at a permission request", (one) => {
+    expect(answerFor("permission", one.optionId)).toEqual({
+      kind: "permission",
+      optionId: one.optionId,
+    })
+    expect(answerFor("permission", one.name)).toEqual({
+      kind: "permission",
+      optionId: one.optionId,
+    })
+  })
+
+  // A line at a permission request that names no option is what the person
+  // typed, because the four options are the only four.
+  it("takes a line that names no option as the text it is", () => {
+    expect(answerFor("permission", "not yet")).toEqual({ kind: "text", text: "not yet" })
+  })
+
+  /**
+   * And a question takes every line whole. "allow" is a word a person may
+   * answer a question with, and a door that read it as an option would answer
+   * a question nobody asked.
+   */
+  it.each(PERMISSION_OPTIONS)("takes $optionId at a question as the text it is", (one) => {
+    expect(answerFor("question", one.optionId)).toEqual({ kind: "text", text: one.optionId })
   })
 })
 

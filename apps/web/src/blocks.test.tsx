@@ -248,7 +248,11 @@ describe("one Session's Turns", () => {
  * terminal and this page draw one question from one shape.
  */
 describe("a permission request that stands", () => {
-  const ASK: Asking = { request: "call_1", question: "edit may change something. Run it?" }
+  const ASK: Asking = {
+    kind: "permission",
+    request: "call_1",
+    question: "edit may change something. Run it?",
+  }
   const asked = (answer?: (request: string, optionId: string) => void): string =>
     renderToStaticMarkup(
       <BlockView
@@ -292,7 +296,10 @@ describe("a permission request that stands", () => {
   // A Turn of its own, after the record. It is the second source, and the
   // keys never collide with a Turn the record made.
   it("folds into a Turn of its own, keyed apart from the record's", () => {
-    const asks = askingOf([ASK, { request: "call_2", question: "and this one?" }])
+    const asks = askingOf([
+      ASK,
+      { kind: "permission", request: "call_2", question: "and this one?" },
+    ])
     expect(asks).toHaveLength(1)
     expect(asks[0]?.author).toBe("agent")
     expect(asks[0]?.blocks.map((one) => one.key)).toEqual(["asking.0", "asking.1"])

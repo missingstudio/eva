@@ -1,4 +1,4 @@
-import { optionFor, type FrontendAnswer } from "@missingstudio/eva-core"
+import { answerFor, type FrontendAnswer } from "@missingstudio/eva-core"
 import type { FrontendRequest } from "@missingstudio/eva-sdk"
 import { Deferred, Effect } from "effect"
 import type { ConsoleEvent } from "./console.js"
@@ -63,12 +63,9 @@ export const makeAsking = (on: (event: ConsoleEvent) => void): Asking => {
     if (held === undefined) return on({ kind: "answered" })
 
     standing.delete(held.request.id)
-    const option = held.request.kind === "permission" ? optionFor(line) : undefined
     yield* Deferred.succeed(
       held.waiting,
-      (option === undefined
-        ? { kind: "text", text: line }
-        : { kind: "permission", optionId: option }) satisfies FrontendAnswer,
+      answerFor(held.request.kind, line) satisfies FrontendAnswer,
     )
     showing()
   })

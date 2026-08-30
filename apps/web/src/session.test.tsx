@@ -627,7 +627,9 @@ describe("what the page offers", () => {
     const drawn = renderToStaticMarkup(
       <Session
         answer={() => undefined}
-        asking={[{ request: "call_1", question: "edit may change something. Run it?" }]}
+        asking={[
+          { kind: "permission", request: "call_1", question: "edit may change something. Run it?" },
+        ]}
         composer={COMPOSING}
         header={HEADER}
         pipe={READY}

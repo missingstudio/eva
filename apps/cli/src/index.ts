@@ -2,6 +2,7 @@ import type { Build } from "@missingstudio/eva-boot"
 import { httpTransport } from "@missingstudio/eva-api/client"
 import type { ConfigError } from "@missingstudio/eva-kernel"
 import type { Claim } from "@missingstudio/eva-schema"
+import { errorWords } from "@missingstudio/eva-session-view"
 import { grantTrust, isTrusted, revokeTrust, type Overlays } from "@missingstudio/eva-kernel"
 import { checkRules, sayFault, unreachableIn } from "@missingstudio/eva-tool-policy"
 import { refusal } from "@missingstudio/eva-web"
@@ -68,11 +69,21 @@ const door = <A>(
  * What a Run that answered exits with. A Claim that failed says why on the
  * error stream, because the Trace holds the reason and so must the terminal —
  * a reader told only that something did not work has been told nothing.
+ *
+ * The class is worded rather than printed. `errorWords` is the one table the
+ * transcript and the page already read, so a person who reads a failure here
+ * reads the same two sentences they would read at any other door — and the
+ * class stays beside the summary, because that is the word a bug report
+ * carries. Nothing reaches standard output: a pipe's answer is the answer.
  */
 const exitOf = (claim: Claim, world: World): number => {
   if (claim.result === "done") return 0
+  const words = claim.errorClass === undefined ? undefined : errorWords(claim.errorClass)
   world.err(
-    `${speak({ what: `${claim.summary}${claim.errorClass === undefined ? "" : ` (${claim.errorClass})`}` })}\n`,
+    `${speak({
+      what: `${claim.summary}${claim.errorClass === undefined ? "" : ` (${claim.errorClass})`}`,
+      ...(words === undefined ? {} : { why: words.means, next: words.next }),
+    })}\n`,
   )
   return 1
 }
@@ -151,7 +162,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       }
       // Nothing reaches standard output: a shell reads an artifact there.
       for (const fault of found.faults) {
-        world.err(`eva: ${invocation.path}: ${sayFault(fault)}\n`)
+        world.err(`${speak({ what: `${invocation.path}: ${sayFault(fault)}` })}\n`)
       }
       return 1
     }
@@ -204,10 +215,22 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
         return 1
       }
 
+      /**
+       * The page's own words, in this app's voice. `eva.web` owns what is
+       * said — where it bound, a bind it refused, a page nobody built — and
+       * `speak` owns the shape every line this app says to a person is read
+       * in. A plugin may not import an app, so the app speaks for it here.
+       *
+       * The terminal's door does not: `besideTerminal` puts the same words in
+       * the notice area, where the whole screen is already Eva and a prefix
+       * on every line would be noise.
+       */
+      const spoken = (text: string): void => world.out(`${speak({ what: text.trimEnd() })}\n`)
+
       return yield* door(
         world,
         invocation.overlays,
-        serving(build, invocation, world.out),
+        serving(build, invocation, spoken),
         (started) =>
           Effect.map(Effect.exit(withSignals(runServe(started))), (outcome) =>
             closed(outcome, world.err),
@@ -326,7 +349,9 @@ const saying = (err: World["err"]): Tracer.Tracer => {
     override end(endTime: bigint, exit: Exit.Exit<unknown, unknown>): void {
       super.end(endTime, exit)
       const took = Number(endTime - this.startTime) / 1e6
-      err(`eva: ${this.name} ${took.toFixed(1)}ms${Exit.isFailure(exit) ? " failed" : ""}\n`)
+      err(
+        `${speak({ what: `${this.name} ${took.toFixed(1)}ms${Exit.isFailure(exit) ? " failed" : ""}` })}\n`,
+      )
     }
   }
   return Tracer.make({ span: (options) => new Said(options) })

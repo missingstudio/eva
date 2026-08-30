@@ -2,6 +2,7 @@ import type { PermissionOutcome, PermissionRequest } from "@missingstudio/eva-ac
 import type { SessionID, ToolKind } from "@missingstudio/eva-schema"
 import type { Effect } from "effect"
 import type { Edit, Hunk } from "./contracts.js"
+import type { FrontendAnswer } from "./session-api.js"
 
 /**
  * The words a gate reasons in: what one call is, what may be decided about it,
@@ -169,6 +170,24 @@ export const optionFor = (text: string): PermissionOutcome["kind"] | undefined =
   return PERMISSION_OPTIONS.find(
     (one) => one.optionId.toLowerCase() === wanted || one.name.toLowerCase() === wanted,
   )?.kind
+}
+
+/**
+ * The line a person typed, as the answer it is. A permission request offers
+ * four options a person may type, so the line is read for one first and a
+ * line that names none goes as the text it is. Every other request takes the
+ * line whole: a question answered with the word "allow" is that word, and a
+ * door that read it as an option would answer a question nobody asked.
+ *
+ * Both doors call this. The rule is a fact of the request and the line, so
+ * one place decides it — a terminal and a page that each read a line their
+ * own way are two products.
+ */
+export const answerFor = (kind: "permission" | "question", line: string): FrontendAnswer => {
+  const option = kind === "permission" ? optionFor(line) : undefined
+  return option === undefined
+    ? { kind: "text", text: line }
+    : { kind: "permission", optionId: option }
 }
 
 /**

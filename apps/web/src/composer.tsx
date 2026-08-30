@@ -5,7 +5,7 @@ import {
   type LoopState,
   type LoopStep,
 } from "@missingstudio/eva-client-runtime"
-import { optionFor } from "@missingstudio/eva-core"
+import { answerFor } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import { namesCommand } from "@missingstudio/eva-sdk"
 import type { Asking } from "@missingstudio/eva-session-view"
@@ -113,23 +113,16 @@ const ran = (session: SessionID, line: string, said: (wrote: string) => void): v
   )
 
 /**
- * The line, as an answer to the question that stands. The four options are
- * words a person can type, so the line is read for one first and a line that
- * names none goes as the text it is — which is how the terminal reads a line
- * typed at a standing question, and the gate reads both back the same way.
+ * The line, as an answer to the question that stands. What the line means is
+ * `answerFor`'s, which is the rule the terminal answers by too: the four
+ * options are words a person can type at a permission request, and every
+ * other question takes the line whole. One question has one answer, whichever
+ * door answers it.
  */
-const replied = (request: string, line: string): void => {
-  const option = optionFor(line)
+const replied = (asking: Asking, line: string): void => {
   sent(
     client().then((one) =>
-      Effect.runPromise(
-        one.api.answer(
-          request,
-          option === undefined
-            ? { kind: "text", text: line }
-            : { kind: "permission", optionId: option },
-        ),
-      ),
+      Effect.runPromise(one.api.answer(asking.request, answerFor(asking.kind, line))),
     ),
   )
 }
@@ -152,7 +145,7 @@ export const useComposer = (session: SessionID, asking: readonly Asking[] = []):
 
   // The question a typed line answers is the first one standing, which is the
   // one the terminal answers too.
-  const standing = asking[0]?.request
+  const standing = asking[0]
 
   const drive = (step: LoopStep): void => {
     held.current = Effect.runSync(

@@ -47,6 +47,7 @@
         "@missingstudio/eva-schema": "workspace:*",
         "@missingstudio/eva-sdk": "workspace:*",
         "@missingstudio/eva-session-jsonl": "workspace:*",
+        "@missingstudio/eva-session-view": "workspace:*",
         "@missingstudio/eva-shell": "workspace:*",
         "@missingstudio/eva-themes": "workspace:*",
         "@missingstudio/eva-tool-bash": "workspace:*",

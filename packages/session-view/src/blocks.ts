@@ -247,11 +247,17 @@ export const blocksOf = (transcript: Transcript): readonly Turn[] =>
   blockFold(transcript.messages())
 
 /**
- * A permission request nobody has answered: the id an answer names, and the
- * question that was asked. The id is the tool call's, so the record the
- * surface already holds names the call the question is about.
+ * A request nobody has answered: what was asked, the id an answer names, and
+ * which of the two kinds of question it is. The id is the tool call's, so the
+ * record the surface already holds names the call the question is about.
+ *
+ * The kind is carried because a line typed at a question is read by it: a
+ * permission request offers four options a person may type and every other
+ * request takes the line whole. `answerFor` is the one rule, and it needs
+ * this to apply it.
  */
 export interface Asking {
+  readonly kind: "permission" | "question"
   readonly request: string
   readonly question: string
 }

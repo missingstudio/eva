@@ -1,7 +1,7 @@
 import { PERMISSION_OPTIONS } from "@missingstudio/eva-core"
 import type { ActorKind } from "@missingstudio/eva-schema"
 import {
-  errorWords,
+  errorText,
   hunkText,
   resultText,
   type Block,
@@ -178,7 +178,7 @@ export const BlockView = ({
      * nothing, so it is said and never dressed up.
      */
     case "outcome": {
-      const words = block.errorClass === undefined ? undefined : errorWords(block.errorClass)
+      const said = block.errorClass === undefined ? undefined : errorText(block.errorClass)
       if (block.result !== "failed")
         return (
           <p className="mode-line">
@@ -201,7 +201,7 @@ export const BlockView = ({
             )}
           </p>
           {block.summary === undefined ? null : <p className="ask-q">{block.summary}</p>}
-          {words === undefined ? null : <p className="ask-q">{`${words.means} ${words.next}`}</p>}
+          {said === undefined ? null : <p className="ask-q">{said}</p>}
         </div>
       )
     }
