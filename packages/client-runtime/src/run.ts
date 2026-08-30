@@ -27,7 +27,7 @@ export type ClientState = "ready" | "synchronizing" | "disconnected"
 /**
  * What one open Run says to its caller, on one queue. A payload is a word of
  * the live stream; a fold is the record taking that stream's place. Always
- * qualified: the bare word belongs to the stage 13 domain.
+ * qualified, because the bare word is claimed elsewhere.
  */
 export type RunSignal =
   | { readonly kind: "payload"; readonly payload: Payload }

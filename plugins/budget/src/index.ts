@@ -23,8 +23,8 @@ export interface BudgetDeps {
 }
 
 /**
- * Accounting and display at stage 0; a limit enforces only when config sets
- * one.
+ * A Budget accounts and reports always; it enforces only when config sets a
+ * limit.
  *
  * A Provider's own figure is what a Budget spends. When none arrives it
  * spends the counters at catalog rates instead, because a limit that can never

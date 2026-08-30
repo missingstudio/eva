@@ -34,8 +34,8 @@ export interface Serve {
   /**
    * `local` is single-tenant and `hosted` is multi-tenant, and both are this
    * one artifact. The posture is read when the surface starts and it changes
-   * no byte of what is served; what each posture then permits arrives with
-   * the token at 9b.
+   * no byte of what is served; what each posture permits waits on a way to
+   * authenticate a visitor, which this build has none of.
    */
   readonly posture: string
   // Where the bound address is said. A `Frontend` carries none.

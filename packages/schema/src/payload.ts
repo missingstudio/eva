@@ -81,8 +81,8 @@ export type Verdict = "valid" | "invalid" | "unchecked"
 /**
  * One thing a Candidate got wrong: where, and what the JSON Schema wanted
  * there. `at` is a JSON Pointer and "" is the root. It carries no value found,
- * because the Candidate itself is recorded as `text`, and because Stage 6's
- * redaction should confirm that rule rather than discover it.
+ * because the Candidate itself is recorded as `text`, and because a
+ * redaction pass should confirm that rule rather than discover it.
  */
 export interface Fault {
   readonly at: string

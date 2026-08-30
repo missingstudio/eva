@@ -134,8 +134,8 @@ const param = (data: Record<string, unknown>, key: string): string => {
 
 /**
  * One short clause in Eva's words, never the library's message. A vendor's
- * prose would land in a record Stage 6 freezes, and a second Validator
- * plugin could not fill it.
+ * prose would land on the Trace, which nothing rewrites, and a second
+ * Validator plugin could not fill it.
  */
 const wantedOf = (error: JsonError): string => {
   const data: Record<string, unknown> = error.data
