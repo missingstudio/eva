@@ -16,8 +16,6 @@ import {
   type Running,
 } from "@missingstudio/eva-sdk"
 import {
-  canonical,
-  conflicts,
   makeKeymap,
   themeColors,
   type KeyPress,
@@ -39,17 +37,10 @@ import {
 import { branchOf, shortPath } from "./banner.js"
 import { apply, backStep, frameOf, initial, type ConsoleEvent, type Place } from "./console.js"
 import { makeAsking } from "./ask.js"
+import { missingCredential, noticesOf } from "./notices.js"
+import { makePalette } from "./palette.js"
 import { edit, pasted, type LineAction, type LineCommand } from "./line.js"
-import {
-  commandRows,
-  completed,
-  completionQuery,
-  opened,
-  selectedRow,
-  COMMANDS_HINT,
-  COMMANDS_TITLE,
-  type OpenOverlay,
-} from "./overlay.js"
+import { selectedRow, type OpenOverlay } from "./overlay.js"
 import { makePicks } from "./pick.js"
 
 export const TUI_SURFACE = "eva.tui"
@@ -117,32 +108,6 @@ export interface SurfaceDeps {
 // How often the spinner turns. Fast enough to read as motion, slow enough
 // that a redraw is not what the terminal spends its time on.
 export const TICK = 100
-
-/**
- * A provider with no key, as one actionable line. It names the variable to
- * export, because "not connected" is a state and not a step, and it names the
- * endpoints that need no key at all, because that is the other way out.
- */
-export const sayNoCredential = (provider: string, variable: string): string =>
-  `no key for ${provider}, so a prompt cannot run: export ${variable}, or name another endpoint — Ollama, vLLM, a gateway — in config`
-
-/**
- * The key this Session would need and does not have, or nothing.
- *
- * The provider is the Session's own, so a run against an endpoint that needs
- * no key is told nothing: a provider that projects no `api_key` row wants no
- * variable, and a warning about one it does not read is noise a person learns
- * to pass over.
- */
-const missingCredential = (
-  provider: string,
-  rows: readonly IntegrationInfo[],
-): string | undefined => {
-  const named = rows.filter((row) => row.provider === provider)
-  if (named.some((row) => row.connected)) return undefined
-  const variable = named.find((row) => row.variable !== undefined)?.variable
-  return variable === undefined ? undefined : sayNoCredential(provider, variable)
-}
 
 /**
  * A panel's own query is a line with no bindings on it: the keys that
@@ -242,19 +207,13 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
           yield* deps.integrations,
         )
 
-  // A binding that cannot fire and a key bound twice are degraded outcomes,
-  // said where the person is looking rather than passed over. This is the
-  // one place rows collapse into a keymap, so it is the one place that asks.
-  const notes = [
-    ...(deps.notices ?? []),
-    ...(missing === undefined ? [] : [missing]),
-    ...rows
-      .filter((row) => canonical(row.binding) === undefined)
-      .map((row) => `key binding ${row.id} names no key this surface knows: ${row.binding}`),
-    ...conflicts(rows).map(
-      (one) => `${one.binding} is bound twice (${one.ids.join(", ")}); the last one wins`,
-    ),
-  ]
+  // What the person reads before the first fold. Which sentences those are is
+  // `noticesOf`'s; what is here is only the three answers it folds.
+  const notes = noticesOf({
+    ...(deps.notices === undefined ? {} : { said: deps.notices }),
+    ...(missing === undefined ? {} : { credential: missing }),
+    keymap: rows,
+  })
 
   const picks = makePicks({ on, theme: () => state.theme })
 
@@ -637,80 +596,15 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     })
 
     /**
-     * The panel over every command there is. It reads the command Domain
-     * at the point of use, so a plugin loaded a moment ago is in it.
+     * The panel and the completion behind it. A row it runs comes back as a
+     * line and goes out through the fold, which is the door a typed line
+     * takes — so a row taken while a Run is open waits its turn.
      */
-    const openPalette = Effect.fn("eva.tui.palette")(function* () {
-      const rows = commandRows(yield* deps.commands)
-      on({
-        kind: "opened-overlay",
-        overlay: opened(COMMANDS_TITLE, rows, "", { kind: "command" }, "query", COMMANDS_HINT),
-      })
-    })
-
-    /**
-     * Completion, kept in step with the line. A line that is still naming a
-     * command has a panel; one that has stopped naming one does not, and a
-     * panel dismissed for this line stays dismissed until the line moves on.
-     */
-    const completing = Effect.fn("eva.tui.completing")(function* () {
-      const showing = state.overlay?.source === "buffer"
-      const query = completionQuery(state.buffer)
-      if (query === undefined || state.hushed) {
-        if (showing) on({ kind: "closed-overlay" })
-        return
-      }
-      // An open panel is already following the line: the Console refiltered
-      // it when the line changed.
-      if (showing) return
-      const rows = commandRows(yield* deps.commands)
-      on({
-        kind: "opened-overlay",
-        overlay: opened(
-          COMMANDS_TITLE,
-          rows,
-          state.buffer,
-          { kind: "command" },
-          "buffer",
-          COMMANDS_HINT,
-        ),
-      })
-    })
-
-    /**
-     * A row was taken. Enter runs it and tab leaves it on the line to
-     * finish, which is what the panel says the two keys do.
-     *
-     * A command that names an argument is still run: `argumentHint` says
-     * what an argument would look like, never that one is needed, and
-     * running with none is not inventing one — it is the line the person
-     * would have typed. `/theme` and `/model` both answer a bare line with
-     * a choice of their own, and reading the hint as a demand is what made
-     * the palette type them out instead of opening either.
-     */
-    const take = Effect.fn("eva.tui.take")(function* (how: "run" | "complete") {
-      const overlay = state.overlay
-      if (overlay === undefined) return
-      const row = selectedRow(overlay)
-      if (row === undefined) return
-
-      const command = (yield* deps.commands).find((one) => one.id === row.id)
-      if (command === undefined) return
-      on({ kind: "closed-overlay" })
-
-      const line = completed(command)
-      if (how === "complete") {
-        on({ kind: "typed", buffer: line, cursor: Array.from(line).length })
-        return
-      }
-      // The space tab leaves for an argument is not part of the line a Run
-      // is opened on.
-      const run = line.trimEnd()
-      on({ kind: "submitted", line: run })
-      on({ kind: "typed", buffer: "", cursor: 0 })
-      // Through the fold like any other line, so a row taken while a Run is
-      // open waits its turn rather than opening a second one over it.
-      yield* walked({ kind: "line", line: run, asking: state.asking })
+    const palette = makePalette({
+      on,
+      commands: deps.commands,
+      state: () => state,
+      run: (line) => Effect.asVoid(walked({ kind: "line", line, asking: state.asking })),
     })
 
     // The panel's three touch nothing the fold holds, so they are answered
@@ -718,15 +612,15 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     for (;;) {
       const signal = yield* Queue.take(keys)
       if (signal.kind === "palette") {
-        yield* openPalette()
+        yield* palette.open()
         continue
       }
       if (signal.kind === "completing") {
-        yield* completing()
+        yield* palette.completing()
         continue
       }
       if (signal.kind === "took") {
-        yield* take(signal.how)
+        yield* palette.take(signal.how)
         continue
       }
       const step: LoopStep =

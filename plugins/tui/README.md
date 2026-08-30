@@ -91,13 +91,18 @@ overrides the working directory the banner shows.
 `console.ts` is a pure reducer: `ConsoleState`, one `ConsoleEvent` case per
 screen rule, and `frameOf` to project the Frame a Renderer draws.
 `makeSurface` in `surface.ts` wires the world to it — keys in, frames out,
-Session API calls at the edge — and keeps no state of its own. `pick.ts`
-holds the choices a command opened and `ask.ts` the questions that stand, so
-each keeps its own map and the surface holds neither. The line
-editor in `line.ts` counts code points, and the keymap alone decides what a
-chord means: rebind `session.submit` and plain enter is released with it. A
-paste lands as text and never reaches the keymap, so a newline in a paste
-never submits.
+Session API calls at the edge — and keeps no state of its own. Four tenants
+live beside it, each with its own state and its own doors: `pick.ts` holds the
+choices a command opened, `ask.ts` the questions that stand, `palette.ts` the
+panel over every command and the completion that follows the line into it, and
+`notices.ts` folds what a person reads before the first fold — a theme that
+named no row, a provider with no key, a binding that names no key here. A row
+the palette runs comes back as the line a person would have typed and goes out
+through the same fold a typed line takes, so it waits its turn behind an open
+Run. The line editor in `line.ts` counts code points, and the keymap alone
+decides what a chord means: rebind `session.submit` and plain enter is released
+with it. A paste lands as text and never reaches the keymap, so a newline in a
+paste never submits.
 
 ## A question a person is looking at
 
