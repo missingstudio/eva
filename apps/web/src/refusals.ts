@@ -1,6 +1,7 @@
 import { Effect, Stream, SubscriptionRef } from "effect"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { refusals } from "./eva.js"
+import { holding, useHeld } from "./held.js"
 
 /**
  * What the far side refused, and what the page does with a write it did not
@@ -42,16 +43,9 @@ export interface Refused {
  * One page, one answer: the composer draws it where a person is typing and
  * the index draws it where a person pressed, and a refusal cleared in one
  * that stood in the other would be two answers to what the far side last
- * said. So it is held here, the way the listing is, and every reader hears
- * the same change.
+ * said. So it is held here, and every reader hears the same change.
  */
-let held: string | undefined
-const readers = new Set<(said: string | undefined) => void>()
-
-const tell = (now: string | undefined): void => {
-  held = now
-  for (const wake of readers) wake(now)
-}
+const held = holding<string | undefined>(undefined)
 
 /**
  * The channel, read for as long as the page is open. It is opened by the
@@ -68,7 +62,7 @@ const watch = (): void => {
     Effect.runFork(
       Stream.runForEach(SubscriptionRef.changes(channel), (one) =>
         Effect.sync(() => {
-          if (one !== undefined) tell(one.said)
+          if (one !== undefined) held.tell(one.said)
         }),
       ),
     ),
@@ -76,16 +70,8 @@ const watch = (): void => {
 }
 
 export const useRefusal = (): Refused => {
-  const [shown, setShown] = useState(held)
+  const shown = useHeld(held)
+  useEffect(watch, [])
 
-  useEffect(() => {
-    watch()
-    readers.add(setShown)
-    // What was refused before this component was drawn is still what was
-    // refused, so a reader that arrives late reads it rather than nothing.
-    setShown(held)
-    return () => void readers.delete(setShown)
-  }, [])
-
-  return { ...(shown === undefined ? {} : { said: shown }), clear: () => tell(undefined) }
+  return { ...(shown === undefined ? {} : { said: shown }), clear: () => held.tell(undefined) }
 }

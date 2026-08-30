@@ -1,9 +1,15 @@
+// @vitest-environment happy-dom
+import type { SessionAPI } from "@missingstudio/eva-core"
 import { BINDINGS } from "@missingstudio/eva-keymap"
-import { THEMES } from "@missingstudio/eva-themes"
+import type { SessionID } from "@missingstudio/eva-schema"
+import type { CommandContext } from "@missingstudio/eva-sdk"
+import { withPlugin } from "@missingstudio/eva-testkit"
+import { themes, THEMES } from "@missingstudio/eva-themes"
 import { DEFAULT_PALETTE, paletteFrom } from "@missingstudio/eva-tui-renderer"
 import { canonical, makeKeymap, themeColors, type KeyPress } from "@missingstudio/eva-tui-core"
 import { edit } from "@missingstudio/eva-tui"
-import { THEMES as DRAWN } from "@missingstudio/eva-web-app"
+import { themed, THEMES as DRAWN } from "@missingstudio/eva-web-app"
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 
 /**
@@ -91,6 +97,37 @@ describe("the shipped themes against the renderer", () => {
 })
 
 /**
+ * What `/theme` wrote at the terminal, for one line, without the newline a
+ * terminal needs and a page does not.
+ *
+ * The command is the theme plugin's and the rows it picks from are the theme
+ * Domain's, so it is only itself once a kernel has built it. It is handed a
+ * `paint` and no `pick`: that is the surface the page is — one that draws
+ * colours and offers no panel to move a selection through — so both doors are
+ * asked the same question.
+ */
+const wrote = (argument?: string): Promise<string> => {
+  const said: string[] = []
+  const ctx: CommandContext = {
+    // Nothing here reaches a Session: a theme is not a fact of one.
+    api: {} as SessionAPI,
+    session: "sess_themes" as SessionID,
+    write: (text) => void said.push(text),
+    select: () => {},
+    paint: () => {},
+    ...(argument === undefined ? {} : { argument }),
+  }
+
+  return withPlugin(themes, (kernel) =>
+    Effect.gen(function* () {
+      const row = (yield* kernel.domains.command.get).find((one) => one.id === "theme")
+      if (row?.run === undefined) throw new Error("this build cannot run /theme")
+      yield* row.run(ctx)
+    }),
+  ).then(() => said.join("").trimEnd())
+}
+
+/**
  * And the same rows on the page. A theme is a Domain the terminal reads in
  * process, and the page cannot: the rows travel with the renderer contract,
  * which is not a package a browser bundle may pull. So the page says them
@@ -100,5 +137,20 @@ describe("the shipped themes against the renderer", () => {
 describe("the shipped themes against the page", () => {
   it("offers the same rows, in the same order, with the same colours", () => {
     expect(DRAWN).toEqual(THEMES)
+  })
+
+  // And the sentences, which the rows do not carry. A person picks a theme by
+  // reading one of three lines, and one list held to the other while the
+  // three lines drifted would still be two products.
+  it("lists the rows in the same words at both doors", async () => {
+    expect(await wrote()).toBe(themed("/theme"))
+  })
+
+  it.each(THEMES)("reports $id applied in the same words at both doors", async (theme) => {
+    expect(await wrote(theme.id)).toBe(themed(`/theme ${theme.id}`))
+  })
+
+  it("refuses a name that is not a theme in the same words at both doors", async () => {
+    expect(await wrote("dusk")).toBe(themed("/theme dusk"))
   })
 })

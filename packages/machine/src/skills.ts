@@ -79,11 +79,8 @@ export const capabilityDescription = (capability: (typeof capabilities)[number])
  * One capability as a SKILL.md. The frontmatter `name` must equal the parent
  * directory's name, which is why the capability's name is both.
  */
-export const capabilitySkill = (name: string): string | undefined => {
-  const capability = capabilities.find((entry) => entry.name === name)
-  if (!capability) return undefined
-
-  return lines([
+const skillFor = (capability: (typeof capabilities)[number]): string =>
+  lines([
     "---",
     `name: ${capability.name}`,
     `description: ${capabilityDescription(capability)}`,
@@ -110,6 +107,11 @@ export const capabilitySkill = (name: string): string | undefined => {
     "",
     `${origin.docs}/${capability.slug}`,
   ])
+
+// The same document, for a caller that has only the name.
+export const capabilitySkill = (name: string): string | undefined => {
+  const capability = capabilities.find((entry) => entry.name === name)
+  return capability === undefined ? undefined : skillFor(capability)
 }
 
 /**
@@ -123,5 +125,5 @@ export const capabilitySkills = (urlOf: (name: string) => string): SkillSource[]
     name: capability.name,
     description: capabilityDescription(capability),
     url: urlOf(capability.name),
-    body: capabilitySkill(capability.name)!,
+    body: skillFor(capability),
   }))
