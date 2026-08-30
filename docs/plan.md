@@ -105,9 +105,8 @@ package name        @missingstudio/eva-a-b
 
 `eva.trace.jsonl` is `plugins/trace-jsonl/`, published as
 `@missingstudio/eva-trace-jsonl`. `eva.provider.anthropic` is
-`plugins/provider-anthropic/`. The rule has **one exception**: `eva.tui` lives
-in `plugins/tui/` but publishes as `@missingstudio/eva-tui-surface`, because
-`packages/tui` already holds the renderer and took the plain name.
+`plugins/provider-anthropic/`. `eva.tui` is `plugins/tui/`, published as
+`@missingstudio/eva-tui`.
 
 Three directories, and which one a stage's work belongs in:
 
@@ -188,32 +187,32 @@ more than that, it is becoming a second contract — stop it there.
 These are mostly _extensions_ of a small number of paths rather than new
 directories, which is the whole argument for the surface tracks being cheap.
 
-| Stage | Creates or extends                                                                              |
-| ----- | ----------------------------------------------------------------------------------------------- |
-| C0    | done — `apps/cli/` · `plugins/tui/` · `plugins/print/` · `packages/tui/` · `packages/tui-core/` |
-| C1    | `plugins/tui/` · `packages/session-view/`                                                       |
-| C2    | `apps/cli/` (the `top` verb) · `plugins/tui/` · `packages/session-view/`                        |
-| C3    | `apps/cli/` · `plugins/tui/` · `packages/session-view/`                                         |
-| C4    | `apps/cli/`                                                                                     |
-| W0    | done — `packages/client-runtime/`                                                               |
-| W1    | **`packages/session-view/`** · **`plugins/api/`** · **`plugins/web/`** · **`apps/web/`**        |
-| W2    | `plugins/api/` · `plugins/web/` · `apps/web/`                                                   |
-| W3    | `packages/session-view/` · `apps/web/`                                                          |
-| W4    | `apps/web/`                                                                                     |
-| W5    | `apps/web/`                                                                                     |
-| D0    | **`apps/desktop/`** · `apps/desktop/src-tauri/`                                                 |
-| D1    | `apps/desktop/`                                                                                 |
-| D2    | `apps/desktop/` · `.github/workflows/` — one more channel, never a second pipeline              |
-| M0    | `packages/client-runtime/` · **`plugins/enroll/`**                                              |
-| M1    | **`plugins/notify/`**                                                                           |
-| M2    | **`apps/mobile/`**                                                                              |
-| M3–M4 | `apps/mobile/`                                                                                  |
-| M5    | `plugins/enroll/` · `plugins/control/`                                                          |
-| S1    | `apps/cli/` · a compose file · and a **separate** Terraform or Pulumi repository                |
-| S2    | `plugins/export/` · `plugins/tenant/`                                                           |
-| S3    | `plugins/svc-sandbox/` · `plugins/svc-tokens/` · `plugins/svc-integrations/`                    |
-| S4    | `plugins/billing/`                                                                              |
-| S5    | `apps/cli/` · `plugins/halt/`                                                                   |
+| Stage | Creates or extends                                                                                       |
+| ----- | -------------------------------------------------------------------------------------------------------- |
+| C0    | done — `apps/cli/` · `plugins/tui/` · `plugins/print/` · `packages/tui-renderer/` · `packages/tui-core/` |
+| C1    | `plugins/tui/` · `packages/session-view/`                                                                |
+| C2    | `apps/cli/` (the `top` verb) · `plugins/tui/` · `packages/session-view/`                                 |
+| C3    | `apps/cli/` · `plugins/tui/` · `packages/session-view/`                                                  |
+| C4    | `apps/cli/`                                                                                              |
+| W0    | done — `packages/client-runtime/`                                                                        |
+| W1    | **`packages/session-view/`** · **`plugins/api/`** · **`plugins/web/`** · **`apps/web/`**                 |
+| W2    | `plugins/api/` · `plugins/web/` · `apps/web/`                                                            |
+| W3    | `packages/session-view/` · `apps/web/`                                                                   |
+| W4    | `apps/web/`                                                                                              |
+| W5    | `apps/web/`                                                                                              |
+| D0    | **`apps/desktop/`** · `apps/desktop/src-tauri/`                                                          |
+| D1    | `apps/desktop/`                                                                                          |
+| D2    | `apps/desktop/` · `.github/workflows/` — one more channel, never a second pipeline                       |
+| M0    | `packages/client-runtime/` · **`plugins/enroll/`**                                                       |
+| M1    | **`plugins/notify/`**                                                                                    |
+| M2    | **`apps/mobile/`**                                                                                       |
+| M3–M4 | `apps/mobile/`                                                                                           |
+| M5    | `plugins/enroll/` · `plugins/control/`                                                                   |
+| S1    | `apps/cli/` · a compose file · and a **separate** Terraform or Pulumi repository                         |
+| S2    | `plugins/export/` · `plugins/tenant/`                                                                    |
+| S3    | `plugins/svc-sandbox/` · `plugins/svc-tokens/` · `plugins/svc-integrations/`                             |
+| S4    | `plugins/billing/`                                                                                       |
+| S5    | `apps/cli/` · `plugins/halt/`                                                                            |
 
 **Bold** is the path that stage creates. Everything else is a path another
 stage creates and this one adds to.

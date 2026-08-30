@@ -1,8 +1,8 @@
 import { BINDINGS } from "@missingstudio/eva-keymap"
 import { THEMES } from "@missingstudio/eva-themes"
-import { DEFAULT_PALETTE, paletteFrom } from "@missingstudio/eva-tui"
+import { DEFAULT_PALETTE, paletteFrom } from "@missingstudio/eva-tui-renderer"
 import { canonical, makeKeymap, themeColors, type KeyPress } from "@missingstudio/eva-tui-core"
-import { edit } from "@missingstudio/eva-tui-surface"
+import { edit } from "@missingstudio/eva-tui"
 import { describe, expect, it } from "vitest"
 
 /**

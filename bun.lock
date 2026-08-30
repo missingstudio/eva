@@ -62,7 +62,7 @@
         "@missingstudio/eva-trace-postgres": "workspace:*",
         "@missingstudio/eva-trace-sqlite": "workspace:*",
         "@missingstudio/eva-tui": "workspace:*",
-        "@missingstudio/eva-tui-surface": "workspace:*",
+        "@missingstudio/eva-tui-renderer": "workspace:*",
         "@missingstudio/eva-usage": "workspace:*",
         "@missingstudio/eva-validator": "workspace:*",
         "@missingstudio/eva-web": "workspace:*",
@@ -248,7 +248,7 @@
         "@missingstudio/eva-trace-sqlite": "workspace:*",
         "@missingstudio/eva-tui": "workspace:*",
         "@missingstudio/eva-tui-core": "workspace:*",
-        "@missingstudio/eva-tui-surface": "workspace:*",
+        "@missingstudio/eva-tui-renderer": "workspace:*",
         "@missingstudio/eva-validator": "workspace:*",
         "@missingstudio/eva-web": "workspace:*",
         "@missingstudio/eva-web-app": "workspace:*",
@@ -379,8 +379,19 @@
         "typescript": "catalog:",
       },
     },
-    "packages/tui": {
-      "name": "@missingstudio/eva-tui",
+    "packages/tui-core": {
+      "name": "@missingstudio/eva-tui-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@missingstudio/eva-schema": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/tui-renderer": {
+      "name": "@missingstudio/eva-tui-renderer",
       "version": "0.0.0",
       "dependencies": {
         "@missingstudio/eva-session-view": "workspace:*",
@@ -392,17 +403,6 @@
       "devDependencies": {
         "@types/node": "catalog:",
         "@types/react": "19.2.18",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/tui-core": {
-      "name": "@missingstudio/eva-tui-core",
-      "version": "0.0.0",
-      "dependencies": {
-        "@missingstudio/eva-schema": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/node": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -951,7 +951,7 @@
       },
     },
     "plugins/tui": {
-      "name": "@missingstudio/eva-tui-surface",
+      "name": "@missingstudio/eva-tui",
       "version": "0.0.0",
       "dependencies": {
         "@missingstudio/eva-client-runtime": "workspace:*",
@@ -1391,11 +1391,11 @@
 
     "@missingstudio/eva-trace-sqlite": ["@missingstudio/eva-trace-sqlite@workspace:plugins/trace-sqlite"],
 
-    "@missingstudio/eva-tui": ["@missingstudio/eva-tui@workspace:packages/tui"],
+    "@missingstudio/eva-tui": ["@missingstudio/eva-tui@workspace:plugins/tui"],
 
     "@missingstudio/eva-tui-core": ["@missingstudio/eva-tui-core@workspace:packages/tui-core"],
 
-    "@missingstudio/eva-tui-surface": ["@missingstudio/eva-tui-surface@workspace:plugins/tui"],
+    "@missingstudio/eva-tui-renderer": ["@missingstudio/eva-tui-renderer@workspace:packages/tui-renderer"],
 
     "@missingstudio/eva-usage": ["@missingstudio/eva-usage@workspace:plugins/usage"],
 

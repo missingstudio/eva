@@ -1,6 +1,6 @@
 import { boot, buildOf } from "@missingstudio/eva-boot"
 import { define } from "@missingstudio/eva-sdk"
-import { TUI_SURFACE } from "@missingstudio/eva-tui-surface"
+import { TUI_SURFACE } from "@missingstudio/eva-tui"
 import { WEB_SURFACE } from "@missingstudio/eva-web"
 import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"

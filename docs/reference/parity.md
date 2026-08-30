@@ -16,12 +16,12 @@ change to this page holds.
 
 ## 1. The four doors
 
-| Door         | How it is started                   | What it is                                |
-| ------------ | ----------------------------------- | ----------------------------------------- |
-| **Terminal** | `eva`                               | `eva.tui`, drawing through `packages/tui` |
-| **Pipe**     | `eva -p`                            | `eva.print` — one answer, then exit       |
-| **Page**     | `eva --web`, beside the terminal    | `apps/web` over `eva.web`                 |
-| **Wire**     | `eva serve --web`, with no terminal | `eva.api`, which any program can curl     |
+| Door         | How it is started                   | What it is                                         |
+| ------------ | ----------------------------------- | -------------------------------------------------- |
+| **Terminal** | `eva`                               | `eva.tui`, drawing through `packages/tui-renderer` |
+| **Pipe**     | `eva -p`                            | `eva.print` — one answer, then exit                |
+| **Page**     | `eva --web`, beside the terminal    | `apps/web` over `eva.web`                          |
+| **Wire**     | `eva serve --web`, with no terminal | `eva.api`, which any program can curl              |
 
 The page has two spellings and they are not the same run. `eva --web` runs the
 page beside the terminal, in one process and against one Session, so a request

@@ -1,4 +1,4 @@
-# @missingstudio/eva-tui-surface
+# @missingstudio/eva-tui
 
 The interactive terminal surface for [Eva](../../README.md). It ships the
 Console a person types into: a prompt line, a live area that streams the open
@@ -32,7 +32,7 @@ The Eva CLI already includes this plugin — it loads by default, and plain
 package, add it as a dependency:
 
 ```json
-{ "dependencies": { "@missingstudio/eva-tui-surface": "workspace:*" } }
+{ "dependencies": { "@missingstudio/eva-tui": "workspace:*" } }
 ```
 
 ## Usage
@@ -69,13 +69,13 @@ them — a plugin may not import an app. The Eva CLI composes it like this
 (`apps/cli/src/plugins.ts`):
 
 ```ts
-import { makeTui } from "@missingstudio/eva-tui-surface"
+import { makeTui } from "@missingstudio/eva-tui"
 
 export const tui = makeTui({
   // Loaded only when the surface starts. The rich renderer is native code
   // over Bun's FFI, so a --print run never imports it.
   renderer: async (theme) => {
-    const { start } = await import("@missingstudio/eva-tui")
+    const { start } = await import("@missingstudio/eva-tui-renderer")
     return start(theme === undefined ? {} : { theme })
   },
   version: VERSION,
@@ -91,7 +91,9 @@ overrides the working directory the banner shows.
 `console.ts` is a pure reducer: `ConsoleState`, one `ConsoleEvent` case per
 screen rule, and `frameOf` to project the Frame a Renderer draws.
 `makeSurface` in `surface.ts` wires the world to it — keys in, frames out,
-Session API calls at the edge — and keeps no state of its own. The line
+Session API calls at the edge — and keeps no state of its own. `pick.ts`
+holds the choices a command opened and `ask.ts` the questions that stand, so
+each keeps its own map and the surface holds neither. The line
 editor in `line.ts` counts code points, and the keymap alone decides what a
 chord means: rebind `session.submit` and plain enter is released with it. A
 paste lands as text and never reaches the keymap, so a newline in a paste

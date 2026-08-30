@@ -9,7 +9,7 @@ import {
   type Payload,
 } from "@missingstudio/eva-schema"
 import { blocksOf, errorWords, resultText, type Block } from "@missingstudio/eva-session-view"
-import { toLines } from "@missingstudio/eva-tui"
+import { toLines } from "@missingstudio/eva-tui-renderer"
 import { EMPTY } from "@missingstudio/eva-tui-core"
 import { Turns } from "@missingstudio/eva-web-app"
 import { renderToStaticMarkup } from "react-dom/server"

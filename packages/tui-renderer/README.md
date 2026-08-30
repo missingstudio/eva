@@ -1,4 +1,4 @@
-# @missingstudio/eva-tui
+# @missingstudio/eva-tui-renderer
 
 The terminal renderer of [Eva](../../README.md), whichever one this runtime
 can give: a rich OpenTUI renderer where there is Bun's FFI and a real screen,
@@ -32,7 +32,7 @@ bun install
 To use the package from another workspace package, add it as a dependency:
 
 ```json
-{ "dependencies": { "@missingstudio/eva-tui": "workspace:*" } }
+{ "dependencies": { "@missingstudio/eva-tui-renderer": "workspace:*" } }
 ```
 
 ## Usage
@@ -43,7 +43,7 @@ composition root calls it — behind a dynamic import, so the module is not
 named until a surface actually starts:
 
 ```ts
-const { start } = await import("@missingstudio/eva-tui")
+const { start } = await import("@missingstudio/eva-tui-renderer")
 
 // { renderer, notices }: the notices name what the fallback left unsaid.
 const chosen = await start({ theme })
@@ -119,5 +119,5 @@ vitest file — the test workers run Node, and OpenTUI needs Bun's FFI — so ru
 it by hand:
 
 ```bash
-bun packages/tui/src/render-check.tsx
+bun packages/tui-renderer/src/render-check.tsx
 ```

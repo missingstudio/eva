@@ -15,7 +15,7 @@ import {
   resultText,
   type Block,
 } from "@missingstudio/eva-session-view"
-import { toLines } from "@missingstudio/eva-tui"
+import { toLines } from "@missingstudio/eva-tui-renderer"
 import { EMPTY } from "@missingstudio/eva-tui-core"
 import { BlockView, Turns } from "@missingstudio/eva-web-app"
 import { renderToStaticMarkup } from "react-dom/server"

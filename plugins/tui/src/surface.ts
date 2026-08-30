@@ -5,16 +5,14 @@ import {
   type Doing,
   type LoopStep,
 } from "@missingstudio/eva-client-runtime"
-import { optionFor, type FrontendAnswer, type Transcript } from "@missingstudio/eva-core"
+import type { Transcript } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import {
   dispatch,
   namesCommand,
   type CommandInfo,
-  type FrontendRequest,
   type IntegrationInfo,
   type KeymapInfo,
-  type PickRow,
   type Running,
 } from "@missingstudio/eva-sdk"
 import {
@@ -40,19 +38,19 @@ import {
 } from "effect"
 import { branchOf, shortPath } from "./banner.js"
 import { apply, backStep, frameOf, initial, type ConsoleEvent, type Place } from "./console.js"
+import { makeAsking } from "./ask.js"
 import { edit, pasted, type LineAction, type LineCommand } from "./line.js"
 import {
   commandRows,
   completed,
   completionQuery,
   opened,
-  pickRows,
   selectedRow,
   COMMANDS_HINT,
   COMMANDS_TITLE,
-  PICK_HINT,
   type OpenOverlay,
 } from "./overlay.js"
+import { makePicks } from "./pick.js"
 
 export const TUI_SURFACE = "eva.tui"
 
@@ -144,17 +142,6 @@ const missingCredential = (
   if (named.some((row) => row.connected)) return undefined
   const variable = named.find((row) => row.variable !== undefined)?.variable
   return variable === undefined ? undefined : sayNoCredential(provider, variable)
-}
-
-/**
- * A choice a command is waiting on: the rows as the command offered them,
- * and what the screen was painted in before the panel opened. Esc means keep
- * what you had, and what you had includes the colors.
- */
-interface Waiting {
-  readonly rows: readonly PickRow[]
-  readonly deferred: Deferred.Deferred<PickRow | undefined>
-  readonly theme?: ThemeColors
 }
 
 /**
@@ -269,57 +256,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     ),
   ]
 
-  // The choices open, by the number that names each request. A panel that
-  // closes late cannot answer a question nobody asked.
-  const waiting = new Map<number, Waiting>()
-  let picks = 0
-
-  /**
-   * The screen while a row is only being looked at. A row that names colors
-   * paints them; one that names none paints nothing, which is why moving
-   * through the model picker never switches a model — that is a fact of the
-   * Session, and it happens when a row is taken.
-   */
-  const preview = (request: number, id: string | undefined): void => {
-    const colors = waiting.get(request)?.rows.find((row) => row.id === id)?.colors
-    const gated = colors === undefined ? undefined : themeColors(colors)
-    if (gated !== undefined) on({ kind: "themed", colors: gated })
-  }
-
-  /**
-   * A choice, answered. The panel leaves the screen as it found it — what it
-   * painted while a row was under the selection was a look, not a decision —
-   * and what the command does with the row it took is the command's to say.
-   */
-  const resolved = (request: number, id?: string): void => {
-    const one = waiting.get(request)
-    if (one === undefined) return
-
-    waiting.delete(request)
-    on({ kind: "themed", ...(one.theme === undefined ? {} : { colors: one.theme }) })
-    Deferred.doneUnsafe(one.deferred, Effect.succeed(one.rows.find((row) => row.id === id)))
-  }
-
-  /**
-   * The `pick` a command is given here. It is a Deferred the panel answers:
-   * enter carries the row back, esc carries nothing — and nothing means the
-   * person kept what they had, which no command may read as a choice.
-   */
-  const pick = Effect.fn("eva.tui.pick")(function* (title: string, rows: readonly PickRow[]) {
-    picks += 1
-    const request = picks
-    const deferred = yield* Deferred.make<PickRow | undefined>()
-    waiting.set(request, {
-      rows,
-      deferred,
-      ...(state.theme === undefined ? {} : { theme: state.theme }),
-    })
-    on({
-      kind: "opened-overlay",
-      overlay: opened(title, pickRows(rows), "", { kind: "pick", request }, "query", PICK_HINT),
-    })
-    return yield* Deferred.await(deferred)
-  })
+  const picks = makePicks({ on, theme: () => state.theme })
 
   // The screen's colors, changed by a command that decided them. A row that
   // is not a theme paints nothing: the contract's own gate says which is
@@ -340,7 +277,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     if (panel?.intent.kind !== "pick") return
 
     on({ kind: "closed-overlay" })
-    resolved(panel.intent.request)
+    picks.resolved(panel.intent.request)
   }
 
   /**
@@ -353,7 +290,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
       on({ kind: "stepped", by: key.key === "up" ? -1 : 1 })
       const moved = state.overlay
       if (open.intent.kind === "pick" && moved !== undefined) {
-        preview(open.intent.request, selectedRow(moved)?.id)
+        picks.preview(open.intent.request, selectedRow(moved)?.id)
       }
       return true
     }
@@ -367,7 +304,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
       if (open.intent.kind === "pick") {
         const row = selectedRow(open)
         on({ kind: "closed-overlay" })
-        resolved(open.intent.request, row?.id)
+        picks.resolved(open.intent.request, row?.id)
         return true
       }
       Queue.offerUnsafe(keys, { kind: "took", how: "run" })
@@ -403,7 +340,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
       // is what keeping what you had is called. A command never hears that a
       // panel closed; it hears that nobody chose.
       if (step === "close-overlay" && panel?.intent.kind === "pick") {
-        resolved(panel.intent.request)
+        picks.resolved(panel.intent.request)
       }
       if (step === "interrupt") Queue.offerUnsafe(keys, { kind: "cancel" })
       return
@@ -541,7 +478,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
        * there would wait on an answer that can never arrive. The same
        * command then says its answer in words, which is what a pipe wanted.
        */
-      ...(deps.renderer.draws.panels ? { pick } : {}),
+      ...(deps.renderer.draws.panels ? { pick: picks.pick } : {}),
       ...(deps.renderer.draws.colors ? { paint } : {}),
     }))
 
@@ -551,77 +488,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
 
   const runCommand = deps.run === undefined ? runHere : runOverWire(deps.run)
 
-  /**
-   * The questions that stand, each waiting on its own answer. Eva may ask more
-   * than one at a time — one tool group can hold two calls that both need a
-   * person — and each ask is answered on its own, whichever door answers it.
-   *
-   * A terminal shows one line at a time, so the first question that stands is
-   * the one a person is looking at and a line they type is that one's. The
-   * others wait their turn behind it. One slot and one shared queue used to
-   * hold this: a second ask overwrote the first, both waited on one answer,
-   * and which of them it settled was whichever the runtime happened to wake.
-   */
-  interface Standing {
-    readonly request: FrontendRequest
-    readonly waiting: Deferred.Deferred<FrontendAnswer>
-  }
-  const standing = new Map<string, Standing>()
-
-  // The question a person is looking at, which is the first one that stands.
-  const shown = (): Standing | undefined => standing.values().next().value
-
-  // What the screen says about the questions that stand. Called whenever the
-  // first one changes, so answering one shows the next rather than nothing.
-  const showing = () => {
-    const next = shown()
-    on(
-      next === undefined
-        ? { kind: "answered" }
-        : { kind: "asked", question: next.request.question },
-    )
-  }
-
-  const answer = Effect.fn("eva.tui.answer")(function* (line: string) {
-    const held = shown()
-    // A line typed with nothing standing answers nothing. It used to be kept
-    // for the next question to consume, which answered one nobody had read.
-    if (held === undefined) return on({ kind: "answered" })
-
-    standing.delete(held.request.id)
-    const option = held.request.kind === "permission" ? optionFor(line) : undefined
-    yield* Deferred.succeed(
-      held.waiting,
-      (option === undefined
-        ? { kind: "text", text: line }
-        : { kind: "permission", optionId: option }) satisfies FrontendAnswer,
-    )
-    showing()
-  })
-
-  /**
-   * Eva needs a person, and this terminal is one of the two doors to one. The
-   * other is the socket: the gate races them, so an answer from a browser
-   * watching the same Session interrupts this call.
-   *
-   * That interrupt is what retires the prompt. There is nothing to watch the
-   * record for — a question nobody has answered is not on it — and the
-   * interrupt is the fact itself: this door lost, so the line above stops
-   * asking to be answered.
-   */
-  const ask = Effect.fn("eva.tui.ask")(function* (request: FrontendRequest) {
-    const waiting = yield* Deferred.make<FrontendAnswer>()
-    standing.set(request.id, { request, waiting })
-    // The screen changes only when this is the question now at the front.
-    if (shown()?.request.id === request.id) showing()
-
-    return yield* Effect.onInterrupt(Deferred.await(waiting), () =>
-      Effect.sync(() => {
-        standing.delete(request.id)
-        showing()
-      }),
-    )
-  })
+  const asking = makeAsking(on)
 
   /**
    * One open Run, from the prompt that opens it to the fold that replaces
@@ -687,7 +554,7 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
 
     // What this door does with each action. Nothing here decides anything.
     const doing = {
-      answer: (line: string) => answer(line),
+      answer: asking.answer,
       // A line does what it says. Which it is, is the command Domain's
       // answer, and what follows from that answer is the fold's.
       handle: Effect.fn("eva.tui.line")(function* (line: string) {
@@ -889,5 +756,5 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
 
   // What this surface can do is on its row in the surface Domain, registered
   // where the plugin is defined. It is not repeated here.
-  return { id: TUI_SURFACE, ask, done: Deferred.await(finished) }
+  return { id: TUI_SURFACE, ask: asking.ask, done: Deferred.await(finished) }
 })
