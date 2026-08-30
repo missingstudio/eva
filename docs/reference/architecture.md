@@ -68,15 +68,16 @@ carry control flow — a hook does that.
 
 We validated three plugin systems before settling on it.
 
-**OpenCode v2** runs this exact model on Effect in production. Its plugin is an
-`Effect`, not a `Layer`. Its `State` helper — 128 lines — is the domain rebuild
-engine. We adopt its transform/hook split, its rebuild semantics, its scoped
-registration, and its boot batching, because they are proven and small.
+**The first reference — one surveyed harness — runs this exact model on Effect
+in production.** Its plugin is an `Effect`, not a `Layer`. Its `State` helper —
+128 lines — is the domain rebuild engine. We adopt its transform/hook split, its
+rebuild semantics, its scoped registration, and its boot batching, because they
+are proven and small.
 
-**DeepSeek Harness** (Cordis) proves that "everything is a plugin" scales: its
-agent loop, session, LLM, tools, and sandbox are all ordinary plugin rows in a
-patch file. We adopt its bundle/profile packaging and its split between a
-contract package and its swappable implementations
+**The second reference — another surveyed harness — proves that "everything is
+a plugin" scales:** its agent loop, session, LLM, tools, and sandbox are all
+ordinary plugin rows in a patch file. We adopt its bundle/profile packaging and
+its split between a contract package and its swappable implementations
 (`session-persistence-jsonl` beside `session-persistence-sqlite`).
 
 **Effect v4** supplies `Scope` for disposal, `Fiber` for concurrency, and
@@ -170,9 +171,9 @@ export interface PluginRuntime {
 `add` forks a child scope from the runtime scope, runs the plugin effect in it,
 and stores the scope. `remove` closes the scope. Replacing a plugin closes the
 old scope before the new effect starts, and the plugin keeps its position in the
-order. That position-keeping is Eva's own rule, not inherited: OpenCode's v2
-replace re-registers at the end of the order, which silently changes which
-transform wins — the kernel reload test asserts the position holds. A load
+order. That position-keeping is Eva's own rule, not inherited: the first
+reference's replace re-registers at the end of the order, which silently
+changes which transform wins — the kernel reload test asserts the position holds. A load
 cycle — a plugin that adds itself — is detected and fails.
 
 ### Load order
@@ -191,10 +192,10 @@ transforms win. The order is a list, not a phase field on the plugin.
 8. domain finalization       (kernel, not a plugin)
 ```
 
-We considered a `phase` field on the plugin, and rejected it. Cordis has no
-phases: its base bundle states that "row order carries no load semantics
-(activation is service-availability driven)". OpenCode has no phases either: it
-uses an explicit `add` sequence. A phase field is a static partition that
+We considered a `phase` field on the plugin, and rejected it. The second
+reference's plugin framework has no phases: its base bundle states that "row
+order carries no load semantics (activation is service-availability driven)".
+The first reference has no phases either: it uses an explicit `add` sequence. A phase field is a static partition that
 forbids legal graphs — a surface plugin that supplies a slot a capability plugin
 reads is normal, and a phase would reject it. The list above is a default order,
 and a profile can change it.
@@ -223,8 +224,9 @@ and hooks that only its hosted plugins see. These are ordinary extension points;
 what makes them the host's is that the host created them.
 
 **Host-scoped extension points are isolated by host instance.** Two hosts that
-declare a domain of the same name have two domains, not one. Cordis does this
-with a realm that suffixes the service key per entry (`key#entryId`) or per
+declare a domain of the same name have two domains, not one. The second
+reference's plugin framework does this with a realm that suffixes the service
+key per entry (`key#entryId`) or per
 label (`key@label`). Eva does the same: a host-scoped key carries its host's
 instance id, so five live harnesses have five compaction strategies and not one
 shared one.
@@ -232,11 +234,11 @@ shared one.
 **Why this matters.** A harness that is one opaque plugin can only be replaced,
 never adjusted. To change how it compacts, or how it builds a system prompt, or
 how it schedules parallel tool calls, you would fork it. Both references solved
-this the same way, by refusing to make the loop a monolith. DeepSeek Harness's
-`agent-loop` is one row among 78 in its base bundle, sitting beside
+this the same way, by refusing to make the loop a monolith. The second
+reference's `agent-loop` is one row among 78 in its base bundle, sitting beside
 `compaction-basic`, `system-prompt`, and `session-title` — each replaceable on
-its own. OpenCode gives every plugin `ctx.plugin.add`, so a plugin can compose
-others.
+its own. The first reference gives every plugin `ctx.plugin.add`, so a plugin
+can compose others.
 
 **Eva's native harness is a host plugin.** `eva.harness.loop` is one entry in
 the harness domain, and it is also a host: the context assembler, the compaction
@@ -266,14 +268,15 @@ Recorder)` fails with `Type 'Recorder' is not assignable to type 'never'`. The
 model does not work.
 
 Both reference implementations avoid it in the same way: **the plugin set is
-dynamic and the extension surface is static.** OpenCode gives each plugin a host
-object with a fixed set of typed domains, and supplies core services with
-`Effect.provideService` at load time — for its internal plugins; an external
-plugin sees only the host object. Cordis gets the same result with
-TypeScript declaration merging on a global `Context` interface.
+dynamic and the extension surface is static.** The first reference gives each
+plugin a host object with a fixed set of typed domains, and supplies core
+services with `Effect.provideService` at load time — for its internal plugins;
+an external plugin sees only the host object. The second reference's plugin
+framework gets the same result with TypeScript declaration merging on a global
+`Context` interface.
 
-Eva takes OpenCode's approach, because Eva is already on Effect and the typing
-is honest with no merging tricks. The consequence: **`@missingstudio/eva-sdk`
+Eva takes the first reference's approach, because Eva is already on Effect and
+the typing is honest with no merging tricks. The consequence: **`@missingstudio/eva-sdk`
 declares every domain, slot, and hook.** Adding a new extension point is an SDK
 change. That is the cost, and it is the right cost — an extension point is a
 public contract and it should be reviewed.
@@ -1054,51 +1057,21 @@ both be true — §9.1 has the layer rule that settles it.
 The config split is deliberate. Reading `~/.eva/config.yaml` is a kernel job,
 because the plugin list lives in it and the kernel needs it before any plugin
 exists. **Interpreting** config — projecting it into the catalog, the tool
-domain, the agent domain — is the `eva.config` plugin's job. OpenCode draws the
-same line, and it is why a kernel with every plugin disabled still knows which
-plugins it was told to skip.
+domain, the agent domain — is the `eva.config` plugin's job. The first
+reference draws the same line, and it is why a kernel with every plugin
+disabled still knows which plugins it was told to skip.
 
 The exit test for the kernel: `plugins: [{ id: "*", disabled: true }]` starts,
 prints a version, and exits 0.
 
 ## 9. Packages
 
-One workspace glob level per directory. Three directories.
-
-```
-eva/
-├── package.json                  workspaces: apps/*, packages/*, plugins/*
-├── bun.lock
-├── tsconfig.base.json            what is true in every package
-├── tsconfig.json                 the loose files, and an editor fallback
-├── vite.config.ts                pack, test, lint, fmt, layer rules
-│
-├── apps/                         what you launch. One per entry point.
-│   └── cli/                      @missingstudio/eva — carries the bin
-│
-├── packages/                     the core. Not plugins.
-│   ├── schema/                   @missingstudio/eva-schema
-│   ├── acp/                      @missingstudio/eva-acp
-│   ├── core/                     @missingstudio/eva-core
-│   ├── kernel/                   @missingstudio/eva-kernel
-│   ├── sdk/                      @missingstudio/eva-sdk
-│   ├── boot/                     @missingstudio/eva-boot
-│   ├── testkit/                  @missingstudio/eva-testkit
-│   ├── conformance/              @missingstudio/eva-conformance — tests only
-│   ├── client-runtime/           @missingstudio/eva-client-runtime
-│   ├── session-view/             @missingstudio/eva-session-view
-│   ├── tui-core/                 @missingstudio/eva-tui-core
-│   └── tui/                      @missingstudio/eva-tui
-│
-├── plugins/                      every internal plugin, one level, flat
-│   └── <name>/
-│
-├── docs/
-└── .github/
-```
-
-**This tree is the state.** `schema/`, `acp/`, `tui-core/`, `tui/`, and `boot/`
-arrived during stage 0, and every package above exists.
+One workspace glob level per directory. Three directories, named as the
+workspace globs in the root `package.json`: `packages/` holds the core — the
+contract and runtime packages that are not plugins; `plugins/` holds every
+internal plugin, one level, flat; `apps/` holds what you launch, one package
+per entry point. No document lists what exists on disk, because `ls` answers
+that.
 
 **`apps/` is what you launch; `packages/` is what it is built from.** `apps/cli`
 carries the `bin`. Every interface that can be reached through that binary —
@@ -1153,9 +1126,9 @@ the packages that layer may import and refusing the rest. A violation fails
 a plugin may also import `tui-core`, because a surface plugin draws through it
 and it is a contract package like `core` and `sdk`.
 
-**On plugins importing each other.** The blanket ban we first wrote is wrong, and
-DeepSeek Harness shows why: its agent-loop package imports values from its
-session, llm, tools, and agent packages. The line that actually holds is
+**On plugins importing each other.** The blanket ban we first wrote is wrong,
+and the second reference shows why: its agent-loop package imports values from
+its session, llm, tools, and agent packages. The line that actually holds is
 different. A **contract** may be imported. An **implementation** may not. Every
 contract lives in `core` or `sdk`; therefore no plugin ever imports another
 plugin, and the rule stays enforceable as written.
@@ -1163,8 +1136,9 @@ plugin, and the rule stays enforceable as written.
 ### 9.2 The plugin packages
 
 The plugin catalogue. The `id` is the runtime identity and the config key; the
-package name is only the distribution channel. Sixteen live in `plugins/` today;
-the rest are named here so the shape of the whole is visible.
+package name is only the distribution channel. The `plugins/` directory holds
+the ones that exist today; the rest are named here so the shape of the whole is
+visible.
 [roadmap.md](../roadmap.md) says which stage introduces each one, and lists the
 many more that later stages add.
 
@@ -1233,13 +1207,11 @@ many more that later stages add.
 
 **Harnesses**
 
-| Plugin id              | Package                | Contributes                                      |
-| ---------------------- | ---------------------- | ------------------------------------------------ |
-| `eva.harness.loop`     | `eva-harness-loop`     | harness domain: Eva's own loop, one Step per Run |
-| `eva.harness.acp`      | `eva-harness-acp`      | the ACP runtime, for any ACP agent               |
-| `eva.harness.claude`   | `eva-harness-claude`   | vendor extension: launch, auth                   |
-| `eva.harness.codex`    | `eva-harness-codex`    | vendor extension over the App Server             |
-| `eva.harness.deepseek` | `eva-harness-deepseek` | vendor extension over its `dsh-acp` server       |
+| Plugin id              | Package                | Contributes                                                               |
+| ---------------------- | ---------------------- | ------------------------------------------------------------------------- |
+| `eva.harness.loop`     | `eva-harness-loop`     | harness domain: Eva's own loop, one Step per Run                          |
+| `eva.harness.acp`      | `eva-harness-acp`      | the ACP runtime, for any ACP agent                                        |
+| `eva.harness.<vendor>` | `eva-harness-<vendor>` | one vendor extension per driven harness: launch, auth, capability probing |
 
 Hosted by `eva.harness.loop`, and reachable only through it:
 
@@ -1336,10 +1308,11 @@ resolved config, the source beside each key, and the plugins that would load —
 before the kernel boots, so a config naming a plugin nobody has still prints.
 
 We previously wrote this as a string grammar (`"-eva.provider.*"`) and claimed
-it came from OpenCode v2. It does not. OpenCode has no such grammar — and no
-disable flag on plugin entries at all: its `plugins` key is an ordered list of
-`string | { package, options }` entries, and disabling means removing the entry.
-The per-item `disabled` boolean is Cordis's — `EntryOptions.disabled`. The
+it came from the first reference. It does not. That harness has no such grammar
+— and no disable flag on plugin entries at all: its `plugins` key is an ordered
+list of `string | { package, options }` entries, and disabling means removing
+the entry. The per-item `disabled` boolean comes from the second reference's
+plugin framework — `EntryOptions.disabled`. The
 string form also had no place to put per-plugin options, which both references
 need and so do we. The object form above is one shape that carries id, options, package,
 and disabled together.
@@ -1429,8 +1402,8 @@ would have taken the value as written, so `themes: dusk` is told to say
 ## 11. Bundles and profiles
 
 A **bundle** is an npm package that contributes plugins. A **profile** is a
-directory describing one runnable composition. This is DeepSeek Harness's model,
-format included. Only `package.json` stays JSON, because npm owns it; its
+directory describing one runnable composition. This is the second reference's
+model, format included. Only `package.json` stays JSON, because npm owns it; its
 `eva.bundle` field points at the YAML file.
 
 ```
@@ -1484,9 +1457,10 @@ push cannot change what runs at install time.
 
 ## 12. The harness contract
 
-A **harness** owns a tool-calling loop. Eva's own loop is one. Claude Code,
-Codex, OpenCode, and DeepSeek Harness are others. One contract covers every one of them, and that
-contract is the **Agent Client Protocol (ACP)**.
+A **harness** owns a tool-calling loop. Eva's own loop is one. Every surveyed
+harness — the two references and the vendor CLIs alike — is another. One
+contract covers every one of them, and that contract is the **Agent Client
+Protocol (ACP)**.
 
 Eva does not invent a harness interface. It adopts ACP, shapes it in Effect, and
 implements **both halves**: the agent half in `eva.harness.loop`, and the client
@@ -1516,8 +1490,9 @@ nowhere for a question to go and nowhere for an answer to come from.
 the one that breaks the product. `Answer` returns an Outcome; it carries no
 permission request and no typed record of the work. Eva's policy gate and Eva's
 trace would then apply to Eva's own loop and to nothing else. `eva task run
-EVA-142 --race eva,claude,codex` would compare three harnesses under three
-different sets of rules, with only one of them recording anything. **The
+EVA-142 --race` across Eva's loop and two vendor harnesses would compare three
+harnesses under three different sets of rules, with only one of them recording
+anything. **The
 comparison would be worthless**, and the comparison is the entire point of stage
 9c.
 
@@ -1552,35 +1527,36 @@ decides where containment lives.
 
 **`fs/*` and `terminal/*` are capabilities an agent MAY use, not obligations.**
 A client offers them at `initialize`; an agent with its own file and shell tools
-is free to ignore them and usually does. This is not a v2 risk or a Claude Code
-quirk. Check the agent we plan to drive with no adapter at all:
+is free to ignore them and usually does. This is not a v2 risk or one vendor's
+quirk. Check the agent we plan to drive with no adapter at all — a leading
+native ACP agent:
 
 ```
-opencode/packages/opencode/src/acp/permission.ts:18
+the surveyed harness's permission-mapping module, line 18
   Partial<Pick<AgentSideConnection, "requestPermission" | "writeTextFile">>
-opencode/packages/opencode/src/acp/permission.ts:110
+the surveyed harness's permission-mapping module, line 110
   void this.input.connection.writeTextFile({ … })   // renders a diff
 ```
 
-That is everything OpenCode's ACP agent takes from the filesystem and terminal
+That is everything this agent takes from the filesystem and terminal
 half — both methods optional and runtime-guarded. No `readTextFile`, no
 `createTerminal`, no terminal lifecycle. The one `writeTextFile` shows the user
 a diff; it is not the write path. (`requestPermission` and `sessionUpdate` it
 uses constantly — those are the rows that carry the comparison, and this section
-is about the others.) OpenCode reads files and runs commands with its own tools,
+is about the others.) It reads files and runs commands with its own tools,
 in its own process, today, against ACP v1 (SDK 0.21.0, checked 2026-08-14).
 
-Zed's Claude adapter does the opposite — it replaces the agent's `Read` and
-`Write` with client calls, so the host really does see every access. Both are
-conformant. **Whether a harness routes through the client half is a property of
+One surveyed editor client's vendor adapter does the opposite — it replaces the
+agent's `Read` and `Write` with client calls, so the host really does see every
+access. Both are conformant. **Whether a harness routes through the client half is a property of
 that harness, not of the protocol**, and a design that assumes otherwise is
 assuming a promise nobody made.
 
 **So containment is not a stage 9c property. It is a stage 4 one.** The
 `Workspace` and `Sandbox` slots bound what a process can touch whether or not it
-ever calls `fs/write_text_file`. That is how the field solves this: Multica and
-Orca both isolate by worktree, not by protocol. Eva already builds that boundary
-at stage 4, and it is the boundary `--race` must rely on.
+ever calls `fs/write_text_file`. That is how the field solves this: the field's
+production orchestrators isolate by worktree, not by protocol. Eva already
+builds that boundary at stage 4, and it is the boundary `--race` must rely on.
 
 What the client half is still worth: **the permission gate and the trace**.
 Every ACP agent implements `requestPermission` and `sessionUpdate`, because a
@@ -1637,10 +1613,10 @@ export type StopReason = "end_turn" | "max_tokens" | "max_turn_requests" | "refu
 ```
 
 `eva.harness.loop` implements this in-process. `eva.harness.acp` implements it
-over stdio JSON-RPC for every agent that speaks the protocol — OpenCode
-natively, Claude and Codex through maintained bridges, DeepSeek Harness through
-its own `dsh-acp` server. `eva.harness.deepseek` is a launcher extension over
-that server, not a second contract.
+over stdio JSON-RPC for every agent that speaks the protocol — some natively,
+others through maintained bridges or a vendor's own ACP server. An
+`eva.harness.<vendor>` entry is a launcher extension over such a bridge or
+server, not a second contract.
 The transport differs. **The contract does not**, and that is what the Go tree's
 version could not give us.
 
@@ -1676,20 +1652,21 @@ neither: `schedule` is `eva.sched`'s policy over `executeToolGroup`'s ceiling,
 and `retry` is `eva.provider.retry`'s hook. When the host points land, those
 become per-instance rather than per-process.
 
-This is the shape both references arrived at. DeepSeek Harness's `agent-loop` is
-one row among 78 in its base bundle, sitting beside `compaction-basic`,
-`system-prompt`, and `session-title` — each of them replaceable on its own. OpenCode gives every plugin `ctx.plugin.add` for the
-same reason.
+This is the shape both references arrived at. The second reference's
+`agent-loop` is one row among 78 in its base bundle, sitting beside
+`compaction-basic`, `system-prompt`, and `session-title` — each of them
+replaceable on its own. The first reference gives every plugin `ctx.plugin.add`
+for the same reason.
 
 The alternative is a loop you can only replace, never adjust: changing how Eva
 compacts would mean forking the harness. Because these points are host-scoped
 and isolated per instance, five live harnesses have five compaction strategies,
 and swapping Eva's compaction touches no other harness.
 
-**A foreign harness is a host too, when it wants to be.** `eva.harness.deepseek`
-wraps a system that has its own plugin ecosystem.
-An adapter may expose those as host-scoped points, so a DeepSeek Harness plugin
-keeps working under Eva. Eva does not flatten another system's extensibility
+**A foreign harness is a host too, when it wants to be.** A vendor extension
+may wrap a system that has its own plugin ecosystem.
+An adapter may expose those as host-scoped points, so that system's own plugins
+keep working under Eva. Eva does not flatten another system's extensibility
 into a single opaque row.
 
 ### 12.3b What Eva hands a native harness
@@ -1816,8 +1793,8 @@ Eva targets **ACP v1** — what every shipped implementation speaks today. The
 protocol version is still 1; v2 exists as a draft and is labelled unstable. This
 table tracks a moving line, so it carries the version it was checked against:
 **`@agentclientprotocol/sdk` 1.3.0**, the release `packages/acp` pins and a test
-holds. The field runs behind it — 0.21.0 in OpenCode, 0.25.1 in DeepSeek
-Harness, both checked 2026-08-14.
+holds. The field runs behind it — 0.21.0 in one surveyed harness, 0.25.1 in
+another, both checked 2026-08-14.
 
 | Settled                                         | Marked unstable                 |
 | ----------------------------------------------- | ------------------------------- |
@@ -1870,10 +1847,10 @@ about it.
 This capability negotiation is also the mechanism behind the honesty rule. A
 harness that cannot fork a session says so, and `eva branch` reports `degraded`
 naming `sessionCapabilities.fork` instead of failing or, worse, silently doing
-nothing. Multica's field experience is that the silent case is the common one:
-across its 21 supported backends, reasoning effort is honored by exactly six —
-`claude`, `codex`, `opencode`, `codebuddy`, `dsh`, and `grok` — and the rest
-"ignore the field rather than fail". Negotiated capabilities turn that silence
+nothing. The survey's widest orchestrator reports that the silent case is the
+common one: across its 21 supported backends, reasoning effort is honored by
+exactly six, and the rest "ignore the field rather than fail". Negotiated
+capabilities turn that silence
 into a recorded fact.
 
 ### 12.6 What ACP does not carry
@@ -1888,9 +1865,9 @@ there under an `eva.` namespace. They travel with the session and a harness that
 does not understand them ignores them.
 
 **Through Eva's own additions to the live handle.** ACP's `prompt` is one Run
-in, one stop reason out. DeepSeek Harness's `Agent` shows what a long-running
-agent also needs, and Eva adopts these on top of the protocol — renaming
-DeepSeek Harness's `next-turn` inbox target to `next-run`, because the bare word
+in, one stop reason out. The second reference's `Agent` shows what a
+long-running agent also needs, and Eva adopts these on top of the protocol —
+renaming its `next-turn` inbox target to `next-run`, because the bare word
 is retired:
 
 ```ts
@@ -1916,7 +1893,8 @@ mid-Run input lands after the current provider response and tool group complete
 structurally, and nothing is orphaned. It is an inbox boundary, not an interrupt.
 
 **Resume honesty is Eva's, not ACP's.** ACP has `resumeSession`; it does not say
-what happens when the resume is refused. Multica's answer is the one to copy:
+what happens when the resume is refused. The survey's widest orchestrator gives
+the answer to copy:
 
 ```ts
 export type ResumeResult =
@@ -1933,14 +1911,15 @@ judgment in one provider-agnostic place. Do not encode it in each adapter.
 
 ### 12.7 An adapter is a record, not a slot
 
-Eva needs many live instances of the same harness kind — five Claude Code
-sessions in five worktrees. A slot holds one implementation, so a harness cannot
+Eva needs many live instances of the same harness kind — five sessions of one
+vendor harness in five worktrees. A slot holds one implementation, so a harness cannot
 be a slot.
 
 The `harness` domain holds **factories**. A registry owns the `Map<InstanceID,
 HarnessInstance>`. An instance is torn down by closing the scope it was created
-in. T3 Code reached the same conclusion for the same reason and says so in its
-driver SPI: service keys are singleton-per-runtime, and drivers are not.
+in. A third surveyed harness reached the same conclusion for the same reason
+and says so in its driver SPI: service keys are singleton-per-runtime, and
+drivers are not.
 
 ### 12.8 Three transports, one contract
 
@@ -1948,23 +1927,21 @@ driver SPI: service keys are singleton-per-runtime, and drivers are not.
 | -------------- | ----------------------------------- | ---------------------------------------------------- |
 | In-process     | `eva.harness.loop`                  | direct calls; no serialization                       |
 | Stdio JSON-RPC | `eva.harness.acp`, and every vendor | the ACP wire format                                  |
-| Eva as agent   | Zed, Orca, Mux, T3 Code             | `eva serve --acp` exposes Eva's loop as an ACP agent |
+| Eva as agent   | external ACP clients                | `eva serve --acp` exposes Eva's loop as an ACP agent |
 
 The third row is the one that is easy to miss and cheap to get. Because
 `eva.harness.loop` implements the agent half, Eva can **be** a harness for
 someone else's client. Adopting the protocol makes Eva adoptable, not only
 adopting.
 
-**Vendor extensions do not disappear, but full adapters mostly have.** Claude
-and Codex do not speak ACP from their own CLIs, but each has a bridge maintained
-under the protocol's organisation — one over the Claude Agent SDK, one over the
-Codex App Server. Eva drives those, so `eva.harness.claude` and
-`eva.harness.codex` carry launch arguments, auth, and capability probing rather
-than an output parser.
+**Vendor extensions do not disappear, but full adapters mostly have.** Some
+vendor harnesses do not speak ACP from their own CLIs, but each has a bridge
+maintained under the protocol's organisation, over the vendor's own agent SDK
+or app server. Eva drives those, so an `eva.harness.<vendor>` entry carries
+launch arguments, auth, and capability probing rather than an output parser.
 
-That is the shape T3 Code arrived at: a first-class ACP runtime with vendor
-extensions beside it for Cursor and xAI — Grok rides the xAI one — plus
-env-gated CLI probes.
+That is the shape the third surveyed harness arrived at: a first-class ACP
+runtime with vendor extensions beside it, plus env-gated CLI probes.
 **Do not plan for one adapter that covers everything.** Plan for one runtime and
 several small extensions, and keep the extension free of protocol logic — the
 day a vendor's differences vanish, deleting the extension should change nothing
@@ -2468,9 +2445,9 @@ both halves: the renderer starts under Bun, and `opentui` appears nowhere in
 the packed entry.
 
 OpenTUI's core is written in Zig with TypeScript bindings. `@opentui/core`
-powers OpenCode in production, pinned there at 0.4.5 alongside
+powers the first reference in production, pinned there at 0.4.5 alongside
 `@opentui/solid`; we pin `@opentui/react` at 0.5.3, a different binding on a
-later minor line. **Nothing about OpenCode's production use vouches for either
+later minor line. **Nothing about that production use vouches for either
 of those differences.** Both bindings ship from one repository at the same
 version, published seconds apart, so the binding choice carries no maintenance
 penalty either way — and `Renderer` is the seam that makes swapping cheap if
@@ -2478,46 +2455,36 @@ that stops being true.
 
 ## 15. What we borrowed, and from where
 
-| Idea                                            | Source                          |
-| ----------------------------------------------- | ------------------------------- |
-| Plugin is an `Effect` with a scope, not a Layer | OpenCode v2                     |
-| Transform and hook as separate registrations    | OpenCode v2                     |
-| Domain rebuild: initial → replay → finalize     | OpenCode v2 `State`             |
-| Boot batching, one rebuild per domain           | OpenCode v2                     |
-| Same-id replace keeps order position            | Eva — OpenCode re-appends       |
-| Drafts in public types, branded types inside    | OpenCode v2                     |
-| Everything is a plugin, including the loop      | DeepSeek Harness                |
-| Contract package beside swappable impls         | DeepSeek Harness                |
-| Bundle manifest and profile directory           | DeepSeek Harness                |
-| Per-entry `disabled`, not a string grammar      | DeepSeek Harness (Cordis)       |
-| No boot phases; dependencies decide order       | DeepSeek Harness and OpenCode   |
-| The harness contract, both halves               | Agent Client Protocol           |
-| Capability negotiation as optional booleans     | ACP                             |
-| `_meta` / `ext` for our own concepts            | ACP                             |
-| An adapter is a record, not a service key       | T3 Code                         |
-| Inbox steering, `whenIdle`, `runMaintenance`    | DeepSeek Harness `Agent`        |
-| `undetectable` as a resume outcome              | Multica                         |
-| Provider-reported cost, in integer ticks        | Multica                         |
-| Late-bound slots for single-provider capability | Eva. Cordis reloads dependents  |
-|                                                 | on provider identity change; we |
-|                                                 | make consumers read late.       |
-| Eva as an ACP agent, not only a client          | Eva. Falls out of adopting ACP. |
+Eva's mechanisms are not all original. The plugin-as-Effect shape, the
+transform/hook split, the domain rebuild engine, the boot batching, and the
+draft/branded-type split come from the first reference. The
+everything-is-a-plugin rule, the contract package beside swappable
+implementations, the bundle and profile format, the per-entry `disabled`
+boolean, and the inbox steering verbs (`whenIdle`, `runMaintenance`) come from
+the second. The adapter-is-a-record rule comes from a third surveyed harness,
+and the `undetectable` resume outcome and provider-reported cost in integer
+ticks come from the survey's widest orchestrator. The harness contract itself —
+both halves, the capability booleans, and `_meta`/`ext` — is the Agent Client
+Protocol. A few rules are Eva's own: same-id replace keeps its order position,
+slot consumers read late instead of reloading on provider change, and Eva is an
+ACP agent as well as a client.
 
 ### Borrowing that is copying needs a licence notice
 
-Some rows above are ideas, and crediting the source in prose is enough. Some are
-source. `Plugin`, `define`, and `PluginDomain` in §2 are OpenCode's file with
-the path comment changed, and the domain rebuild engine in §4.1 follows its
-`State` closely.
+Some of that borrowing is ideas, and crediting the source in prose is enough.
+Some is source: `Plugin`, `define`, and `PluginDomain` in §2 are an upstream
+file with the path comment changed, and the domain rebuild engine in §4.1
+follows its upstream closely. A permissive licence permits the copy and
+requires the copyright notice and permission text to travel with it — a
+sentence in a design document does not satisfy that.
 
-OpenCode, T3 Code, DeepSeek Harness and Orca are MIT, which permits this and
-requires the copyright notice and permission text to travel with the copy — a
-sentence in a design document does not satisfy it. Before any of this ships,
-each file carrying copied source needs its upstream notice, and the repository
-needs a `NOTICE` or third-party licence file naming them. Multica is under its
-own Apache-derived licence, so read that one separately before taking a shape
-from `agent.go`; the ideas credited to it here are field observations rather
-than code.
+The authoritative attribution list — which upstream projects, what was taken
+from each, and under which licence — is the repository's `NOTICE` file, not
+this document. Before any copied source ships, each file that carries it needs
+its upstream notice, and the `NOTICE` file must accompany the distribution.
+One upstream is under its own Apache-derived licence rather than MIT; read
+that licence before taking a shape from its source — what Eva credits to it
+are field observations rather than code.
 
 ## 16. References
 

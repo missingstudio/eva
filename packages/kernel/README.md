@@ -93,7 +93,7 @@ named in `Location.ignored` rather than skipped in silence.
 `resolveConfiguration` holds the whole order, lowest precedence first: the
 user directory and file, `EVA_CONFIG_DIR`, the trusted project chain, every
 `--config`, `EVA_CONFIG_CONTENT`, then the flags as one layer whose origin is
-"the command line". [docs/decisions.md](../../docs/decisions.md) records why a
+"the command line". A decision record, local to a checkout, records why a
 flag is a layer and why the trust grant lives where it does.
 
 ## What it does not do

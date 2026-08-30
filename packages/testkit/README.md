@@ -10,12 +10,12 @@ live here.
 Eva is built on a plugin kernel: every capability is a plugin, and a plugin
 may not import the kernel — the layer rule in
 [architecture.md](../../docs/reference/architecture.md) holds. `withPlugin`
-is the one legal way a plugin's own tests boot it
-([docs/decisions.md](../../docs/decisions.md) §"A plugin's tests may boot it,
-and only its tests"), and `withKernel` is the same boot for several plugins
-at once (§"Booting several plugins as peers is `withKernel`, in the
-testkit"). The glossary in [docs/context.md](../../docs/context.md) defines
-the terms used here.
+is the one legal way a plugin's own tests boot it — a decision record, local
+to a checkout, holds the rule "A plugin's tests may boot it, and only its
+tests" — and `withKernel` is the same boot for several plugins at once
+("Booting several plugins as peers is `withKernel`, in the testkit"). The
+glossary in [docs/context.md](../../docs/context.md) defines the terms used
+here.
 
 ## Prerequisites
 

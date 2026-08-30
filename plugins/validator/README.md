@@ -11,8 +11,8 @@ fills the `Validator` slot that
 [workflow plugin](../workflow/README.md) reads the slot to check each Step
 that declares a schema. The glossary in
 [docs/context.md](../../docs/context.md) defines **Validator**, **Verdict**,
-and **Fault**, and [docs/decisions.md](../../docs/decisions.md) records why
-the repair loop belongs to the caller, not here.
+and **Fault**, and a decision record, local to a checkout, records why the
+repair loop belongs to the caller, not here.
 
 ## Prerequisites
 

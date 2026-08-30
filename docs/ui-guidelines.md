@@ -50,16 +50,16 @@ cost of conforming instead — or resolved in favour of the house rule.
 
 ## 1. Context and goals
 
-| Item                 | Value                                                                     |
-| -------------------- | ------------------------------------------------------------------------- |
-| Product              | Eva, an open-source autonomous software factory for human and agent teams |
-| Publisher            | missing studio                                                            |
-| Surfaces             | `evafactory.co` (marketing), `docs.evafactory.co` (documentation)         |
-| Stack                | TanStack Start, Tailwind v4, shared `@missingstudio/ui`                   |
-| Documentation layer  | Fumadocs 16, notebook layout                                              |
-| Audience             | Developers and technical teams                                            |
-| Accessibility target | WCAG 2.2 AA                                                               |
-| Style                | Structured, tokenized, content-first, dark only                           |
+| Item                 | Value                                                             |
+| -------------------- | ----------------------------------------------------------------- |
+| Product              | Eva, an open-source autonomous software factory                   |
+| Publisher            | missing studio                                                    |
+| Surfaces             | `evafactory.co` (marketing), `docs.evafactory.co` (documentation) |
+| Stack                | TanStack Start, Tailwind v4, shared `@missingstudio/ui`           |
+| Documentation layer  | Fumadocs 16, notebook layout                                      |
+| Audience             | Developers and technical teams                                    |
+| Accessibility target | WCAG 2.2 AA                                                       |
+| Style                | Structured, tokenized, content-first, dark only                   |
 
 Goals, in priority order:
 
@@ -141,48 +141,49 @@ A warning is a defect. Do not add a token the format cannot carry and then
 explain the warning away; either express it within these three rules or keep
 it out of the front matter and document it in prose.
 
-### 2.2 How the five references were reconciled
+### 2.2 Why these values
 
-The system was assembled from five captured references — Linear, Axiom, Warp,
-Basedash and Factory. Where they disagreed, the measurement decided. Each
-resolution below is binding.
+Each value below was settled by measurement against the alternatives that were
+considered, and each resolution is binding. The number is the argument: where
+an alternative is named it is named as a value, because a value can be
+re-measured and a preference cannot.
 
-**The ground.** Axiom, Warp and Basedash all anchor at pure `#000000`, which
-reaches 21:1 against white — enough contrast to halo on OLED and smear text in
-motion. **Resolution:** Linear's `#08090a`, at 19.93:1 against paper and
-15.83:1 against the default ink. It gives up about a point of contrast and
-buys back a surface a reader can hold for an hour.
+**The ground.** A pure `#000000` canvas reaches 21:1 against white — enough
+contrast to halo on OLED and smear text in motion. **Resolution:** `#08090a`,
+at 19.93:1 against paper and 15.83:1 against the default ink. It gives up
+about a point of contrast and buys back a surface a reader can hold for an
+hour.
 
 **The default ink.** A maximum-contrast white ink is the same halation problem
 from the other side. **Resolution:** bone `#e5e5e6` at 15.83:1 is the default;
 paper `#ffffff` is reserved for the hero headline and inline emphasis.
 
-**The faces.** Axiom is the only all-mono system of the five, and a monospaced
-face measurably slows continuous reading — which is most of what the
-documentation surface is. **Resolution:** Geist for prose and UI, Geist Mono
-for machine output. They are one family, so the metrics agree, and both are on
-the house-rules allowed list where Berkeley Mono and Inter are not.
+**The faces.** Setting everything in a monospaced face measurably slows
+continuous reading — which is most of what the documentation surface is.
+**Resolution:** Geist for prose and UI, Geist Mono for machine output. They
+are one family, so the metrics agree, and both are on the house-rules allowed
+list where Berkeley Mono and Inter are not.
 
-**The accent.** Axiom's ember `#da5c2c` measures 5.27:1 on the ground;
-Factory's signal orange `#ee6018` measures **6.00:1**. **Resolution:**
-`#ee6018`, kept under the name ember.
+**The accent.** A `#da5c2c` ember measures 5.27:1 on the ground; `#ee6018`
+measures **6.00:1**. **Resolution:** `#ee6018`, kept under the name ember.
 
-**The CTA ink.** Every reference puts a light ink on its orange. Bone on ember
-measures **2.64:1** and fails outright. **Resolution:** the ink on an ember
+**The CTA ink.** A light ink on an orange fill is the common choice, and it
+fails: bone on ember measures **2.64:1**. **Resolution:** the ink on an ember
 fill is void, at 6.00:1.
 
-**The neutral ladder.** Linear's is the only one of the five with a distinct
-step at every job — three grounds, three lines, four inks. **Resolution:**
-taken whole and unchanged.
+**The neutral ladder.** A ladder earns its place by holding a distinct step at
+every job — three grounds, three lines, four inks — and by carrying a faint
+blue cast, which keeps a large dark field from reading brown. **Resolution:**
+the ten neutrals in [design.md](design.md), taken whole and unchanged.
 
-**The radius.** Axiom rounds everything to 2px, which reads as an unfinished
-rectangle on a 36px control. **Resolution:** Linear's range — 2px for small
-nested shapes, 6px for controls, 12px for cards.
+**The radius.** A 2px radius everywhere reads as an unfinished rectangle on a
+36px control. **Resolution:** the range — 2px for small nested shapes, 6px for
+controls, 12px for cards.
 
-**The type scale.** Axiom's 14px and Linear's 15px body are UI sizes.
-**Resolution:** 16px at a 1.6 ratio for prose, with a 15px `body-sm` step for
-genuinely dense product surfaces. Tracking follows Linear's discipline:
--0.011em at reading sizes, -0.022em at display sizes.
+**The type scale.** A 14px or 15px body is a UI size, and this documentation
+is prose. **Resolution:** 16px at a 1.6 ratio for prose, with a 15px
+`body-sm` step for genuinely dense product surfaces. Tracking follows the
+tighter discipline: -0.011em at reading sizes, -0.022em at display sizes.
 
 ### 2.3 Color
 
@@ -346,8 +347,8 @@ Rules:
   phrase. This governs copy rendered on either site. It does not govern this
   file, code identifiers, CSS property names, or command syntax. One exemption
   is on the record: `autonomous`, in the product tagline and wherever the
-  product is described. Recorded in [decisions.md](decisions.md); no second
-  exemption without one.
+  product is described. Recorded in a decision record, local to a checkout;
+  no second exemption without one.
 - No word may sit alone on the last line. Headings set `text-wrap: balance`;
   body copy sets `text-wrap: pretty`; long-form documentation prose sets
   neither.
@@ -376,7 +377,7 @@ break-word` on prose, and `white-space: nowrap` on a label or a badge that
 
 ### 2.5 Spacing
 
-Base unit 4px, on Linear's grid. Only these values. Nothing between them,
+Base unit 4px. Only these values. Nothing between them,
 nothing outside them.
 
 | Token        | Value | Token         | Value |
@@ -429,7 +430,7 @@ optically; the bottom of a band usually needs one step more than the top.
 
 ### 2.6 Radius
 
-Five values, on Linear's range:
+Five values:
 
 | Token          | Value  | Use                                               |
 | -------------- | ------ | ------------------------------------------------- |
@@ -439,11 +440,11 @@ Five values, on Linear's range:
 | `rounded-xl`   | 16px   | A full-bleed feature panel                        |
 | `rounded-full` | 9999px | Avatars, stage tags, icon badges                  |
 
-Axiom's 2px-everywhere was rejected on the same grounds as its type scale: at
-a 36px control a 2px corner reads as an unfinished rectangle, and 6px is the
-smallest radius that reads as deliberate. The 2px floor is kept for small
-nested shapes. The shadcn bridge sets a bare `--radius` at the control step,
-which is what the components' radius arithmetic reads.
+The 2px-everywhere candidate was rejected on the same grounds as its type
+scale: at a 36px control a 2px corner reads as an unfinished rectangle, and
+6px is the smallest radius that reads as deliberate. The 2px floor is kept
+for small nested shapes. The shadcn bridge sets a bare `--radius` at the
+control step, which is what the components' radius arithmetic reads.
 
 **Nested radius.** When a shape sits inside another and the gap between them
 is under 32px:

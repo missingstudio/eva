@@ -11,9 +11,8 @@ harness contract is ACP, not one Eva invents — `@missingstudio/eva-core`'s
 Harness contract imports its capability and permission types from here, which
 is why core sits above this package in the layer rule of
 [architecture.md](../../docs/reference/architecture.md). The glossary in
-[docs/context.md](../../docs/context.md) defines the terms, and
-[docs/decisions.md](../../docs/decisions.md) records the bet and every
-mapping rule below.
+[docs/context.md](../../docs/context.md) defines the terms, and a decision
+record, local to a checkout, records the bet and every mapping rule below.
 
 ## Prerequisites
 

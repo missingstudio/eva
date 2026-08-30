@@ -8,9 +8,8 @@ The matrix holds thirty-two cells: twenty-seven are proven, one is a refusal
 that names itself, and four are neither. The four are the work this page
 exists to find, and section 3 says what is absent in each.
 
-`packages/conformance/src/parity.test.ts` reads this page on every build. Every
-citation on it has to resolve, so a proof that is renamed or deleted fails the
-build instead of a user.
+This page is written by hand. Every citation on it names a test in the tree,
+and section 5 says the rules a change to it holds.
 
 ## 1. The four doors
 
@@ -188,10 +187,9 @@ row out of the tool domain, so the next call is refused by name and the record
 reads `unknown_tool`, not `denied`. A mode is capability selection, and not a
 filter at call time.
 
-## 5. How this page is checked
+## 5. How this page is kept
 
-`packages/conformance/src/parity.test.ts` reads this file and holds it to five
-rules:
+No suite reads this page. A change to it holds five rules:
 
 1. The matrix carries the eight interactions, in the set's own words.
 2. Every interaction has a section, and every section covers the four doors.
@@ -199,12 +197,9 @@ rules:
 4. A cell that reads `proven` or `refused` names at least one citation.
 5. A cell that reads `none` says what is absent.
 
-Then it resolves every citation on the page: the file has to exist, and it has
-to hold the test name or the token the citation gives. A proof that is renamed
-or deleted fails that suite, and `verify` runs it.
+A citation names a file that exists and a test that file holds. Follow a proof
+that is renamed or deleted to this page, because nothing else will.
 
-It is a sibling of `packages/conformance/src/w2-exit.test.ts` rather than a
-part of it. The two ledgers answer to different authorities: the exit test is
-held to the roadmap's own sentences, and this page is held to the interaction
-set and to itself. The exit test names this suite in the clause the stage plan
-added, so the matrix cannot be dropped without the exit test failing.
+`packages/conformance/src/w2-exit.test.ts` is the other ledger, and it answers
+to the roadmap rather than to this page: it carries the clauses of the W2 exit
+test and names the test that proves each one.

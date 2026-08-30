@@ -81,8 +81,8 @@ One plugin serves N providers, so each carries a compound id —
 plugin. In the CLI build (see
 [apps/cli/src/plugins.ts](../../apps/cli/src/plugins.ts)) this plugin loads
 after `eva.provider.openai`, so an entry named `openai` overrides the
-first-party one: load order is the documented answer, and
-[docs/decisions.md](../../docs/decisions.md) records why.
+first-party one: load order is the documented answer, and a decision record,
+local to a checkout, records why.
 
 The catalog never learns models from the endpoint, because boot does no
 network — the rows come from the `models` list. On the wire,

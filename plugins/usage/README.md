@@ -62,7 +62,7 @@ Every payload kind other than `usage` passes through untouched. The optional
 counters — `reasoningTokens`, `serverToolTokens`, `costTicks` — are clamped
 when present and stay absent when absent, rather than appearing as null.
 
-[docs/decisions.md](../../docs/decisions.md) records why the rule lives here
+A decision record, local to a checkout, records why the rule lives here
 and nowhere else: the Anthropic provider once clamped in its own mapper, and
 two rules for one concern drift apart.
 

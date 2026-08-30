@@ -46,16 +46,19 @@ eva
 
 Your key never reaches a settings file, a log, or the session record.
 
-| Command                 | What it does                                              |
-| ----------------------- | --------------------------------------------------------- |
-| `eva`                   | Open the interactive surface                              |
-| `eva -p "<prompt>"`     | Answer once, print to stdout, exit                        |
-| `eva run <name> [file]` | Run a Workflow: one input in, the last Run's text out     |
-| `eva serve --web`       | Serve the page that watches a Session, at a loopback bind |
-| `eva trust`             | Read this directory's `.eva`, and record the grant        |
-| `eva untrust`           | Drop the grant for this directory                         |
-| `eva config show`       | Print the resolved config, and where each key came from   |
-| `eva --version`         | What you have                                             |
+| Command                 | What it does                                               |
+| ----------------------- | ---------------------------------------------------------- |
+| `eva`                   | Open the interactive surface                               |
+| `eva --web`             | The same terminal, with the page served beside it          |
+| `eva -p "<prompt>"`     | Answer once, print to stdout, exit                         |
+| `eva run <name> [file]` | Run a Workflow: one input in, the last Run's text out      |
+| `eva serve --web`       | Headless: serve the page and the API, at a loopback bind   |
+| `eva attach <url>`      | Drive a runtime another process serves, from this terminal |
+| `eva trust`             | Read this directory's `.eva`, and record the grant         |
+| `eva untrust`           | Drop the grant for this directory                          |
+| `eva config show`       | Print the resolved config, and where each key came from    |
+| `eva policy check`      | Validate a tool-policy rule set, for CI                    |
+| `eva --version`         | What you have                                              |
 
 `eva run` takes its one input from a positional file, `--input <file>`, or
 piped standard input — one route at a time, and two at once is refused with

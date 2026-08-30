@@ -337,10 +337,6 @@ claims** — and the surface is the instrument that prints it: a near-black
 panel, quiet neutrals, and one ember signal spent only where something is
 actually happening.
 
-The system was assembled from five references — Linear, Axiom, Warp, Basedash
-and Factory — and every contested value was settled by measurement rather than
-by taste. Where they disagreed, the number in [Colors](#colors) decided it.
-
 **Key characteristics:**
 
 - **Dark only.** There is no light scheme, no theme toggle, no scheme cookie.
@@ -369,11 +365,10 @@ contract reads. Every ratio below is measured, not estimated.
 
 ### Why these neutrals
 
-Linear's ladder was taken over Axiom's and Factory's because it is the only
-one of the five with a genuinely distinct step at every job — two grounds, two
+This ladder was measured against the alternatives and kept because it is the
+only one with a genuinely distinct step at every job — two grounds, two
 borders and four inks — and because its neutrals carry a faint blue cast that
-keeps a large dark field from reading brown. The values are unchanged from the
-reference.
+keeps a large dark field from reading brown.
 
 ### Surfaces
 
@@ -409,12 +404,13 @@ reference.
 
 ### The accent
 
-- **Ember** (`{colors.primary}` — `#ee6018`): Factory's signal orange, taken
-  over Axiom's `#da5c2c` on the measurement — **6.00:1** against void where
-  Axiom's reaches 5.27:1, and the same 6.00:1 for the ink sitting on the fill.
+- **Ember** (`{colors.primary}` — `#ee6018`): the signal orange, taken over
+  the `#da5c2c` alternative on the measurement — **6.00:1** against void where
+  that one reaches 5.27:1, and the same 6.00:1 for the ink sitting on the
+  fill.
 - **The ink on an ember fill is `{colors.void}`.** Bone on ember measures
-  **2.64:1** and fails outright; void measures 6.00:1. Every reference in the
-  set puts a light ink on its orange, and every one of them is wrong.
+  **2.64:1** and fails outright; void measures 6.00:1. Every dark interface we
+  measured puts a light ink on its orange, and every one of them is wrong.
 - Ember fills the primary CTA, draws the 2 px editorial case mark, colours the
   shipping stage tag and the transcript's turn marker, and paints the focus
   ring. **Nothing else.** Scattered onto ordinary text, icons or borders it
@@ -425,8 +421,8 @@ reference.
 These report what a machine did, and only that. They never decorate chrome.
 
 - **Teal** (`{colors.teal}` — `#02b8cc`): running, in progress, and the
-  log-bar histogram — at **8.29:1**, the most legible data colour in the five
-  references.
+  log-bar histogram — at **8.29:1**, the most legible data colour of the
+  candidates measured.
 - **Green** (`{colors.green}` — `#27a644`): a passing check, a clean diff, at
   **6.29:1**.
 - **Red** (`{colors.red}` — `#eb5757`): a failing check, a destructive action,
@@ -485,20 +481,20 @@ in the mono; if a person is being spoken to, it is set in the sans.** That one
 line styles the transcript, the metadata row, the eyebrow and the code block
 without a per-case decision.
 
-An earlier revision of this system set _everything_ in the mono, following
-Axiom. That is the one place Axiom is measurably wrong: a monospaced face
-slows continuous reading, and Eva's documentation is continuous reading. Every
-other reference in the set — Linear, Warp, Factory, Basedash — pairs a sans
-with a mono, and so does this one.
+An earlier revision of this system set _everything_ in the mono, the way a
+terminal-first interface does. That is measurably wrong here: a monospaced
+face slows continuous reading, and Eva's documentation is continuous reading.
+A sans paired with a mono is what every comparable system does, and so does
+this one.
 
 Weights: **400** for prose, **500** for headings, buttons and emphasis. Never
 above 600, and never italic.
 
 ### Hierarchy
 
-Tracking follows Linear's discipline: about **-0.011em** at reading sizes,
-tightening to **-0.022em** at display sizes, because tracking that is right at
-56 px closes the letters up at 16 px. The mono never tracks negative;
+Tracking is optical: about **-0.011em** at reading sizes, tightening to
+**-0.022em** at display sizes, because tracking that is right at 56 px closes
+the letters up at 16 px. The mono never tracks negative;
 `{typography.label}` tracks _open_ at +0.06em.
 
 | Token                      | Size | Weight | Line height | Tracking | Face       | Use                                 |
@@ -519,9 +515,9 @@ tightening to **-0.022em** at display sizes, because tracking that is right at
 | `{typography.code}`        | 13px | 400    | 1.6         | 0        | Geist Mono | Code, transcript, tables.           |
 
 **Body is 16 px at a 1.6 ratio.** That is the reading size, and it is the one
-value here chosen purely for long-form legibility: Axiom's 14 px and Linear's
-15 px are UI sizes, and Eva's documentation is prose. Dense product surfaces
-step down to `{typography.body-sm}` 15 px.
+value here chosen purely for long-form legibility: the 14 px and 15 px
+alternatives are UI sizes, and Eva's documentation is prose. Dense product
+surfaces step down to `{typography.body-sm}` 15 px.
 
 Code is 13 px at 1.6. A monospaced face renders optically larger than a sans
 at the same pixel size, so code set one step below body reads level with it.
@@ -542,8 +538,8 @@ at the same pixel size, so code set one step below body reads level with it.
 
 ### Spacing System
 
-- **Base unit**: 4 px, on Linear's grid — the most flexible of the five, and
-  the one Tailwind speaks natively.
+- **Base unit**: 4 px — the most flexible of the grids measured, and the one
+  Tailwind speaks natively.
 - **Tokens**: `{spacing.4}` 4 · `{spacing.8}` 8 · `{spacing.12}` 12 ·
   `{spacing.16}` 16 · `{spacing.20}` 20 · `{spacing.24}` 24 · `{spacing.32}`
   32 · `{spacing.40}` 40 · `{spacing.48}` 48 · `{spacing.64}` 64 ·
@@ -607,7 +603,7 @@ is ever used to make a flat surface look raised.
 | `{rounded.xl}`   | 16px   | A full-bleed feature panel.                        |
 | `{rounded.full}` | 9999px | Avatars, stage tags, icon badges.                  |
 
-Linear's range is taken over Axiom's 2 px-everywhere: at a 36 px control a
+This range is taken over a 2 px-everywhere alternative: at a 36 px control a
 2 px corner reads as an unfinished rectangle, and 6 px is the smallest radius
 that reads as deliberate. The 2 px floor is kept for small nested shapes.
 

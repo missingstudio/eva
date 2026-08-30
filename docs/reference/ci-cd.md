@@ -6,9 +6,10 @@ owns the workflow fleet around them, the release path, and every channel a
 person installs Eva from.
 
 Everything here is designed for what this tree is: a Bun monorepo that ships
-one compiled CLI. OpenCode ships the same shape — a Bun-compiled TUI, from a
-monorepo, to binaries and npm — and is the closest prior art, so its release
-path is cited where a decision follows it and where one deliberately does not.
+one compiled CLI. A surveyed harness's release pipeline ships the same shape —
+a Bun-compiled TUI, from a monorepo, to binaries and npm — and is the closest
+prior art, so it is cited where a decision follows it and where one
+deliberately does not.
 
 **Status.** All five workflow files, the release scripts in `scripts/release/`,
 and `scripts/install.sh` are in the tree, and the whole release path short of
@@ -109,11 +110,11 @@ full terminal surface needs FFI that only Bun carries
 Five targets: both macOS architectures, both Linux architectures, and the one
 Windows architecture with users. Bun cross-compiles every target from one
 Linux runner, so there is no build matrix and no per-OS runner to keep alive.
-musl, baseline (pre-AVX2), and `windows-arm64` variants — all of which OpenCode
-ships — are deferred until a user reports the gap; each is one line in the
-target list when it earns its place.
+musl, baseline (pre-AVX2), and `windows-arm64` variants — all of which the
+surveyed pipeline ships — are deferred until a user reports the gap; each is
+one line in the target list when it earns its place.
 
-Three traps, the first two found by OpenCode before us:
+Three traps, the first two found in the surveyed pipeline before us:
 
 **Native dependencies must be installed for every platform before compiling.**
 OpenTUI's renderer is one prebuilt package per platform, named as optional
@@ -162,11 +163,11 @@ acted on.
 _Rejected:_ tag-push as the trigger. It splits one decision across two local
 commands, and the mistakes it invites — a tag on the wrong commit, a tag that
 disagrees with the manifest — each need a guard that the dispatch model makes
-unnecessary. _Rejected:_ OpenCode's branch-push publishing, where every push to
-a release branch ships. That makes merging and releasing the same act, and a
-release is a decision, not a side effect. _Rejected:_ changesets. It versions
-many packages independently; Eva ships one artifact, and the machinery would
-outweigh the version number it manages.
+unnecessary. _Rejected:_ the surveyed pipeline's branch-push publishing, where
+every push to a release branch ships. That makes merging and releasing the
+same act, and a release is a decision, not a side effect. _Rejected:_
+changesets. It versions many packages independently; Eva ships one artifact,
+and the machinery would outweigh the version number it manages.
 
 The run, in order:
 
@@ -245,8 +246,9 @@ target — `@missingstudio/eva-darwin-arm64` and so on, each holding one binary 
 and the wrapper `@missingstudio/eva` names them all as `optionalDependencies`,
 so the installer's package manager downloads exactly one. The wrapper's `bin`
 is a small script that resolves the installed platform package and executes it.
-No postinstall, so `--ignore-scripts` installs work, which is where OpenCode's
-postinstall model sends its users an error message instead.
+No postinstall, so `--ignore-scripts` installs work, which is where the
+surveyed pipeline's postinstall model sends its users an error message
+instead.
 
 _Rejected:_ publishing the packed JavaScript as the npm artifact. It runs, but
 the surface depends on the runtime that happens to invoke it — full TUI under
@@ -352,11 +354,11 @@ else, spent after the release is public.
 Named gaps, so nobody mistakes silence for coverage: the Windows binary is not
 Authenticode-signed and SmartScreen will say so; the macOS binary is not
 notarized and the cask clears quarantine instead. Both are solved with money
-and certificates, not engineering — OpenCode carries Azure Trusted Signing and
-Apple certificates for exactly this — and each arrives when enough users hit
-the warning to justify the secret sprawl.
+and certificates, not engineering — the surveyed pipeline carries Azure
+Trusted Signing and Apple certificates for exactly this — and each arrives
+when enough users hit the warning to justify the secret sprawl.
 
-## 10. Taken from OpenCode, and not
+## 10. Taken from the field, and not
 
 Taken, with the reasoning above: the dispatch-with-bump release trigger (§4);
 cross-compiling every target with Bun from one runner and smoke-testing what

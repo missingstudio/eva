@@ -51,7 +51,7 @@ A theme is chosen in one of two places:
 
 Applying goes through the surface's `paint`, and the outcome is also said in
 words (`theme → Monochrome`), so a reader scrolling back knows what happened.
-[docs/decisions.md](../../docs/decisions.md) records the split: a theme is
+A decision record, local to a checkout, records the split: a theme is
 looked at before it is chosen, and only a Command applies one.
 
 ## How a theme is shaped

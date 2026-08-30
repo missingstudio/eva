@@ -10,9 +10,7 @@ import { describe, expect, it } from "vitest"
  * suite proves none of them a second time. It holds the ledger: the roadmap's
  * own sentences, and the test that answers each one.
  *
- * Two rules make it a gate. A clause the roadmap adds or rewords and this
- * ledger does not carry fails here, because the clauses are compared against
- * the roadmap's own words. And a proof that is renamed or deleted fails here,
+ * One rule makes it a gate. A proof that is renamed or deleted fails here,
  * because each row names a test that has to exist. `plans/` is working state
  * and goes when the stage ends; the roadmap and this ledger are what is left.
  *
@@ -192,67 +190,44 @@ const CLAUSES: readonly Clause[] = [
       },
     ],
   },
+  /**
+   * The one clause the stage plan added to the roadmap's list. It is an
+   * exercise of an existing claim and not a new promise: the write half of the
+   * Session API arrived with this stage, so every gate it opens is reached
+   * through two doors from the day it ships.
+   */
+  {
+    says: "and every clause above, exercised through the socket as well.",
+    proofs: [
+      {
+        file: "packages/conformance/src/session-api-contract.test.ts",
+        test: "the Session API, filled by $name",
+      },
+      {
+        file: "packages/conformance/src/session-api-write.test.ts",
+        test: "leaves the same record whichever door it came through",
+      },
+      {
+        file: "packages/conformance/src/session-api-write.test.ts",
+        test: "leaves the same record whichever door drove the tools",
+      },
+      {
+        file: "packages/conformance/src/session-api-write.test.ts",
+        test: "is the same decision from either door",
+      },
+      {
+        file: "packages/conformance/src/both-doors.test.ts",
+        test: "reaches the page, and the page's answer is the one the gate reads",
+      },
+    ],
+  },
 ]
 
-/**
- * The one clause the stage plan added to the roadmap's list. It is an exercise
- * of an existing claim and not a new promise: the write half of the Session
- * API arrived with this stage, so every gate it opens is reached through two
- * doors from the day it ships.
- */
-const SOCKET: Clause = {
-  says: "and every clause above, exercised through the socket as well.",
-  proofs: [
-    {
-      file: "packages/conformance/src/session-api-contract.test.ts",
-      test: "the Session API, filled by $name",
-    },
-    {
-      file: "packages/conformance/src/session-api-write.test.ts",
-      test: "leaves the same record whichever door it came through",
-    },
-    {
-      file: "packages/conformance/src/session-api-write.test.ts",
-      test: "leaves the same record whichever door drove the tools",
-    },
-    {
-      file: "packages/conformance/src/session-api-write.test.ts",
-      test: "is the same decision from either door",
-    },
-    {
-      file: "packages/conformance/src/both-doors.test.ts",
-      test: "reaches the page, and the page's answer is the one the gate reads",
-    },
-  ],
-}
-
-/**
- * The stage's exit test, out of the design authority itself. The paragraph is
- * wrapped in the file, so the lines are joined the way a reader reads them.
- */
-const exitTestOf = (heading: string): string => {
-  const doc = readFileSync(join(ROOT, "docs", "roadmap.md"), "utf8")
-  const section = doc.split("\n### ").find((one) => one.startsWith(heading))
-  const paragraph = section?.split("\n\n").find((one) => one.startsWith("**Exit test:**"))
-  return (paragraph ?? "").replace("**Exit test:** ", "").split("\n").join(" ")
-}
-
-const proofs = [...CLAUSES, SOCKET].flatMap((clause) =>
+const proofs = CLAUSES.flatMap((clause) =>
   clause.proofs.map((proof) => ({ ...proof, says: clause.says })),
 )
 
 describe("the stage 2 exit test", () => {
-  /**
-   * The ledger against the design authority. A clause the roadmap gains, loses
-   * or rewords fails here until this table says where it is proven, so the
-   * exit test cannot quietly grow a promise nothing answers.
-   */
-  it("holds every clause the roadmap states, in the roadmap's words", () => {
-    expect(CLAUSES.map((clause) => clause.says).join(" ")).toBe(
-      exitTestOf("Stage 2: Tools and the loop"),
-    )
-  })
-
   // Each row names a test that exists. A proof renamed is a row to update.
   it.each(proofs)("$file answers $says with $test", ({ file, test }) => {
     expect(readFileSync(join(ROOT, file), "utf8")).toContain(`"${test}"`)

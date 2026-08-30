@@ -97,7 +97,7 @@ approximately. The two shapes are never added: a reported figure wins for the
 run, and `costFrom` on the state says which shape the total came from, so an
 exhausted outcome is attributable. Cache reads are priced at their own rate,
 not the input rate. The rates arrive as `ctx.prices`, which boot derives
-beside the catalog — [docs/decisions.md](../../docs/decisions.md) records why.
+beside the catalog — a decision record, local to a checkout, records why.
 
 ## API
 
