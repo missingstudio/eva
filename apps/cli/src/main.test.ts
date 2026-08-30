@@ -11,11 +11,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { buildOf, type Build } from "@missingstudio/eva-boot"
 import type { Payload } from "@missingstudio/eva-schema"
+import { errorWords } from "@missingstudio/eva-session-view"
 import { define } from "@missingstudio/eva-sdk"
 import { scripted } from "@missingstudio/eva-testkit"
 import { Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
-import { BUILT_IN, main, OPTIONAL } from "./index.js"
+import { BUILT_IN, main, OPTIONAL, PREFIX } from "./index.js"
 import { VERSION } from "./version.js"
 import type { World } from "./world.js"
 
@@ -939,7 +940,9 @@ describe("eva serve --web", () => {
     })
     await Effect.runPromise(Fiber.interrupt(running))
 
-    expect(said).toContain(`http://127.0.0.1:${port}`)
+    // In the one voice, because this door's words land beside whatever else
+    // the shell is printing and a reader tells Eva from a crash by the prefix.
+    expect(said).toContain(`${PREFIX}http://127.0.0.1:${port}`)
     expect(await listening(port)).toBe(false)
   })
 })
@@ -1055,6 +1058,27 @@ describe("what a verb that answers writes to standard output", () => {
     expect(found.code).toBe(0)
     expect(found.out).toBe("the answer")
     expect(found.err).toContain("cost unreported")
+  })
+
+  /**
+   * And a Run that stopped says why here in the same words every other door
+   * says it in. `errorWords` is the one table, so a person who reads a
+   * failure at the pipe and a person who reads it on the page read one
+   * sentence — and the answer stream stays the answer's, which is empty when
+   * there was none.
+   */
+  it("words a failed Run on the error stream, and writes nothing to the answer", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", contained(directory))
+
+    const found = await ran(["--print", "say hello"], directory, {}, { build: buildWith([]) })
+    const words = errorWords("other")
+
+    expect(found.code).toBe(1)
+    expect(found.out).toBe("")
+    expect(found.err).toContain("(other)")
+    expect(found.err).toContain(words.means)
+    expect(found.err).toContain(words.next)
   })
 
   it("is the last Run's text alone for eva run", async () => {

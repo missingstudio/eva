@@ -11,7 +11,7 @@ import {
   type TranscriptMessage,
 } from "@missingstudio/eva-schema"
 import { describe, expect, it } from "vitest"
-import { askingOf, blockFold, blocksOf, type Block } from "./blocks.js"
+import { askingOf, blockFold, blocksOf, type Asking, type Block } from "./blocks.js"
 
 const agent = (blocks: TranscriptMessage["blocks"]): TranscriptMessage => ({
   author: "agent",
@@ -244,7 +244,7 @@ describe("the fold from a Transcript", () => {
  * union.
  */
 describe("the questions that stand", () => {
-  const ASK = { request: "call_1", question: "run git push?" }
+  const ASK: Asking = { kind: "permission", request: "call_1", question: "run git push?" }
 
   it("folds one question to one Block, with the id an answer names", () => {
     expect(askingOf([ASK])).toEqual([
@@ -261,7 +261,10 @@ describe("the questions that stand", () => {
   // One Turn, whatever stands. A reader is being asked once, however many
   // calls are waiting on them.
   it("folds every question that stands into one Turn", () => {
-    const turns = askingOf([ASK, { request: "call_2", question: "and this one?" }])
+    const turns = askingOf([
+      ASK,
+      { kind: "permission", request: "call_2", question: "and this one?" },
+    ])
     expect(turns).toHaveLength(1)
     expect(kinds(turns)).toEqual(["permission", "permission"])
   })

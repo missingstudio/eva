@@ -202,7 +202,9 @@ const turns = blocksOf(record)
  * the id is the tool call's: the card the record drew for `t2` is the card
  * this question stands under.
  */
-const asking = askingOf([{ request: "t2", question: "search wants to read outside the root" }])
+const asking = askingOf([
+  { kind: "permission", request: "t2", question: "search wants to read outside the root" },
+])
 const drawn = [...turns, ...asking]
 const blocks = drawn.flatMap((turn) => turn.blocks)
 

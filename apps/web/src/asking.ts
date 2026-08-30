@@ -23,8 +23,13 @@ import { sent } from "./refusals.js"
 
 // The Block shape, from the request that travelled whole. A Block says
 // `request` where the contract says `id`, because that is what it is the id
-// of — the one translation on this channel, and it is the drawing's.
-const asked = (one: FrontendRequest): Asking => ({ request: one.id, question: one.question })
+// of — the one translation on this channel, and it is the drawing's. The kind
+// travels with it, because it is what a line typed in answer is read by.
+const asked = (one: FrontendRequest): Asking => ({
+  kind: one.kind,
+  request: one.id,
+  question: one.question,
+})
 
 // The questions that stand, for as long as the page is drawn.
 export const useAsking = (): readonly Asking[] => {
