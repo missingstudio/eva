@@ -89,7 +89,10 @@ second parser would be one to keep in step. The answer is `{"wrote", "selected"?
 command opened when it opened one. `pick` is absent, so a command that would
 have asked lists its options instead — the contract already says a command
 answers in words where a capability is missing, so no command needs work of its
-own to cross this wire. Nothing here can fault: a line no row answers is
+own to cross this wire. `CommandContext.location` is this door's `directory`,
+the same one a `create` that names nowhere is answered in: a command that read
+the process would open a new Session in the serving directory whatever a
+caller pinned. Nothing here can fault: a line no row answers is
 answered in words with the same status as one that ran.
 
 `GET /api/models` is the other. A model is a fact of the build and not of a
@@ -289,9 +292,17 @@ about would be refused again however often it is sent.
   `framesIn(text)`, `payloadIn(frame)`, `refusalOut(refused)`,
   `refusalIn(from, body)` — the headers and the stream's own shapes, read by
   both halves for the reason the paths are. The framing itself lives in
-  `@missingstudio/eva-client-runtime`, below both wires — the ask channel in
-  `eva.web` frames the same way, and a plugin may not import a plugin — and is
-  said again here so a caller reads one file for the whole agreement.
+  `@missingstudio/eva-client-runtime`, below both wires — the surface that
+  writes the ask channel's frames frames the same way, and a plugin may not
+  import a plugin — and is said again here so a caller reads one file for the
+  whole agreement.
+- `ASKING_PATH`, `askingIn(text)`, `watchAsking(each, options?)` — the ask
+  channel's reader. A question is asked over that stream and settled over
+  `REQUESTS`, so the two halves of one exchange sit in one place and any
+  surface across a socket relays a permission request without naming a page.
+  The surface that binds the port writes the frames and spells the path
+  itself; the copy is forced, exactly as `Answering` is spelled twice, and
+  `packages/conformance` reads that writer through this reader.
 - `httpTransport(options)`, `readModels(options)` — from
   `@missingstudio/eva-api/client`. The first answers an `HttpTransport`: the
   seam's `Transport`, and `command(session, line)` beside it. A command is not

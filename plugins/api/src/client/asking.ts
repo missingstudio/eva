@@ -3,12 +3,12 @@ import type { FrontendRequest } from "@missingstudio/eva-sdk"
 import { askingIn, ASKING_PATH, EVENT_STREAM } from "../wire.js"
 
 /**
- * The page's half of the ask channel. It lives with the surface that serves
- * the page, exactly as `plugins/api`'s client half lives with the wire it
- * reads — so a page holds no wire of its own and knows no address.
+ * The reader's half of the ask channel. It lives beside the wire that answers
+ * a question, so every surface across a socket reaches it the same way — a
+ * page, a terminal, and whatever comes next.
  *
  * The origin is nothing by default, which is the origin the page was served
- * by: `eva.web` serves the page and answers this stream on the one port.
+ * by: one port carries the page, the calls, and this stream.
  */
 
 // How long a reader that lost the stream waits before opening it again, in

@@ -5,4 +5,5 @@
  * imports a `node:` module, ever.
  */
 export * from "../wire.js"
+export * from "./asking.js"
 export * from "./transport.js"

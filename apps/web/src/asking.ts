@@ -1,6 +1,6 @@
+import { watchAsking } from "@missingstudio/eva-api/client"
 import type { FrontendRequest } from "@missingstudio/eva-sdk"
 import type { Asking } from "@missingstudio/eva-session-view"
-import { watchAsking } from "@missingstudio/eva-web/client"
 import { Effect } from "effect"
 import { useEffect, useState } from "react"
 import { client } from "./eva.js"
@@ -11,10 +11,10 @@ import { client } from "./eva.js"
  * This is the one thing the page reads that is not the record, and it cannot
  * come from the record: nobody has answered the question yet, so nothing about
  * it is recorded — a request that has been answered is the Disposition of the
- * call it gated. So `eva.web` streams the questions that stand on the port
- * that served the page, and the page reads that stream through the surface's
- * own client half, exactly as it reads the wire through `eva.api`'s. No
- * address and no socket is named here.
+ * call it gated. So the questions that stand are streamed on the port that
+ * served the page, and the page reads that stream through `eva.api`'s client
+ * half, exactly as it reads the rest of the wire. No address and no socket is
+ * named here.
  *
  * The answer goes back through the Client, because an answer is a Session API
  * call and every one of those goes through `client-runtime`.

@@ -14,7 +14,12 @@ export interface PrintOptions {
   // Continue an existing Session rather than opening a new one. The prior
   // Runs are folded back in as history, so the conversation carries.
   readonly session?: SessionID
-  // The directory the new Session belongs to.
+  /**
+   * The directory the new Session belongs to. The door that starts the print
+   * run supplies it, because that door is where the process is read; nothing
+   * is a caller with none to give, and `SessionAPI.create` then answers where
+   * it is.
+   */
   readonly location?: string
   readonly write?: (text: string) => void
 }
@@ -36,7 +41,7 @@ export const runPrint = Effect.fn("eva.print.run")(function* (
   options: PrintOptions = {},
 ) {
   const write = options.write ?? ((text: string) => void process.stdout.write(text))
-  const session = options.session ?? (yield* client.api.create(options.location ?? process.cwd()))
+  const session = options.session ?? (yield* client.api.create(options.location))
 
   // The runtime owns the Run, the cancel on interrupt included. The stream is
   // only what the reader sees as it is said; what the Run answered and what

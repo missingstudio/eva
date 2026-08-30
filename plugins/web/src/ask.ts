@@ -1,16 +1,23 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
+import { EVENT_STREAM, frameOut } from "@missingstudio/eva-client-runtime"
 import type { Frontend, FrontendRequest } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
-import { askFrame, ASKING_PATH, EVENT_STREAM } from "./wire.js"
 
 /**
  * How Eva asks the person at the page, and how it knows there is one.
  *
+ * This is the writer's half of the ask channel. The reader's half is
+ * `plugins/api`'s, beside the wire that answers a question, so every surface
+ * across a socket reads what this writes. A plugin may not import a plugin,
+ * so the path is spelled on both sides — the same forced copy that
+ * `Answering` is, and the conformance suites read this writer through that
+ * reader, so the two cannot drift in silence.
+ *
  * The page reads the questions that stand from a stream of their own, on the
  * port that served it. It is not a Session API method: a question nobody has
  * answered has no position on the Trace — nothing about it is recorded, because
- * an answered request is the Disposition of the call it gated — and a surface
- * owns how it reaches its own person. The answer goes back the other way,
+ * an answered request is the Disposition of the call it gated — and the surface
+ * that binds the port owns the door. The answer goes back the other way,
  * through `SessionAPI.answer`, which every surface writes through.
  *
  * The stream is also the presence signal, and that is what makes an
@@ -20,6 +27,24 @@ import { askFrame, ASKING_PATH, EVENT_STREAM } from "./wire.js"
  * waiting. A surface that says it takes input and then holds a Run forever is
  * worse than one that declines.
  */
+
+// Where the questions that stand are read. Outside `/api`, which the wire
+// claims whole and answers every unknown path under with a refusal.
+export const ASKING_PATH = "/asking"
+
+/**
+ * Every question that stands, as one frame. The whole set and not the change
+ * to it, so a page holds no bookkeeping: a question withdrawn — answered at
+ * the other door, or the Run stopped — is a set with one fewer in it, and a
+ * page that joined late reads the same frame as one that was there.
+ *
+ * What travels is `FrontendRequest`, whole. It is the shape `Frontend.ask`
+ * takes, so a question crosses this wire unchanged and a door at the far end
+ * asks its person with the kind the gate asked it with — a wire that dropped
+ * the kind made every relayed question a permission request, whatever it was.
+ */
+export const askFrame = (asking: readonly FrontendRequest[]): string =>
+  frameOut({ data: JSON.stringify({ asking }) })
 
 const STREAM = {
   "content-type": `${EVENT_STREAM}; charset=utf-8`,

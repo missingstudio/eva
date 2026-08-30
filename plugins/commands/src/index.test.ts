@@ -39,6 +39,8 @@ interface Watched {
   readonly offered: () => readonly PickRow[]
   readonly model: () => ModelRef
   readonly followed: () => SessionID | undefined
+  // Where each Session this context opened was asked for.
+  readonly opened: () => readonly (string | undefined)[]
 }
 
 /**
@@ -49,16 +51,23 @@ interface Watched {
 const watched = (
   takes?: (rows: readonly PickRow[]) => PickRow | undefined,
   held: readonly SessionHeader[] = [],
+  location?: string,
 ): Watched => {
   const said: string[] = []
   let offered: readonly PickRow[] = []
   let model: ModelRef = { provider: "fake", model: "model" }
   let followed: SessionID | undefined
+  const opened: (string | undefined)[] = []
   // Only the half `/model` reaches: the rest of the Session API is not what
   // this command is, and a stub of it would only be a second thing to keep
   // in step.
   const api = {
     list: Effect.succeed(held),
+    create: (where?: string) =>
+      Effect.sync(() => {
+        opened.push(where)
+        return `sess_${opened.length}` as SessionID
+      }),
     model: {
       get: () => Effect.succeed(model),
       set: (_session: SessionID, next: ModelRef) => Effect.sync(() => void (model = next)),
@@ -69,6 +78,7 @@ const watched = (
     ctx: {
       api,
       session: "sess_test" as SessionID,
+      ...(location === undefined ? {} : { location }),
       write: (text) => void said.push(text),
       select: (session) => void (followed = session),
       ...(takes === undefined
@@ -84,6 +94,7 @@ const watched = (
     offered: () => offered,
     model: () => model,
     followed: () => followed,
+    opened: () => opened,
   }
 }
 
@@ -264,5 +275,32 @@ describe("/sessions", () => {
     expect(seen.written()).toBe("no Sessions yet\n")
     expect(seen.offered()).toEqual([])
     expect(seen.followed()).toBeUndefined()
+  })
+})
+
+describe("/clear", () => {
+  /**
+   * The Location is the door's, and never the process's. This command runs
+   * where the rows are, so one that read the process opened the new Session
+   * in the serving directory whenever the line came over a wire.
+   */
+  it("opens the new Session in the Location the door supplied", async () => {
+    const seen = watched(undefined, [], "/work/here")
+    await ran("clear", seen.ctx)
+
+    expect(seen.opened()).toEqual(["/work/here"])
+    expect(seen.followed()).toBe("sess_1")
+    // A raw session id is a fact for the record, not a line for a person.
+    expect(seen.written()).toBe("")
+  })
+
+  // A door with no Location to give says nothing, and `create` answers where
+  // it is. Nothing here reads the directory this suite happens to run in.
+  it("names no directory when the door supplied none", async () => {
+    const seen = watched()
+    await ran("clear", seen.ctx)
+
+    expect(seen.opened()).toEqual([undefined])
+    expect(seen.followed()).toBe("sess_1")
   })
 })

@@ -18,7 +18,7 @@ import {
   type Payload,
   type SessionID,
 } from "@missingstudio/eva-schema"
-import type { PickRow, Ran } from "@missingstudio/eva-sdk"
+import type { FrontendRequest, PickRow, Ran } from "@missingstudio/eva-sdk"
 
 export const API_PLUGIN = "eva.api"
 
@@ -43,6 +43,59 @@ export const REQUESTS = `${API_ROOT}/requests`
  * once and every Session on this runtime is offered the same ones.
  */
 export const MODELS = `${API_ROOT}/models`
+
+/**
+ * Where the questions that stand are read.
+ *
+ * It is here and not beside a surface. `answer` is here already, and a
+ * question and its answer are two halves of one exchange — so a terminal at
+ * the end of a socket relays a permission request through this wire and
+ * imports no page.
+ *
+ * The path is outside `API_ROOT`, which the wire claims whole and refuses
+ * every unknown path under. The surface that binds the port writes the
+ * frames, and it spells this path itself: a plugin may not import a plugin,
+ * so the copy is forced, exactly as `Answering` is spelled twice.
+ */
+export const ASKING_PATH = "/asking"
+
+const requestIn = (value: unknown): FrontendRequest | undefined => {
+  if (typeof value !== "object" || value === null) return undefined
+  const { kind, id, question } = value as Record<string, unknown>
+  if (typeof id !== "string" || typeof question !== "string") return undefined
+  return kind === "permission" || kind === "question" ? { kind, id, question } : undefined
+}
+
+/**
+ * The questions a frame's data carries, or nothing when it carries no set this
+ * side can read. A frame that cannot be read is not an empty set: a reader
+ * looking at a question would otherwise watch it vanish because a byte was
+ * wrong, so the caller keeps what it had.
+ *
+ * What travels is `FrontendRequest`, whole. It is the shape `Frontend.ask`
+ * takes, so a question crosses this wire unchanged and a door at the far end
+ * asks its person with the kind the gate asked it with — a wire that dropped
+ * the kind made every relayed question a permission request, whatever it was.
+ */
+export const askingIn = (text: string): readonly FrontendRequest[] | undefined => {
+  let read: unknown
+  try {
+    read = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  if (typeof read !== "object" || read === null) return undefined
+  const asking = (read as Record<string, unknown>)["asking"]
+  if (!Array.isArray(asking)) return undefined
+
+  const out: FrontendRequest[] = []
+  for (const one of asking as readonly unknown[]) {
+    const request = requestIn(one)
+    if (request === undefined) return undefined
+    out.push(request)
+  }
+  return out
+}
 
 export const sessionPath = (session: string): string => `${SESSIONS}/${encodeURIComponent(session)}`
 
@@ -83,10 +136,10 @@ export const CURSOR = "last-event-id"
 export const IDEMPOTENCY = "idempotency-key"
 
 /**
- * The framing this stream speaks is the client runtime's: the ask channel in
- * `eva.web` frames the same way, and a plugin may not import a plugin, so the
- * one spelling lives below both. It is said again here so a caller of this
- * wire reads one file for the whole agreement.
+ * The framing this stream speaks is the client runtime's: the surface that
+ * writes the ask channel's frames frames the same way, and a plugin may not
+ * import a plugin, so the one spelling lives below both. It is said again
+ * here so a caller of this wire reads one file for the whole agreement.
  */
 export {
   cursorIn,

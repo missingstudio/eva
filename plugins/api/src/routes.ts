@@ -125,11 +125,20 @@ const joined = (said: readonly string[]): string =>
  * capability absent answers in words instead, so a door that draws no panel
  * gets a listing rather than a wait for an answer that cannot arrive.
  *
+ * The Location is this door's too, and it is the same one a `create` with no
+ * location is answered in. A command that read the process would open a new
+ * Session in the serving directory whatever a suite pinned.
+ *
  * `dispatch` has no error channel, so this route cannot fault: a line no
  * command answers is answered in words, with the same status as one that ran.
  */
 const commanded =
-  (commands: Effect.Effect<readonly CommandInfo[]>, session: SessionID, line: string): Route =>
+  (
+    commands: Effect.Effect<readonly CommandInfo[]>,
+    session: SessionID,
+    line: string,
+    location: string,
+  ): Route =>
   (api) =>
     Effect.gen(function* () {
       const said: string[] = []
@@ -138,6 +147,7 @@ const commanded =
       const outcome = yield* dispatch(yield* commands, line, (parsed) => ({
         api,
         session,
+        location,
         ...(parsed.argument === undefined ? {} : { argument: parsed.argument }),
         write: (text: string) => void said.push(text),
         select: (next: SessionID) => void (selected = next),
@@ -332,7 +342,7 @@ export const routeFor = (
     if (running !== undefined) {
       const line = lineIn(body)
       if (line === undefined) return refusing
-      return commanded(commands, sessionID(running), line)
+      return commanded(commands, sessionID(running), line, directory())
     }
 
     return undefined

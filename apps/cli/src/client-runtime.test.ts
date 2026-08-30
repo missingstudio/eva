@@ -93,9 +93,13 @@ describe("what the page reaches Eva through", () => {
    * One Client, built at one site, and every other file on the page is handed
    * it. `client-runtime` holds what a reconnect costs, so a second Client
    * would be a second answer to where the runtime is.
+   *
+   * The transport and the Client are what is counted, and not the module they
+   * ship in: the ask channel's reader lives beside the wire too, and the page
+   * reads the questions that stand where it draws them.
    */
   it("builds one Client, at one site", () => {
-    expect(naming("eva-api/client", ["apps/web/src"])).toEqual(["apps/web/src/eva.ts"])
+    expect(naming("httpTransport", ["apps/web/src"])).toEqual(["apps/web/src/eva.ts"])
     expect(naming("makeClient", ["apps/web/src"])).toEqual(["apps/web/src/eva.ts"])
   })
 })

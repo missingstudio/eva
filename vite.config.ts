@@ -229,10 +229,9 @@ export default defineConfig({
           "@missingstudio/eva-client-runtime",
           "@missingstudio/eva-session-view",
           "@missingstudio/eva-api/client",
-          "@missingstudio/eva-web/client",
           "@missingstudio/ui",
         ],
-        "the web app imports the contracts, the client runtime, the session view, the two client halves, and ui",
+        "the web app imports the contracts, the client runtime, the session view, the wire's client half, and ui",
       ),
       {
         files: ["apps/web/**", "apps/www/**", "apps/docs/**"],

@@ -1,7 +1,6 @@
-import type { HttpTransport } from "@missingstudio/eva-api/client"
+import { watchAsking, type HttpTransport } from "@missingstudio/eva-api/client"
 import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
 import type { Frontend, FrontendRequest } from "@missingstudio/eva-sdk"
-import { watchAsking } from "@missingstudio/eva-web/client"
 import { Effect, Fiber, Queue } from "effect"
 import { runInteractive } from "./interactive.js"
 import type { Started } from "./run.js"
@@ -20,11 +19,12 @@ import type { Opening } from "./surface.js"
 /**
  * The questions the runtime has, offered to the person at this terminal.
  *
- * `eva.web` streams the questions that stand on the port that served the page,
- * and it is the presence signal as well as the channel: a runtime with nobody
- * reading it cancels an ask rather than holding a Run open for nobody. So an
- * attached terminal reads that stream for the whole of its run, and the moment
- * it does the runtime has somebody to ask.
+ * The ask channel streams the questions that stand, and it is the presence
+ * signal as well as the channel: a runtime with nobody reading it cancels an
+ * ask rather than holding a Run open for nobody. So an attached terminal reads
+ * that stream for the whole of its run, and the moment it does the runtime has
+ * somebody to ask. The reader is the wire's, beside `answer`, so this terminal
+ * names no surface: it relays a question from any runtime that serves one.
  *
  * The answer goes back the other way, through `SessionAPI.answer` — the door
  * every surface across a wire has. A question that leaves the set was answered
