@@ -6,8 +6,8 @@ export * from "./sandbox.js"
 
 /**
  * Fills the `Sandbox` slot and contains nothing. The seam exists so a tool
- * asks for containment through one contract from its first day; the plugin
- * that answers with real limits is stage 4's, and it replaces this one whole.
+ * asks for containment through one contract from its first day; a plugin that
+ * answers with real limits replaces this one whole.
  */
 export const sandboxNone = define({
   id: "eva.sandbox.none",

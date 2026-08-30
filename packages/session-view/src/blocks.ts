@@ -92,11 +92,10 @@ export type Block =
    *
    * **One surface draws it today: the page.** The terminal shows the question
    * as a Note and says `ASKING` on its status line, because a `Frame` carries
-   * the record and a standing request is not on the record. The roadmap puts
-   * the terminal's permission Overlay at C1, and that is where the two start
-   * drawing one question the same way. Until then this is a shape one of the
-   * two ignores, which is a cost worth naming rather than a claim worth
-   * repeating.
+   * the record and a standing request is not on the record. The two start
+   * drawing one question the same way when the terminal grows a permission
+   * Overlay. Until then this is a shape one of the two ignores, which is a
+   * cost worth naming rather than a claim worth repeating.
    *
    * `request` is the id an answer names, which is the id of the tool call the
    * question is about — so the card the record drew for that call is the card

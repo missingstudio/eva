@@ -51,8 +51,9 @@ export interface DroppableTransport extends Transport {
 
 /**
  * The seam's own proof: a filler that can be told to lose its pipe. It ships
- * in the package rather than in a test file because W0's exit test runs on
- * it, and because the second filler will want it again.
+ * in the package rather than in a test file because the conformance suite
+ * that proves the page survives a dead pipe runs on it, and because the
+ * second filler will want it again.
  *
  * A drop says what it has to say where it can be acted on: `health` changes,
  * and every open `watch` ends. It says nothing through an error channel —

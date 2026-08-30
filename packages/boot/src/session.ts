@@ -205,8 +205,8 @@ export interface ApiOptions {
    *
    * A Prompt still names its own, and a named one wins. This only says what a
    * Session means by a bare line, which is what makes `eva.harness.loop`
-   * reachable from a Console at all. A profile decides it at stage 7; until
-   * then a person names it once in config.
+   * reachable from a Console at all. A person names it once in config, until
+   * something in the tree decides it per Session.
    */
   readonly harness?: string
 }

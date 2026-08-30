@@ -223,8 +223,8 @@ export const BUILT_IN: readonly Plugin[] = [
   sandboxNone,
   diff,
   // The tools, together. Load order binds none of them to a filler above —
-  // every one reads its slot at the moment of use — so stage 4's containment
-  // arrives behind `toolBash` with no change here.
+  // every one reads its slot at the moment of use — so a plugin that contains
+  // what a command may do arrives behind `toolBash` with no change here.
   toolRead,
   toolEdit,
   toolGrep,

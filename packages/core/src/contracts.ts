@@ -311,8 +311,8 @@ export interface Validator {
    */
   readonly accepts: (schema: unknown) => Effect.Effect<void, ValidatorError>
   /**
-   * `candidate` is text, because at Stage 1 a Candidate is the Step's `text`
-   * payloads joined and `ProviderRequest` has no response-format field.
+   * `candidate` is text, because a Candidate is the Step's `text` payloads
+   * joined and `ProviderRequest` has no response-format field.
    * Extract, parse and check are one judgement, so a Candidate that is not
    * JSON at all gets one Verdict and one Fault set rather than a parse failure
    * the caller has to word itself.

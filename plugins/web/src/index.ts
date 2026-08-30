@@ -11,9 +11,10 @@ export * from "./serve.js"
 
 /**
  * One artifact serves single-tenant and multi-tenant alike, so the posture is
- * config and never a build variant. `local` is single-tenant, `hosted` is
- * multi-tenant, and W1 reads the name and reports it: what each posture then
- * permits arrives with the token at 9b.
+ * config and never a build variant. `local` is single-tenant and `hosted` is
+ * multi-tenant. The surface reads the name and reports it, and nothing more:
+ * what each posture permits waits on a way to authenticate a visitor, which
+ * this build has none of.
  */
 const KEYS = declare({ posture: "name" })
 export const DEFAULT_POSTURE = "local"
@@ -59,7 +60,7 @@ export const makeWeb = (options: WebOptions): Plugin =>
        * A row is a factory: nothing binds until `start` runs, so a test that
        * boots this build opens no socket. The Client it is handed is what the
        * wire answers from — the page reaches Eva over that wire and not
-       * through this process, and W2 is where the surface itself asks.
+       * through this process.
        */
       yield* ctx.surface.transform((draft) => {
         draft.set({

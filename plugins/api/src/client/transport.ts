@@ -50,8 +50,8 @@ export type Request = typeof globalThis.fetch
 export interface HttpOptions {
   /**
    * Where the wire is. Nothing is the origin the page was served by, which is
-   * what W1 uses: `eva.web` serves the page and `eva.api` answers beside it
-   * on the one port, so the page knows no address.
+   * what the page uses: `eva.web` serves the page and `eva.api` answers
+   * beside it on the one port, so the page knows no address.
    */
   readonly origin?: string
   readonly gap?: number

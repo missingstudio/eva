@@ -29,7 +29,7 @@ export interface Virtual {
  * outside the root, the same glob rule out of `globMatcher` — so a tool test
  * runs with nothing to clean up and nothing to leak.
  *
- * The shape is OpenHarness's `provider-vfs`, named in the stage 2 plan.
+ * The shape is OpenHarness's `provider-vfs`.
  */
 export const virtualFileSystem = (
   seed: Readonly<Record<string, string>> = {},

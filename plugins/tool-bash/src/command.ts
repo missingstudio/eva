@@ -23,8 +23,8 @@ export interface CommandLimits {
 export interface CommandDeps extends CommandLimits {
   /**
    * The read of the Sandbox slot, not a Sandbox: every call reads it again,
-   * so the containment stage 4 fills the slot with arrives here with no
-   * change to this call site.
+   * so a plugin that fills the slot with real containment arrives here with
+   * no change to this call site.
    */
   readonly sandbox: Effect.Effect<Sandbox | undefined>
 }
