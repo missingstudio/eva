@@ -227,14 +227,187 @@ export interface WireOptions {
 }
 
 /**
- * Both halves `eva.api` carries as a body. `watch` is in neither: it answers
- * a stream rather than a body, so it has a table of its own that is matched
- * first.
+ * What a row is answered from. The body and the three facts of the serving
+ * process travel together, so a row names only the ones it reads and a new
+ * row costs no call site anything.
+ */
+interface Asked {
+  readonly body: unknown
+  readonly directory: () => string
+  readonly commands: Effect.Effect<readonly CommandInfo[]>
+  readonly catalog: Effect.Effect<CatalogState>
+}
+
+/**
+ * One row of the table: a method, the path it answers, and what it answers
+ * with. A row states an exact `path`, or a `shape` with one segment in it —
+ * and a shape's row is handed the name that segment held.
+ *
+ * A row that matched always answers. A body this wire cannot read is
+ * `refusing`, which is an answer too; only a path no row states is nothing.
+ */
+type Row =
+  | {
+      readonly method: string
+      readonly path: string
+      readonly route: (asked: Asked) => Route
+    }
+  | {
+      readonly method: string
+      readonly shape: RegExp
+      readonly route: (name: string, asked: Asked) => Route
+    }
+
+// A row that answers one path, whole.
+const exact = (method: string, path: string, route: (asked: Asked) => Route): Row => ({
+  method,
+  path,
+  route,
+})
+
+// A row that answers a path with one segment in it, and is handed the name
+// that segment held.
+const named = (
+  method: string,
+  shape: RegExp,
+  route: (name: string, asked: Asked) => Route,
+): Row => ({ method, shape, route })
+
+/**
+ * Both halves `eva.api` carries as a body, in one table. `watch` is in
+ * neither: it answers a stream rather than a body, so it has a table of its
+ * own that is matched first.
+ *
+ * The rows are read in order and the first match answers. A `POST` opens or
+ * stops work, a `PUT` sets a value, and a `DELETE` puts a Session away. So
+ * asking twice is what tells them apart: the same `PUT` or `DELETE` twice
+ * leaves the same state and the same answer, and the same `POST` twice would
+ * be a second Run — which is what the idempotency key exists for.
+ */
+const ROUTES: readonly Row[] = [
+  exact(
+    "GET",
+    SESSIONS,
+    () => (api) => Effect.map(api.list, (rows) => ({ status: 200, body: headersOut(rows) })),
+  ),
+
+  /**
+   * What this build can run, as the rows a picker draws. The terminal reads
+   * its own Catalog in process and a page holds none, so this is the read
+   * half of one fact — and it is `modelRows` and not a second derivation of
+   * it, which is what stops the two pickers from offering different models.
+   *
+   * A `PickRow` is JSON already, so the wire adds no envelope here either.
+   */
+  exact(
+    "GET",
+    MODELS,
+    ({ catalog }) =>
+      () =>
+        Effect.map(catalog, (state) => ({ status: 200, body: modelRowsOut(modelRows(state)) })),
+  ),
+
+  /**
+   * Scoped here, and everything the answer needs read inside it. `attach` is
+   * the one read that asks for a Scope, and a socket callback is not an
+   * Effect — so the request that opened the Scope is what closes it, and
+   * nothing outlives the answer it was opened for.
+   */
+  named("GET", SESSION, (name) => {
+    const asked = sessionID(name)
+    return (api) =>
+      Effect.scoped(
+        Effect.map(api.attach(asked), (record) => ({
+          status: 200,
+          body: eventsOut(record.events()),
+        })),
+      )
+  }),
+
+  named("GET", MODEL, (name) => {
+    const asked = sessionID(name)
+    return (api) =>
+      Effect.map(api.model.get(asked), (found) => ({ status: 200, body: modelOut(found) }))
+  }),
+
+  /**
+   * Before the Session row, which needs a segment this path does not have. It
+   * is the one write that answers a value: what a caller asked for is the
+   * Session, and a status alone would not say which one.
+   */
+  exact("POST", SESSIONS, ({ body, directory }) => {
+    const opening = locationIn(body)
+    if (opening === undefined) return refusing
+    const where = opening.location ?? directory()
+    return (api) =>
+      Effect.map(api.create(where), (made) => ({ status: 200, body: sessionOut(made) }))
+  }),
+
+  named("POST", SESSION, (name, { body }) => {
+    const input = submitInputIn(body)
+    if (input === undefined) return refusing
+    const asked = sessionID(name)
+    return (api) => Effect.as(api.submit(asked, input), DONE)
+  }),
+
+  named("POST", CANCEL, (name, { body }) => {
+    const cause = cancelCauseIn(body)
+    if (cause === undefined) return refusing
+    const asked = sessionID(name)
+    return (api) => Effect.as(api.cancel(asked, cause), DONE)
+  }),
+
+  /**
+   * A `POST`, because a line does work: `/mode` records a Run and `/undo`
+   * reverses a write, so asking twice is two of each — which is what the
+   * idempotency key already answers for every other write here.
+   */
+  named("POST", COMMAND, (name, { body, commands, directory }) => {
+    const line = lineIn(body)
+    if (line === undefined) return refusing
+    return commanded(commands, sessionID(name), line, directory())
+  }),
+
+  /**
+   * The one method that names a Session and carries nothing. Putting a
+   * Session away acts on the path and on no body, and asking twice leaves it
+   * exactly where asking once left it — which is what tells a `DELETE` from
+   * the `POST`s above, where a second ask would be a second Run.
+   */
+  named("DELETE", SESSION, (name) => {
+    const asked = sessionID(name)
+    return (api) => Effect.as(api.retire(asked), DONE)
+  }),
+
+  named("PUT", MODEL, (name, { body, catalog }) => {
+    const model = modelIn(body)
+    if (model === undefined) return refusing
+    const asked = sessionID(name)
+    return (api) =>
+      Effect.flatMap(catalog, (state) =>
+        holds(state, model)
+          ? Effect.as(api.model.set(asked, model), DONE)
+          : Effect.succeed(unheld(model)),
+      )
+  }),
+
+  // A `RequestID` is not a `SessionID`, so this is the one write that sits
+  // outside the listing. The id is the tool call's, which the `tool_call`
+  // record named before anybody was asked.
+  named("PUT", REQUEST, (name, { body }) => {
+    const given = answerIn(body)
+    if (given === undefined) return refusing
+    return (api) => Effect.as(api.answer(name, given), DONE)
+  }),
+]
+
+/**
+ * The row this request is answered by, or nothing when no row states it.
  *
  * The body arrives as a third argument, the way `watchFor` takes the Cursor
  * it read off a header. So a write route is still a description of an answer
- * and this table is still a pure function — the socket reads the bytes and
- * this decides what they mean.
+ * and this is still a pure function — the socket reads the bytes and this
+ * decides what they mean.
  *
  * The serving process arrives as the fourth, whole. A wire that took its
  * three facts as three trailing arguments made every call site name the ones
@@ -246,146 +419,23 @@ export const routeFor = (
   body?: unknown,
   serving: WireOptions = {},
 ): Route | undefined => {
-  const directory = serving.directory ?? HERE
-  const commands = serving.commands ?? NO_COMMANDS
-  const catalog = serving.catalog ?? NOTHING
-
-  if (method === "GET") {
-    if (path === SESSIONS) {
-      return (api) => Effect.map(api.list, (rows) => ({ status: 200, body: headersOut(rows) }))
-    }
-
-    /**
-     * What this build can run, as the rows a picker draws. The terminal reads
-     * its own Catalog in process and a page holds none, so this is the read
-     * half of one fact — and it is `modelRows` and not a second derivation of
-     * it, which is what stops the two pickers from offering different models.
-     *
-     * A `PickRow` is JSON already, so the wire adds no envelope here either.
-     */
-    if (path === MODELS) {
-      return () =>
-        Effect.map(catalog, (state) => ({ status: 200, body: modelRowsOut(modelRows(state)) }))
-    }
-
-    const attaching = askedFor(SESSION, path)
-    if (attaching !== undefined) {
-      const asked = sessionID(attaching)
-      /**
-       * Scoped here, and everything the answer needs read inside it. `attach`
-       * is the one read that asks for a Scope, and a socket callback is not an
-       * Effect — so the request that opened the Scope is what closes it, and
-       * nothing outlives the answer it was opened for.
-       */
-      return (api) =>
-        Effect.scoped(
-          Effect.map(api.attach(asked), (record) => ({
-            status: 200,
-            body: eventsOut(record.events()),
-          })),
-        )
-    }
-
-    const session = askedFor(MODEL, path)
-    if (session !== undefined) {
-      const asked = sessionID(session)
-      return (api) =>
-        Effect.map(api.model.get(asked), (found) => ({ status: 200, body: modelOut(found) }))
-    }
-
-    return undefined
+  const asked: Asked = {
+    body,
+    directory: serving.directory ?? HERE,
+    commands: serving.commands ?? NO_COMMANDS,
+    catalog: serving.catalog ?? NOTHING,
   }
 
-  /**
-   * A `POST` opens or stops work, a `PUT` sets a value, and a `DELETE` puts a
-   * Session away. So asking twice is what tells them apart: the same `PUT` or
-   * `DELETE` twice leaves the same state and the same answer, and the same
-   * `POST` twice would be a second Run — which is what the idempotency key
-   * exists for.
-   */
-  if (method === "POST") {
-    /**
-     * Before the Session match, which needs a segment this path does not
-     * have. It is the one write that answers a value: what a caller asked for
-     * is the Session, and a status alone would not say which one.
-     */
-    if (path === SESSIONS) {
-      const opening = locationIn(body)
-      if (opening === undefined) return refusing
-      const where = opening.location ?? directory()
-      return (api) =>
-        Effect.map(api.create(where), (made) => ({ status: 200, body: sessionOut(made) }))
+  for (const row of ROUTES) {
+    if (row.method !== method) continue
+
+    if ("path" in row) {
+      if (row.path === path) return row.route(asked)
+      continue
     }
 
-    const prompting = askedFor(SESSION, path)
-    if (prompting !== undefined) {
-      const input = submitInputIn(body)
-      if (input === undefined) return refusing
-      const asked = sessionID(prompting)
-      return (api) => Effect.as(api.submit(asked, input), DONE)
-    }
-
-    const stopping = askedFor(CANCEL, path)
-    if (stopping !== undefined) {
-      const cause = cancelCauseIn(body)
-      if (cause === undefined) return refusing
-      const asked = sessionID(stopping)
-      return (api) => Effect.as(api.cancel(asked, cause), DONE)
-    }
-
-    /**
-     * A `POST`, because a line does work: `/mode` records a Run and `/undo`
-     * reverses a write, so asking twice is two of each — which is what the
-     * idempotency key already answers for every other write here.
-     */
-    const running = askedFor(COMMAND, path)
-    if (running !== undefined) {
-      const line = lineIn(body)
-      if (line === undefined) return refusing
-      return commanded(commands, sessionID(running), line, directory())
-    }
-
-    return undefined
-  }
-
-  /**
-   * The one method that names a Session and carries nothing. Putting a
-   * Session away acts on the path and on no body, and asking twice leaves it
-   * exactly where asking once left it — which is what tells a `DELETE` from
-   * the `POST`s above, where a second ask would be a second Run.
-   */
-  if (method === "DELETE") {
-    const retiring = askedFor(SESSION, path)
-    if (retiring === undefined) return undefined
-    const asked = sessionID(retiring)
-    return (api) => Effect.as(api.retire(asked), DONE)
-  }
-
-  if (method === "PUT") {
-    const session = askedFor(MODEL, path)
-    if (session !== undefined) {
-      const model = modelIn(body)
-      if (model === undefined) return refusing
-      const asked = sessionID(session)
-      return (api) =>
-        Effect.flatMap(catalog, (state) =>
-          holds(state, model)
-            ? Effect.as(api.model.set(asked, model), DONE)
-            : Effect.succeed(unheld(model)),
-        )
-    }
-
-    // A `RequestID` is not a `SessionID`, so this is the one write that sits
-    // outside the listing. The id is the tool call's, which the `tool_call`
-    // record named before anybody was asked.
-    const request = askedFor(REQUEST, path)
-    if (request !== undefined) {
-      const given = answerIn(body)
-      if (given === undefined) return refusing
-      return (api) => Effect.as(api.answer(request, given), DONE)
-    }
-
-    return undefined
+    const segment = askedFor(row.shape, path)
+    if (segment !== undefined) return row.route(segment, asked)
   }
 
   return undefined
