@@ -236,13 +236,32 @@
    the taller of the two columns — a rail of forty Sessions — and the dock
    would then sit below the fold with nothing able to scroll to it.
 */
+/*
+   Two rows: what the pipe is, and everything else. The first row is drawn
+   whether or not there is anything to say — a live region a reader is already
+   in is where a sentence can arrive — and it is nothing tall while it says
+   nothing.
+*/
 .shell {
   display: grid;
   grid-template-columns: 15.5rem 1fr;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
   background: var(--canvas);
+}
+
+/* Over both columns, because a dead pipe is a fact about the whole page. */
+.pipe {
+  grid-column: 1 / -1;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  text-align: center;
+}
+
+.pipe:empty {
+  padding: 0;
+  border: 0;
 }
 
 .sidebar {
@@ -449,9 +468,30 @@
   }
 }
 
-.side-foot {
+/*
+   The page's own two facts, under every Session on the rail: which colours it
+   draws, and which build drew it.
+*/
+.side-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
   margin-top: auto;
-  padding: 0.6rem 0.6rem 0.1rem;
+  padding-top: 0.5rem;
+}
+
+/* Quiet, because it is chrome and not a Session. The listbox it opens is the
+   picker's own, so only the trigger is dressed down here. */
+.side-theme {
+  border-color: transparent;
+  color: var(--ink-3);
+  font-size: 0.71875rem;
+}
+
+.side-foot {
+  padding: 0 0.6rem;
   color: var(--ink-3);
   font-family: var(--font-mono);
   font-size: 0.71875rem;
@@ -607,6 +647,22 @@
 
 .idle-line code {
   font-family: var(--font-mono);
+}
+
+/* What is missing, said before the control that fills it. */
+.idle-said {
+  margin: 0.9rem 0 0;
+  font-size: 0.9375rem;
+}
+
+/* The one action, and the other way to the same place beside it. */
+.idle-do {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0.15rem 0 0.9rem;
 }
 
 /*
@@ -1155,11 +1211,51 @@
   }
 }
 
-.waiting {
-  margin: 0 0.25rem;
-  color: var(--ink-3);
+/*
+   The queue, over the field it was typed into: how many lines wait, and which
+   ones. It scrolls rather than growing, so a person who queued ten lines still
+   has the field they are typing into in front of them.
+*/
+.queue {
+  max-height: 7rem;
+  margin: 0 0 0.6rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--inset);
+  overflow-y: auto;
+}
+
+.queue-lines {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  color: var(--ink-2);
   font-size: 0.8125rem;
+  list-style: none;
+}
+
+/* One line each, whole prompts included: a queued line that ran on into the
+   next one would read as one thing waiting where two are. */
+.queue-lines li {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.waiting {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* The doors the field has. It is the quietest thing in the dock, because it
+   is for the reader who has not found them yet and is under the eye of every
+   reader who has. */
+.hint {
+  margin: 0.5rem 0.25rem 0;
+  color: var(--ink-3);
+  font-size: 0.75rem;
 }
 
 /*

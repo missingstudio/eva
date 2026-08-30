@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
+import { THEMES } from "./themes.js"
 
 /**
  * The measurement, against the stylesheet that ships.
@@ -158,5 +159,27 @@ describe("the corrections the mock needed", () => {
     expect(
       Math.min(...grounds.map((one) => contrast(LIGHT["ink-3"] ?? "", one))),
     ).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+/**
+ * The theme rows, against the skin the stylesheet ships.
+ *
+ * A theme writes four colours onto four of these tokens, and the default row
+ * is the mapping's own proof: every value in it is the value the dark column
+ * already holds, so drawing the default theme changes nothing. A token edited
+ * without the row is a page that repaints itself a colour it never had the
+ * first time somebody picks the theme it is already on.
+ */
+describe("the default theme row", () => {
+  const DEFAULT = THEMES.find((one) => one.id === "default")?.colors ?? {}
+
+  it.each([
+    ["foreground", "ink"],
+    ["muted", "ink-3"],
+    ["accent", "accent"],
+    ["warning", "run"],
+  ])("draws %s onto the dark skin's %s, unchanged", (key, token) => {
+    expect(DEFAULT[key]).toBe(DARK[token])
   })
 })

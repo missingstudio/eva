@@ -63,7 +63,15 @@ export const makeClient = Effect.fn("eva.client")(function* (
   const state = yield* SubscriptionRef.make<ClientState>("ready")
   let open = 0
 
-  yield* Effect.forkChild(
+  /**
+   * Detached, because the watcher lives as long as the Client and not as long
+   * as the call that made one. A page makes its Client in one call and holds
+   * it for the rest of the session, so a watcher supervised by that call is
+   * interrupted the moment the handle is passed out — and the state a surface
+   * reads then never moves again unless a Run is open. That is the whole of
+   * how a dead pipe stayed invisible between Runs.
+   */
+  yield* Effect.forkDetach(
     Stream.runForEach(SubscriptionRef.changes(transport.health), (health) =>
       Effect.gen(function* () {
         if (health === "disconnected") return yield* SubscriptionRef.set(state, "disconnected")

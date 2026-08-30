@@ -616,6 +616,42 @@ describe("a pipe that is down", () => {
 
     await served.close()
   })
+
+  /**
+   * And says so where it can be drawn. The defect stops the ask; the channel
+   * is what reaches the person who asked for the write, because a caller
+   * holds a `SessionAPI` with no error channel and would otherwise watch a
+   * write that never happened.
+   */
+  it("says what the far side refused, in the words it refused it with", async () => {
+    const memory = await held()
+    const served = await standing(memory)
+
+    const said = await Effect.runPromise(
+      Effect.gen(function* () {
+        const transport = yield* httpTransport({ origin: served.origin, gap: 1 })
+        yield* Effect.exit(transport.api.cancel(memory.session, "whenever" as CancelCause))
+        return yield* SubscriptionRef.get(transport.refusals)
+      }),
+    )
+
+    expect(said?.said).toContain("Eva refused this")
+    expect(said?.said).toContain("the wire cannot read this body")
+
+    await served.close()
+  })
+
+  // Nothing is on the channel before a write is refused. A surface reading it
+  // draws a refusal that happened and never one that has not.
+  it("says nothing before a write has been refused", async () => {
+    const said = await Effect.runPromise(
+      Effect.flatMap(httpTransport({ origin: "http://127.0.0.1:1" }), (transport) =>
+        SubscriptionRef.get(transport.refusals),
+      ),
+    )
+
+    expect(said).toBeUndefined()
+  })
 })
 
 /**

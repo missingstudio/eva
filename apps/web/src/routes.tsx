@@ -7,16 +7,16 @@ import { useChoosing } from "./models.js"
 import { Page } from "./page.js"
 import { SESSION_ROUTE } from "./paths.js"
 import { Session } from "./session.js"
-import { Shell, useRail } from "./shell.js"
-import { useHeader, usePipe, useTranscript } from "./transcript.js"
+import { Shell, useFramePipe, useRail } from "./shell.js"
+import { useHeader, useTranscript } from "./transcript.js"
 
 /**
  * The one Session the route names, read. The views take what they draw as
  * props, so this is the only place on the page where a read and a drawing
- * meet — and the Header, the record, the pipe and the questions that stand are
- * four reads, because the Header is drawn before the fold has arrived, the
- * pipe is drawn whatever the fold is doing, and a question is not on the
- * record at all.
+ * meet — and the Header, the record and the questions that stand are three
+ * reads, because the Header is drawn before the fold has arrived and a
+ * question is not on the record at all. The pipe is the frame's own read,
+ * taken here as well because the field under the record acts on it.
  *
  * The composer is the fifth, and the one that writes. It is given the
  * questions because a line typed while one stands answers it rather than
@@ -42,7 +42,7 @@ const Read = ({ session }: { readonly session: SessionID }) => {
       choosing={useChoosing(session)}
       composer={useComposer(session, asking)}
       header={useHeader(session)}
-      pipe={usePipe()}
+      pipe={useFramePipe()}
       reading={reading}
       session={session}
     />

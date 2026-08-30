@@ -1,4 +1,3 @@
-import type { ClientState } from "@missingstudio/eva-client-runtime"
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { spendOf, spendText, type CostSummary, type Cursor } from "@missingstudio/eva-schema"
 import { titleLine } from "@missingstudio/eva-sdk"
@@ -22,7 +21,7 @@ import { MessageResponse } from "@missingstudio/ui/components/ai-elements/messag
 import { useEffect } from "react"
 import { ModelPicker, type Choosing } from "./models.js"
 import { priced } from "./pricing.js"
-import { Main, stampText, TopBar } from "./shell.js"
+import { Main, stampText, TopBar, type Pipe } from "./shell.js"
 
 /**
  * What the page has of one Session's record: the fold, or not yet. It is a
@@ -57,55 +56,6 @@ export interface Reading {
   readonly folded: Folded
   readonly said: string
   readonly running: boolean
-}
-
-/**
- * What the page has of the pipe: where the runtime says it is, and whether it
- * has ever said it was gone. The state is the Client's own — a surface reads
- * it to say so and acts on nothing else about the pipe — and `dropped` is this
- * page's, because "the pipe is back" says nothing to a reader who was never
- * told it had gone.
- */
-export interface Pipe {
-  readonly at: ClientState
-  readonly dropped: boolean
-}
-
-/**
- * What the page says about the pipe, and nothing while there is nothing to
- * say. A page frozen on a dead pipe reads as a Session that stopped, so the
- * words are about the pipe and never about the Run: the Session goes on
- * without this page, and the page catches up by Cursor when the pipe is back.
- *
- * `synchronizing` arrives here whenever the pipe comes back: this page follows
- * a Session through the Client, and the Client refolds after a drop. The arm
- * used to be unreachable, because the page held a refold of its own that said
- * nothing about the pipe.
- */
-const noticeOf = (pipe: Pipe): string | undefined => {
-  switch (pipe.at) {
-    case "ready":
-      return pipe.dropped ? "The pipe is back." : undefined
-    case "synchronizing":
-      return "Catching up with the record…"
-    case "disconnected":
-      return "The pipe is down. The Session goes on, and this page catches up when it is back."
-  }
-}
-
-/**
- * What the pipe is, said where a reader is already looking. It is drawn above
- * the transcript and not beside it: a reader who cannot tell a dead pipe from
- * a Session that stopped reads the wrong thing off a page that is otherwise
- * correct.
- */
-const Notice = ({ pipe }: { readonly pipe: Pipe }) => {
-  const said = noticeOf(pipe)
-  return said === undefined ? null : (
-    <p className="notice" role="status">
-      {said}
-    </p>
-  )
 }
 
 /**
@@ -163,17 +113,18 @@ const modeSaid = (reading: Reading): { mode?: string } => {
 }
 
 /**
- * What the pipe is, in one word, and nothing while it is plainly up. It is the
- * meta row's half of the notice above the record: a reader who has read the
- * sentence once does not need it again beside the field, and a reader who has
- * not still gets told the record is not moving.
+ * What the pipe is, in one word, and nothing while it is not down. It is the
+ * meta row's half of the notice the frame draws: a reader looking at the field
+ * rather than at the top of the page still gets told the record is not moving.
+ *
+ * A resync says nothing here either. The frame's rule holds at every place
+ * that says anything about the pipe: the runtime closes that gap by itself.
  */
 const pipeWord = (pipe: Pipe): string | undefined => {
   switch (pipe.at) {
     case "ready":
-      return undefined
     case "synchronizing":
-      return "catching up…"
+      return undefined
     case "disconnected":
       return "down"
   }
@@ -242,9 +193,10 @@ const Live = ({ said }: { readonly said: string }) =>
 const TAB = "Eva"
 
 /**
- * One Session, read: which Session it is, what the pipe is, then what was said
- * in it, then the questions that stand, then what the open Run is saying, then
- * what it cost — and under all of it, what to say next.
+ * One Session, read: which Session it is, then what was said in it, then the
+ * questions that stand, then what the open Run is saying, then what it cost —
+ * and under all of it, what to say next. What the pipe is doing is the frame's
+ * to say, over every route.
  *
  * The page writes three things: a line — a Prompt, or the command it names —
  * an answer to a permission request that stands, and the model this Session is
@@ -320,7 +272,6 @@ export const Session = ({
     */}
       <Conversation className="scroll">
         <ConversationContent className="col">
-          <Notice pipe={pipe} />
           {reading.folded.kind === "folding" ? (
             <p aria-busy="true" className="text-muted-foreground" role="status">
               Reading the transcript…

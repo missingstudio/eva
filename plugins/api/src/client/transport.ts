@@ -70,10 +70,10 @@ const settled = (options: HttpOptions) => ({
 })
 
 /**
- * A write the far side read and refused. It is a shape the two halves of one
- * wire disagree about — a page held from an older build, calling a newer one —
- * so it is a defect where the call was made. Asking again forever would turn
- * a report into a hang.
+ * A write the far side read and refused. Asking again forever would turn a
+ * report into a hang, so it is a defect where the call was made — and it is
+ * said out loud first, on the channel below, because a caller that never
+ * hears it is a surface that shows a write nobody made.
  *
  * It is the only defect this filler raises. `SessionAPI` is one interface and
  * a filler answers all of it, and this one now reaches all ten methods — so
@@ -81,6 +81,35 @@ const settled = (options: HttpOptions) => ({
  */
 export class Refused extends Error {
   override readonly name = "Refused"
+}
+
+/**
+ * What the far side refused, in the words it refused it with. A refusal is a
+ * decision somebody made about this write, so it is carried whole rather than
+ * classified: the far side knows why, and this side would only be guessing.
+ */
+export interface Refusal {
+  readonly said: string
+}
+
+/**
+ * The refusal, as a person reads it. The far side answers a refused write
+ * with a reason, and the reason is the half a person can act on — so it is
+ * quoted rather than replaced, under a lead that says who refused.
+ *
+ * A body carrying no reason is a far side this build cannot quote. It says so
+ * rather than inventing one, and never says which path answered: what a
+ * surface draws ends up in screenshots.
+ */
+const refusalOf = (body: unknown): Refusal => {
+  const said =
+    typeof body === "object" && body !== null ? (body as { readonly error?: unknown }).error : ""
+  return {
+    said:
+      typeof said === "string" && said !== ""
+        ? `Eva refused this: ${said}`
+        : "Eva refused this, and gave no reason this page can read.",
+  }
 }
 
 // The far side did not answer, or did not answer the wire. It never leaves
@@ -98,6 +127,19 @@ class Unreachable extends Error {
  */
 export interface HttpTransport extends Transport {
   readonly command: Running
+
+  /**
+   * What the far side refused, as it refuses it. Nothing until one is
+   * refused, and the last one after that.
+   *
+   * It rides beside `health` for the reason `command` rides beside `api`: the
+   * seam carries neither, and both are facts only a wire has. A drop and a
+   * refusal are the two things that happen to a write out here, and they are
+   * two channels because they are two facts — a drop is a gap the runtime
+   * closes by asking again, and a refusal is a decision that will not change
+   * however often it is asked.
+   */
+  readonly refusals: SubscriptionRef.SubscriptionRef<Refusal | undefined>
 }
 
 /**
@@ -154,6 +196,7 @@ export const readModels = (
 export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTransport> =>
   Effect.gen(function* () {
     const health = yield* SubscriptionRef.make<TransportHealth>("ready")
+    const refusals = yield* SubscriptionRef.make<Refusal | undefined>(undefined)
     const { origin, gap, request } = settled(options)
 
     /**
@@ -214,7 +257,13 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
       const kind = response.headers.get("content-type") ?? ""
       const json = kind.includes("application/json")
       if (response.ok) return { said: json ? ((await response.json()) as unknown) : undefined }
-      if (json) return new Refused(`${path} refused this shape with ${response.status}`)
+      // A body this cannot read is a refusal with no reason, never a retry:
+      // the far side has decided, and reading its answer badly does not
+      // change that.
+      if (json) {
+        const read = await response.json().catch(() => undefined)
+        return new Refused(refusalOf(read).said)
+      }
       throw new Unreachable(`${path} answered ${kind === "" ? "nothing" : kind}`)
     }
 
@@ -250,7 +299,18 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
                     catch: (cause) => new Unreachable(String(cause)),
                   }),
                   (answered) => {
-                    if (answered instanceof Refused) return Effect.die(answered)
+                    /*
+                      Said before it dies. The die stops the retry, and every
+                      caller of this filler holds a `SessionAPI` with no error
+                      channel — so the channel is how a refusal reaches the
+                      person who asked for the write.
+                    */
+                    if (answered instanceof Refused) {
+                      return Effect.flatMap(
+                        SubscriptionRef.set(refusals, { said: answered.message }),
+                        () => Effect.die(answered),
+                      )
+                    }
                     const found = shape(answered.said)
                     return found === undefined
                       ? Effect.fail(new Unreachable(`${path} answered a shape this cannot read`))
@@ -434,5 +494,5 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
     const command: Running = (session, line) =>
       writing("POST", commandPath(session), lineOut(line), ranIn)
 
-    return { api, health, command }
+    return { api, health, command, refusals }
   })

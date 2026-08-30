@@ -3,12 +3,14 @@ import { THEMES } from "@missingstudio/eva-themes"
 import { DEFAULT_PALETTE, paletteFrom } from "@missingstudio/eva-tui-renderer"
 import { canonical, makeKeymap, themeColors, type KeyPress } from "@missingstudio/eva-tui-core"
 import { edit } from "@missingstudio/eva-tui"
+import { THEMES as DRAWN } from "@missingstudio/eva-web-app"
 import { describe, expect, it } from "vitest"
 
 /**
  * The joins no plugin may test for itself: the shipped bindings against the
- * surface that acts on them, and the shipped default theme against the
- * palette the renderer falls back to. A plugin may not import a plugin, so
+ * surface that acts on them, the shipped default theme against the palette
+ * the renderer falls back to, and the shipped rows against the ones the page
+ * offers. A plugin may not import a plugin and a page may import neither, so
  * the place these meet is here.
  */
 
@@ -85,5 +87,18 @@ describe("the shipped themes against the renderer", () => {
   // already in its one spelling reads as a different key than it fires as.
   it("ships every binding in its canonical spelling", () => {
     for (const row of BINDINGS) expect(canonical(row.binding)).toBe(row.binding)
+  })
+})
+
+/**
+ * And the same rows on the page. A theme is a Domain the terminal reads in
+ * process, and the page cannot: the rows travel with the renderer contract,
+ * which is not a package a browser bundle may pull. So the page says them
+ * again, and this is what keeps the two lists one list — two doors offering
+ * different themes under one name would be two products.
+ */
+describe("the shipped themes against the page", () => {
+  it("offers the same rows, in the same order, with the same colours", () => {
+    expect(DRAWN).toEqual(THEMES)
   })
 })

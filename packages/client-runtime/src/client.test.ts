@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { makeClient } from "./client.js"
 import { CLAIM, CLOSE, fakeApi, given, PROMPT, SESSION, spoken, text } from "./fake-api.js"
 import type { RunSignal } from "./run.js"
-import { localTransport } from "./transport.js"
+import { droppableTransport, localTransport } from "./transport.js"
 
 const BOUND = 5
 
@@ -18,6 +18,30 @@ describe("the handle a surface holds", () => {
         expect(yield* SubscriptionRef.get(client.state)).toBe("ready")
       }),
     )
+  })
+
+  /**
+   * The handle outlives the call that made it: a surface makes one Client and
+   * holds it for as long as it is drawn. So the watcher that turns the pipe's
+   * health into the state a surface reads is not supervised by that call — a
+   * page that made a Client and then went idle would otherwise never hear
+   * that the pipe had gone.
+   */
+  it("says the pipe is gone after the call that made the handle has ended", async () => {
+    const fake = await Effect.runPromise(fakeApi([]))
+    const transport = await Effect.runPromise(droppableTransport(fake.api))
+    const client = await Effect.runPromise(makeClient(transport))
+
+    await Effect.runPromise(transport.drop)
+    await Effect.runPromise(
+      Effect.asVoid(
+        Stream.runHead(
+          Stream.filter(SubscriptionRef.changes(client.state), (one) => one === "disconnected"),
+        ),
+      ),
+    )
+
+    expect(await Effect.runPromise(SubscriptionRef.get(client.state))).toBe("disconnected")
   })
 
   it("runs the protocol, and the record it gives back is the Run's own", async () => {

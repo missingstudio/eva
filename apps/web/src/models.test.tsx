@@ -210,7 +210,7 @@ describe("the model picker", () => {
     const markup = renderToStaticMarkup(
       <Session
         header={undefined}
-        pipe={{ at: "ready", dropped: false }}
+        pipe={{ at: "ready" }}
         reading={{ folded: { kind: "folding" }, running: false, said: "" }}
         session="ses_one"
       />,
