@@ -13,7 +13,7 @@ const REPO = join(new URL(".", import.meta.url).pathname, "..", "..", "..")
  * those are not a fold the terminal holds.
  */
 const shipped = (): readonly string[] =>
-  readdirSync(join(REPO, "packages/tui/src"), { withFileTypes: true })
+  readdirSync(join(REPO, "packages/tui-renderer/src"), { withFileTypes: true })
     .filter(
       (entry) => entry.isFile() && (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")),
     )
@@ -28,7 +28,9 @@ describe("how many folds decide what a Run did", () => {
   // One, and it is not here. Two folds would disagree, and a person
   // comparing the screen with the page would find the disagreement.
   it("the terminal names the one in the session view, at one site", () => {
-    expect(naming("@missingstudio/eva-session-view")).toEqual(["packages/tui/src/frame.ts"])
+    expect(naming("@missingstudio/eva-session-view")).toEqual([
+      "packages/tui-renderer/src/frame.ts",
+    ])
   })
 
   /**

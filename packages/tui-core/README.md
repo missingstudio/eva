@@ -9,7 +9,7 @@ Eva is built on a plugin kernel: every capability is a plugin, and a plugin
 may not import another plugin — the layer rule in
 [architecture.md](../../docs/reference/architecture.md) holds. This package
 imports only the schema, so the Surface plugin and the renderer package
-[`@missingstudio/eva-tui`](../tui/README.md) both depend on it and never on
+[`@missingstudio/eva-tui-renderer`](../tui-renderer/README.md) both depend on it and never on
 each other. The glossary in [docs/context.md](../../docs/context.md) defines
 **Surface**, **Binding**, and **Live area**; this package is where those
 words become types.
@@ -86,7 +86,7 @@ repeat.
 ## What it does not do
 
 It draws nothing: the two Renderer adapters live in
-[`@missingstudio/eva-tui`](../tui/README.md), and so does `toKeyPress`, the
+[`@missingstudio/eva-tui-renderer`](../tui-renderer/README.md), and so does `toKeyPress`, the
 normalizer that turns a raw terminal key into the `KeyPress` defined here. It
 holds no rows of its own — the keymap and theme Domains are plugins' to fill.
 

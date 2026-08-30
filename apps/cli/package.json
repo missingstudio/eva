@@ -90,7 +90,7 @@
     "@missingstudio/eva-trace-postgres": "workspace:*",
     "@missingstudio/eva-trace-sqlite": "workspace:*",
     "@missingstudio/eva-tui": "workspace:*",
-    "@missingstudio/eva-tui-surface": "workspace:*",
+    "@missingstudio/eva-tui-renderer": "workspace:*",
     "@missingstudio/eva-usage": "workspace:*",
     "@missingstudio/eva-validator": "workspace:*",
     "@missingstudio/eva-web": "workspace:*",

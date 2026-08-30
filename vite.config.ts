@@ -179,16 +179,16 @@ export default defineConfig({
         ],
         "a plugin test may also import the testkit — still never the kernel or another plugin",
       ),
-      // The terminal draws the contracts and knows nothing else about Eva.
-      // It is the only package that may name OpenTUI, and the plugin layer
+      // The renderers draw the contracts and know nothing else about Eva.
+      // This is the only package that may name OpenTUI, and the plugin layer
       // above has no import for it, so a surface can never pull FFI in.
       // It names the session view because that is where the one fold over
       // the record lives; a terminal with a fold of its own would be a
       // second answer to what a Run did.
       layer(
-        ["packages/tui/**"],
+        ["packages/tui-renderer/**"],
         ["@missingstudio/eva-tui-core", "@missingstudio/eva-session-view"],
-        "the terminal imports tui-core and the session view only",
+        "the renderers import tui-core and the session view only",
       ),
       // apps/cli has no import rule on purpose: an app is the composition
       // root, and composing is the one job that needs every layer at once.

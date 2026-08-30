@@ -41,7 +41,7 @@ import { traceMemory } from "@missingstudio/eva-trace-memory"
 import { tracePostgres } from "@missingstudio/eva-trace-postgres"
 import { traceSqlite } from "@missingstudio/eva-trace-sqlite"
 import { validator } from "@missingstudio/eva-validator"
-import { makeTui, TUI_SURFACE, type TuiOptions } from "@missingstudio/eva-tui-surface"
+import { makeTui, TUI_SURFACE, type TuiOptions } from "@missingstudio/eva-tui"
 import { usage } from "@missingstudio/eva-usage"
 import { hasPage, makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
 import { workflow } from "@missingstudio/eva-workflow"
@@ -56,7 +56,7 @@ import { VERSION } from "./version.js"
  * loads it — the module is not named until a surface actually starts.
  */
 const RENDERER: TuiOptions["renderer"] = async (theme) => {
-  const { start } = await import("@missingstudio/eva-tui")
+  const { start } = await import("@missingstudio/eva-tui-renderer")
   return start(theme === undefined ? {} : { theme })
 }
 
