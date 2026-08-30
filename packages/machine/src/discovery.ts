@@ -16,6 +16,12 @@ import { entity, external, origin } from "./site.js"
  * `specVersion`, refuses top-level keys it does not define, and holds
  * `representativeQueries` to between two and five. Every entry here satisfies
  * the stricter of the two, so one list serves both paths.
+ *
+ * Nothing here names a surface Eva does not serve. That rules out an A2A agent
+ * card: its `supportedInterfaces` is a required field whose entries must be
+ * live HTTPS agent endpoints, and Eva is a local program with none. A card with
+ * an endpoint that refuses the connection is worse than no card, because an
+ * agent spends a call to learn what the card should have told it.
  */
 
 export type CatalogEntry = {
@@ -26,6 +32,13 @@ export type CatalogEntry = {
   description: string
   representativeQueries: readonly string[]
   tags?: readonly string[]
+}
+
+/** One area of the documentation, as the site that names its areas states it. */
+export type DocsSection = {
+  slug: string
+  title: string
+  queries: readonly string[]
 }
 
 const urn = (namespace: string, name: string) => `urn:air:evafactory.co:${namespace}:${name}`
@@ -47,11 +60,7 @@ export const catalogEntry = {
   }),
 
   /** One area of the documentation, for an agent that needs one area. */
-  docsSection: (section: {
-    slug: string
-    title: string
-    queries: readonly string[]
-  }): CatalogEntry => ({
+  docsSection: (section: DocsSection): CatalogEntry => ({
     identifier: urn("docs", section.slug),
     displayName: `${section.title} — ${entity.product.name} documentation`,
     type: "text/markdown",
@@ -134,6 +143,42 @@ export const catalogEntry = {
     tags: ["source", "open-source"],
   }),
 }
+
+/**
+ * What the marketing origin catalogues: the product. What it is, what it costs,
+ * what it can do, and where its documentation and source are.
+ */
+export const webCatalog = (): CatalogEntry[] => [
+  catalogEntry.docsIndex(),
+  catalogEntry.siteIndex(),
+  catalogEntry.skills(),
+  catalogEntry.pricing(),
+  catalogEntry.auth(),
+  catalogEntry.source(),
+]
+
+/**
+ * What the documentation origin catalogues: the pages it serves, and what the
+ * marketing origin holds.
+ *
+ * An agent that arrives at a documentation page — which is where a search
+ * result usually lands one — must not have to guess that the catalog lives on
+ * another host. So the documentation publishes its own. Pricing and
+ * authentication are in it because this origin serves both at its own paths,
+ * and under the marketing origin's identifier, because each is one document.
+ *
+ * The sections are a parameter because the site that names its areas states
+ * them in a module this package may not be imported into.
+ */
+export const docsCatalog = (sections: readonly DocsSection[]): CatalogEntry[] => [
+  catalogEntry.docsIndex(),
+  ...sections.map((section) => catalogEntry.docsSection(section)),
+  catalogEntry.docsSearch(),
+  catalogEntry.siteIndex(),
+  catalogEntry.skills(),
+  catalogEntry.pricing(),
+  catalogEntry.auth(),
+]
 
 /** The document at `/.well-known/ard.json`. */
 export const ardManifest = (entries: readonly CatalogEntry[]) => ({ entries })

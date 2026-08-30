@@ -21,7 +21,7 @@ const bodyOf = async (slug: DocSlug) => {
  * The Agent Skills index: every task these pages teach, as a skill whose body
  * is the page's own markdown twin.
  *
- * The shape is the ui package's, so this index and the marketing origin's
+ * The shape is the machine package's, so this index and the marketing origin's
  * carry the draft's five fields under one statement of them. The digest is
  * taken over the twin this build writes, so a page cannot be edited without
  * its digest following, and a skill whose page has gone is dropped rather than

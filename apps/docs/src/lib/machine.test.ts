@@ -1,8 +1,11 @@
 import {
+  aiCatalogManifest,
+  ardManifest,
   authMarkdown,
   catalogEntry,
   docPageEntities,
   docPageGraph,
+  docsCatalog,
   docSlugs,
   pricingMarkdown,
 } from "@missingstudio/machine"
@@ -10,7 +13,6 @@ import { json, markdown, plain } from "@missingstudio/machine/serve"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
-import { aiCatalog, ard } from "./discovery.js"
 import { modifiedOn } from "./modified.js"
 import { asksQuestions, questionsIn } from "./questions.js"
 import { taught, taughtSlugs } from "./skills.js"
@@ -188,8 +190,10 @@ describe("the edge configuration", () => {
 })
 
 describe("the resource catalog this origin publishes", () => {
+  const entries = docsCatalog(sections)
+
   test("lists the index, every section, and the search index", () => {
-    const urls = ard().entries.map((entry) => entry.url)
+    const urls = entries.map((entry) => entry.url)
 
     expect(urls).toContain("https://docs.evafactory.co/llms.txt")
     expect(urls).toContain("https://docs.evafactory.co/api/search")
@@ -199,7 +203,7 @@ describe("the resource catalog this origin publishes", () => {
   })
 
   test("points at what the other origin holds rather than copying it", () => {
-    const urls = ard().entries.map((entry) => entry.url)
+    const urls = entries.map((entry) => entry.url)
 
     expect(urls).toContain("https://evafactory.co/llms.txt")
     expect(urls).toContain("https://evafactory.co/.well-known/agent-skills/index.json")
@@ -207,12 +211,12 @@ describe("the resource catalog this origin publishes", () => {
 
   test("names the documentation index with the identifier the other catalog uses", () => {
     // One resource, one identifier, in every catalog that lists it.
-    const entry = ard().entries.find((item) => item.url.endsWith("docs.evafactory.co/llms.txt"))
+    const entry = entries.find((item) => item.url.endsWith("docs.evafactory.co/llms.txt"))
     expect(entry?.identifier).toBe(catalogEntry.docsIndex().identifier)
   })
 
   test("every entry meets the stricter of the two schemas", () => {
-    const catalog = aiCatalog()
+    const catalog = aiCatalogManifest(entries)
 
     expect(catalog.specVersion).toBe("1.0")
     expect(catalog.host.displayName).toBeTruthy()
@@ -228,12 +232,12 @@ describe("the resource catalog this origin publishes", () => {
   })
 
   test("names each resource once", () => {
-    const ids = ard().entries.map((entry) => entry.identifier)
+    const ids = entries.map((entry) => entry.identifier)
     expect(new Set(ids).size).toBe(ids.length)
   })
 
   test("both paths carry the same entries", () => {
-    expect(ard().entries).toEqual(aiCatalog().entries)
+    expect(ardManifest(entries).entries).toEqual(aiCatalogManifest(entries).entries)
   })
 })
 

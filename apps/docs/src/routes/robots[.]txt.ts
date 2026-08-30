@@ -2,7 +2,7 @@ import { origin, robotsTxt } from "@missingstudio/machine"
 import { plain } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 
-// The policy is the ui package's, because it is the same policy on both
+// The policy is the machine package's, because it is the same policy on both
 // origins. This one names its own sitemap: the marketing origin's robots.txt
 // names both, so a crawler that arrives at either finds the pair.
 const body = robotsTxt({

@@ -1,6 +1,6 @@
+import { capabilitySkill } from "@missingstudio/machine"
 import { markdown, missing } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
-import { skill } from "../lib/discovery.js"
 
 /**
  * One skill, at the path the index points to. The draft asks a publisher to
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/.well-known/agent-skills/$name/SKILL.md")
   server: {
     handlers: {
       GET: ({ params }) => {
-        const body = skill(params.name)
+        const body = capabilitySkill(params.name)
 
         return body ? markdown(body) : missing(`No skill is named "${params.name}".`)
       },

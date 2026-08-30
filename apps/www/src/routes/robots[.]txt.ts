@@ -2,7 +2,7 @@ import { origin, robotsTxt } from "@missingstudio/machine"
 import { plain } from "@missingstudio/machine/serve"
 import { createFileRoute } from "@tanstack/react-router"
 
-// The policy is the ui package's, because it is the same policy on both
+// The policy is the machine package's, because it is the same policy on both
 // origins. What this origin says for itself is the opening line and the two
 // sitemaps: a crawler that finds the marketing site should be told where the
 // documentation's sitemap is as well.

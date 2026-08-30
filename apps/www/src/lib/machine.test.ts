@@ -1,10 +1,20 @@
-import { agentSkillFields, capabilities, origin, resources } from "@missingstudio/machine"
+import {
+  agentSkillFields,
+  agentSkillsIndex,
+  aiCatalogManifest,
+  ardManifest,
+  capabilities,
+  capabilitySkill,
+  capabilitySkills,
+  origin,
+  resources,
+  webCatalog,
+} from "@missingstudio/machine"
 import { json, markdown, plain } from "@missingstudio/machine/serve"
 import { readdirSync, readFileSync } from "node:fs"
 import { createHash } from "node:crypto"
 import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
-import { agentSkills, aiCatalog, ard, skill } from "./discovery.js"
 import { llmsTxt, markdownPages } from "./markdown.js"
 import { machinePathsFor, pagePaths, skillPath, twinOf } from "./pages.js"
 
@@ -213,25 +223,27 @@ describe("llms.txt", () => {
 })
 
 describe("the discovery documents", () => {
+  const entries = webCatalog()
+
   test("the catalog declares the predecessor schema's required fields", () => {
-    const catalog = aiCatalog()
+    const catalog = aiCatalogManifest(entries)
     expect(catalog.specVersion).toBe("1.0")
     expect(catalog.host.displayName).toBeTruthy()
     expect(catalog.entries.length).toBeGreaterThan(0)
   })
 
   test("both catalogs carry the same entries", () => {
-    expect(ard().entries).toEqual(aiCatalog().entries)
+    expect(ardManifest(entries).entries).toEqual(aiCatalogManifest(entries).entries)
   })
 
   test("every entry has an identifier in the specified form", () => {
-    for (const entry of ard().entries) {
+    for (const entry of entries) {
       expect(entry.identifier).toMatch(/^urn:air:[a-zA-Z0-9.-]+(:[a-zA-Z0-9._-]+)+$/)
     }
   })
 
   test("every entry has exactly one of a url or inline data", () => {
-    for (const entry of ard().entries) {
+    for (const entry of entries) {
       expect(typeof entry.url, entry.identifier).toBe("string")
       expect("data" in entry, entry.identifier).toBe(false)
     }
@@ -239,7 +251,7 @@ describe("the discovery documents", () => {
 
   test("every entry carries two to five representative queries", () => {
     // The predecessor schema enforces the bounds. The current one warns.
-    for (const entry of ard().entries) {
+    for (const entry of entries) {
       expect(entry.representativeQueries.length, entry.identifier).toBeGreaterThanOrEqual(2)
       expect(entry.representativeQueries.length, entry.identifier).toBeLessThanOrEqual(5)
     }
@@ -248,7 +260,7 @@ describe("the discovery documents", () => {
   test("no entry names a surface Eva does not serve", () => {
     // An A2A card, an MCP server card, or an OpenAPI document would each
     // promise a hosted endpoint. Eva is a local program and has none.
-    const json = JSON.stringify(ard())
+    const json = JSON.stringify(ardManifest(entries))
     for (const absent of ["a2a", "mcp", "openapi", "oauth"]) {
       expect(json.toLowerCase()).not.toContain(absent)
     }
@@ -256,7 +268,7 @@ describe("the discovery documents", () => {
 })
 
 describe("the agent skills index", () => {
-  const index = agentSkills(sha256)
+  const index = agentSkillsIndex(capabilitySkills(skillPath), sha256)
 
   /*
     The one place the version is written as a literal. Everything else — the
@@ -293,7 +305,7 @@ describe("the agent skills index", () => {
 
   test("every digest is the hash of the bytes the url serves", () => {
     for (const entry of index.skills) {
-      const body = skill(entry.name)!
+      const body = capabilitySkill(entry.name)!
       expect(entry.digest, entry.name).toBe(`sha256:${sha256(body)}`)
       expect(entry.digest).toMatch(/^sha256:[0-9a-f]{64}$/)
     }
@@ -301,7 +313,7 @@ describe("the agent skills index", () => {
 
   test("a skill's frontmatter name matches its parent directory", () => {
     for (const entry of index.skills) {
-      const body = skill(entry.name)!
+      const body = capabilitySkill(entry.name)!
       const declared = body.match(/^name:\s*(.+)$/m)?.[1]
       const directory = entry.url.split("/").at(-2)
 
@@ -312,19 +324,19 @@ describe("the agent skills index", () => {
 
   test("a skill's description matches the index entry", () => {
     for (const entry of index.skills) {
-      expect(skill(entry.name)!).toContain(`description: ${entry.description}`)
+      expect(capabilitySkill(entry.name)!).toContain(`description: ${entry.description}`)
     }
   })
 
   test("an unknown skill has no body to serve", () => {
-    expect(skill("no-such-skill")).toBeUndefined()
+    expect(capabilitySkill("no-such-skill")).toBeUndefined()
   })
 })
 
 describe("every skill body", () => {
   test("opens its prose with a heading and shows the command", () => {
     for (const capability of capabilities) {
-      const body = skill(capability.name)!
+      const body = capabilitySkill(capability.name)!
       const prose = body.slice(body.indexOf("---", 3) + 3).trimStart()
 
       expect(prose.startsWith("# "), capability.name).toBe(true)
@@ -335,7 +347,7 @@ describe("every skill body", () => {
   test("says there is no hosted endpoint to call", () => {
     // The one thing an agent must not guess wrong about a local-first program.
     for (const capability of capabilities) {
-      expect(skill(capability.name)!).toContain("no hosted endpoint")
+      expect(capabilitySkill(capability.name)!).toContain("no hosted endpoint")
     }
   })
 })

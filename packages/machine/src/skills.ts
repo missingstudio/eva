@@ -1,3 +1,6 @@
+import { capabilities } from "./agents.js"
+import { entity, origin } from "./site.js"
+
 /**
  * The Agent Skills index both origins publish, and the shape the discovery
  * draft gives one skill.
@@ -60,3 +63,65 @@ export const agentSkillsIndex = (
     }),
   ),
 })
+
+const lines = (parts: string[]) => `${parts.join("\n")}\n`
+
+/**
+ * What a capability's skill says it is for. The draft asks the index's
+ * description to match the SKILL.md frontmatter, so one function writes both
+ * and they cannot disagree. A description says what the skill does and when to
+ * reach for it.
+ */
+export const capabilityDescription = (capability: (typeof capabilities)[number]) =>
+  `${capability.description} Use when working with ${entity.product.name}, the open-source autonomous software factory.`
+
+/**
+ * One capability as a SKILL.md. The frontmatter `name` must equal the parent
+ * directory's name, which is why the capability's name is both.
+ */
+export const capabilitySkill = (name: string): string | undefined => {
+  const capability = capabilities.find((entry) => entry.name === name)
+  if (!capability) return undefined
+
+  return lines([
+    "---",
+    `name: ${capability.name}`,
+    `description: ${capabilityDescription(capability)}`,
+    "license: MIT",
+    "metadata:",
+    `  homepage: ${origin.web}`,
+    "---",
+    "",
+    `# ${capability.title}`,
+    "",
+    capability.description,
+    "",
+    "## Run it",
+    "",
+    "```sh",
+    capability.command,
+    "```",
+    "",
+    "Eva runs on the machine that calls it. There is no hosted endpoint and no key",
+    "to request: a model credential is read from the environment of the shell that",
+    "runs the command.",
+    "",
+    "## Read more",
+    "",
+    `${origin.docs}/${capability.slug}`,
+  ])
+}
+
+/**
+ * Every capability, as skills for the origin that publishes them.
+ *
+ * The URL is a parameter because the path rule belongs to the site that serves
+ * the skills, in a module this package may not be imported into.
+ */
+export const capabilitySkills = (urlOf: (name: string) => string): SkillSource[] =>
+  capabilities.map((capability) => ({
+    name: capability.name,
+    description: capabilityDescription(capability),
+    url: urlOf(capability.name),
+    body: capabilitySkill(capability.name)!,
+  }))

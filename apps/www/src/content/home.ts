@@ -2,7 +2,7 @@ import { entity, type DocSlug } from "@missingstudio/machine"
 
 /*
   The home page's words, held where both the page and its markdown twin can
-  read them. The tagline is not here: it lives in the ui package, because the
+  read them. The tagline is not here: it lives in the machine package, because the
   README and the documentation say it too.
 */
 export const lede =
@@ -32,7 +32,7 @@ export const today: readonly { title: string; body: string; slug: DocSlug }[] = 
 ]
 
 // What the open-source band says, in the order it says it. The company is
-// named from the ui package, never spelled out here: the page said the name
+// named from the machine package, never spelled out here: the page said the name
 // twice once, and the two spellings drifted apart.
 export const openSource = {
   heading: "Your key never reaches a settings file, a log, or the session record.",
