@@ -19,6 +19,7 @@ import {
   ConversationScrollButton,
 } from "@missingstudio/ui/components/ai-elements/conversation"
 import { MessageResponse } from "@missingstudio/ui/components/ai-elements/message"
+import { useEffect } from "react"
 import { ModelPicker, type Choosing } from "./models.js"
 import { priced } from "./pricing.js"
 import { Main, stampText, TopBar } from "./shell.js"
@@ -236,6 +237,10 @@ const Live = ({ said }: { readonly said: string }) =>
     </div>
   )
 
+// What the tab says with no Session open. It is the name `index.html` ships,
+// so the document and the page never disagree about it.
+const TAB = "Eva"
+
 /**
  * One Session, read: which Session it is, what the pipe is, then what was said
  * in it, then the questions that stand, then what the open Run is saying, then
@@ -277,66 +282,83 @@ export const Session = ({
    * comes from, so the rows that offer a model are the rows that price it.
    */
   readonly choosing?: Choosing
-}) => (
-  <Main>
-    <TopBar
-      title={titleLine(header?.title)}
-      {...(reading.folded.kind === "folding"
-        ? {}
-        : {
-            spend: spendText(
-              spendOf(
-                priced(reading.folded.cost, choosing?.rows ?? [], choosing?.chosen),
-                reading.folded.at.seq > 0,
+}) => {
+  const title = titleLine(header?.title)
+
+  /**
+   * The tab says which Session it is, so five open Sessions are five tabs a
+   * reader tells apart. It is the same line the top bar draws, and a Session
+   * whose Header has not arrived says it has no title yet — a tab is drawn in
+   * every screen share, so it is never the directory the Session runs in.
+   */
+  useEffect(() => {
+    document.title = `${title} · ${TAB}`
+    return () => {
+      document.title = TAB
+    }
+  }, [title])
+
+  return (
+    <Main>
+      <TopBar
+        title={title}
+        {...(reading.folded.kind === "folding"
+          ? {}
+          : {
+              spend: spendText(
+                spendOf(
+                  priced(reading.folded.cost, choosing?.rows ?? [], choosing?.chosen),
+                  reading.folded.at.seq > 0,
+                ),
               ),
-            ),
-          })}
-    />
-    {/*
+            })}
+      />
+      {/*
        The one scroll container on the page. It sticks to the bottom while the
        record grows and stops the moment a reader scrolls up, so the composer
        and the rail hold still while the record moves.
     */}
-    <Conversation className="scroll">
-      <ConversationContent className="col">
-        <Notice pipe={pipe} />
-        {reading.folded.kind === "folding" ? (
-          <p aria-busy="true" className="text-muted-foreground" role="status">
-            Reading the transcript…
-          </p>
-        ) : (
-          <>
-            <Turns
-              turns={[...reading.folded.turns, ...askingOf(asking)]}
-              {...(answer === undefined ? {} : { answer })}
-            />
-            <Live said={reading.said} />
-            <Cost
-              cost={priced(reading.folded.cost, choosing?.rows ?? [], choosing?.chosen)}
-              ran={reading.folded.at.seq > 0}
-            />
-          </>
-        )}
-      </ConversationContent>
-      <ConversationScrollButton className="to-newest" />
-    </Conversation>
-    <div className="dock">
-      <div className="dock-col">
-        <Composer
-          model={
-            <ModelPicker
-              chosen={choosing?.chosen}
-              rows={choosing?.rows ?? []}
-              {...(choosing === undefined ? {} : { choose: choosing.choose })}
-            />
-          }
-          pipe={pipe}
-          running={reading.running}
-          {...(composer === undefined ? {} : { composer })}
-          {...modeSaid(reading)}
-        />
-        <Named header={header} pipe={pipe} session={session} />
+      <Conversation className="scroll">
+        <ConversationContent className="col">
+          <Notice pipe={pipe} />
+          {reading.folded.kind === "folding" ? (
+            <p aria-busy="true" className="text-muted-foreground" role="status">
+              Reading the transcript…
+            </p>
+          ) : (
+            <>
+              <Turns
+                turns={[...reading.folded.turns, ...askingOf(asking)]}
+                {...(answer === undefined ? {} : { answer })}
+              />
+              <Live said={reading.said} />
+              <Cost
+                cost={priced(reading.folded.cost, choosing?.rows ?? [], choosing?.chosen)}
+                ran={reading.folded.at.seq > 0}
+              />
+            </>
+          )}
+        </ConversationContent>
+        <ConversationScrollButton className="to-newest" />
+      </Conversation>
+      <div className="dock">
+        <div className="dock-col">
+          <Composer
+            model={
+              <ModelPicker
+                chosen={choosing?.chosen}
+                rows={choosing?.rows ?? []}
+                {...(choosing === undefined ? {} : { choose: choosing.choose })}
+              />
+            }
+            pipe={pipe}
+            running={reading.running}
+            {...(composer === undefined ? {} : { composer })}
+            {...modeSaid(reading)}
+          />
+          <Named header={header} pipe={pipe} session={session} />
+        </div>
       </div>
-    </div>
-  </Main>
-)
+    </Main>
+  )
+}

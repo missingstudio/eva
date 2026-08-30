@@ -3,6 +3,7 @@ import { makeSessionAPI, overSurface, type Gate, type Kernel } from "@missingstu
 import { localTransport, makeClient, type Client } from "@missingstudio/eva-client-runtime"
 import type { Frontend, SurfaceInfo } from "@missingstudio/eva-sdk"
 import { Cause, Effect, Exit, Scope } from "effect"
+import { reasonOf, speak } from "./report.js"
 import type { Started } from "./run.js"
 
 /**
@@ -201,6 +202,9 @@ export const runDoor = Effect.fn("cli.runDoor")(function* (
  * failure is a different thing: this build has no such surface, and the door
  * names what it does have. A door that offers help passes it, and the one that
  * does not passes nothing.
+ *
+ * What the failure said reaches the person, and the class of the thrown value
+ * does not: a class name is ours, and a reader cannot act on it.
  */
 export const closed = (
   outcome: Exit.Exit<unknown, unknown>,
@@ -208,7 +212,7 @@ export const closed = (
   help?: () => void,
 ): number => {
   if (Exit.isSuccess(outcome) || Cause.hasInterruptsOnly(outcome.cause)) return 0
-  err(`${Cause.squash(outcome.cause) as Error}\n`)
+  err(`${speak({ what: reasonOf(Cause.squash(outcome.cause)) })}\n`)
   help?.()
   return 1
 }

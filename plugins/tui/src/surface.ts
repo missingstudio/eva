@@ -12,6 +12,7 @@ import {
   namesCommand,
   type CommandInfo,
   type FrontendRequest,
+  type IntegrationInfo,
   type KeymapInfo,
   type PickRow,
   type Running,
@@ -99,6 +100,12 @@ export interface SurfaceDeps {
   // What went wrong on the way here — a theme that named no row, say. The
   // surface shows them where the person is looking, until the first fold.
   readonly notices?: readonly string[]
+  /**
+   * How each provider would authenticate, and whether it is live. Read when
+   * the surface starts, so a person with no key is told before they spend a
+   * prompt on a Run that cannot reach a model.
+   */
+  readonly integrations?: Effect.Effect<readonly IntegrationInfo[]>
   readonly now?: () => number
   // How long the Live area may take to drain after its Run has closed.
   // Named here so a test can reach the stop without waiting for it.
@@ -108,6 +115,32 @@ export interface SurfaceDeps {
 // How often the spinner turns. Fast enough to read as motion, slow enough
 // that a redraw is not what the terminal spends its time on.
 export const TICK = 100
+
+/**
+ * A provider with no key, as one actionable line. It names the variable to
+ * export, because "not connected" is a state and not a step, and it names the
+ * endpoints that need no key at all, because that is the other way out.
+ */
+export const sayNoCredential = (provider: string, variable: string): string =>
+  `no key for ${provider}, so a prompt cannot run: export ${variable}, or name another endpoint — Ollama, vLLM, a gateway — in config`
+
+/**
+ * The key this Session would need and does not have, or nothing.
+ *
+ * The provider is the Session's own, so a run against an endpoint that needs
+ * no key is told nothing: a provider that projects no `api_key` row wants no
+ * variable, and a warning about one it does not read is noise a person learns
+ * to pass over.
+ */
+const missingCredential = (
+  provider: string,
+  rows: readonly IntegrationInfo[],
+): string | undefined => {
+  const named = rows.filter((row) => row.provider === provider)
+  if (named.some((row) => row.connected)) return undefined
+  const variable = named.find((row) => row.variable !== undefined)?.variable
+  return variable === undefined ? undefined : sayNoCredential(provider, variable)
+}
 
 /**
  * A choice a command is waiting on: the rows as the command offered them,
@@ -204,11 +237,26 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
   )
   const bindings = makeKeymap(new Map(rows.map((row) => [row.binding, row.command])))
 
+  /**
+   * The credential preflight, before a prompt is spent on a Run that cannot
+   * reach a model. An attached terminal is not asked: the credentials that
+   * decide a Run are the serving process's, and this process's say nothing
+   * about them.
+   */
+  const missing =
+    deps.integrations === undefined || where.kind !== "directory"
+      ? undefined
+      : missingCredential(
+          (yield* deps.client.api.model.get(state.session)).provider,
+          yield* deps.integrations,
+        )
+
   // A binding that cannot fire and a key bound twice are degraded outcomes,
   // said where the person is looking rather than passed over. This is the
   // one place rows collapse into a keymap, so it is the one place that asks.
   const notes = [
     ...(deps.notices ?? []),
+    ...(missing === undefined ? [] : [missing]),
     ...rows
       .filter((row) => canonical(row.binding) === undefined)
       .map((row) => `key binding ${row.id} names no key this surface knows: ${row.binding}`),

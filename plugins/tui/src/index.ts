@@ -84,6 +84,9 @@ export const makeTui = (options: TuiOptions): Plugin =>
                 renderer: picked.renderer,
                 commands: ctx.command.get,
                 keymap: ctx.keymap.get,
+                // Read at the point of use, so the plugin that projects them
+                // is asked after every plugin has loaded.
+                integrations: ctx.integration.get,
                 where: (
                   options.where ?? (() => ({ kind: "directory", path: process.cwd() }) as const)
                 )(),

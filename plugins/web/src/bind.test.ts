@@ -72,13 +72,15 @@ describe("the refusal", () => {
   })
 
   /**
-   * The message names the reason and the stage that changes it, so a reader
-   * knows this is a door that opens later rather than a defect.
+   * The message names the reason and the next step, and names no stage of our
+   * own plan: a person at a refused bind can act on the first and not on the
+   * second.
    */
-  it("names the reason and stage 9b", () => {
+  it("names the reason and the bind that works", () => {
     const said = refusal("0.0.0.0")
-    expect(said).toContain("a non-local bind needs a token")
-    expect(said).toContain("9b")
+    expect(said).toContain("is not authenticated")
+    expect(said).toContain("bind 127.0.0.1 instead")
+    expect(said).not.toMatch(/\b9b\b/)
   })
 
   it("refuses every interface, however it is spelled", () => {

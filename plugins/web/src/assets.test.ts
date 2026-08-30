@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { assetFor, hasPage, mediaType, unbuilt } from "./assets.js"
+import { assetFor, fromSource, hasPage, mediaType, unbuilt } from "./assets.js"
 
 // A tree in the shape `vp build` leaves: the page, and hashed assets beside it.
 const built = (): string => {
@@ -97,8 +97,22 @@ describe("the media type", () => {
 
 describe("the unbuilt notice", () => {
   it("names the tree it looked in and the command that fills it", () => {
-    const said = unbuilt("/eva/apps/web/dist")
+    const said = unbuilt("/eva/apps/web/dist", "/usr/local/bin/bun")
     expect(said).toContain("/eva/apps/web/dist")
     expect(said).toContain("vp run -r build")
+  })
+
+  // Somebody who installed a binary has no workspace and no `vp`, so a build
+  // command is a step they cannot take.
+  it("names no build command to a run that is not from source", () => {
+    const said = unbuilt("/opt/eva/eva-page", "/opt/homebrew/bin/eva")
+    expect(said).toContain("/opt/eva/eva-page")
+    expect(said).not.toContain("vp run -r build")
+    expect(said).toContain("use the terminal")
+  })
+
+  it("reads a source run off the runtime that is executing it", () => {
+    expect(fromSource("/usr/local/bin/node")).toBe(true)
+    expect(fromSource("/opt/homebrew/bin/eva")).toBe(false)
   })
 })

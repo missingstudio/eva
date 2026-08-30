@@ -212,10 +212,16 @@ describe("the effect body over a real kernel", () => {
       provider: "vllm",
       mode: "api_key",
       connected: true,
+      variable: "VLLM_API_KEY",
     })
   })
 
-  it("projects the row as not connected when the variable is unset", async () => {
+  /**
+   * The row carries the variable it reads, from the merged map rather than
+   * from `ENV_KEYS`. A surface tells a person what to export, and a provider
+   * named in config has a variable no static table holds.
+   */
+  it("projects the row as not connected, and names the variable it reads", async () => {
     const rows = await withPlugin(
       auth,
       (kernel) => kernel.domains.integration.get,
@@ -227,6 +233,7 @@ describe("the effect body over a real kernel", () => {
       provider: "vllm",
       mode: "api_key",
       connected: false,
+      variable: "VLLM_API_KEY",
     })
   })
 })

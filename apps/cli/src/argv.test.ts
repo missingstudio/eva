@@ -328,7 +328,7 @@ describe("eva attach", () => {
     (given) => {
       const found = ran(["attach", given])
       expect(found.invocation).toEqual({ kind: "answered", code: 1 })
-      expect(found.err).toContain("eva attach takes the address a runtime serves")
+      expect(found.err).toContain("`eva attach` takes the address a runtime serves")
     },
   )
 

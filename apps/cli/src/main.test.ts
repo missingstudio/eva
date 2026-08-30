@@ -753,12 +753,12 @@ steps:
 })
 
 /**
- * A local page binds to loopback. A non-local bind needs a token and stage 9b
- * is what issues one, so until 9b exists it is refused rather than served
- * unauthenticated — and a refusal is a supported outcome that says why.
+ * A local page binds to loopback. A non-local bind has no way to authenticate
+ * a visitor, so it is refused rather than served unauthenticated — and a
+ * refusal is a supported outcome that says why.
  */
-describe("a bind that needs a token", () => {
-  // The whole criterion in one run: the reason and the stage are said, the
+describe("a bind that needs authentication", () => {
+  // The whole criterion in one run: the reason and the next step are said, the
   // exit code is non-zero, nothing was printed as though it had served, and
   // the port it named is still free. A server on 0.0.0.0 answers on loopback,
   // so a loopback connect would have reached one had anything bound.
@@ -770,21 +770,21 @@ describe("a bind that needs a token", () => {
     )
 
     expect(found.code).toBe(1)
-    expect(found.err).toContain("a non-local bind needs a token")
-    expect(found.err).toContain("9b")
+    expect(found.err).toContain("is not authenticated")
+    expect(found.err).toContain("bind 127.0.0.1 instead")
     expect(found.out).toBe("")
     expect(await listening(port)).toBe(false)
   })
 
-  // The posture is a tenancy and not a token, so `hosted` opens no door in W1
-  // either. What each posture permits arrives with the token at 9b.
+  // The posture is a tenancy and not a credential, so `hosted` opens no door
+  // either.
   it("refuses it under the hosted posture too", async () => {
     const directory = scratch()
     write(directory, "user.yaml", "posture: hosted\n")
 
     const found = await ran(["serve", "--web", "--host", "192.168.1.10"], directory)
     expect(found.code).toBe(1)
-    expect(found.err).toContain("tokens arrive at 9b")
+    expect(found.err).toContain("is not authenticated")
     expect(found.out).toBe("")
   })
 
@@ -797,7 +797,7 @@ describe("a bind that needs a token", () => {
       scratch(),
     )
 
-    expect(found.err).not.toContain("9b")
+    expect(found.err).not.toContain("is not authenticated")
     expect(found.err).toContain("no eva.web surface is registered")
   })
 })
@@ -846,7 +846,7 @@ describe("eva attach", () => {
     const found = await ran(["attach", "localhost:7777"], scratch())
 
     expect(found.code).toBe(1)
-    expect(found.err).toContain("eva attach takes the address a runtime serves")
+    expect(found.err).toContain("`eva attach` takes the address a runtime serves")
     expect(found.out).toBe("")
   })
 })
@@ -928,7 +928,7 @@ describe("eva --web", () => {
     const found = await ran(["--web", "--host", "0.0.0.0", "--port", String(port)], scratch())
 
     expect(found.code).toBe(1)
-    expect(found.err).toContain("a non-local bind needs a token")
+    expect(found.err).toContain("is not authenticated")
     expect(found.out).toBe("")
     expect(await listening(port)).toBe(false)
   })

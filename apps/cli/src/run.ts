@@ -14,7 +14,7 @@ import type { Claim } from "@missingstudio/eva-schema"
 import type { Domains } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Scope, Stream } from "effect"
 import { BUILD, BUILT_IN_IDS, entriesOf, readsOf, uncarriedOf } from "./plugins.js"
-import { sayEvicted, sayMiss } from "./report.js"
+import { sayEvicted, sayFailed, sayMiss } from "./report.js"
 import type { World } from "./world.js"
 
 export { DEFAULT_MODEL } from "@missingstudio/eva-catalog-models"
@@ -99,7 +99,8 @@ export const resolveConfig = Effect.fn("cli.resolveConfig")(function* (
 /**
  * Says what the kernel's broadcast reports, in `say`'s voice: each distinct
  * miss once — a persistent miss recurs on every rebuild by design, so the
- * lines deduplicate across rebuilds — and every slot eviction as it happens.
+ * lines deduplicate across rebuilds — every slot eviction as it happens, and
+ * every plugin that did not load.
  * Subscribed through `observe`, before boot loads anything, because a
  * Broadcast has no replay.
  */
@@ -121,6 +122,17 @@ export const watchKernel = (scope: Scope.Scope, err: (text: string) => void) =>
         ),
         scope,
       ),
+    )
+    /**
+     * A plugin whose effect threw. The kernel rolls the load back, so the run
+     * goes on with one plugin fewer — and it used to go on in silence, with
+     * only a broadcast nobody at this door subscribed.
+     */
+    yield* Effect.forkIn(
+      Stream.runForEach(kernel.broadcast.subscribe("plugin.failed"), (payload) =>
+        Effect.sync(() => err(sayFailed(payload.id, payload.cause, payload.hook))),
+      ),
+      scope,
     )
     yield* Effect.forkIn(
       Stream.runForEach(kernel.broadcast.subscribe("slot.filled"), (payload) =>

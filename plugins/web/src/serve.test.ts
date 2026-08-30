@@ -309,8 +309,8 @@ describe("a bind that needs a token", () => {
   it("says why, and says no address", async () => {
     const served = await refused({ host: "0.0.0.0", port: await freePort() })
 
-    expect(served.printed).toContain("a non-local bind needs a token")
-    expect(served.printed).toContain("9b")
+    expect(served.printed).toContain("is not authenticated")
+    expect(served.printed).toContain("bind 127.0.0.1 instead")
     expect(served.printed).not.toContain("http://")
     expect(served.printed).not.toContain("posture")
     await served.close()
@@ -329,13 +329,12 @@ describe("a bind that needs a token", () => {
     await served.close()
   })
 
-  // The posture is a tenancy and not a token. `hosted` opens no door in W1:
-  // what each posture permits arrives with the token at 9b.
+  // The posture is a tenancy and not a credential, so `hosted` opens no door.
   it("is refused under the hosted posture too", async () => {
     const port = await freePort()
     const served = await refused({ host: "0.0.0.0", port }, "hosted")
 
-    expect(served.printed).toContain("tokens arrive at 9b")
+    expect(served.printed).toContain("is not authenticated")
     expect(served.printed).not.toContain("hosted posture")
     expect(await reachable(`http://127.0.0.1:${port}`)).toBe(false)
     await served.close()
@@ -344,7 +343,7 @@ describe("a bind that needs a token", () => {
   // Every interface is every interface, in either family.
   it("refuses the IPv6 form of every interface as well", async () => {
     const served = await refused({ host: "::", port: await freePort() })
-    expect(served.printed).toContain("tokens arrive at 9b")
+    expect(served.printed).toContain("is not authenticated")
     await served.close()
   })
 })
