@@ -6,6 +6,7 @@ import { makeSurface, TUI_SURFACE, type Where } from "./surface.js"
 export * from "./banner.js"
 export * from "./console.js"
 export * from "./line.js"
+export * from "./notices.js"
 export * from "./surface.js"
 
 /**
