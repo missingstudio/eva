@@ -1093,7 +1093,7 @@ earns one; `docs/adr/` carries that decision.
 | `@missingstudio/eva-client-runtime` | every non-visual client concern a surface would otherwise write itself: the `Client` a surface holds, the Run protocol it runs, the transport seam it calls through, and the reconnect over it | `schema`, `core`                   |
 | `@missingstudio/eva-session-view`   | the one fold that decides what a Run did: a Transcript to Blocks — words, reasoning, a tool call, the result that answered it, a diff, an image, and `unknown`. No renderer.                   | `schema`, `core`                   |
 | `@missingstudio/eva-tui-core`       | `Keymap`, `ThemeColors`, `Frame`, `Renderer` contracts and the helpers beside them. No rendering code.                                                                                         | `schema`                           |
-| `@missingstudio/eva-tui`            | the terminal: the OpenTUI React renderer, and a stream renderer for everywhere else                                                                                                            | `tui-core`, `session-view`         |
+| `@missingstudio/eva-tui-renderer`   | the terminal: the OpenTUI React renderer, and a stream renderer for everywhere else                                                                                                            | `tui-core`, `session-view`         |
 
 The layer rule:
 
@@ -1112,8 +1112,8 @@ conformance imports anything, plugins included — test files only, ships nothin
 plugins/*  import schema, core, sdk, client-runtime, tui-core — never kernel,
            never each other
            a plugin's *.test.ts may also import testkit, to boot the plugin
-tui        imports tui-core and session-view — the only package that may name
-           OpenTUI, and it holds no fold over the record
+tui-renderer imports tui-core and session-view — the only package that may
+           name OpenTUI, and it holds no fold over the record
 apps/*     import everything — an app is the composition root
 ```
 
@@ -2208,8 +2208,8 @@ Disabling `eva.tui` in config removes a row from a domain; nothing else in the
 tree knows the difference.
 
 A surface plugin declares the row; the terminal itself comes from
-`packages/tui`, which the plugin layer may not import. The composition root
-binds the two, and the binding is lazy: a `--print` run never opens a terminal,
+`packages/tui-renderer`, which the plugin layer may not import. The
+composition root binds the two, and the binding is lazy: a `--print` run never opens a terminal,
 and never loads a renderer this runtime may not support.
 
 ### 14.2 The Session API — what a surface calls
@@ -2377,8 +2377,8 @@ adds. Break any one and every surface built meanwhile needs revisiting.
 ### 14.5 The terminal
 
 `@missingstudio/eva-tui-core` holds contracts with no rendering code.
-`packages/tui` renders them. `Renderer` is terminal-specific and sits below
-`Frontend` — it is how one surface draws, not what a surface is.
+`packages/tui-renderer` renders them. `Renderer` is terminal-specific and sits
+below `Frontend` — it is how one surface draws, not what a surface is.
 
 ```ts
 // packages/tui-core/src/frame.ts
@@ -2413,12 +2413,12 @@ presses, so a redraw never loses a half-written line.
 
 `eva.tui` — the plugin — registers a surface, calls the Session API, and draws
 through `Renderer`. It imports `eva-tui-core` and never OpenTUI; the plugin
-layer has no import for `eva-tui` at all, so a surface can never pull FFI in.
-A future web surface implements `Frontend` and calls the same Session API;
+layer has no import for `eva-tui-renderer` at all, so a surface can never pull
+FFI in. A future web surface implements `Frontend` and calls the same Session API;
 only `Renderer` is terminal-specific.
 
 ```
-packages/tui/
+packages/tui-renderer/
 ├── src/
 │   ├── index.ts               picks a renderer for this runtime, and says why
 │   ├── renderer.tsx           createCliRenderer() + createRoot().render(<App />)

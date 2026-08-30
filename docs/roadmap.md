@@ -1424,7 +1424,7 @@ same degradation rule the harness seam uses, pointed at renderers.
 
 ### The terminal — C0 through C4
 
-`apps/cli`, `plugins/tui`, `plugins/print`, `packages/tui`,
+`apps/cli`, `plugins/tui`, `plugins/print`, `packages/tui-renderer`,
 `packages/tui-core`. The terminal is the **reference** surface: every
 capability reaches a person here first, because a terminal costs no build step
 and no window. If a factory capability lands in the browser first, the
@@ -1542,7 +1542,7 @@ proved the cut.
 
 **W1 — the wire and the page that watches.** Builds on W0 and stage 0's
 Trace. Ships four things: `packages/session-view` (the fold, moved out of
-`packages/tui`, which produces flat `Line { text }` a browser cannot use);
+`packages/tui-renderer`, which produces flat `Line { text }` a browser cannot use);
 `plugins/api` with the **read half** of the Session API — `list`, `attach`,
 `watch`, `model.get` — over HTTP and SSE, plus its `Transport` filler;
 `plugins/web` serving the built assets from the artifact; and `apps/web` as a

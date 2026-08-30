@@ -33,7 +33,7 @@ Bun is the target runtime because OpenTUI's renderer needs FFI. Under Bun, FFI
 is in the runtime. Under Node it needs 26.4.0 with `--experimental-ffi`, plus
 `--allow-ffi` and a filesystem grant when the permission model is on.
 
-That asymmetry stops at one module: `packages/tui/src/renderer.tsx`. The
+That asymmetry stops at one module: `packages/tui-renderer/src/renderer.tsx`. The
 composition root reaches it through a dynamic import, so Node never loads it —
 the stream renderer draws the same `Frame` there instead. Everything else runs on
 Node with no flags, and `vp test` proves it on every push: Vitest runs its
@@ -282,14 +282,14 @@ guessing from the least-proven seam in the stack.
 **Three things no workflow proves.** Each is named here rather than papered
 over. A reader who trusts a green gate should know what the gate does not read.
 
-**The rich renderer's draw.** `packages/tui/src/render-check.tsx` draws eleven
+**The rich renderer's draw.** `packages/tui-renderer/src/render-check.tsx` draws eleven
 screens through the real `App` and asserts on `captureCharFrame()`. It cannot be
 a test file: Vitest runs its workers under Node, and OpenTUI's renderer needs
 Bun's FFI (§1). It is a Bun script instead, so `test.include` never reaches it
 (§4). This is the rich renderer's only gate, and it runs by hand:
 
 ```bash
-bun packages/tui/src/render-check.tsx
+bun packages/tui-renderer/src/render-check.tsx
 ```
 
 **Every package packing.** A package whose `exports` names a file `pack` never
