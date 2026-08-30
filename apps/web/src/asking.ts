@@ -4,6 +4,7 @@ import type { Asking } from "@missingstudio/eva-session-view"
 import { Effect } from "effect"
 import { useEffect, useState } from "react"
 import { client } from "./eva.js"
+import { sent } from "./refusals.js"
 
 /**
  * The permission requests that stand, and how the page answers one.
@@ -42,9 +43,12 @@ export const useAsking = (): readonly Asking[] => {
  *
  * Nothing is waited on here. The gate races the two doors and the first answer
  * wins; a second one is refused as already answered, and the record is where
- * the outcome is.
+ * the outcome is — and a refusal of this write is said on the page, because
+ * `sent` is what a write that nobody waits for goes through.
  */
 export const answer = (request: string, optionId: string): void =>
-  void client().then((one) =>
-    Effect.runPromise(one.api.answer(request, { kind: "permission", optionId })),
+  sent(
+    client().then((one) =>
+      Effect.runPromise(one.api.answer(request, { kind: "permission", optionId })),
+    ),
   )

@@ -38,17 +38,18 @@ const Row = ({ row }: { readonly row: PickRow }) => (
 )
 
 /**
- * How the page switches the model. Nothing is waited on, as nothing is for the
- * answer to a permission request: the choice is a Session fact and the next
- * Run is where it shows.
+ * How the page switches the model. The choice is a Session fact and the next
+ * Run is where it shows, so nothing waits on the answer — but the answer is
+ * handed back all the same, because the picker holds the choice and a refused
+ * write has to take it away again.
  *
  * A row's id is `provider/model`, so this reads every row the wire answered.
  * A string that is not one names no model and sets none.
  */
-export const setModel = (session: SessionID, id: string): void => {
+export const setModel = (session: SessionID, id: string): Promise<void> => {
   const wanted = modelRef(id)
-  if (wanted === undefined) return
-  void client().then((one) => Effect.runPromise(one.api.model.set(session, wanted)))
+  if (wanted === undefined) return Promise.resolve()
+  return client().then((one) => Effect.runPromise(one.api.model.set(session, wanted)))
 }
 
 export interface Choosing {
@@ -93,9 +94,17 @@ export const useChoosing = (session: SessionID): Choosing => {
   return {
     rows,
     chosen,
+    /**
+     * The name shows at once and goes back to what the Session was kept at if
+     * the far side refuses it. The picker is the only thing on the page that
+     * knows the Session's model — it is not on the record this page follows —
+     * so a refusal that left the new name standing would be this page saying
+     * the Session runs on a model it does not. What was refused, and why, is
+     * said on the refusal channel and drawn where the person is typing.
+     */
     choose: (id) => {
       setChosen(id)
-      setModel(session, id)
+      void setModel(session, id).catch(() => setChosen(chosen))
     },
   }
 }

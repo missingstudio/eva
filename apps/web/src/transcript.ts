@@ -5,8 +5,9 @@ import { blocksOf } from "@missingstudio/eva-session-view"
 import { Effect, Fiber, Stream, SubscriptionRef } from "effect"
 import { useEffect, useState } from "react"
 import { client } from "./eva.js"
-import type { Folded, Pipe, Reading } from "./session.js"
+import type { Folded, Reading } from "./session.js"
 import { useSessions } from "./sessions.js"
+import type { Pipe } from "./shell.js"
 
 /**
  * One Session's Header, out of the listing it came from. The Session API has
@@ -117,20 +118,19 @@ export const useTranscript = (session: SessionID): Reading => {
  * the pipe onto the three values a surface acts on, and this page acts on the
  * one thing it can: it says so.
  *
- * Whether the pipe has ever gone is kept here rather than in the Client. "The
- * pipe is back" is a thing to say only to a reader who was told it had gone,
- * and that is a fact about this page and not about the runtime.
+ * The frame reads it, once, for both routes. Nothing about the pipe is
+ * remembered here: what a surface says is what the runtime is saying now, and
+ * a page that kept a memory of its own would say it after it stopped being
+ * true.
  */
 export const usePipe = (): Pipe => {
-  const [pipe, setPipe] = useState<Pipe>({ at: "ready", dropped: false })
+  const [pipe, setPipe] = useState<Pipe>({ at: "ready" })
 
   useEffect(
     () =>
       whileDrawn((one) =>
         Stream.runForEach(SubscriptionRef.changes(one.state), (at) =>
-          Effect.sync(() =>
-            setPipe((was) => ({ at, dropped: was.dropped || at === "disconnected" })),
-          ),
+          Effect.sync(() => setPipe({ at })),
         ),
       ),
     [],

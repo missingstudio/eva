@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
-import { Composer, refusalOf, type Composing } from "./composer.js"
-import type { Pipe } from "./session.js"
+import { Composer, HINT, refusalOf, type Composing } from "./composer.js"
+import type { Pipe } from "./shell.js"
 
-const READY: Pipe = { at: "ready", dropped: false }
-const DOWN: Pipe = { at: "disconnected", dropped: true }
+const READY: Pipe = { at: "ready" }
+const DOWN: Pipe = { at: "disconnected" }
 
 const composing = (over: Partial<Composing> = {}): Composing => ({
   pending: [],
@@ -35,6 +35,37 @@ describe("what the composer says", () => {
   // — so what is proved here is only that this page draws them.
   it("draws the queue where the person who typed it is looking", () => {
     expect(drawn({ pending: ["and rename it"], open: true })).toContain("1 waiting")
+  })
+
+  /**
+   * And draws the lines themselves. A count answers how many and not which,
+   * so a person who typed three lines while a Run was open reads three lines
+   * rather than counting on their memory of what they typed.
+   */
+  it("draws three queued lines as three lines, in the order they were typed", () => {
+    const queued = drawn({ pending: ["rename it", "and run the tests", "then say what broke"] })
+
+    expect(queued).toContain("3 waiting")
+    expect(queued).toContain("rename it")
+    expect(queued).toContain("and run the tests")
+    expect(queued).toContain("then say what broke")
+    expect(queued.indexOf("rename it")).toBeLessThan(queued.indexOf("then say what broke"))
+  })
+
+  // And says nothing about a queue that is empty. A strip that was always
+  // drawn would be a queue a person reads as holding something.
+  it("says nothing while nothing waits", () => {
+    expect(drawn({})).not.toContain('class="queue"')
+  })
+
+  /**
+   * The doors this field has, said where a person first looks. The terminal
+   * prints its own line for the same reason, and this one names the doors
+   * this surface has rather than the terminal's.
+   */
+  it("names the door a line can take", () => {
+    expect(drawn({})).toContain(HINT)
+    expect(HINT).toContain("/help")
   })
 
   // A stop for something that is running, and nothing to press while nothing
@@ -144,5 +175,51 @@ describe("a send during a drop", () => {
   it("takes no line when it was drawn with nowhere to send one", () => {
     expect(drawn(undefined)).toContain('data-disabled=""')
     expect(drawn({})).not.toContain('data-disabled=""')
+  })
+})
+
+/**
+ * A write the far side read and refused. It is a decision and not a gap: it
+ * will not change however often it is asked, so it is said out loud, where
+ * the person who asked for the write is looking.
+ *
+ * The words are the far side's own. It knows why it refused and this page
+ * would only be guessing, so what a person reads is what the server said.
+ */
+describe("a write the far side refused", () => {
+  const REFUSED = "Eva refused this: the Catalog does not hold anthropic/nope"
+
+  it("says what was refused where the person is typing", () => {
+    const strip = drawn({ refused: REFUSED })
+
+    expect(strip).toContain("the Catalog does not hold anthropic/nope")
+    expect(strip).toContain('class="refusal"')
+  })
+
+  /**
+   * And leaves the field alive. One write was refused; the next line is how a
+   * person answers that, so taking the field away would leave them reading a
+   * refusal with no way to act on it. Only a dead pipe takes it away, because
+   * nothing at all goes out then.
+   */
+  it("keeps the field open, because only a dead pipe closes it", () => {
+    expect(drawn({ refused: REFUSED })).not.toContain('data-disabled=""')
+  })
+
+  /**
+   * A dead pipe outranks it. Nothing can go out at all while the pipe is
+   * down, and that is the sentence a person acts on first — the refusal is
+   * still there when the pipe is.
+   */
+  it("says the pipe first while the pipe is down", () => {
+    const off = drawn({ refused: REFUSED }, DOWN)
+
+    expect(off).toContain("The line waits here")
+    expect(off).not.toContain("the Catalog does not hold")
+  })
+
+  it("says nothing about a write nobody refused", () => {
+    expect(drawn({})).not.toContain('class="refusal"')
+    expect(refusalOf(READY)).toBeUndefined()
   })
 })

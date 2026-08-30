@@ -1,5 +1,16 @@
 <!doctype html>
-<html lang="en">
+<!--
+  The page is dark only, the way every Eva surface is: the design system ships
+  one instrument panel and no light scheme, so nothing here reads the
+  operating system's preference. Which colours that panel draws is a theme,
+  and the page offers Eva's own three.
+
+  It is a class rather than a media query because the ui package's `dark`
+  variant and every `dark:` utility in the imported components answer to the
+  class. It is written here rather than set by a script, so it is true before
+  the first stylesheet and nothing can flash the wrong skin.
+-->
+<html class="dark" lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -14,21 +25,6 @@
       so it names the file and the build emits it.
     -->
     <link rel="icon" type="image/svg+xml" href="../../packages/ui/public/favicon.svg" />
-    <!--
-      The skin follows the OS. It is a class rather than a media query because
-      the ui package's `dark` variant and every `dark:` utility in the imported
-      components answer to the class, and it runs here — before any stylesheet,
-      before the first paint — because a class set later flashes the wrong skin.
-
-      A DOM with no matchMedia gets dark, which is Eva's own skin and the state
-      every existing test renders under.
-    -->
-    <script>
-      const dark = window.matchMedia?.("(prefers-color-scheme: dark)")
-      const apply = () => document.documentElement.classList.toggle("dark", dark?.matches !== false)
-      apply()
-      dark?.addEventListener("change", apply)
-    </script>
   </head>
   <body>
     <div id="page"></div>

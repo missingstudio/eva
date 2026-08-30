@@ -23,8 +23,10 @@ import { ArrowUpIcon, LockIcon } from "lucide-react"
 import { useRef, useState, type ReactNode } from "react"
 import { client, command } from "./eva.js"
 import { sessionHref } from "./paths.js"
-import { SAY_NEXT } from "./shell.js"
-import type { Pipe } from "./session.js"
+import { useRefusal } from "./refusals.js"
+import { sent } from "./refusals.js"
+import { SAY_NEXT, type Pipe } from "./shell.js"
+import { themed } from "./themes.js"
 
 /**
  * The composer: what a line typed here does, and how it is drawn. The rules a
@@ -56,6 +58,11 @@ export interface Composing {
   readonly stop: () => void
   // What the last line that named a command wrote back. Nothing until one has.
   readonly wrote?: string
+  /**
+   * What the far side refused, in its own words. Nothing until it has refused
+   * something, and nothing again once the person has said the next thing.
+   */
+  readonly refused?: string
 }
 
 /**
@@ -73,12 +80,16 @@ const prompted = (session: SessionID, line: string): Promise<void> =>
  * already draws as the human-authored message it is.
  */
 const steered = (session: SessionID, line: string): void =>
-  void client().then((one) =>
-    Effect.runPromise(one.api.submit(session, { kind: "steer", text: line, target: "next-step" })),
+  sent(
+    client().then((one) =>
+      Effect.runPromise(
+        one.api.submit(session, { kind: "steer", text: line, target: "next-step" }),
+      ),
+    ),
   )
 
 const stopped = (session: SessionID): void =>
-  void client().then((one) => Effect.runPromise(one.api.cancel(session, "user")))
+  sent(client().then((one) => Effect.runPromise(one.api.cancel(session, "user"))))
 
 /**
  * A line, run where the Domains are. A command reaches Domains rather than a
@@ -92,11 +103,13 @@ const stopped = (session: SessionID): void =>
  * stayed put for would read as a command that did nothing.
  */
 const ran = (session: SessionID, line: string, said: (wrote: string) => void): void =>
-  void command().then((over) =>
-    Effect.runPromise(over(session, line)).then((answer) => {
-      said(answer.wrote)
-      if (answer.selected !== undefined) window.location.assign(sessionHref(answer.selected))
-    }),
+  sent(
+    command().then((over) =>
+      Effect.runPromise(over(session, line)).then((answer) => {
+        said(answer.wrote)
+        if (answer.selected !== undefined) window.location.assign(sessionHref(answer.selected))
+      }),
+    ),
   )
 
 /**
@@ -107,13 +120,15 @@ const ran = (session: SessionID, line: string, said: (wrote: string) => void): v
  */
 const replied = (request: string, line: string): void => {
   const option = optionFor(line)
-  void client().then((one) =>
-    Effect.runPromise(
-      one.api.answer(
-        request,
-        option === undefined
-          ? { kind: "text", text: line }
-          : { kind: "permission", optionId: option },
+  sent(
+    client().then((one) =>
+      Effect.runPromise(
+        one.api.answer(
+          request,
+          option === undefined
+            ? { kind: "text", text: line }
+            : { kind: "permission", optionId: option },
+        ),
       ),
     ),
   )
@@ -127,6 +142,7 @@ const replied = (request: string, line: string): void => {
 export const useComposer = (session: SessionID, asking: readonly Asking[] = []): Composing => {
   const held = useRef<LoopState>(idle)
   const [shown, setShown] = useState<LoopState>(idle)
+  const refused = useRefusal()
   /**
    * What the last command wrote. A command answers in words and the words
    * arrive nowhere else — it is the one write on this page whose outcome is
@@ -160,6 +176,18 @@ export const useComposer = (session: SessionID, asking: readonly Asking[] = []):
         handle: (line) =>
           Effect.sync(() => {
             if (!namesCommand(line)) return { ran: false, moved: false }
+            /*
+              One command is answered here: the one that paints. Every other
+              runs where the Domains are, and this one cannot — the wire
+              supplies no way to paint, so a `/theme` sent over it is a
+              command correctly reporting that the surface it can see draws
+              no colors, on a page that does.
+            */
+            const painted = themed(line)
+            if (painted !== undefined) {
+              setWrote(painted)
+              return { ran: true, moved: false }
+            }
             ran(session, line, setWrote)
             return { ran: true, moved: false }
           }),
@@ -168,7 +196,7 @@ export const useComposer = (session: SessionID, asking: readonly Asking[] = []):
             // The conversation moves on, so what a command wrote before it
             // goes with it — the lifetime a Note has at every door.
             setWrote(undefined)
-            void prompted(session, line).finally(() => drive({ kind: "settled", run }))
+            sent(prompted(session, line).finally(() => drive({ kind: "settled", run })))
           }),
         /**
          * The gesture, made. A steer rides the open Run and returns at once,
@@ -196,12 +224,23 @@ export const useComposer = (session: SessionID, asking: readonly Asking[] = []):
     setShown(held.current)
   }
 
+  /**
+   * The line, and the refusal it replaces. What was refused is what the far
+   * side said about the write before this one, so a person who has said the
+   * next thing is no longer reading about the last one.
+   */
+  const say = (line: string, steer = false): void => {
+    refused.clear()
+    drive({ kind: "line", line, asking: standing !== undefined, ...(steer ? { steer } : {}) })
+  }
+
   return {
     pending: shown.pending,
     open: shown.open !== undefined,
     ...(wrote === undefined ? {} : { wrote }),
-    send: (line) => drive({ kind: "line", line, asking: standing !== undefined }),
-    steer: (line) => drive({ kind: "line", line, asking: standing !== undefined, steer: true }),
+    ...(refused.said === undefined ? {} : { refused: refused.said }),
+    send: (line) => say(line),
+    steer: (line) => say(line, true),
     stop: () => drive({ kind: "cancel" }),
   }
 }
@@ -233,16 +272,56 @@ const Wrote = ({ text }: { readonly text?: string }) =>
   )
 
 /**
+ * The lines waiting behind the Run that is open, oldest first, over the field
+ * they were typed into.
+ *
+ * The count is the composer fold's own words, so every door says a queue the
+ * same way. The lines themselves are here because a count answers how many
+ * and not which: a person who typed three lines and can see three lines does
+ * not type the third one again to find out whether it was taken.
+ */
+const Waiting = ({ pending }: { readonly pending: readonly string[] }) => {
+  const said = waitingText(pending.length)
+
+  return said === undefined ? null : (
+    <div className="queue">
+      <p className="waiting" role="status">
+        {said}
+      </p>
+      <ol className="queue-lines">
+        {pending.map((line, at) => (
+          <li key={`${at} ${line}`}>{line}</li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+/**
+ * The doors this field has, said where a person first looks. The terminal
+ * prints a line of its own for the same reason — a door nobody names is a
+ * door nobody finds — and this one names the doors this surface has: a line
+ * that starts with a slash runs a command, and `/help` is the one that lists
+ * them.
+ */
+export const HINT = "type /help for the commands"
+
+/**
  * Why nothing can be sent, or nothing while it can. A write that cannot reach
  * the far side waits behind the pipe and retries with the key it minted once,
  * so a send during a drop is not lost — it is silent, and that is the lie: a
  * page that took a line and said nothing reads as a Run that started. So the
  * send is refused where the person is looking.
+ *
+ * A pipe that is down outranks a write the far side refused: nothing can go
+ * out at all while it is down, and that is the sentence a person acts on
+ * first. The refusal keeps until they say the next thing, so it is still
+ * there when the pipe is.
  */
-export const refusalOf = (pipe: Pipe): string | undefined =>
+export const refusalOf = (pipe: Pipe, refused?: string): string | undefined =>
   pipe.at === "disconnected"
     ? "Nothing goes out while the pipe is down. The line waits here, where it can be seen."
-    : undefined
+    : refused
 
 /**
  * What to say next: the line, how to send it, and how to stop what is open.
@@ -279,9 +358,11 @@ export const Composer = ({
   readonly mode?: string
 }) => {
   const [line, setLine] = useState("")
-  const refused = refusalOf(pipe)
-  const off = refused !== undefined || composer === undefined
-  const waiting = waitingText(composer?.pending.length ?? 0)
+  const refused = refusalOf(pipe, composer?.refused)
+  // A refused write leaves the field alive: what was refused is one write, and
+  // the next line is how a person answers it. Only a dead pipe takes the
+  // field away, because nothing at all goes out then.
+  const off = pipe.at === "disconnected" || composer === undefined
   const open = running || composer?.open === true
 
   /**
@@ -314,6 +395,9 @@ export const Composer = ({
       {/* Above the card, where the tail of an open Run is: it is the last
           thing the program said, and the field is for the next thing. */}
       <Wrote {...(composer?.wrote === undefined ? {} : { text: composer.wrote })} />
+      {/* Under what the program said and over the field, because the queue is
+          what the person themselves has said and has not been answered yet. */}
+      <Waiting pending={composer?.pending ?? []} />
       {/*
         The card supplies the clothes and the submit plumbing. What a line
         means is decided here and in the fold behind this file: `onSubmit` is
@@ -361,11 +445,6 @@ export const Composer = ({
                 Stop
               </Button>
             ) : null}
-            {waiting === undefined ? null : (
-              <p className="waiting" role="status">
-                {waiting}
-              </p>
-            )}
           </PromptInputTools>
           {/*
             The send keeps its accessible name. Its glyph says which way the
@@ -382,6 +461,7 @@ export const Composer = ({
           {refused}
         </p>
       )}
+      <p className="hint">{HINT}</p>
     </section>
   )
 }

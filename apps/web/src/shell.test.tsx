@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, describe, expect, it } from "vitest"
 import { buildLine } from "./build.js"
 import type { Listing } from "./sessions.js"
-import { Sidebar, TopBar } from "./shell.js"
+import { Notice, Sidebar, TopBar, type Pipe } from "./shell.js"
 
 /**
  * The rail, which is where the listing lives now.
@@ -94,6 +94,27 @@ describe("the listing, on the rail", () => {
 
   it("says it is reading before the wire has answered", () => {
     expect(rail({ kind: "reading" })).toContain("Reading the Sessions…")
+  })
+
+  /**
+   * And says nothing of the kind while the pipe is down. A listing that has
+   * not arrived over a pipe that is gone is not one that is arriving, and a
+   * wait drawn there would be the rail implying a read is under way. The
+   * frame says what happened, once, over both routes.
+   */
+  it("draws no wait while the pipe is down", () => {
+    const drawn = rail({ kind: "reading" }, { pipe: { at: "disconnected" } })
+
+    expect(drawn).not.toContain("Reading the Sessions…")
+    expect(drawn).not.toContain("aria-busy")
+  })
+
+  // A resync is not a drop. The runtime is closing that gap, and the rail
+  // goes on saying what it was saying.
+  it("keeps drawing the wait while the runtime catches up", () => {
+    expect(rail({ kind: "reading" }, { pipe: { at: "synchronizing" } })).toContain(
+      "Reading the Sessions…",
+    )
   })
 
   /**
@@ -287,6 +308,47 @@ describe("the running dot", () => {
 
     expect(drawn).toContain('aria-current="page"')
     expect(drawn.match(/aria-current="page"/g)).toHaveLength(1)
+  })
+})
+
+/**
+ * What the pipe is, said over every route rather than inside one. A visitor
+ * whose server is gone used to read "Reading the Sessions…" for as long as
+ * they kept the page open, because the only sentence about the pipe was drawn
+ * inside a Session.
+ */
+describe("the pipe, over the frame", () => {
+  const said = (pipe: Pipe) => renderToStaticMarkup(<Notice pipe={pipe} />)
+
+  it("says the pipe is down while it is down", () => {
+    expect(said({ at: "disconnected" })).toContain("The pipe is down")
+  })
+
+  // And says the Session is not the thing that stopped. The record goes on
+  // without this page, and the page catches up by Cursor.
+  it("says the Session goes on while the pipe does not", () => {
+    expect(said({ at: "disconnected" })).toContain("The Session goes on")
+  })
+
+  /**
+   * A resync says nothing. It is a gap the runtime is already closing, and a
+   * page that announced it would be asking a person to watch work that is not
+   * theirs — the split the whole surface keeps: a gap is silent, a decision
+   * is loud.
+   */
+  it("says nothing while the runtime catches up", () => {
+    expect(said({ at: "synchronizing" })).not.toContain("Catching up")
+    expect(said({ at: "synchronizing" })).toBe(said({ at: "ready" }))
+  })
+
+  /**
+   * The region is drawn whether or not it holds a sentence, so a sentence
+   * arrives in a region a reader is already in rather than in one that was
+   * not there a moment ago.
+   */
+  it("draws the region before it has anything to say", () => {
+    expect(said({ at: "ready" })).toContain('role="status"')
+    expect(said({ at: "ready" })).not.toContain("pipe is")
   })
 })
 

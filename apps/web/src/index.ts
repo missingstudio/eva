@@ -19,5 +19,11 @@ export * from "./composer.js"
 // drawing here is handed what it draws.
 export { ModelPicker } from "./models.js"
 export * from "./paths.js"
+/**
+ * The theme rows this page draws. They are the theme domain's own and a page
+ * may import no plugin, so the two lists are welded in `packages/conformance`
+ * rather than shared — and this is the half of the weld that ships.
+ */
+export { THEMES } from "./themes.js"
 export * from "./session.js"
 export { follow } from "./transcript.js"

@@ -541,7 +541,7 @@ const MATRIX: readonly Row[] = [
         door: "Page",
         verdict: "proven",
         proofs: [
-          { file: "apps/web/src/session.test.tsx", test: "says the pipe is down while it is down" },
+          { file: "apps/web/src/shell.test.tsx", test: "says the pipe is down while it is down" },
           {
             file: "apps/web/src/composer.test.tsx",
             test: "refuses the send visibly rather than taking the line",

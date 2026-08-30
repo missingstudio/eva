@@ -1,11 +1,17 @@
-import { httpTransport, readModels, type PickRow } from "@missingstudio/eva-api/client"
+import {
+  httpTransport,
+  readModels,
+  type PickRow,
+  type Refusal,
+} from "@missingstudio/eva-api/client"
 import { makeClient, type Client } from "@missingstudio/eva-client-runtime"
 import type { Running } from "@missingstudio/eva-sdk"
-import { Effect } from "effect"
+import { Effect, type SubscriptionRef } from "effect"
 
-// One row of the Catalog, as the picker draws it. Said again here for the
-// reason everything else in this file is: the wire is named at one site.
-export type { PickRow }
+// One row of the Catalog, as the picker draws it, and one refusal as the far
+// side worded it. Said again here for the reason everything else in this file
+// is: the wire is named at one site.
+export type { PickRow, Refusal }
 
 /**
  * The one Client this page holds, and the only way anything on the page
@@ -19,6 +25,7 @@ export type { PickRow }
 interface Held {
   readonly client: Client
   readonly command: Running
+  readonly refused: SubscriptionRef.SubscriptionRef<Refusal | undefined>
 }
 
 let held: Promise<Held> | undefined
@@ -26,7 +33,11 @@ let held: Promise<Held> | undefined
 const one = (): Promise<Held> =>
   (held ??= Effect.runPromise(
     Effect.flatMap(httpTransport(), (transport) =>
-      Effect.map(makeClient(transport), (client) => ({ client, command: transport.command })),
+      Effect.map(makeClient(transport), (client) => ({
+        client,
+        command: transport.command,
+        refused: transport.refusals,
+      })),
     ),
   ))
 
@@ -39,6 +50,19 @@ export const client = (): Promise<Client> => one().then((each) => each.client)
  * pipe, and one answer to where the runtime is.
  */
 export const command = (): Promise<Running> => one().then((each) => each.command)
+
+/**
+ * What the far side refused, as it refuses it. It is no call at all — nothing
+ * is asked for here — but it is a fact that arrives over the one pipe, so it
+ * is opened where the pipe is: a refusal read anywhere else would be a second
+ * answer to what the far side last said.
+ *
+ * A write cannot say it for itself. The Session API gives a call no error
+ * channel, so a refused write dies where it was made and the page hears it
+ * here.
+ */
+export const refusals = (): Promise<SubscriptionRef.SubscriptionRef<Refusal | undefined>> =>
+  one().then((each) => each.refused)
 
 /**
  * Every model the Catalog behind that wire knows. It is read here and not

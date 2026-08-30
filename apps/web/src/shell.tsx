@@ -1,3 +1,4 @@
+import type { ClientState } from "@missingstudio/eva-client-runtime"
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { sessionID } from "@missingstudio/eva-schema"
 import { titleLine } from "@missingstudio/eva-sdk"
@@ -18,7 +19,10 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { buildLine } from "./build.js"
 import { filtered, grouped, movedAt } from "./grouping.js"
 import { SESSION_ROUTE, sessionHref } from "./paths.js"
+import { sent } from "./refusals.js"
 import { opening, retiring, useSessions, type Listing } from "./sessions.js"
+import { ThemePicker } from "./themes.js"
+import { usePipe } from "./transcript.js"
 
 /**
  * The frame both routes are drawn inside: the Sessions on a rail that is
@@ -48,6 +52,59 @@ const RailContext = createContext<Rail>({
 })
 
 export const useRail = (): Rail => useContext(RailContext)
+
+/**
+ * What the page has of the pipe: where the runtime says it is. The state is
+ * the Client's own, and a surface reads it to say so and acts on nothing else
+ * about the pipe.
+ */
+export interface Pipe {
+  readonly at: ClientState
+}
+
+/**
+ * Where the runtime is, read once for the whole frame. Both routes are drawn
+ * inside it and both say the same thing about the pipe, because both read the
+ * same answer — a second read would be a second answer to one fact.
+ */
+const PipeContext = createContext<Pipe>({ at: "ready" })
+
+export const useFramePipe = (): Pipe => useContext(PipeContext)
+
+/**
+ * What the page says about the pipe, and nothing while there is nothing to
+ * say. A page frozen on a dead pipe reads as a Session that stopped, so the
+ * words are about the pipe and never about the Run: the Session goes on
+ * without this page, and the page catches up by Cursor when the pipe is back.
+ *
+ * A resync says nothing. `synchronizing` is a gap the runtime is already
+ * closing, and a surface that announced it would be asking a person to watch
+ * work that is not theirs. What is said is what a person can act on.
+ */
+const noticeOf = (pipe: Pipe): string | undefined => {
+  switch (pipe.at) {
+    case "ready":
+    case "synchronizing":
+      return undefined
+    case "disconnected":
+      return "The pipe is down. The Session goes on, and this page catches up when it is back."
+  }
+}
+
+/**
+ * What the pipe is, said over every route rather than inside one. A visitor
+ * whose server is gone reads it on the listing as well as in a Session, which
+ * is what the frame is for: it is drawn whichever route is.
+ *
+ * The region is drawn whether or not it holds a sentence, so a reader who is
+ * being read the page hears the words arrive in a region that was already
+ * there. Empty, it takes no room.
+ */
+export const Notice = ({ pipe }: { readonly pipe: Pipe }) => (
+  <p className="notice pipe" role="status">
+    {noticeOf(pipe)}
+  </p>
+)
 
 const FULL = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
 
@@ -154,6 +211,7 @@ const SideRow = ({
 export const Sidebar = ({
   listing,
   now,
+  pipe,
   watching,
   running = false,
   attention,
@@ -163,6 +221,12 @@ export const Sidebar = ({
 }: {
   readonly listing: Listing
   readonly now: Date
+  /**
+   * Where the runtime is, for the one thing it changes here: a listing that
+   * has not arrived over a pipe that is down is not one that is arriving. The
+   * frame says what happened; this rail draws no wait that is not one.
+   */
+  readonly pipe?: Pipe
   readonly watching?: string
   readonly running?: boolean
   /**
@@ -237,7 +301,7 @@ export const Sidebar = ({
         </button>
       )}
 
-      {listing.kind === "reading" ? (
+      {listing.kind === "reading" && pipe?.at !== "disconnected" ? (
         <p aria-busy="true" className="side-said" role="status">
           Reading the Sessions…
         </p>
@@ -272,7 +336,13 @@ export const Sidebar = ({
         </div>
       ))}
 
-      <p className="side-foot">eva.web · build {buildLine()}</p>
+      {/* What this page draws, and which build drew it. A theme is this one
+          surface's — nothing over the wire hears about it — so the control
+          for it stands with the page's own two facts. */}
+      <div className="side-end">
+        <ThemePicker />
+        <p className="side-foot">eva.web · build {buildLine()}</p>
+      </div>
 
       {/*
          One dialog for the whole rail, drawn once and pointed at the row that
@@ -376,6 +446,7 @@ export const SAY_NEXT = "say-next"
  */
 export const Shell = () => {
   const listing = useSessions()
+  const pipe = usePipe()
   const navigate = useNavigate()
   const [shown, setShown] = useState(false)
   const [running, setRunning] = useState(false)
@@ -407,7 +478,8 @@ export const Shell = () => {
     <RailContext.Provider
       value={{ shown, toggle: () => setShown((was) => !was), watch: setRunning }}
     >
-      {/*
+      <PipeContext.Provider value={pipe}>
+        {/*
          The rail is a column of Sessions and it is first in the tab order, so
          without these a reader on a keyboard tabs past every Session Eva holds
          to reach the record, and past every fold in the record to reach the
@@ -416,64 +488,71 @@ export const Shell = () => {
          The second exists exactly where the field does. A link to a place the
          route does not have would be one more thing that reaches nothing.
       */}
-      <a className="skip" href="#main">
-        skip to the record
-      </a>
-      {watching === undefined ? null : (
-        <a className="skip" href={`#${SAY_NEXT}`}>
-          skip to what to say next
+        <a className="skip" href="#main">
+          skip to the record
         </a>
-      )}
-      <div className="shell" data-rail={shown ? "shown" : "held"}>
-        <Sidebar
-          /**
-           * What the page can honestly say a row wants. It reads one Session
-           * — the one the route names — so that is the one row it answers
-           * for, and every other is left unanswered rather than guessed.
-           *
-           * The fleet view is where every row has an answer: it folds each
-           * Trace with `attentionFold` and hands the same function in. The
-           * order is already written and nothing about it changes.
-           */
-          attention={(header) =>
-            header.id === watching && running ? { kind: "moving" } : undefined
-          }
-          go={(session) => {
-            setShown(false)
-            void navigate({ to: SESSION_ROUTE, params: { session } })
-          }}
-          listing={listing}
-          now={new Date()}
-          open={opening}
-          /**
-           * The write, and the one thing that has to follow it: a reader
-           * left on the Session they just put away is a reader on a record
-           * the rail no longer offers a way back to. So the page goes where
-           * it goes with no Session named.
-           *
-           * `retiring` reads the listing again for every reader, so the row
-           * is gone by the time this navigates.
-           */
-          retire={(session) => {
-            void retiring(sessionID(session)).then(() => {
-              if (session === watching) void navigate({ to: "/" })
-            })
-          }}
-          running={running}
-          {...(watching === undefined ? {} : { watching })}
-        />
-        {/* The way out of the open rail, for a reader who reaches for the
-            record rather than for the keyboard. */}
-        {shown ? (
-          <button
-            aria-label="close the listing"
-            className="rail-scrim"
-            onClick={() => setShown(false)}
-            type="button"
+        {watching === undefined ? null : (
+          <a className="skip" href={`#${SAY_NEXT}`}>
+            skip to what to say next
+          </a>
+        )}
+        <div className="shell" data-rail={shown ? "shown" : "held"}>
+          {/* Over both columns and over both routes, because a dead pipe is a
+            fact about the page and not about the record on it. */}
+          <Notice pipe={pipe} />
+          <Sidebar
+            /**
+             * What the page can honestly say a row wants. It reads one Session
+             * — the one the route names — so that is the one row it answers
+             * for, and every other is left unanswered rather than guessed.
+             *
+             * The fleet view is where every row has an answer: it folds each
+             * Trace with `attentionFold` and hands the same function in. The
+             * order is already written and nothing about it changes.
+             */
+            attention={(header) =>
+              header.id === watching && running ? { kind: "moving" } : undefined
+            }
+            go={(session) => {
+              setShown(false)
+              void navigate({ to: SESSION_ROUTE, params: { session } })
+            }}
+            listing={listing}
+            now={new Date()}
+            open={opening}
+            pipe={pipe}
+            /**
+             * The write, and the one thing that has to follow it: a reader
+             * left on the Session they just put away is a reader on a record
+             * the rail no longer offers a way back to. So the page goes where
+             * it goes with no Session named.
+             *
+             * `retiring` reads the listing again for every reader, so the row
+             * is gone by the time this navigates.
+             */
+            retire={(session) => {
+              sent(
+                retiring(sessionID(session)).then(() => {
+                  if (session === watching) void navigate({ to: "/" })
+                }),
+              )
+            }}
+            running={running}
+            {...(watching === undefined ? {} : { watching })}
           />
-        ) : null}
-        <Outlet />
-      </div>
+          {/* The way out of the open rail, for a reader who reaches for the
+            record rather than for the keyboard. */}
+          {shown ? (
+            <button
+              aria-label="close the listing"
+              className="rail-scrim"
+              onClick={() => setShown(false)}
+              type="button"
+            />
+          ) : null}
+          <Outlet />
+        </div>
+      </PipeContext.Provider>
     </RailContext.Provider>
   )
 }

@@ -4,11 +4,16 @@ import { Effect } from "effect"
 import { useEffect, useState } from "react"
 import { client } from "./eva.js"
 import { sessionHref } from "./paths.js"
+import { sent } from "./refusals.js"
 
 /**
- * What the page has: the Sessions Eva holds, or not yet. There is no third
- * state, because a call made while the pipe is down is slower and never
- * differently typed — a listing that has not arrived has not arrived yet.
+ * What the page has: the Sessions Eva holds, or not yet. Two states, because
+ * a call made while the pipe is down is slower and never differently typed —
+ * a listing that has not arrived has not arrived yet.
+ *
+ * Whether it is on its way or stranded is not on the listing at all: it is
+ * the pipe's, the frame reads it once, and the rail draws no wait while the
+ * pipe is down.
  */
 export type Listing =
   | { readonly kind: "reading" }
@@ -84,11 +89,13 @@ export const useSessions = (): Listing => {
  * Session opens where the process answering the call is.
  */
 export const opening = (): void =>
-  void client()
-    .then((one) => Effect.runPromise(one.api.create()))
-    .then((made) => {
-      window.location.assign(sessionHref(made))
-    })
+  sent(
+    client()
+      .then((one) => Effect.runPromise(one.api.create()))
+      .then((made) => {
+        window.location.assign(sessionHref(made))
+      }),
+  )
 
 /**
  * Put a Session away, and read the listing again once Eva has.

@@ -13,7 +13,8 @@ import { blocksOf } from "@missingstudio/eva-session-view"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 import type { Composing } from "./composer.js"
-import { Session, type Folded, type Pipe, type Reading } from "./session.js"
+import { Session, type Folded, type Reading } from "./session.js"
+import type { Pipe } from "./shell.js"
 
 const SESSION = sessionID("ses_one")
 
@@ -51,8 +52,8 @@ const folding: Reading = { folded: { kind: "folding" }, said: "", running: false
 
 const reading = (said = "", running = false): Reading => ({ folded: read(), said, running })
 
-// A pipe that has never gone, which is the one state with nothing to say.
-const READY: Pipe = { at: "ready", dropped: false }
+// A pipe that is answering, which is the state with nothing to say.
+const READY: Pipe = { at: "ready" }
 
 // A composer with somewhere to send a line, and nothing waiting.
 const COMPOSING: Composing = {
@@ -148,19 +149,21 @@ describe("which Session this is", () => {
   })
 
   /**
-   * The pipe is said in one word beside the id, and nothing while it is
-   * plainly up. The sentence above the record is the whole of it; this is for
-   * a reader who is looking at the field rather than at the record.
+   * The pipe is said in one word beside the id, and nothing while it is not
+   * down. The sentence over the frame is the whole of it; this is for a reader
+   * who is looking at the field rather than at the top of the page.
    */
-  it("says in one word that the pipe is not up, and nothing while it is", () => {
+  it("says in one word that the pipe is down, and nothing while it is not", () => {
     const worded = (pipe: Pipe) =>
       renderToStaticMarkup(
         <Session session={SESSION} header={HEADER} reading={folding} pipe={pipe} />,
       )
 
     expect(worded(READY)).not.toContain("<span>down</span>")
-    expect(worded({ at: "disconnected", dropped: true })).toContain("<span>down</span>")
-    expect(worded({ at: "synchronizing", dropped: true })).toContain("<span>catching up…</span>")
+    expect(worded({ at: "disconnected" })).toContain("<span>down</span>")
+    // A resync is the runtime closing a gap, so no word of it reaches a
+    // reader here either.
+    expect(worded({ at: "synchronizing" })).not.toContain("<span>")
   })
 })
 
@@ -347,62 +350,23 @@ describe("the live tail", () => {
 
 /**
  * A page frozen on a dead pipe reads as a Session that stopped, so the page
- * says which of the two it is. What it reads for that is the Client's `state`
- * and nothing else about the pipe.
+ * says which of the two it is. The sentence is the frame's, over every route,
+ * and `shell.test.tsx` holds it — what is held here is that the Session view
+ * says none of it a second time.
  */
-describe("what the page says about the pipe", () => {
-  const said = (pipe: Pipe) =>
-    renderToStaticMarkup(
-      <Session session={SESSION} header={HEADER} reading={reading()} pipe={pipe} />,
-    )
-
-  it("says the pipe is down while it is down", () => {
-    expect(said({ at: "disconnected", dropped: true })).toContain("The pipe is down")
-  })
-
-  // And says the Session is not the thing that stopped. The record goes on
-  // without this page and the page catches up by Cursor.
-  it("says the Session goes on while the pipe does not", () => {
-    expect(said({ at: "disconnected", dropped: true })).toContain("The Session goes on")
-  })
-
-  it("says the pipe is back once it is", () => {
-    expect(said({ at: "ready", dropped: true })).toContain("The pipe is back.")
-  })
-
-  /**
-   * And says nothing to a reader who was never told it had gone. "The pipe is
-   * back" is a fact about a page that lost it, not about a page that has been
-   * reading all along.
-   */
-  it("says nothing about a pipe that has never gone", () => {
-    expect(said(READY)).not.toContain("The pipe is back.")
-    expect(said(READY)).not.toContain('class="notice"')
-  })
-
-  /**
-   * `synchronizing` arrives whenever the pipe comes back with a Run to catch
-   * up on. The arm is drawn with the other two, because the three are a
-   * closed set and one left off is a page that says nothing during the one
-   * recovery a reader is watching.
-   */
-  it("says it is catching up while the runtime refolds", () => {
-    expect(said({ at: "synchronizing", dropped: true })).toContain("Catching up")
-  })
-
-  // Above the transcript, because a reader looking at the words is who has to
-  // know the words have stopped arriving.
-  it("stands above what was said in the Session", () => {
+describe("what the Session view says about the pipe", () => {
+  it("leaves the sentence to the frame, and draws no second one", () => {
     const drawn = renderToStaticMarkup(
       <Session
         session={SESSION}
         header={HEADER}
         reading={reading()}
-        pipe={{ at: "disconnected", dropped: true }}
+        pipe={{ at: "disconnected" }}
       />,
     )
 
-    expect(drawn.indexOf("The pipe is down")).toBeLessThan(drawn.indexOf("change it"))
+    expect(drawn).not.toContain("The pipe is down.")
+    expect(drawn).not.toContain('class="notice"')
   })
 })
 
@@ -465,11 +429,12 @@ describe("the cost line", () => {
  * counted is every reach for Eva, read off what ships. Most of them go
  * through the one Client and are written `one.api.X`, and the Client's own
  * two are reaches as well: the followed Session is written `one.follow` and
- * the pipe's state `one.state`. Two more go beside the Client, because
- * neither is a Session API method: a command line comes off the transport
- * and is written `command()`, and the Catalog's rows are read beside it and
- * written `models()`. Every spelling is grepped, because a reach this count
- * cannot see is the defect the count exists for.
+ * the pipe's state `one.state`. Three more go beside the Client, because none
+ * of them is a Session API method: a command line comes off the transport and
+ * is written `command()`, the Catalog's rows are read beside it and written
+ * `models()`, and what the far side refused arrives on `refusals()`. Every
+ * spelling is grepped, because a reach this count cannot see is the defect
+ * the count exists for.
  *
  * `eva.ts` is where every door is opened, so its exports are counted too. A
  * fourth door would be a reach all three spellings miss, and it lands on that
@@ -491,7 +456,7 @@ describe("what the page offers", () => {
       .sort()
 
   // The grep, written once so a reviewer can run the same one by hand.
-  const REACH = /one\.(?:api\.[a-z.]+|follow\b|state\b)|\bcommand\(\)|\bmodels\(\)/g
+  const REACH = /one\.(?:api\.[a-z.]+|follow\b|state\b)|\bcommand\(\)|\bmodels\(\)|\brefusals\(\)/g
 
   const calls = (): readonly string[] => {
     const found = new Set<string>()
@@ -543,10 +508,11 @@ describe("what the page offers", () => {
    * rail's second write: the Session a person deleted. `model.get` and
    * `model.set` are the picker: what this Session is kept at, and the row a
    * reader chose. `follow` is how the page reads a Session at all, and
-   * `state` is the pipe's word — the Client's own two. `command` and `models`
-   * are the odd two — neither is a Session API method at all. One runs a line
-   * where the Domains live, and the other reads what the Catalog knows.
-   * Nothing else.
+   * `state` is the pipe's word — the Client's own two. `command`, `models` and
+   * `refusals` are the odd three — none of them is a Session API method at
+   * all. One runs a line where the Domains live, one reads what the Catalog
+   * knows, and one is not a call: it is what the far side refused, which
+   * reaches a write through no channel of its own. Nothing else.
    */
   it("makes these calls on Eva and no others", () => {
     expect(calls()).toEqual([
@@ -559,17 +525,25 @@ describe("what the page offers", () => {
       "model.get",
       "model.set",
       "models",
+      "refusals",
       "retire",
       "state",
       "submit",
     ])
   })
 
-  // Three doors, and `eva.ts` holds all of them. A fourth would be a call the
-  // count above is blind to, which is the one failure this suite must not
-  // allow.
+  /**
+   * Four doors, and `eva.ts` holds all of them. A fifth would be a call the
+   * count above is blind to, which is the one failure this suite must not
+   * allow.
+   *
+   * The fourth is not a call at all: it is the channel a refused write
+   * arrives on. It is a door all the same — it is opened over the one pipe,
+   * and a refusal read anywhere else would be a second answer to what the far
+   * side last said.
+   */
   it("reaches Eva through these doors and no others", () => {
-    expect(doors()).toEqual(["client", "command", "models"])
+    expect(doors()).toEqual(["client", "command", "models", "refusals"])
   })
 
   /**
@@ -620,15 +594,15 @@ describe("what the page offers", () => {
 
   /**
    * A send that reached nothing and said nothing would read as a Run that
-   * started. So the send is off and the reason is drawn, on the same page as
-   * the notice about the pipe.
+   * started. So the send is off and the reason is drawn where the person is
+   * typing, under the sentence the frame draws over both routes.
    */
   it("refuses a send while the pipe is down, and says why", () => {
     const drawn = renderToStaticMarkup(
       <Session
         composer={COMPOSING}
         header={HEADER}
-        pipe={{ at: "disconnected", dropped: true }}
+        pipe={{ at: "disconnected" }}
         reading={reading()}
         session={SESSION}
       />,
