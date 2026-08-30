@@ -8,7 +8,6 @@ export * from "./ask.js"
 export * from "./assets.js"
 export * from "./bind.js"
 export * from "./serve.js"
-export * from "./wire.js"
 
 /**
  * One artifact serves single-tenant and multi-tenant alike, so the posture is

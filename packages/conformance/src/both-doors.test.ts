@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { remembering } from "@missingstudio/eva-approval"
 import { apiWire } from "@missingstudio/eva-api"
-import { httpTransport } from "@missingstudio/eva-api/client"
+import { httpTransport, watchAsking } from "@missingstudio/eva-api/client"
 import { boot, buildOf, makeSessionAPI, overSurface, type Kernel } from "@missingstudio/eva-boot"
 import { localTransport, makeClient } from "@missingstudio/eva-client-runtime"
 import {
@@ -15,7 +15,6 @@ import {
 import { sessionID } from "@missingstudio/eva-schema"
 import type { Frontend, FrontendRequest } from "@missingstudio/eva-sdk"
 import { makeWeb, WEB_SURFACE } from "@missingstudio/eva-web"
-import { watchAsking } from "@missingstudio/eva-web/client"
 import { Effect, Exit, Fiber, Scope } from "effect"
 import { describe, expect, it } from "vitest"
 

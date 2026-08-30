@@ -95,6 +95,17 @@ export interface PickRow {
 export interface CommandContext {
   readonly api: SessionAPI
   readonly session: SessionID
+  /**
+   * Where a command that opens a Session opens it. The door supplies it,
+   * because the door is the half that knows whose directory this is: a line
+   * runs where the rows are, so a command that read the process would open a
+   * new Session in the serving directory rather than the caller's.
+   *
+   * Nothing is a door with no Location to give. `SessionAPI.create` then
+   * answers where it is, which is the same rule a caller that names nowhere
+   * already gets.
+   */
+  readonly location?: string
   readonly argument?: string
   readonly write: (text: string) => void
   // A command that opens a different Session says so, and the surface follows.

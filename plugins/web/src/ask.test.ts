@@ -4,8 +4,8 @@ import { join } from "node:path"
 import type { FrontendRequest } from "@missingstudio/eva-sdk"
 import { Effect, Exit, Fiber, Scope } from "effect"
 import { describe, expect, it } from "vitest"
+import { ASKING_PATH, askFrame } from "./ask.js"
 import { serveWeb } from "./serve.js"
-import { askingIn, ASKING_PATH, askFrame } from "./wire.js"
 
 /**
  * The ask channel, over a real socket. What is proven is the honesty of the
@@ -15,7 +15,20 @@ import { askingIn, ASKING_PATH, askFrame } from "./wire.js"
  * Nothing here answers the question. The answer travels the other way, through
  * `SessionAPI.answer`, and the gate races the two doors — so what this suite
  * sees is one door.
+ *
+ * What this suite reads is what this half wrote. The reader that judges a
+ * frame is `plugins/api`'s, and a plugin may not import a plugin — so the
+ * conformance suites are where the two halves meet.
  */
+
+// The set one frame carries, or nothing when the text is not a frame of them.
+const setIn = (text: string): readonly FrontendRequest[] | undefined => {
+  try {
+    return (JSON.parse(text) as { readonly asking?: readonly FrontendRequest[] }).asking
+  } catch {
+    return undefined
+  }
+}
 
 const REQUEST = { kind: "permission", id: "call_1", question: "run git push?" } as const
 
@@ -64,7 +77,7 @@ const reading = async (url: string) => {
       const parts = held.split("\n\n")
       held = parts.pop() ?? ""
       for (const part of parts) {
-        const asking = askingIn(part.replace(/^data:/, "").trim())
+        const asking = setIn(part.replace(/^data:/, "").trim())
         if (asking !== undefined) frames.push(asking)
       }
     }
@@ -95,10 +108,11 @@ const settledOr = <A>(asked: Fiber.Fiber<A>, waiting: string) =>
     Effect.as(Effect.sleep("20 millis"), waiting),
   )
 
-describe("the frame the page reads", () => {
+describe("the frame this half writes", () => {
   // The whole set every time, so a page holds no bookkeeping and a page that
-  // joined late reads the same frame as one that was there.
-  it("carries every question that stands, and reads back as it was written", () => {
+  // joined late reads the same frame as one that was there. Each question
+  // carries the kind the gate asked it with.
+  it("carries every question that stands, as one frame", () => {
     const asking: readonly FrontendRequest[] = [
       { kind: "permission", id: "call_1", question: "run git push?" },
       { kind: "question", id: "call_2", question: "which of the two?" },
@@ -106,21 +120,7 @@ describe("the frame the page reads", () => {
     const frame = askFrame(asking)
 
     expect(frame.endsWith("\n\n")).toBe(true)
-    expect(askingIn(frame.replace(/^data:/, "").trim())).toEqual(asking)
-  })
-
-  // A frame nothing can read is not an empty set. The caller keeps what it
-  // had, so a reader looking at a question does not watch it vanish because
-  // a byte was wrong.
-  it.each([
-    '{"asking":1}',
-    '{"asking":[{"id":1}]}',
-    // A row with no kind is a question this side cannot ask as it was asked.
-    '{"asking":[{"id":"call_1","question":"run git push?"}]}',
-    "not json",
-    "[]",
-  ])("reads no set out of %s", (text) => {
-    expect(askingIn(text)).toBeUndefined()
+    expect(setIn(frame.replace(/^data:/, "").trim())).toEqual(asking)
   })
 })
 

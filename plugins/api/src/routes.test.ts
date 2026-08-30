@@ -835,10 +835,12 @@ describe("a command, over a socket", () => {
       }),
     },
     {
+      // The command whose Location is the door's. `eva.commands` spells it
+      // this way, and a plugin's test may not import another plugin.
       id: "clear",
       description: "Open a new Session",
       run: Effect.fn("wire.test.clear")(function* (command) {
-        command.select(yield* command.api.create("/there"))
+        command.select(yield* command.api.create(command.location))
       }),
     },
   ]
@@ -850,10 +852,15 @@ describe("a command, over a socket", () => {
       body: JSON.stringify({ line }),
     })
 
+  // The directory is pinned, as a suite pins a bind. Nothing here reads the
+  // directory this suite happens to run in.
   const serving = async (mode = "default", writes: string[] = []) => {
     const state: Serving = { mode, writes }
     const memory = await held()
-    const served = await standing(memory, { commands: Effect.succeed(rowsOf(state)) })
+    const served = await standing(memory, {
+      commands: Effect.succeed(rowsOf(state)),
+      directory: () => "/there",
+    })
     return { state, memory, served }
   }
 
@@ -956,8 +963,26 @@ describe("a command, over a socket", () => {
     }
 
     expect(answered.wrote).toBe("")
-    expect(memory.calls).toEqual([{ method: "create", args: ["/there"] }])
     expect(answered.selected).toBe(memory.opened()[0])
+
+    await served.close()
+  })
+
+  /**
+   * The Location is the door's, and the door was told what it is. A command
+   * that read the process would open the new Session in the directory the
+   * serving process happens to be in, whatever a caller or a suite pinned.
+   */
+  it("opens the new Session where this door was told it is", async () => {
+    const memory = await held()
+    const served = await standing(memory, {
+      commands: Effect.succeed(rowsOf({ mode: "default", writes: [] })),
+      directory: () => "/pinned",
+    })
+
+    await ran(served.origin, "ses_1", "/clear")
+
+    expect(memory.calls).toEqual([{ method: "create", args: ["/pinned"] }])
 
     await served.close()
   })

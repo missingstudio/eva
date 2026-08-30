@@ -53,11 +53,17 @@ const showModel = (catalog: Effect.Effect<CatalogState>) =>
     if (chosen !== undefined) yield* setModel(ctx, chosen.id)
   })
 
-// Opening is the whole answer: the surface follows the selection and shows
-// the new Session's fold, which is empty. A raw session id is a fact for the
-// record, not a line for a person, so nothing is written.
+/**
+ * Opening is the whole answer: the surface follows the selection and shows
+ * the new Session's fold, which is empty. A raw session id is a fact for the
+ * record, not a line for a person, so nothing is written.
+ *
+ * The Location is the door's. This command runs where the rows are, so one
+ * that read the process opened the new Session in the serving directory when
+ * the line came over a wire.
+ */
 const openNew = Effect.fn("eva.commands.clear")(function* (ctx: CommandContext) {
-  ctx.select(yield* ctx.api.create(process.cwd()))
+  ctx.select(yield* ctx.api.create(ctx.location))
 })
 
 /**

@@ -4,23 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client/index.ts"
+    ".": "./src/index.ts"
   },
   "publishConfig": {
     "exports": {
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
-      },
-      "./client": {
-        "types": "./dist/client/index.d.mts",
-        "default": "./dist/client/index.mjs"
       }
     }
   },
   "scripts": {
-    "pack": "vp pack src/index.ts src/client/index.ts"
+    "pack": "vp pack src/index.ts"
   },
   "dependencies": {
     "@missingstudio/eva-client-runtime": "workspace:*",

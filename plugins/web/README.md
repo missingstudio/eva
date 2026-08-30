@@ -116,7 +116,8 @@ from.
   list, because the four options are `PERMISSION_OPTIONS` in `packages/core`
   and every surface already holds them.
 - The path sits **outside `/api`**, which [`eva.api`](../api/README.md) claims
-  whole. It is this surface's own door and not a Session API method.
+  whole. The surface that binds the port serves it, and it is not a Session
+  API method.
 - **The stream is also the presence signal**, and that is what makes the row
   honest. `ask` is offered only while a page is reading: with none open it is
   cancelled at once, and the moment the last page goes it is cancelled then. A
@@ -127,11 +128,14 @@ from.
   request, so the answer that lands first is the one it reads, and the question
   is withdrawn from this stream however the ask ended.
 
-**The page's half is `@missingstudio/eva-web/client`.** `watchAsking(each,
-options?)` reads the stream and calls `each` with the whole set; the origin is
-nothing by default, which is the origin the page was served by. It lives here
-rather than in `apps/web` for the reason `eva.api`'s client half lives with the
-wire: a page holds no wire of its own and knows no address.
+**This surface writes the frames; the reader is
+[`eva.api`](../api/README.md)'s.** `watchAsking(each, options?)` ships in
+`@missingstudio/eva-api/client`, beside the `answer` a question is settled
+through, so every surface across a socket reads the questions the same way —
+the page, an attached terminal, and whatever comes next. A plugin may not
+import a plugin, so `ASKING_PATH` is spelled on both sides; the conformance
+suites read this writer through that reader, so the two cannot drift in
+silence.
 
 ## What it does not do
 

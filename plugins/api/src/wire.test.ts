@@ -5,11 +5,12 @@ import {
   type SubmitInput,
 } from "@missingstudio/eva-core"
 import { sessionID, type Cursor } from "@missingstudio/eva-schema"
-import type { Ran } from "@missingstudio/eva-sdk"
+import type { FrontendRequest, Ran } from "@missingstudio/eva-sdk"
 import { describe, expect, it } from "vitest"
 import {
   answerIn,
   answerOut,
+  askingIn,
   cancelCauseIn,
   cancelCauseOut,
   headersIn,
@@ -194,5 +195,34 @@ describe("the refusal a cursor watch answers with", () => {
     expect(refused?._tag).toBe("ResumeTooFarBehind")
     expect(refused?.head).toBe(1200)
     expect(refused?.from).toEqual(from)
+  })
+})
+
+describe("the questions that stand", () => {
+  // The whole set every time, so a reader holds no bookkeeping and a reader
+  // that joined late reads the same frame as one that was there. The kind
+  // travels with each question: a wire that dropped it would make every
+  // relayed question a permission request, whatever it was.
+  it("reads back every question a frame carries", () => {
+    const asking: readonly FrontendRequest[] = [
+      { kind: "permission", id: "call_1", question: "run git push?" },
+      { kind: "question", id: "call_2", question: "which of the two?" },
+    ]
+
+    expect(askingIn(JSON.stringify({ asking }))).toEqual(asking)
+  })
+
+  // A frame nothing can read is not an empty set. The caller keeps what it
+  // had, so a reader looking at a question does not watch it vanish because
+  // a byte was wrong.
+  it.each([
+    '{"asking":1}',
+    '{"asking":[{"id":1}]}',
+    // A row with no kind is a question this side cannot ask as it was asked.
+    '{"asking":[{"id":"call_1","question":"run git push?"}]}',
+    "not json",
+    "[]",
+  ])("reads no set out of %s", (text) => {
+    expect(askingIn(text)).toBeUndefined()
   })
 })
