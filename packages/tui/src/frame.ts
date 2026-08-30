@@ -1,4 +1,10 @@
-import { blockFold, hunkText, type Block } from "@missingstudio/eva-session-view"
+import {
+  blockFold,
+  errorText,
+  hunkText,
+  resultText,
+  type Block,
+} from "@missingstudio/eva-session-view"
 import type { Frame, Overlay, OverlayRow } from "@missingstudio/eva-tui-core"
 
 export interface Line {
@@ -211,6 +217,31 @@ const rowsOf = (block: Block, author: Group["kind"]): readonly Line[] => {
           kind: "system",
         },
       ]
+    /**
+     * How the Run ended, and what to do when it stopped. The mark and the
+     * class are the first row, because that is what a person reads first;
+     * the words the Run gave and the words the class means are under it,
+     * indented, in the order a person needs them.
+     *
+     * Nothing is invented here. A Claim with no summary draws no summary row,
+     * and a failure nobody classified draws no advice row.
+     */
+    case "outcome": {
+      const mark = block.result === "failed" ? "✗" : "✓"
+      const named = block.errorClass === undefined ? "" : `${SEPARATOR}${block.errorClass}`
+      const said = (at: string, text: string): Line => ({
+        key: `${key}.${at}`,
+        text,
+        kind: "system",
+      })
+      return [
+        { key, text: `${mark} ${resultText(block.result)}${named}`, kind: "system" },
+        ...(block.summary === undefined ? [] : [said("said", `  ${block.summary}`)]),
+        ...(block.errorClass === undefined
+          ? []
+          : [said("why", `  ${errorText(block.errorClass)}`)]),
+      ]
+    }
     /**
      * A question that stands is answered in the Overlay, not on the line the
      * scroll-back holds: the four options are a choice a person moves through

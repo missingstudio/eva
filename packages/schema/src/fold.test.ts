@@ -275,7 +275,40 @@ describe("transcriptFold", () => {
         status: "in_progress",
         disposition: "ok",
       },
+      { type: "outcome", result: "done", summary: "answered" },
     ])
+  })
+
+  /**
+   * How the Run ended, from the Claim the record holds. A Run that stopped
+   * used to die on the `default` arm of this fold, so the transcript ended on
+   * the last thing said and no surface could say the Run had stopped at all.
+   */
+  it("folds a Claim that failed into an outcome that carries its class", () => {
+    const messages = transcriptFold([
+      make(samples().started),
+      make(text("reading")),
+      make({
+        kind: "finished",
+        claim: { result: "failed", summary: "the key was refused", errorClass: "auth_failed" },
+      }),
+    ])
+    expect(messages[1]!.blocks.at(-1)).toEqual({
+      type: "outcome",
+      result: "failed",
+      summary: "the key was refused",
+      errorClass: "auth_failed",
+    })
+  })
+
+  // Absent is not `other`. A failure nobody classified carries no class, so
+  // no surface can name a cause the record does not hold.
+  it("carries no class when nothing classified the failure", () => {
+    const messages = transcriptFold([
+      make(samples().started),
+      make({ kind: "finished", claim: { result: "failed" } }),
+    ])
+    expect(messages[1]!.blocks).toEqual([{ type: "outcome", result: "failed" }])
   })
 
   it("records steering as a human message", () => {

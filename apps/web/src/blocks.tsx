@@ -1,6 +1,12 @@
 import { PERMISSION_OPTIONS } from "@missingstudio/eva-core"
 import type { ActorKind } from "@missingstudio/eva-schema"
-import { hunkText, type Block, type Turn } from "@missingstudio/eva-session-view"
+import {
+  errorWords,
+  hunkText,
+  resultText,
+  type Block,
+  type Turn,
+} from "@missingstudio/eva-session-view"
 import { Button } from "@missingstudio/ui/components/button"
 import {
   CommitFile,
@@ -158,6 +164,47 @@ export const BlockView = ({
           </span>
         </p>
       )
+    /**
+     * How the Run ended.
+     *
+     * A Run that stopped is a notice with an accent edge, because it is the
+     * one thing in the record a person has to act on — the border a standing
+     * question wears, for the same reason. Under the class are the words the
+     * Run gave and the words the class means, and both are the fold's: a page
+     * that wrote its own would be a second sentence for one failure.
+     *
+     * A Run that finished is a quiet line across the column, the way a mode
+     * change is. It is a fact with a position on the record and it asks for
+     * nothing, so it is said and never dressed up.
+     */
+    case "outcome": {
+      const words = block.errorClass === undefined ? undefined : errorWords(block.errorClass)
+      if (block.result !== "failed")
+        return (
+          <p className="mode-line">
+            <span>
+              {resultText(block.result)}
+              {block.summary === undefined ? null : ` · ${block.summary}`}
+            </span>
+          </p>
+        )
+
+      return (
+        <div aria-label="how the Run ended" className="notice" role="note">
+          <p className="ask-of">
+            {resultText(block.result)}
+            {block.errorClass === undefined ? null : (
+              <>
+                {" · "}
+                <code>{block.errorClass}</code>
+              </>
+            )}
+          </p>
+          {block.summary === undefined ? null : <p className="ask-q">{block.summary}</p>}
+          {words === undefined ? null : <p className="ask-q">{`${words.means} ${words.next}`}</p>}
+        </div>
+      )
+    }
     /**
      * A question that stands, and the four options it may be answered with.
      * The options are `PERMISSION_OPTIONS` and not a field on the Block: Eva

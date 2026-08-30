@@ -1,6 +1,7 @@
 import type { SessionHeader } from "@missingstudio/eva-core"
 import { sessionID } from "@missingstudio/eva-schema"
 import { titleLine } from "@missingstudio/eva-sdk"
+import type { Attention } from "@missingstudio/eva-session-view"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -155,6 +156,7 @@ export const Sidebar = ({
   now,
   watching,
   running = false,
+  attention,
   open,
   go,
   retire,
@@ -163,6 +165,12 @@ export const Sidebar = ({
   readonly now: Date
   readonly watching?: string
   readonly running?: boolean
+  /**
+   * What one Session wants from a person, when the page can say. The rail
+   * orders by it, and a row it answers nothing for keeps the order recency
+   * gave it — a rail drawn without it is the rail by recency it always was.
+   */
+  readonly attention?: (header: SessionHeader) => Attention | undefined
   /**
    * Where a press on New Session goes. A rail drawn without one draws the
    * button and disables it, because a control that looks live and reaches
@@ -189,7 +197,7 @@ export const Sidebar = ({
   const [asked, setAsked] = useState<SessionHeader | undefined>(undefined)
 
   const held = listing.kind === "read" ? listing.sessions : []
-  const groups = grouped(filtered(held, query), now)
+  const groups = grouped(filtered(held, query), now, attention)
 
   return (
     <nav aria-label="every Session" className="sidebar">
@@ -418,6 +426,18 @@ export const Shell = () => {
       )}
       <div className="shell" data-rail={shown ? "shown" : "held"}>
         <Sidebar
+          /**
+           * What the page can honestly say a row wants. It reads one Session
+           * — the one the route names — so that is the one row it answers
+           * for, and every other is left unanswered rather than guessed.
+           *
+           * The fleet view is where every row has an answer: it folds each
+           * Trace with `attentionFold` and hands the same function in. The
+           * order is already written and nothing about it changes.
+           */
+          attention={(header) =>
+            header.id === watching && running ? { kind: "moving" } : undefined
+          }
           go={(session) => {
             setShown(false)
             void navigate({ to: SESSION_ROUTE, params: { session } })

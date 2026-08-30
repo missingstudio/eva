@@ -1,5 +1,14 @@
-import { sessionID, type SessionID } from "@missingstudio/eva-schema"
+import {
+  eventID,
+  runID,
+  sessionID,
+  type Cursor,
+  type Event,
+  type Payload,
+  type SessionID,
+} from "@missingstudio/eva-schema"
 import type { SessionHeader } from "@missingstudio/eva-core"
+import { attentionFold, type Attention } from "@missingstudio/eva-session-view"
 import { describe, expect, it } from "vitest"
 import { filtered, grouped } from "./grouping.js"
 
@@ -155,6 +164,138 @@ describe("the day groups", () => {
   it("says nothing for a Session it cannot place in time", () => {
     const undated = grouped([at("ses_undated")], NOW)[0]
     expect(undated?.moved(at("ses_undated"))).toBe("")
+  })
+})
+
+/**
+ * The rail orders by what a Session wants from a person before it orders by
+ * when it moved. The states are not written here: each one is folded out of a
+ * Trace by `attentionFold`, so what this proves is that the rail's order comes
+ * from that fold and not from a rule of the rail's own.
+ */
+describe("the order attention puts the rail in", () => {
+  let counter = 0
+  const make = (session: SessionID, payload: Payload): Event => {
+    counter += 1
+    return {
+      id: eventID(`evt_${counter}`),
+      seq: counter,
+      at: { wall: "2026-08-25T09:00:00.000Z" },
+      run: runID("run_a"),
+      session,
+      parent: null,
+      payload,
+    }
+  }
+
+  const traces = new Map<string, readonly Event[]>()
+
+  // A Session, its Header, and the Trace that says what it wants. The two are
+  // written together so nothing in this suite can claim a state the record
+  // does not hold.
+  const holding = (id: string, updatedAt: string, wrote: readonly Payload[]): SessionHeader => {
+    const session = sessionID(id) as SessionID
+    traces.set(
+      id,
+      wrote.map((payload) => make(session, payload)),
+    )
+    return { id: session, updatedAt }
+  }
+
+  const wants = (header: SessionHeader): Attention | undefined => {
+    const trace = traces.get(header.id)
+    return trace === undefined ? undefined : attentionFold(trace)
+  }
+
+  const opened: Payload = { kind: "started", intent: "read the trace back" }
+  const question: Payload = {
+    kind: "needs_human",
+    question: "which branch?",
+    resume: { session: sessionID("ses_asking") as SessionID, seq: 1 } satisfies Cursor,
+  }
+  const stopped: Payload = {
+    kind: "finished",
+    claim: { result: "failed", errorClass: "auth_failed" },
+  }
+  const answered: Payload = { kind: "finished", claim: { result: "done" } }
+
+  /**
+   * The claim the rail exists to make. The Session waiting on a person moved
+   * two days before the newest one and is drawn over it all the same, because
+   * recency is not what a person came to the rail for.
+   */
+  it("puts a Session waiting on a person over one that is merely newest", () => {
+    const asking = holding("ses_asking", "2026-08-23T09:00:00.000Z", [opened, question])
+    const newest = holding("ses_newest", "2026-08-25T10:30:00.000Z", [opened, answered])
+    const groups = grouped([newest, asking], NOW, wants)
+
+    expect(groups.map((group) => group.label)).toEqual(["Needs you", "Today"])
+    expect(groups[0]?.sessions.map((one) => one.id)).toEqual(["ses_asking"])
+  })
+
+  // A Run that stopped needs a person too: nobody else is going to fix the
+  // key. It stands under the one being waited on, which is stopped now.
+  it("lifts a Run that stopped, under the one that is waiting", () => {
+    const asking = holding("ses_asks", "2026-08-25T02:00:00.000Z", [opened, question])
+    const blocked = holding("ses_blocked", "2026-08-25T10:00:00.000Z", [opened, stopped])
+    const quiet = holding("ses_quiet", "2026-08-25T10:30:00.000Z", [opened, answered])
+    const groups = grouped([quiet, blocked, asking], NOW, wants)
+
+    expect(groups[0]?.label).toBe("Needs you")
+    expect(groups[0]?.sessions.map((one) => one.id)).toEqual(["ses_asks", "ses_blocked"])
+    expect(groups[1]?.sessions.map((one) => one.id)).toEqual(["ses_quiet"])
+  })
+
+  // A Run that is moving is not one a person has to come to, so it stays in
+  // its day — over the ones that want nothing.
+  it("puts a moving Run over a finished one inside its day", () => {
+    const moving = holding("ses_moving", "2026-08-25T02:00:00.000Z", [opened])
+    const quiet = holding("ses_quiet", "2026-08-25T10:30:00.000Z", [opened, answered])
+    const groups = grouped([quiet, moving], NOW, wants)
+
+    expect(groups.map((group) => group.label)).toEqual(["Today"])
+    expect(groups[0]?.sessions.map((one) => one.id)).toEqual(["ses_moving", "ses_quiet"])
+  })
+
+  /**
+   * A row nothing has read keeps the order recency gave it, and it sorts over
+   * one that is known to want nothing. The page reads one Session at a time,
+   * so most rows are this — and none of them is guessed into a state.
+   */
+  it("leaves a Session nothing has read where recency put it, over a finished one", () => {
+    const unread = holding("ses_unread", "2026-08-25T02:00:00.000Z", [])
+    traces.delete("ses_unread")
+    const quiet = holding("ses_quiet", "2026-08-25T10:30:00.000Z", [opened, answered])
+
+    expect(wants(unread)).toBeUndefined()
+    expect(grouped([quiet, unread], NOW, wants)[0]?.sessions.map((one) => one.id)).toEqual([
+      "ses_unread",
+      "ses_quiet",
+    ])
+  })
+
+  // The rule stands when nothing needs a person; the label does not. A rail
+  // drawn with nothing to say about a row is the rail by recency it was.
+  it("draws no group for what needs a person when nothing does", () => {
+    const held = [
+      at("ses_late", "2026-08-25T10:30:00.000Z"),
+      at("ses_early", "2026-08-25T02:00:00.000Z"),
+    ]
+
+    expect(grouped(held, NOW, wants).map((group) => group.label)).toEqual(["Today"])
+    expect(grouped(held, NOW).map((group) => group.label)).toEqual(["Today"])
+    expect(inside(held, "Today")).toEqual(["ses_late", "ses_early"])
+  })
+
+  // The group holds any day, so it says when each of its Sessions moved in
+  // that Session's own precision rather than in one the group picked.
+  it("says when a Session in it moved, in that Session's own precision", () => {
+    const today = holding("ses_today", "2026-08-25T09:00:00.000Z", [opened, question])
+    const older = holding("ses_older", "2026-04-02T09:00:00.000Z", [opened, question])
+    const group = grouped([today, older], NOW, wants)[0]
+
+    expect(group?.label).toBe("Needs you")
+    expect(group?.moved(today)).not.toBe(group?.moved(older))
   })
 })
 

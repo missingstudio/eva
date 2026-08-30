@@ -81,6 +81,11 @@
               "type": "text",
               "text": "Eva is an open-source, autonomous software factory."
             }
+          },
+          {
+            "type": "outcome",
+            "result": "done",
+            "summary": "answered"
           }
         ]
       }
@@ -132,6 +137,11 @@
               "type": "text",
               "text": "The trace is JSONL, one event per line."
             }
+          },
+          {
+            "type": "outcome",
+            "result": "failed",
+            "summary": "cancelled by user"
           }
         ]
       }
