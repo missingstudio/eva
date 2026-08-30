@@ -1,12 +1,16 @@
 import type { SessionHeader } from "@missingstudio/eva-core"
+import { byAttention, needsAPerson, type Attention } from "@missingstudio/eva-session-view"
 
 /**
- * How the rail arranges the Sessions Eva holds: by the day each Header's own
- * `updatedAt` names, and by the words a reader typed.
+ * How the rail arranges the Sessions Eva holds: by what each of them wants
+ * from a person, then by the day each Header's own `updatedAt` names, and by
+ * the words a reader typed.
  *
- * Both are pure and both take everything they read. The clock in particular is
- * handed in — a grouping that read `new Date()` for itself could not be tested
- * across a day boundary, and a day boundary is the only place it can be wrong.
+ * All three are pure and all three take everything they read. The clock in
+ * particular is handed in — a grouping that read `new Date()` for itself could
+ * not be tested across a day boundary, and a day boundary is the only place it
+ * can be wrong. What a Session wants is handed in for the same reason, and for
+ * a second: it is a fold over the Trace and this file folds nothing.
  */
 
 export interface Group {
@@ -23,6 +27,17 @@ export interface Group {
 }
 
 const UNDATED = "Undated"
+
+/**
+ * The one group that is not a day. A Session that is waiting on a person, and
+ * one that stopped and cannot go on without one, are the reason a person came
+ * to the rail — so they are lifted out of the days and drawn first, whatever
+ * day they last moved on.
+ *
+ * It is drawn only when it holds something, the way every other group is. The
+ * rule stands when nothing needs a person; the label does not.
+ */
+const NEEDS = "Needs you"
 
 /**
  * The buckets, in the order they are drawn, with the last day each one holds.
@@ -92,27 +107,47 @@ export const movedAt = (updatedAt: string | undefined): number | undefined => {
 }
 
 /**
- * The Sessions Eva holds, by day, newest first inside a day. A bucket that
- * holds nothing is not drawn: a label over no rows reads as a day whose
- * Sessions failed to arrive.
+ * The Sessions Eva holds: what needs a person first, then by day, and inside
+ * a group by what it wants and then by which moved last. A bucket that holds
+ * nothing is not drawn: a label over no rows reads as a day whose Sessions
+ * failed to arrive.
+ *
+ * `attention` answers what one Session wants, and it may answer nothing. The
+ * page reads one Session at a time, so it can answer for that one and for no
+ * other, and a row it cannot answer for keeps the order recency gave it
+ * rather than being guessed into a state. When the fleet view reads every
+ * Trace, every row has an answer and none of this changes.
  */
-export const grouped = (headers: readonly SessionHeader[], now: Date): readonly Group[] => {
+export const grouped = (
+  headers: readonly SessionHeader[],
+  now: Date,
+  attention?: (header: SessionHeader) => Attention | undefined,
+): readonly Group[] => {
+  const wants = (header: SessionHeader): Attention | undefined => attention?.(header)
   const held = new Map<string, SessionHeader[]>()
   for (const header of headers) {
-    const label = bucketOf(header, now)
+    const label = needsAPerson(wants(header)) ? NEEDS : bucketOf(header, now)
     held.set(label, [...(held.get(label) ?? []), header])
   }
 
-  return [...BUCKETS.map(([label]) => label), OLDER, UNDATED].flatMap((label) => {
+  return [NEEDS, ...BUCKETS.map(([label]) => label), OLDER, UNDATED].flatMap((label) => {
     const sessions = held.get(label)
     if (sessions === undefined) return []
     // The undated have no order to put them in, so they keep the one the
-    // listing handed over.
+    // listing handed over. A sort is stable, so what the page can read about
+    // a row still lifts it and nothing else moves.
+    const order = byAttention(wants, label === UNDATED ? () => 0 : byNewest)
     return [
       {
         label,
-        moved: (header: SessionHeader) => movedText(header.updatedAt, RECENT.includes(label)),
-        sessions: label === UNDATED ? sessions : [...sessions].sort(byNewest),
+        // The group of a Session that needs a person holds any day, so the
+        // precision is that Session's own day and not the group's.
+        moved: (header: SessionHeader) =>
+          movedText(
+            header.updatedAt,
+            RECENT.includes(label === NEEDS ? bucketOf(header, now) : label),
+          ),
+        sessions: [...sessions].sort(order),
       },
     ]
   })

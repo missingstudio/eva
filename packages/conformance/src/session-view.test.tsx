@@ -8,7 +8,13 @@ import {
   type Event,
   type Payload,
 } from "@missingstudio/eva-schema"
-import { askingOf, blockFold, blocksOf, type Block } from "@missingstudio/eva-session-view"
+import {
+  askingOf,
+  blockFold,
+  blocksOf,
+  resultText,
+  type Block,
+} from "@missingstudio/eva-session-view"
 import { toLines } from "@missingstudio/eva-tui"
 import { EMPTY } from "@missingstudio/eva-tui-core"
 import { BlockView, Turns } from "@missingstudio/eva-web-app"
@@ -147,6 +153,15 @@ const factsOf = (block: Block): readonly string[] => {
       return [block.path, String(block.hunks)]
     case "mode":
       return block.reason === undefined ? [block.mode] : [block.mode, block.reason]
+    // How the Run ended, in the words both doors say it in, with the summary
+    // and the class the record holds. `run-outcome.test.tsx` is where the
+    // pair is held to the eight classes.
+    case "outcome":
+      return [
+        resultText(block.result),
+        ...(block.summary === undefined ? [] : [block.summary]),
+        ...(block.errorClass === undefined ? [] : [block.errorClass]),
+      ]
     // The id an answer names, and the question. The id is the tool call's, so
     // a reader ties the question to the card the record drew for that call.
     case "permission":

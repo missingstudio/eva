@@ -1,7 +1,16 @@
 import { estimateTicks, toUsd, type Counted, type PriceLookup } from "./cost.js"
 import { sameFoldKeys, type Event } from "./event.js"
 import type { ActorKind } from "./id.js"
-import type { Claim, ContentBlock, Disposition, ToolKind, ToolStatus, Verdict } from "./payload.js"
+import type {
+  Claim,
+  ContentBlock,
+  Disposition,
+  ErrorClass,
+  Result,
+  ToolKind,
+  ToolStatus,
+  Verdict,
+} from "./payload.js"
 
 const isText = (content: ContentBlock): content is Extract<ContentBlock, { type: "text" }> =>
   content.type === "text"
@@ -326,6 +335,21 @@ export type TranscriptBlock =
    */
   | { readonly type: "mode"; readonly mode: string; readonly reason?: string }
   /**
+   * How the Run ended: what it claimed, the words it gave for it, and the
+   * class of the failure when something classified one. The record has held
+   * all three since the first Run; this fold dropped them, so a Run that
+   * failed drew a spinner that stopped and no surface could say why.
+   *
+   * An absent `errorClass` on a failed Claim is nobody classifying it, which
+   * is not `other`.
+   */
+  | {
+      readonly type: "outcome"
+      readonly result: Result
+      readonly summary?: string
+      readonly errorClass?: ErrorClass
+    }
+  /**
    * A payload kind the schema does not define. It is still something the Run
    * said, so the fold keeps it: `originalKind` is what it was and `raw` is
    * what it said. A renderer draws that it could not draw it, which is a
@@ -440,6 +464,19 @@ export const transcriptFold = (events: readonly Event[]): readonly TranscriptMes
           type: "mode",
           mode: payload.mode,
           ...(payload.reason === undefined ? {} : { reason: payload.reason }),
+        })
+        break
+      // How the Run ended. It is the last thing the Run did, so the turn
+      // says so: a transcript that left it out ended on the words and never
+      // said whether they were the answer or the last thing before a stop.
+      case "finished":
+        agentTail().blocks.push({
+          type: "outcome",
+          result: payload.claim.result,
+          ...(payload.claim.summary === undefined ? {} : { summary: payload.claim.summary }),
+          ...(payload.claim.errorClass === undefined
+            ? {}
+            : { errorClass: payload.claim.errorClass }),
         })
         break
       // The codec parks a wire kind it does not recognise here. It survives

@@ -2,6 +2,8 @@ import type {
   ActorKind,
   ContentBlock,
   Disposition,
+  ErrorClass,
+  Result,
   ToolKind,
   ToolStatus,
   TranscriptBlock,
@@ -63,6 +65,25 @@ export type Block =
    * refused.
    */
   | { readonly kind: "mode"; readonly key: string; readonly mode: string; readonly reason?: string }
+  /**
+   * How the Run ended: what it claimed, the words it gave for it, and the
+   * class of the failure when something classified one. It is the fold's, so
+   * every door draws one ending and none of them invents a version of it.
+   *
+   * The sentence that says what a class means is `errorWords` and not a field
+   * here. Eight classes are eight sentences, written once; a Block that
+   * carried them would give a renderer a second place to read them from.
+   *
+   * An absent `errorClass` on a failed Claim is nobody classifying it, which
+   * is not `other`.
+   */
+  | {
+      readonly kind: "outcome"
+      readonly key: string
+      readonly result: Result
+      readonly summary?: string
+      readonly errorClass?: ErrorClass
+    }
   /**
    * A permission request nobody has answered. It is the one Block that is not
    * on the record, and it cannot be: a request a person has answered is the
@@ -178,6 +199,14 @@ const blockOf = (key: string, block: TranscriptBlock): Block => {
         key,
         mode: block.mode,
         ...(block.reason === undefined ? {} : { reason: block.reason }),
+      }
+    case "outcome":
+      return {
+        kind: "outcome",
+        key,
+        result: block.result,
+        ...(block.summary === undefined ? {} : { summary: block.summary }),
+        ...(block.errorClass === undefined ? {} : { errorClass: block.errorClass }),
       }
     // A payload kind the schema does not define, and a content type it does
     // not define, are the same fact to a renderer: the record holds one and
