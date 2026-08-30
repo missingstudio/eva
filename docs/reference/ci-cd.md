@@ -250,6 +250,11 @@ No postinstall, so `--ignore-scripts` installs work, which is where the
 surveyed pipeline's postinstall model sends its users an error message
 instead.
 
+`scripts/release/npm.ts` writes the wrapper and the platform packages at
+release time, and they are the only packages that reach a registry. No
+workspace package publishes: every one of them is `"private": true`, and the
+`publishConfig` nearly all of them carry is a readiness rather than a release.
+
 _Rejected:_ publishing the packed JavaScript as the npm artifact. It runs, but
 the surface depends on the runtime that happens to invoke it — full TUI under
 Bun, the stream renderer under Node — and an install command whose result
