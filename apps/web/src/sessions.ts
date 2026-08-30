@@ -1,8 +1,8 @@
 import type { SessionHeader } from "@missingstudio/eva-core"
 import type { SessionID } from "@missingstudio/eva-schema"
 import { Effect } from "effect"
-import { useEffect, useState } from "react"
 import { client } from "./eva.js"
+import { asked, useHeld } from "./held.js"
 import { sessionHref } from "./paths.js"
 import { sent } from "./refusals.js"
 
@@ -20,65 +20,21 @@ export type Listing =
   | { readonly kind: "read"; readonly sessions: readonly SessionHeader[] }
 
 /**
- * The listing, read once for however many readers ask at once.
+ * The listing, held for the whole page.
  *
- * The rail and the Session both want it and both mount in the same tick, so
- * without this the page asks Eva what it holds twice and holds two answers to
- * one question. Only the call in flight is shared, never the answer: a reader
- * that asks after one has settled reads again, which is what a page that has
- * just opened another Session wants.
+ * The rail and the Session both want it and both mount in the same tick, and
+ * a write that changed what Eva holds has to reach both: two views of one
+ * listing that heard different things are two answers to what Eva holds. One
+ * call in flight, one answer, and a re-read that wakes every reader are all
+ * `asked`'s, so this says only what the listing is.
  */
-let asking: Promise<readonly SessionHeader[]> | undefined
-
-const listed = (): Promise<readonly SessionHeader[]> => {
-  const asked = (asking ??= client()
+const listing = asked<Listing>({ kind: "reading" }, () =>
+  client()
     .then((one) => Effect.runPromise(one.api.list))
-    .finally(() => {
-      if (asking === asked) asking = undefined
-    }))
-  return asked
-}
+    .then((sessions): Listing => ({ kind: "read", sessions })),
+)
 
-/**
- * Everything on the page drawing the listing right now.
- *
- * A write that changed what Eva holds has to reach all of them: the rail and
- * the Session's own Header are two views of one listing, and one that heard
- * the change while the other did not is two answers to what Eva holds. The
- * rail never unmounts — that is the point of the frame — so nothing else
- * would tell it.
- */
-const readers = new Set<() => void>()
-
-// Reads the listing again, for every reader at once. The held call is let go
-// of first, so what they share is the new answer and not the old one.
-const reread = (): void => {
-  asking = undefined
-  for (const wake of readers) wake()
-}
-
-export const useSessions = (): Listing => {
-  const [listing, setListing] = useState<Listing>({ kind: "reading" })
-
-  useEffect(() => {
-    // The call outlives a page that navigated away from it, so the answer is
-    // dropped rather than written into a component nobody is drawing.
-    let drawing = true
-    const read = (): void => {
-      void listed().then((sessions) => {
-        if (drawing) setListing({ kind: "read", sessions })
-      })
-    }
-    readers.add(read)
-    read()
-    return () => {
-      drawing = false
-      readers.delete(read)
-    }
-  }, [])
-
-  return listing
-}
+export const useSessions = (): Listing => useHeld(listing)
 
 /**
  * Open a Session, then go and read it. A plain load, because the rows on the
@@ -111,4 +67,4 @@ export const opening = (): void =>
 export const retiring = (session: SessionID): Promise<void> =>
   client()
     .then((one) => Effect.runPromise(one.api.retire(session)))
-    .then(reread)
+    .then(listing.again)

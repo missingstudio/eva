@@ -8,6 +8,7 @@ import { Select, SelectItem, SelectValue } from "@missingstudio/ui/components/se
 import { Effect } from "effect"
 import { useEffect, useState } from "react"
 import { client, models, type PickRow } from "./eva.js"
+import { asked, useHeld, whileDrawn } from "./held.js"
 
 /**
  * The model this Session runs on, chosen from what the Catalog knows.
@@ -59,37 +60,37 @@ export interface Choosing {
 }
 
 /**
+ * The rows this build can run, held for the whole page. A Catalog is a fact
+ * of the build and not of a Session, so five Sessions opened in one page read
+ * one answer rather than asking five times for the same list.
+ *
+ * Nothing is what a far side that answered no rows gives back, and an empty
+ * listing is what the picker says it is reading.
+ */
+const catalog = asked<readonly PickRow[]>([], () => models().then((known) => known ?? []))
+
+/**
  * The models to offer, and the one this Session is kept at. Two reads, because
  * they are two facts: the Catalog is the build's and the model is the
- * Session's.
+ * Session's — so one is held for the page and the other for as long as this
+ * reader draws this Session.
  *
  * The choice is held here as well as sent. The Session's model is not on the
  * record this page follows, so a picker that waited for the fold to say so
  * would sit on the old name for as long as the Session ran.
  */
 export const useChoosing = (session: SessionID): Choosing => {
-  const [rows, setRows] = useState<readonly PickRow[]>([])
+  const rows = useHeld(catalog)
   const [chosen, setChosen] = useState<string | undefined>(undefined)
 
-  useEffect(() => {
-    // The read outlives a page that navigated away from it, so the answer is
-    // dropped rather than written into a component nobody is drawing.
-    let drawing = true
-    void models().then((known) => {
-      if (drawing && known !== undefined) setRows(known)
-    })
-    return () => void (drawing = false)
-  }, [])
-
-  useEffect(() => {
-    let drawing = true
-    void client()
-      .then((one) => Effect.runPromise(one.api.model.get(session)))
-      .then((found) => {
-        if (drawing) setChosen(`${found.provider}/${found.model}`)
-      })
-    return () => void (drawing = false)
-  }, [session])
+  useEffect(
+    () =>
+      whileDrawn(
+        () => client().then((one) => Effect.runPromise(one.api.model.get(session))),
+        (found) => setChosen(`${found.provider}/${found.model}`),
+      ),
+    [session],
+  )
 
   return {
     rows,

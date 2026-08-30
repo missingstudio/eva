@@ -201,13 +201,20 @@ cd apps/web && bun run dev
 | `src/main.tsx`      | mounts the router into `index.html`                          |
 | `src/routes.tsx`    | the route tree, and where a read meets a drawing             |
 | `src/paths.ts`      | the two spellings of one route, in one place                 |
-| `src/page.tsx`      | the listing: the build, and the Sessions Eva holds           |
+| `src/shell.tsx`     | the frame both routes are drawn inside: the rail, the notice |
+| `src/page.tsx`      | the pane with no Session in it: what this is, and the way in |
 | `src/session.tsx`   | one Session: which it is, what was said, what it cost        |
 | `src/blocks.tsx`    | one Block, in page primitives                                |
 | `src/composer.tsx`  | what to say next: the line, the send, the stop, the queue    |
 | `src/models.tsx`    | the model picker: the Catalog's rows, and the one chosen     |
+| `src/themes.tsx`    | Eva's three theme rows, and the `/theme` this page answers   |
+| `src/grouping.ts`   | the rail's order: by day, by what a Session wants            |
+| `src/pricing.ts`    | what a fold costs, against the rows the Catalog answered     |
 | `src/eva.ts`        | the one Client, over the same-origin wire                    |
+| `src/held.ts`       | one answer the page holds, and where each answer comes from  |
 | `src/sessions.ts`   | what the page reads: the Sessions, or not yet                |
+| `src/refusals.ts`   | what the far side refused, and a write nobody waits on       |
+| `src/asking.ts`     | the questions that stand, and how the page answers one       |
 | `src/transcript.ts` | what it reads of one Session: the Header, the fold, the tail |
 | `src/build.ts`      | the version and the stamp, injected by the build             |
 | `src/index.ts`      | the drawing half, for `packages/conformance`                 |
@@ -219,8 +226,33 @@ cd apps/web && bun run dev
 
 Routes are code-based, so the build needs no route generator and no plugin
 beside the toolchain the repository already has. The views take what they draw
-as props, so the reads live in `routes.tsx` and `transcript.ts` — and what is
-on the page is provable without a socket.
+as props, so what is on the page is provable without a socket.
+
+## One answer, held once
+
+A page draws one fact in more than one place — the last Refusal is under the
+composer and beside the control that was pressed, the listing is on the rail
+and behind the Session's own Header — so it holds one answer and tells every
+reader at once. `held.ts` is where that lives, and it holds where each answer
+comes from as well as what it is:
+
+- `holding(first)` — an answer the page works out for itself, such as the
+  theme. Nothing is read from anywhere.
+- `told(first, open)` — an answer the far side pushes. The channel is opened
+  by the first reader and never closed, because a fact that arrived while
+  nothing was drawing it is still the last thing the far side said, and a
+  channel reopened on every navigation is one nothing is listening on in
+  between. The Refusal, the pipe and the questions that stand are these.
+- `asked(first, ask)` — an answer the page asks for. One call is in flight
+  however many readers ask at once, a reader that arrives after one settled
+  asks again, and `again()` is what a write calls when it changed what the
+  answer is. The listing and the Catalog's rows are these.
+- `whileDrawn(read, use)` — one read for as long as one reader draws it. What
+  settles after the reader has gone is dropped rather than written into a
+  component nobody is drawing.
+
+Five reads used to keep these rules five ways and no test reached any of them.
+They are plain functions now, so `held.test.ts` proves each one without a page.
 
 ## The name
 
