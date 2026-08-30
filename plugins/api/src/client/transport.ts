@@ -9,33 +9,16 @@ import type { Cursor, Payload, SessionID } from "@missingstudio/eva-schema"
 import type { Running } from "@missingstudio/eva-sdk"
 import { Effect, Schedule, Scope, Stream, SubscriptionRef } from "effect"
 import {
-  answerOut,
-  answerPath,
-  cancelCauseOut,
-  cancelPath,
-  commandPath,
+  CALLS,
   CURSOR,
   CURSOR_REFUSED,
-  eventsIn,
   EVENT_STREAM,
   framesIn,
-  headersIn,
   IDEMPOTENCY,
-  lineOut,
-  locationOut,
-  modelIn,
-  modelOut,
-  modelPath,
-  modelRowsIn,
-  MODELS,
   payloadIn,
-  ranIn,
   refusalIn,
-  sessionIn,
-  sessionPath,
-  SESSIONS,
-  submitInputOut,
   watchPath,
+  type Call,
   type PickRow,
 } from "../wire.js"
 
@@ -180,11 +163,12 @@ export const readModels = (
     return Effect.map(
       Effect.result(
         Effect.tryPromise({
-          try: (signal) => read(request, origin, MODELS, signal),
+          try: (signal) => read(request, origin, CALLS.models.at(""), signal),
           catch: (cause) => new Unreachable(String(cause)),
         }),
       ),
-      (answered) => (answered._tag === "Success" ? modelRowsIn(answered.success) : undefined),
+      (answered) =>
+        answered._tag === "Success" ? CALLS.models.answer.reads(answered.success) : undefined,
     )
   })
 
@@ -326,11 +310,6 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
         )
       })
 
-    // A write that answers nothing reads nothing: the status is the whole of
-    // the answer, so any body at all is one this can read.
-    const write = (method: string, path: string, body: unknown): Effect.Effect<void> =>
-      Effect.asVoid(writing(method, path, body, () => null))
-
     // A pipe that is not answering, said where it can be acted on. The watch
     // ends and no error channel carries it, which is the rule every filler of
     // this seam keeps: catching up is the caller's, by Cursor.
@@ -437,8 +416,27 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
         return framed(response.body)
       })
 
+    /**
+     * One read, through the call that says where it is asked and what its
+     * answer has to be. The path and the reader are the wire's row, so this
+     * half cannot ask on a path the other half does not answer, or read an
+     * answer it does not write.
+     */
+    const asks = <Req, Ans>(row: Call<Req, Ans>, name: string): Effect.Effect<Ans> =>
+      call(row.at(name), row.answer.reads)
+
+    // One write, through the call that says its method, its path, and both
+    // shapes that cross it.
+    const tells = <Req, Ans>(row: Call<Req, Ans>, name: string, body: Req): Effect.Effect<Ans> =>
+      writing(row.method, row.at(name), row.body.writes(body), row.answer.reads)
+
+    // A write whose answer is the status. The row says so, and `nothing`
+    // reads any body at all.
+    const told = <Req>(row: Call<Req, null>, name: string, body: Req): Effect.Effect<void> =>
+      Effect.asVoid(tells(row, name, body))
+
     const api: SessionAPI = {
-      list: call(SESSIONS, headersIn),
+      list: asks(CALLS.list, ""),
       /**
        * The one write with no body at all. What a `DELETE` acts on is the
        * path, so there is nothing left to carry — and it is a `DELETE` and
@@ -446,17 +444,17 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
        * asking once left it, which is the line this wire draws between the
        * two.
        */
-      retire: (session) => write("DELETE", sessionPath(session), null),
+      retire: (session) => told(CALLS.retire, session, null),
       model: {
-        get: (session) => call(modelPath(session), modelIn),
-        set: (session, model) => write("PUT", modelPath(session), modelOut(model)),
+        get: (session) => asks(CALLS.readModel, session),
+        set: (session, model) => told(CALLS.setModel, session, model),
       },
       /**
        * The one write that answers a value. A page holds no honest path, so
        * the location it names is the one it was given — and a page that names
        * none leaves the serving process to answer with its own directory.
        */
-      create: (location) => writing("POST", SESSIONS, locationOut(location), sessionIn),
+      create: (location) => tells(CALLS.create, "", location === undefined ? {} : { location }),
       /**
        * The record arrives and the fold happens here. So the Cursor is not
        * read off the wire either — this fold ends where the far side's ended,
@@ -467,9 +465,7 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
        * never an estimate worked out from nothing.
        */
       attach: (session) =>
-        Effect.map(call(sessionPath(session), eventsIn), (record) =>
-          foldTranscript(session, record),
-        ),
+        Effect.map(asks(CALLS.attach, session), (record) => foldTranscript(session, record)),
       // Cast because the two forms differ in their error channel and the
       // implementation is one function, as it is where the API is built.
       watch: ((session: SessionID, from?: Cursor) =>
@@ -481,9 +477,9 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
        * connection that drops meanwhile costs a repaint and not the Run: the
        * far side goes on, and a Cursor is how a page catches up.
        */
-      submit: (session, input) => write("POST", sessionPath(session), submitInputOut(input)),
-      cancel: (session, cause) => write("POST", cancelPath(session), cancelCauseOut(cause)),
-      answer: (request, given) => write("PUT", answerPath(request), answerOut(given)),
+      submit: (session, input) => told(CALLS.submit, session, input),
+      cancel: (session, cause) => told(CALLS.cancel, session, cause),
+      answer: (request, given) => told(CALLS.answer, request, given),
     }
 
     /**
@@ -491,8 +487,7 @@ export const httpTransport = (options: HttpOptions = {}): Effect.Effect<HttpTran
      * others, key and all: `/undo` asked twice would reverse two writes, and
      * the key is what makes asking again after a lost answer safe.
      */
-    const command: Running = (session, line) =>
-      writing("POST", commandPath(session), lineOut(line), ranIn)
+    const command: Running = (session, line) => tells(CALLS.command, session, line)
 
     return { api, health, command, refusals }
   })

@@ -9,29 +9,18 @@ import { encodePayloadLine, sessionID, type SessionID } from "@missingstudio/eva
 import { dispatch, modelRows, type CatalogState, type CommandInfo } from "@missingstudio/eva-sdk"
 import { Effect, Fiber, Stream } from "effect"
 import {
-  answerIn,
   API_ROOT,
-  cancelCauseIn,
+  CALLS,
   cursorIn,
   CURSOR,
   CURSOR_REFUSED,
-  eventsOut,
   EVENT_STREAM,
   frameOut,
-  headersOut,
   IDEMPOTENCY,
-  lineIn,
-  locationIn,
-  modelIn,
-  modelOut,
-  modelRowsOut,
-  MODELS,
-  ranOut,
   refusalOut,
-  REQUESTS,
-  sessionOut,
-  SESSIONS,
-  submitInputIn,
+  WATCH_AT,
+  type Call,
+  type Method,
   type StreamFrame,
 } from "./wire.js"
 
@@ -56,13 +45,6 @@ export interface Answer {
 
 export type Route = (api: SessionAPI) => Effect.Effect<Answer>
 
-const SESSION = new RegExp(`^${SESSIONS}/([^/]+)$`)
-const MODEL = new RegExp(`^${SESSIONS}/([^/]+)/model$`)
-const WATCH = new RegExp(`^${SESSIONS}/([^/]+)/watch$`)
-const CANCEL = new RegExp(`^${SESSIONS}/([^/]+)/cancel$`)
-const COMMAND = new RegExp(`^${SESSIONS}/([^/]+)/command$`)
-const REQUEST = new RegExp(`^${REQUESTS}/([^/]+)$`)
-
 // A segment is a name, and a name that is not valid percent-encoding names
 // nothing. A request a browser can send may never end a server.
 const nameOf = (segment: string): string | undefined => {
@@ -73,10 +55,17 @@ const nameOf = (segment: string): string | undefined => {
   }
 }
 
-// Which Session a path names, or nothing when the path is not that shape.
+/**
+ * What a path's segment held, or nothing when the path is not that shape. A
+ * shape with no segment in it matches on the path alone and holds no name,
+ * which is the empty string — that is not "no match", and a row for one of
+ * the two calls about the whole runtime reads it and ignores it.
+ */
 const askedFor = (shape: RegExp, path: string): string | undefined => {
-  const named = shape.exec(path)?.[1]
-  return named === undefined ? undefined : nameOf(named)
+  const found = shape.exec(path)
+  if (found === null) return undefined
+  const named = found[1]
+  return named === undefined ? "" : nameOf(named)
 }
 
 /**
@@ -160,10 +149,10 @@ const commanded =
             ? outcome.text
             : "not a command: a line that names none is a Prompt"
 
-      return {
-        status: 200,
-        body: ranOut({ wrote, ...(selected === undefined ? {} : { selected }) }),
-      }
+      return answering(CALLS.command, {
+        wrote,
+        ...(selected === undefined ? {} : { selected }),
+      })
     })
 
 /**
@@ -239,39 +228,49 @@ interface Asked {
 }
 
 /**
- * One row of the table: a method, the path it answers, and what it answers
- * with. A row states an exact `path`, or a `shape` with one segment in it —
- * and a shape's row is handed the name that segment held.
+ * One row of the table: the call it answers, and what it answers with.
+ *
+ * The call is the wire's own row, so the method this row answers, the path it
+ * is matched on, and both shapes that cross it come from the one place the
+ * half that asks reads them too. What is left here is the body — which reaches
+ * the Session API, or the Domains, or the Catalog — and that is the only part
+ * of a call the two halves really do differ about.
  *
  * A row that matched always answers. A body this wire cannot read is
  * `refusing`, which is an answer too; only a path no row states is nothing.
  */
-type Row =
-  | {
-      readonly method: string
-      readonly path: string
-      readonly route: (asked: Asked) => Route
-    }
-  | {
-      readonly method: string
-      readonly shape: RegExp
-      readonly route: (name: string, asked: Asked) => Route
-    }
+interface Row {
+  readonly method: Method
+  readonly shape: RegExp
+  readonly route: (name: string, asked: Asked) => Route
+}
 
-// A row that answers one path, whole.
-const exact = (method: string, path: string, route: (asked: Asked) => Route): Row => ({
-  method,
-  path,
-  route,
+/**
+ * A row, from the call it answers. The body is read through the call's own
+ * reader before the route is built, so a body this wire cannot read is
+ * refused once here rather than in every row that carries one.
+ *
+ * `name` is what the path's segment held, and it is the empty string for the
+ * two calls whose path has none.
+ */
+const on = <Req, Ans>(
+  one: Call<Req, Ans>,
+  route: (asked: Asked, name: string, body: Req) => Route,
+): Row => ({
+  method: one.method,
+  shape: one.shape,
+  route: (name, asked) => {
+    const body = one.body.reads(asked.body)
+    return body === undefined ? refusing : route(asked, name, body)
+  },
 })
 
-// A row that answers a path with one segment in it, and is handed the name
-// that segment held.
-const named = (
-  method: string,
-  shape: RegExp,
-  route: (name: string, asked: Asked) => Route,
-): Row => ({ method, shape, route })
+// What a call answers with, spelled through the call's own writer. A route
+// that named a field would be a second spelling of the agreement.
+const answering = <Req, Ans>(one: Call<Req, Ans>, answer: Ans): Answer => ({
+  status: 200,
+  body: one.answer.writes(answer),
+})
 
 /**
  * Both halves `eva.api` carries as a body, in one table. `watch` is in
@@ -285,11 +284,7 @@ const named = (
  * be a second Run — which is what the idempotency key exists for.
  */
 const ROUTES: readonly Row[] = [
-  exact(
-    "GET",
-    SESSIONS,
-    () => (api) => Effect.map(api.list, (rows) => ({ status: 200, body: headersOut(rows) })),
-  ),
+  on(CALLS.list, () => (api) => Effect.map(api.list, (rows) => answering(CALLS.list, rows))),
 
   /**
    * What this build can run, as the rows a picker draws. The terminal reads
@@ -299,12 +294,11 @@ const ROUTES: readonly Row[] = [
    *
    * A `PickRow` is JSON already, so the wire adds no envelope here either.
    */
-  exact(
-    "GET",
-    MODELS,
+  on(
+    CALLS.models,
     ({ catalog }) =>
       () =>
-        Effect.map(catalog, (state) => ({ status: 200, body: modelRowsOut(modelRows(state)) })),
+        Effect.map(catalog, (state) => answering(CALLS.models, modelRows(state))),
   ),
 
   /**
@@ -313,75 +307,48 @@ const ROUTES: readonly Row[] = [
    * Effect — so the request that opened the Scope is what closes it, and
    * nothing outlives the answer it was opened for.
    */
-  named("GET", SESSION, (name) => {
+  on(CALLS.attach, (_asked, name) => {
     const asked = sessionID(name)
     return (api) =>
       Effect.scoped(
-        Effect.map(api.attach(asked), (record) => ({
-          status: 200,
-          body: eventsOut(record.events()),
-        })),
+        Effect.map(api.attach(asked), (record) => answering(CALLS.attach, record.events())),
       )
   }),
 
-  named("GET", MODEL, (name) => {
+  on(CALLS.readModel, (_asked, name) => {
     const asked = sessionID(name)
-    return (api) =>
-      Effect.map(api.model.get(asked), (found) => ({ status: 200, body: modelOut(found) }))
+    return (api) => Effect.map(api.model.get(asked), (found) => answering(CALLS.readModel, found))
   }),
 
   /**
-   * Before the Session row, which needs a segment this path does not have. It
-   * is the one write that answers a value: what a caller asked for is the
+   * The one write that answers a value: what a caller asked for is the
    * Session, and a status alone would not say which one.
    */
-  exact("POST", SESSIONS, ({ body, directory }) => {
-    const opening = locationIn(body)
-    if (opening === undefined) return refusing
+  on(CALLS.create, ({ directory }, _name, opening) => {
     const where = opening.location ?? directory()
-    return (api) =>
-      Effect.map(api.create(where), (made) => ({ status: 200, body: sessionOut(made) }))
+    return (api) => Effect.map(api.create(where), (made) => answering(CALLS.create, made))
   }),
 
-  named("POST", SESSION, (name, { body }) => {
-    const input = submitInputIn(body)
-    if (input === undefined) return refusing
+  on(CALLS.submit, (_asked, name, input) => {
     const asked = sessionID(name)
     return (api) => Effect.as(api.submit(asked, input), DONE)
   }),
 
-  named("POST", CANCEL, (name, { body }) => {
-    const cause = cancelCauseIn(body)
-    if (cause === undefined) return refusing
+  on(CALLS.cancel, (_asked, name, cause) => {
     const asked = sessionID(name)
     return (api) => Effect.as(api.cancel(asked, cause), DONE)
   }),
 
-  /**
-   * A `POST`, because a line does work: `/mode` records a Run and `/undo`
-   * reverses a write, so asking twice is two of each — which is what the
-   * idempotency key already answers for every other write here.
-   */
-  named("POST", COMMAND, (name, { body, commands, directory }) => {
-    const line = lineIn(body)
-    if (line === undefined) return refusing
-    return commanded(commands, sessionID(name), line, directory())
-  }),
+  on(CALLS.command, ({ commands, directory }, name, line) =>
+    commanded(commands, sessionID(name), line, directory()),
+  ),
 
-  /**
-   * The one method that names a Session and carries nothing. Putting a
-   * Session away acts on the path and on no body, and asking twice leaves it
-   * exactly where asking once left it — which is what tells a `DELETE` from
-   * the `POST`s above, where a second ask would be a second Run.
-   */
-  named("DELETE", SESSION, (name) => {
+  on(CALLS.retire, (_asked, name) => {
     const asked = sessionID(name)
     return (api) => Effect.as(api.retire(asked), DONE)
   }),
 
-  named("PUT", MODEL, (name, { body, catalog }) => {
-    const model = modelIn(body)
-    if (model === undefined) return refusing
+  on(CALLS.setModel, ({ catalog }, name, model) => {
     const asked = sessionID(name)
     return (api) =>
       Effect.flatMap(catalog, (state) =>
@@ -391,14 +358,7 @@ const ROUTES: readonly Row[] = [
       )
   }),
 
-  // A `RequestID` is not a `SessionID`, so this is the one write that sits
-  // outside the listing. The id is the tool call's, which the `tool_call`
-  // record named before anybody was asked.
-  named("PUT", REQUEST, (name, { body }) => {
-    const given = answerIn(body)
-    if (given === undefined) return refusing
-    return (api) => Effect.as(api.answer(name, given), DONE)
-  }),
+  on(CALLS.answer, (_asked, name, given) => (api) => Effect.as(api.answer(name, given), DONE)),
 ]
 
 /**
@@ -428,14 +388,8 @@ export const routeFor = (
 
   for (const row of ROUTES) {
     if (row.method !== method) continue
-
-    if ("path" in row) {
-      if (row.path === path) return row.route(asked)
-      continue
-    }
-
-    const segment = askedFor(row.shape, path)
-    if (segment !== undefined) return row.route(segment, asked)
+    const named = askedFor(row.shape, path)
+    if (named !== undefined) return row.route(named, asked)
   }
 
   return undefined
@@ -475,7 +429,7 @@ export const watchFor = (
 ): Watching | undefined => {
   if (method !== "GET") return undefined
 
-  const watching = askedFor(WATCH, path)
+  const watching = askedFor(WATCH_AT, path)
   if (watching === undefined) return undefined
 
   const asked = sessionID(watching)

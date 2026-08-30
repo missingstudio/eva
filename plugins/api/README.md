@@ -256,38 +256,46 @@ about would be refused again however often it is sent.
   `ctx.catalog.get` from its own context, because `PluginContext` extends
   `Domains` — so the wire reaches both without importing the plugins that fill
   them.
-- `apiWire(api, directory, commands, catalog)` — the request handler, answering
-  from any filler of the Session API. It says whether it answered, so the
-  server that owns the socket can serve the page with what falls past it.
-- `routeFor(method, path, body, directory, commands, catalog)` — the route
-  table, as a pure function. The body arrives as a third argument the way
-  `watchFor` takes its Cursor, so a write route is still a description of an
-  answer and never a write itself; the directory arrives as a fourth, because
-  where the serving process is is a fact of that process and not of the
-  request; the commands arrive as a fifth and the Catalog as a sixth, each an
-  Effect rather than a list, because both are read at the moment a request asks
-  for them.
+- `apiWire(api, serving?)` — the request handler, answering from any filler of
+  the Session API. It says whether it answered, so the server that owns the
+  socket can serve the page with what falls past it.
+- `routeFor(method, path, body, serving?)` — the route table, as a pure
+  function. Each row is built from its own `Call`, so the method it answers,
+  the path it is matched on and both shapes come from the one place the half
+  that asks reads them too — and a body this wire cannot read is refused once,
+  where the row is built, rather than in every row that carries one. The body
+  arrives as a third argument the way `watchFor` takes its Cursor, so a write
+  route is still a description of an answer and never a write itself; the three
+  facts of the serving process arrive as a fourth, whole — where it is, which
+  command rows it loaded, and what its Catalog holds — because all three are
+  facts of that process and of no request, and the last two are Effects rather
+  than lists because both are read at the moment a request asks for them.
 - `watchFor(method, path, from)` — the same, for the one method that answers a
   stream. It is matched first, because a `Route` answers a body.
 - `API_PLUGIN`, `API_ROOT`, `SESSIONS`, `REQUESTS`, `MODELS`, `sessionPath(session)`,
   `modelPath(session)`, `watchPath(session)`, `cancelPath(session)`,
   `commandPath(session)`, `answerPath(request)` — the id and the paths, rooted
   so no address is built into the page.
-- `headerIn`/`headersOut`, `modelIn`/`modelOut`, `sessionIn`/`sessionOut`,
-  `modelRowIn`/`modelRowsOut`, `eventsIn`/`eventsOut` — one pair per shape: the
-  writer that spells it onto the wire and the reader that judges what arrived.
-  A writer spells its shape field by field and asserts the rest empty, so a
-  field the contract grows is a compile error in `wire.ts` rather than a
-  silent drop on the far side. `PickRow` is said again here so the page names
-  the row shape off this wire.
-- `Ran`, `ranIn`/`ranOut` — what running a line came to: the text it wrote,
-  and the Session it opened when it opened one.
-- `submitInputIn`/`submitInputOut`, `cancelCauseIn`/`cancelCauseOut`,
-  `answerIn`/`answerOut`, `locationIn`/`locationOut`, `lineIn`/`lineOut` — what
-  a body has to be to be a write, and the writer beside each reader. `modelIn`
-  reads both directions, because `model.set` sends back what `model.get`
-  answers, and `locationIn` is the one that accepts an absent body: only a
-  `location` that is there and is not a string refuses.
+- `Codec<A>` — one shape, both ways: `writes` spells it onto the wire and
+  `reads` judges what arrived. A writer spells its shape field by field and
+  asserts the rest empty, so a field the contract grows is a compile error in
+  `wire.ts` rather than a silent drop on the far side. A reader answers
+  nothing for what it cannot read, which is a refusal and never a partly
+  applied write. `nothing` is the pair for a call that carries or answers
+  none: the path is the whole of what a `DELETE` acts on, and the status is
+  the whole of what a write answers.
+- `Call<Req, Ans>` and `CALLS` — one row per call this wire carries: the
+  `method`, the path it is asked on (`at`), the path as the answering half
+  matches it (`shape`), and the two Codecs that cross it. Eleven rows, and
+  both halves read them: `routes.ts` maps a row to the Session API, the
+  Domains or the Catalog, and `client/transport.ts` maps the same row to a
+  read, a write, or a write that answers a value. The pairing used to live
+  nowhere — the half that answers picked the readers, the half that asks
+  picked the writers, and a method added to the contract cost three edits
+  with nothing to say when they drifted. `PickRow` and `Ran` are said again
+  here so the page and the terminal name both shapes off this wire.
+- `WATCH_AT` — the one path that answers frames rather than a body, so it is
+  in no row and is matched before the table.
 - `CURSOR`, `cursorIn(value)`, `IDEMPOTENCY`, `StreamFrame`, `frameOut(frame)`,
   `framesIn(text)`, `payloadIn(frame)`, `refusalOut(refused)`,
   `refusalIn(from, body)` — the headers and the stream's own shapes, read by
