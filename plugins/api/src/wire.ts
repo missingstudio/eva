@@ -150,6 +150,34 @@ export {
 } from "@missingstudio/eva-client-runtime"
 
 /**
+ * One shape, both ways. The writer spells it onto the wire and the reader
+ * judges what arrived, and they are one value because a wire that held them
+ * apart held no agreement — only two halves of one, in a bag, paired by
+ * whichever name a call site reached for.
+ *
+ * A reader answers nothing for a shape it cannot read. That is never a
+ * partially applied write: a shape half understood is worse than a call that
+ * says it was not understood.
+ */
+export interface Codec<A> {
+  readonly writes: (value: A) => unknown
+  readonly reads: (value: unknown) => A | undefined
+}
+
+const codec = <A>(
+  writes: (value: A) => unknown,
+  reads: (value: unknown) => A | undefined,
+): Codec<A> => ({ writes, reads })
+
+/**
+ * A call that carries nothing, and a call that answers nothing. The path is
+ * the whole of what a `DELETE` acts on, and the status is the whole of what a
+ * write answers — so there is nothing to spell and any body at all is one
+ * this can read.
+ */
+export const nothing: Codec<null> = { writes: () => null, reads: () => null }
+
+/**
  * What travels: the contract's own shapes, with nothing wrapped around them.
  * `SessionHeader` and `ModelRef` are JSON already, so the wire adds no
  * envelope and no rendering — and the half that reads a shape is the half
@@ -182,7 +210,7 @@ const booleanAt = (row: Record<string, unknown>, name: string): boolean | undefi
   return typeof found === "boolean" ? found : undefined
 }
 
-export const headerOut = (header: SessionHeader): Record<string, unknown> => {
+const headerOut = (header: SessionHeader): Record<string, unknown> => {
   const { id, title, updatedAt, retired, ...rest } = header
   void (rest satisfies Record<string, never>)
   return {
@@ -193,10 +221,10 @@ export const headerOut = (header: SessionHeader): Record<string, unknown> => {
   }
 }
 
-export const headersOut = (rows: readonly SessionHeader[]): readonly Record<string, unknown>[] =>
+const headersOut = (rows: readonly SessionHeader[]): readonly Record<string, unknown>[] =>
   rows.map(headerOut)
 
-export const headerIn = (value: unknown): SessionHeader | undefined => {
+const headerIn = (value: unknown): SessionHeader | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
   const id = stringAt(row, "id")
@@ -213,7 +241,7 @@ export const headerIn = (value: unknown): SessionHeader | undefined => {
   }
 }
 
-export const headersIn = (value: unknown): readonly SessionHeader[] | undefined => {
+const headersIn = (value: unknown): readonly SessionHeader[] | undefined => {
   if (!Array.isArray(value)) return undefined
   const listed: readonly unknown[] = value
 
@@ -228,13 +256,13 @@ export const headersIn = (value: unknown): readonly SessionHeader[] | undefined 
   return rows
 }
 
-export const modelOut = (model: ModelRef): Record<string, unknown> => {
+const modelOut = (model: ModelRef): Record<string, unknown> => {
   const { provider, model: name, ...rest } = model
   void (rest satisfies Record<string, never>)
   return { provider, model: name }
 }
 
-export const modelIn = (value: unknown): ModelRef | undefined => {
+const modelIn = (value: unknown): ModelRef | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
   const provider = stringAt(row, "provider")
@@ -314,7 +342,7 @@ const colorsIn = (value: unknown): Record<string, string> | undefined => {
   return colors
 }
 
-export const modelRowOut = (row: PickRow): Record<string, unknown> => {
+const modelRowOut = (row: PickRow): Record<string, unknown> => {
   const { id, label, detail, price, colors, ...rest } = row
   void (rest satisfies Record<string, never>)
   return {
@@ -326,10 +354,10 @@ export const modelRowOut = (row: PickRow): Record<string, unknown> => {
   }
 }
 
-export const modelRowsOut = (rows: readonly PickRow[]): readonly Record<string, unknown>[] =>
+const modelRowsOut = (rows: readonly PickRow[]): readonly Record<string, unknown>[] =>
   rows.map(modelRowOut)
 
-export const modelRowIn = (value: unknown): PickRow | undefined => {
+const modelRowIn = (value: unknown): PickRow | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
   const id = stringAt(row, "id")
@@ -348,7 +376,7 @@ export const modelRowIn = (value: unknown): PickRow | undefined => {
   }
 }
 
-export const modelRowsIn = (value: unknown): readonly PickRow[] | undefined => {
+const modelRowsIn = (value: unknown): readonly PickRow[] | undefined => {
   if (!Array.isArray(value)) return undefined
   const listed: readonly unknown[] = value
 
@@ -374,10 +402,10 @@ export const modelRowsIn = (value: unknown): readonly PickRow[] | undefined => {
  * only a `location` that is there and is not a string — the one disagreement
  * about a shape that this side can really see.
  */
-export const locationOut = (location: string | undefined): Record<string, unknown> =>
-  location === undefined ? {} : { location }
+const locationOut = (opening: { readonly location?: string }): Record<string, unknown> =>
+  opening.location === undefined ? {} : { location: opening.location }
 
-export const locationIn = (value: unknown): { readonly location?: string } | undefined => {
+const locationIn = (value: unknown): { readonly location?: string } | undefined => {
   if (value === undefined) return {}
   const row = objectIn(value)
   if (row === undefined) return undefined
@@ -388,9 +416,9 @@ export const locationIn = (value: unknown): { readonly location?: string } | und
 
 // The Session a `create` opened. It travels as the string it is, because a
 // `SessionID` is a branded string and an envelope around one would say no more.
-export const sessionOut = (session: SessionID): string => session
+const sessionOut = (session: SessionID): string => session
 
-export const sessionIn = (value: unknown): SessionID | undefined =>
+const sessionIn = (value: unknown): SessionID | undefined =>
   typeof value === "string" ? sessionID(value) : undefined
 
 /**
@@ -398,22 +426,22 @@ export const sessionIn = (value: unknown): SessionID | undefined =>
  * here: `dispatch` owns what a line means, and a wire that parsed one would
  * be a second parser to keep in step with the first.
  */
-export const lineOut = (line: string): Record<string, unknown> => ({ line })
+const lineOut = (line: string): Record<string, unknown> => ({ line })
 
-export const lineIn = (value: unknown): string | undefined => {
+const lineIn = (value: unknown): string | undefined => {
   const row = objectIn(value)
   return row === undefined ? undefined : stringAt(row, "line")
 }
 
 // What running a line came to. The shape is the sdk's, so the wire and the
 // door that draws the answer read one agreement.
-export const ranOut = (ran: Ran): Record<string, unknown> => {
+const ranOut = (ran: Ran): Record<string, unknown> => {
   const { wrote, selected, ...rest } = ran
   void (rest satisfies Record<string, never>)
   return { wrote, ...(selected === undefined ? {} : { selected }) }
 }
 
-export const ranIn = (value: unknown): Ran | undefined => {
+const ranIn = (value: unknown): Ran | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
   const wrote = stringAt(row, "wrote")
@@ -434,7 +462,7 @@ export const ranIn = (value: unknown): Ran | undefined => {
  * write. It is the rule `headersIn` keeps pointed the other way: a shape half
  * understood is worse than a call that says it was not understood.
  */
-export const submitInputOut = (input: SubmitInput): Record<string, unknown> => {
+const submitInputOut = (input: SubmitInput): Record<string, unknown> => {
   if (input.kind === "prompt") {
     const { kind, text, harness, ...rest } = input
     void (rest satisfies Record<string, never>)
@@ -445,7 +473,7 @@ export const submitInputOut = (input: SubmitInput): Record<string, unknown> => {
   return { kind, text, target }
 }
 
-export const submitInputIn = (value: unknown): SubmitInput | undefined => {
+const submitInputIn = (value: unknown): SubmitInput | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
   const text = stringAt(row, "text")
@@ -469,12 +497,12 @@ export const submitInputIn = (value: unknown): SubmitInput | undefined => {
 }
 
 // A cause travels as the word it is.
-export const cancelCauseOut = (cause: CancelCause): string => cause
+const cancelCauseOut = (cause: CancelCause): string => cause
 
-export const cancelCauseIn = (value: unknown): CancelCause | undefined =>
+const cancelCauseIn = (value: unknown): CancelCause | undefined =>
   value === "user" || value === "budget" || value === "shutdown" ? value : undefined
 
-export const answerOut = (answer: FrontendAnswer): Record<string, unknown> => {
+const answerOut = (answer: FrontendAnswer): Record<string, unknown> => {
   switch (answer.kind) {
     case "permission": {
       const { kind, optionId, ...rest } = answer
@@ -494,7 +522,7 @@ export const answerOut = (answer: FrontendAnswer): Record<string, unknown> => {
   }
 }
 
-export const answerIn = (value: unknown): FrontendAnswer | undefined => {
+const answerIn = (value: unknown): FrontendAnswer | undefined => {
   const row = objectIn(value)
   if (row === undefined) return undefined
 
@@ -520,10 +548,10 @@ export const answerIn = (value: unknown): FrontendAnswer | undefined => {
  * a page had, and a wrong one would read as the truth. `packages/schema`
  * carries the codec both ways, so there is no second one here.
  */
-export const eventsOut = (events: readonly Event[]): readonly Record<string, unknown>[] =>
+const eventsOut = (events: readonly Event[]): readonly Record<string, unknown>[] =>
   events.map(encode)
 
-export const eventsIn = (value: unknown): readonly Event[] | undefined => {
+const eventsIn = (value: unknown): readonly Event[] | undefined => {
   if (!Array.isArray(value)) return undefined
   const listed: readonly unknown[] = value
 
@@ -587,3 +615,189 @@ export const refusalIn = (from: Cursor, value: unknown): ResumeTooFarBehind | un
   const head = row["head"]
   return typeof head === "number" ? new ResumeTooFarBehind({ from, head }) : undefined
 }
+
+/**
+ * One call this wire carries: the method, the path it is asked on, and the
+ * two shapes that cross it.
+ *
+ * It is one row because it is one agreement. The paths and the shapes used to
+ * be spelled beside each other here and paired nowhere: the half that answers
+ * picked the readers, the half that asks picked the writers, and which writer
+ * belonged to which reader was a habit rather than a type. A method added to
+ * the contract cost an edit in this file, a row in `routes.ts` and a method in
+ * `client/transport.ts`, and nothing said when the three drifted.
+ *
+ * What a row does not carry is what the two halves really do differ about:
+ * the server's body — which reaches the Session API, or the Domains, or the
+ * Catalog — and the client's, which is a read, a write, or a write that
+ * answers a value. Those stay where they are. The agreement is here.
+ *
+ * `watch` is in no row. It answers frames rather than a body, so it has a
+ * table of its own that is matched first, and a Cursor rides a request header
+ * that no body call reads.
+ */
+export type Method = "GET" | "POST" | "PUT" | "DELETE"
+
+export interface Call<Req, Ans> {
+  readonly method: Method
+  /**
+   * The path, built from the name this call is about — a Session, or the
+   * request a person is answering. The two that are about the whole runtime
+   * are handed a name and ignore it.
+   */
+  readonly at: (name: string) => string
+  /**
+   * The same path, as the half that answers matches it. One segment at most,
+   * and it holds the name `at` was given.
+   */
+  readonly shape: RegExp
+  readonly body: Codec<Req>
+  readonly answer: Codec<Ans>
+}
+
+const call = <Req, Ans>(one: Call<Req, Ans>): Call<Req, Ans> => one
+
+/**
+ * Each path, as the half that answers matches it. They are stated rather than
+ * built from the writers above, because a writer percent-encodes the name it
+ * is given and a pattern fed through one comes out escaped.
+ *
+ * Every shape is anchored, so no row has to be tried before another: a path
+ * with no segment and a path with one are two different shapes, and neither
+ * matches the other.
+ */
+const LISTING = new RegExp(`^${SESSIONS}$`)
+const SESSION_AT = new RegExp(`^${SESSIONS}/([^/]+)$`)
+const MODEL_AT = new RegExp(`^${SESSIONS}/([^/]+)/model$`)
+const CANCEL_AT = new RegExp(`^${SESSIONS}/([^/]+)/cancel$`)
+const COMMAND_AT = new RegExp(`^${SESSIONS}/([^/]+)/command$`)
+const REQUEST_AT = new RegExp(`^${REQUESTS}/([^/]+)$`)
+const CATALOG = new RegExp(`^${MODELS}$`)
+
+/**
+ * The one path that answers frames rather than a body. It is matched before
+ * the table, so it stands here beside the rest rather than inside the half
+ * that matches it.
+ */
+export const WATCH_AT = new RegExp(`^${SESSIONS}/([^/]+)/watch$`)
+
+export const CALLS = {
+  list: call({
+    method: "GET",
+    at: () => SESSIONS,
+    shape: LISTING,
+    body: nothing,
+    answer: codec(headersOut, headersIn),
+  }),
+
+  /**
+   * The one write that answers a value. A browser holds no honest path, so
+   * the field is optional and an absent one means the directory the serving
+   * process is in.
+   */
+  create: call({
+    method: "POST",
+    at: () => SESSIONS,
+    shape: LISTING,
+    body: codec(locationOut, locationIn),
+    answer: codec(sessionOut, sessionIn),
+  }),
+
+  /**
+   * What travels is the record the Transcript folded, not the Transcript: the
+   * far side folds it again. A projection sent instead would be the only
+   * answer a page had, and a wrong one would read as the truth.
+   */
+  attach: call({
+    method: "GET",
+    at: sessionPath,
+    shape: SESSION_AT,
+    body: nothing,
+    answer: codec(eventsOut, eventsIn),
+  }),
+
+  submit: call({
+    method: "POST",
+    at: sessionPath,
+    shape: SESSION_AT,
+    body: codec(submitInputOut, submitInputIn),
+    answer: nothing,
+  }),
+
+  /**
+   * The one method that names a Session and carries nothing. Putting a
+   * Session away acts on the path and on no body, and asking twice leaves it
+   * exactly where asking once left it — which is what tells a `DELETE` from
+   * the `POST`s here, where a second ask would be a second Run.
+   */
+  retire: call({
+    method: "DELETE",
+    at: sessionPath,
+    shape: SESSION_AT,
+    body: nothing,
+    answer: nothing,
+  }),
+
+  cancel: call({
+    method: "POST",
+    at: cancelPath,
+    shape: CANCEL_AT,
+    body: codec(cancelCauseOut, cancelCauseIn),
+    answer: nothing,
+  }),
+
+  readModel: call({
+    method: "GET",
+    at: modelPath,
+    shape: MODEL_AT,
+    body: nothing,
+    answer: codec(modelOut, modelIn),
+  }),
+
+  setModel: call({
+    method: "PUT",
+    at: modelPath,
+    shape: MODEL_AT,
+    body: codec(modelOut, modelIn),
+    answer: nothing,
+  }),
+
+  /**
+   * A `RequestID` is not a `SessionID`, so this is the one call that sits
+   * outside the listing. The id is the tool call's, which the `tool_call`
+   * record named before anybody was asked.
+   */
+  answer: call({
+    method: "PUT",
+    at: answerPath,
+    shape: REQUEST_AT,
+    body: codec(answerOut, answerIn),
+    answer: nothing,
+  }),
+
+  /**
+   * A `POST`, because a line does work: `/mode` records a Run and `/undo`
+   * reverses a write, so asking twice is two of each — which is what the
+   * idempotency key already answers for every other write here.
+   */
+  command: call({
+    method: "POST",
+    at: commandPath,
+    shape: COMMAND_AT,
+    body: codec(lineOut, lineIn),
+    answer: codec(ranOut, ranIn),
+  }),
+
+  /**
+   * The one read on this wire that is no Session API call at all. A model is
+   * a fact of the build and not of a Session, so the rows are read once and
+   * every Session on this runtime is offered the same ones.
+   */
+  models: call({
+    method: "GET",
+    at: () => MODELS,
+    shape: CATALOG,
+    body: nothing,
+    answer: codec(modelRowsOut, modelRowsIn),
+  }),
+} as const

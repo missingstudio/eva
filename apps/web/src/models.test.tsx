@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { modelRowsIn, readModels, type PickRow, type Request } from "@missingstudio/eva-api/client"
+import { CALLS, readModels, type PickRow, type Request } from "@missingstudio/eva-api/client"
 import { modelRows, type CatalogState, type ModelInfo } from "@missingstudio/eva-sdk"
 import { Effect } from "effect"
 import { act } from "react"
@@ -198,7 +198,7 @@ describe("the model picker", () => {
   // that same state rather than an empty listing it invented.
   it("has no rows when nothing on the far side answered any", async () => {
     expect(await Effect.runPromise(readModels({ request: answering("not rows") }))).toBeUndefined()
-    expect(modelRowsIn([{ label: "a row with no id" }])).toBeUndefined()
+    expect(CALLS.models.answer.reads([{ label: "a row with no id" }])).toBeUndefined()
   })
 
   /**
