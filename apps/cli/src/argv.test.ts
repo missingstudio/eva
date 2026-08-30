@@ -341,6 +341,31 @@ describe("eva attach", () => {
   })
 })
 
+/**
+ * Two spellings serve the page and they are not the same run, so the help
+ * says which is which: one runs beside the terminal, the other runs no
+ * terminal at all. A reader picks from these two lines and nothing else.
+ */
+describe("what the help says about the two --web spellings", () => {
+  it("says the root flag runs the page beside the terminal", () => {
+    expect(ran(["--help"]).out).toContain("run the page beside the terminal")
+  })
+
+  it("says the verb serves the page and its API with no terminal", () => {
+    const found = ran(["serve", "--help"])
+    expect(found.out).toContain("serve the page and its API, with no terminal")
+    expect(found.out).toContain("serve a surface with no terminal")
+  })
+
+  // The pipe answers once and exits, so it has no terminal to put a page
+  // beside — and the refusal names the spelling that does serve one.
+  it("sends --print --web to the spelling that runs no terminal", () => {
+    expect(ran(["--print", "hi", "--web"]).err).toContain(
+      "`eva serve --web` serves the page with no terminal",
+    )
+  })
+})
+
 describe("eva --web", () => {
   it("runs the page beside the terminal, and leaves the bind to the surface", () => {
     expect(ran(["--web"]).invocation).toEqual({ kind: "interactive", overlays: {}, web: true })

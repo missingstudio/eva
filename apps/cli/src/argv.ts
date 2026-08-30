@@ -40,7 +40,12 @@ export type Invocation =
    */
   | { readonly kind: "attach"; readonly url: string; readonly overlays: Overlays }
   | { readonly kind: "print"; readonly prompt: string; readonly overlays: Overlays }
-  | { readonly kind: "showConfig"; readonly overlays: Overlays }
+  /**
+   * `eva config show`. With `--json` the answer is one object rather than a
+   * table, so the one command that says what a run would use can be read by a
+   * machine and pasted whole into a bug report.
+   */
+  | { readonly kind: "showConfig"; readonly overlays: Overlays; readonly json?: boolean }
   | { readonly kind: "trust" }
   | { readonly kind: "untrust" }
   /**
@@ -58,9 +63,13 @@ export type Invocation =
       readonly overlays: Overlays
     }
   /**
-   * `eva serve --web`. The posture is a flag rather than a verb per surface,
-   * so `--acp` at 9c adds a flag here and not a second verb — and until a
-   * posture is named there is nothing to serve, so it is refused.
+   * `eva serve --web`. The page and its API with no terminal, which is the one
+   * thing that tells it from `eva --web`: that spelling runs the page beside
+   * the terminal, and this one runs no terminal at all.
+   *
+   * The posture is a flag rather than a verb per surface, so `--acp` at a
+   * later stage adds a flag here and not a second verb — and until a posture
+   * is named there is nothing to serve, so it is refused.
    *
    * The bind is absent when the command line named none: the surface owns the
    * default, and a default in two places is two defaults.
@@ -318,7 +327,7 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
       command.error(
         speak({
           what: "`eva --print` answers once and exits",
-          next: "`eva serve --web` is the page on its own",
+          next: "`eva serve --web` serves the page with no terminal",
         }),
       )
     }
@@ -360,8 +369,8 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
 
   root
     .command("serve")
-    .description("serve a surface: --web is the page that watches a Session")
-    .option("--web", "serve the page that watches a Session")
+    .description("serve a surface with no terminal: --web is the page and its API")
+    .option("--web", "serve the page and its API, with no terminal")
     .option("--host <host>", `the address to bind, ${DEFAULT_HOST} by default`)
     .option("--port <port>", `the port to bind, ${DEFAULT_PORT} by default`)
     .action((_given: ServeOptions, command: Command) => {
@@ -420,8 +429,13 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
   config
     .command("show")
     .description("print the resolved config, and where each key came from")
-    .action((_options: RootOptions, command: Command) => {
-      record({ kind: "showConfig", overlays: overlaysOf(command.optsWithGlobals()) })
+    .option("--json", "print it as one object, with nothing shortened to fit a column")
+    .action((options: { json?: boolean }, command: Command) => {
+      record({
+        kind: "showConfig",
+        overlays: overlaysOf(command.optsWithGlobals()),
+        ...(options.json === true ? { json: true } : {}),
+      })
     })
 
   // A group, for the reason `config` is one, and `check` is the one thing in

@@ -35,6 +35,13 @@ export interface TuiOptions {
   // How a line runs, when it does not run in this process. Absent is the
   // local dispatch.
   readonly run?: Running
+  /**
+   * What another row has to say to the person here, read when this surface
+   * starts. `eva --web` binds the page before the terminal takes the screen,
+   * and the line that says where the page is has nowhere else to land: this
+   * renderer draws over the stream it would have been written to.
+   */
+  readonly notices?: () => readonly string[]
   // The banner names the build, and the app is what holds the manifest.
   readonly version: string
 }
@@ -93,7 +100,9 @@ export const makeTui = (options: TuiOptions): Plugin =>
                 ...(options.run === undefined ? {} : { run: options.run }),
                 version: options.version,
                 ...(chosen.colors === undefined ? {} : { theme: chosen.colors }),
-                notices: [...chosen.notices, ...picked.notices],
+                // The rows beside this one first: where the page bound is
+                // what the person asked for, and the rest is what went wrong.
+                notices: [...(options.notices?.() ?? []), ...chosen.notices, ...picked.notices],
               })
             }),
         })

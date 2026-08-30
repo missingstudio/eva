@@ -66,7 +66,7 @@ describe("a compatible namespace and the prices", () => {
  * `eva.provider.compatible` + `eva.auth`: an entry with `credential: true`
  * and a declared `env` mapping meet in the `CredentialStore`. Without the
  * mapping, `ENV_KEYS` cannot see a run-time-named provider however the
- * variable is exported, and `eva auth status` is blind to it.
+ * variable is exported, and the integration domain is blind to it.
  */
 describe("a compatible entry and the auth store", () => {
   const loaded: readonly Loaded[] = [

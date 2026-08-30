@@ -13,7 +13,7 @@ import { buildOf, type Build } from "@missingstudio/eva-boot"
 import type { Payload } from "@missingstudio/eva-schema"
 import { define } from "@missingstudio/eva-sdk"
 import { scripted } from "@missingstudio/eva-testkit"
-import { Effect } from "effect"
+import { Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 import { BUILT_IN, main, OPTIONAL } from "./index.js"
 import { VERSION } from "./version.js"
@@ -68,6 +68,19 @@ const freePort = (): Promise<number> =>
       probe.close(() => settle(port))
     })
   })
+
+/**
+ * What a run has said once it says it, or nothing after a second of asking.
+ * A door that holds the process is read while it runs, not after it.
+ */
+const until = async (read: () => string | undefined): Promise<string | undefined> => {
+  for (let tries = 0; tries < 100; tries += 1) {
+    const found = read()
+    if (found !== undefined) return found
+    await new Promise((wake) => setTimeout(wake, 10))
+  }
+  return undefined
+}
 
 const listening = (port: number): Promise<boolean> =>
   new Promise((settle) => {
@@ -319,6 +332,52 @@ describe("config show", () => {
 
     expect(found.out).toContain("model      anthropic/inline")
     expect(found.out).toContain("EVA_CONFIG_CONTENT")
+  })
+
+  /**
+   * The table is for a person and cuts a value at the column; `--json` is for
+   * a machine and cuts nothing, because this is the answer that goes whole
+   * into a bug report.
+   */
+  describe("--json", () => {
+    const sentence = "a prompt that is far longer than the table's column, and stays whole here"
+
+    it("answers with the config, the origins, the plugins, and the location", async () => {
+      const directory = scratch()
+      const path = write(directory, "user.yaml", `model: anthropic/one\ntheme: dusk\n`)
+
+      const found = await ran(["config", "show", "--json"], directory)
+      expect(found.code).toBe(0)
+
+      const answer = JSON.parse(found.out)
+      expect(Object.keys(answer)).toEqual(["config", "origins", "plugins", "location"])
+      expect(answer.config.model).toBe("anthropic/one")
+      expect(answer.origins.model).toBe(path)
+      expect(answer.plugins.map((plugin: { id: string }) => plugin.id)).toContain("eva.tui")
+      expect(answer.location).toMatchObject({ directory, trusted: false, ignored: [] })
+    })
+
+    it("keeps a value the table would cut at the column", async () => {
+      const directory = scratch()
+      write(directory, "user.yaml", `prompts:\n  say:\n    text: "${sentence}"\n`)
+
+      const table = await ran(["config", "show"], directory)
+      expect(table.out).toContain("…")
+      expect(table.out).not.toContain(sentence)
+
+      const found = await ran(["config", "show", "--json"], directory)
+      expect(JSON.parse(found.out).config.prompts.say.text).toBe(sentence)
+    })
+
+    it("names the command line as the origin of a flag, as the table does", async () => {
+      const directory = scratch()
+      write(directory, "user.yaml", "model: anthropic/one\n")
+
+      const found = await ran(["config", "show", "--json", "--model", "anthropic/two"], directory)
+      const answer = JSON.parse(found.out)
+      expect(answer.config.model).toBe("anthropic/two")
+      expect(answer.origins.model).toBe("the command line")
+    })
   })
 })
 
@@ -851,6 +910,40 @@ describe("eva attach", () => {
   })
 })
 
+/**
+ * The other spelling. Nothing holds a terminal here, so nothing draws over
+ * standard output and the address belongs on it: a person reads it there, and
+ * so does a script that started the page.
+ */
+describe("eva serve --web", () => {
+  it("prints the address it bound on standard output, and lets the port go", async () => {
+    const port = await freePort()
+    const directory = scratch()
+    write(directory, "user.yaml", contained(directory))
+    const out: string[] = []
+    const world: World = {
+      args: ["serve", "--web", "--port", String(port)],
+      env: { EVA_CONFIG: join(directory, "user.yaml") },
+      cwd: directory,
+      out: (text) => void out.push(text),
+      err: () => {},
+      stdin: () => undefined,
+    }
+
+    // A headless page ends when the process is stopped, so this reads what it
+    // said while it ran and then stops it the way a signal does.
+    const running = Effect.runFork(main(world))
+    const said = await until(() => {
+      const written = out.join("")
+      return written.includes(`http://127.0.0.1:${port}`) ? written : undefined
+    })
+    await Effect.runPromise(Fiber.interrupt(running))
+
+    expect(said).toContain(`http://127.0.0.1:${port}`)
+    expect(await listening(port)).toBe(false)
+  })
+})
+
 describe("eva --web", () => {
   /**
    * The terminal's id, answered by a row that looks and then ends. The
@@ -878,7 +971,7 @@ describe("eva --web", () => {
       }),
     })
 
-  it("binds the page beside the terminal, says where it is, and lets it go", async () => {
+  it("binds the page beside the terminal, keeps its line off the screen, and lets it go", async () => {
     const port = await freePort()
     const directory = scratch()
     write(directory, "user.yaml", contained(directory))
@@ -898,10 +991,16 @@ describe("eva --web", () => {
     )
 
     expect(found.code).toBe(0)
-    // The page says where it bound, on the stream the run writes to. The raw
-    // `eva.web` entry has no writer at all, so this is also what says the
-    // build was rebuilt the way `eva serve --web` rebuilds it.
-    expect(found.out).toContain(`http://127.0.0.1:${port}`)
+    /**
+     * Nothing about the bind reaches either stream: this door draws over
+     * them, so the page's line goes to the terminal's notice area instead.
+     * `apps/cli/src/surface.test.ts` › "lets the row it chose read what the
+     * row beside it said" holds the order that makes it readable, and
+     * `plugins/tui/src/surface.test.ts` › "shows a notice it was handed"
+     * holds what the surface does with it.
+     */
+    expect(found.out).not.toContain(`http://127.0.0.1:${port}`)
+    expect(found.err).not.toContain(`http://127.0.0.1:${port}`)
     // Bound while the terminal row still held the process, and gone with it.
     expect(held).toEqual([true])
     expect(await listening(port)).toBe(false)
@@ -931,5 +1030,88 @@ describe("eva --web", () => {
     expect(found.err).toContain("is not authenticated")
     expect(found.out).toBe("")
     expect(await listening(port)).toBe(false)
+  })
+})
+
+/**
+ * The pipe is a surface with one user and that user is a script, so every
+ * verb that answers writes exactly its answer to standard output and every
+ * word about the answer — a cost line, a finding, a fault — leaves on the
+ * error stream. It is asserted here per verb rather than trusted, because
+ * the rule holds only where somebody checked.
+ */
+describe("what a verb that answers writes to standard output", () => {
+  it("is the answer alone for eva --print, and the cost goes to the error stream", async () => {
+    const directory = scratch()
+    write(directory, "user.yaml", contained(directory))
+
+    const found = await ran(
+      ["--print", "say hello"],
+      directory,
+      {},
+      { build: buildWith(["the answer"]) },
+    )
+
+    expect(found.code).toBe(0)
+    expect(found.out).toBe("the answer")
+    expect(found.err).toContain("cost unreported")
+  })
+
+  it("is the last Run's text alone for eva run", async () => {
+    const directory = scratch()
+    write(
+      directory,
+      "user.yaml",
+      `${contained(directory)}
+prompts:
+  say:
+    text: "Answer: {{input}}"
+workflows:
+  one-step:
+    name: One step
+    steps:
+      - id: only
+        template: say
+        with:
+          input: input
+`,
+    )
+
+    const found = await ran(
+      ["run", "one-step"],
+      directory,
+      {},
+      { build: buildWith(["the only answer"]) },
+    )
+
+    expect(found.code).toBe(0)
+    expect(found.out).toBe("the only answer")
+  })
+
+  it("is one JSON object alone for eva config show --json, findings and all", async () => {
+    const directory = scratch()
+    // A key nothing reads, so the run has something to say while it answers.
+    write(directory, "user.yaml", "telemetry: true\n")
+
+    const found = await ran(["config", "show", "--json"], directory)
+
+    expect(found.code).toBe(0)
+    expect(found.err).toContain(`nothing reads "telemetry"`)
+    expect(found.out).toBe(`${JSON.stringify(JSON.parse(found.out), undefined, 2)}\n`)
+  })
+
+  it("is the verdict alone for eva policy check, and a fault goes to the error stream", async () => {
+    const directory = scratch()
+    const clean = write(directory, "clean.yaml", "policy:\n  rules:\n    - allow: [read]\n")
+    const broken = write(directory, "broken.yaml", "policy:\n  rules:\n    - allow: [[]]\n")
+
+    const passed = await ran(["policy", "check", clean], directory)
+    expect(passed.code).toBe(0)
+    expect(passed.err).toBe("")
+
+    const failed = await ran(["policy", "check", broken], directory)
+    expect(failed.code).toBe(1)
+    expect(failed.out).toBe("")
+    expect(failed.err).toContain("policy.rules.0.allow.0")
   })
 })

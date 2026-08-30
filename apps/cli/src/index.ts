@@ -8,9 +8,9 @@ import { refusal } from "@missingstudio/eva-web"
 import { Effect, Exit, Scope } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
 import { runAttach } from "./attach.js"
-import { attaching, BUILD, serving } from "./plugins.js"
+import { attaching, besideTerminal, BUILD, serving } from "./plugins.js"
 import { report, speak } from "./report.js"
-import { showConfig } from "./show.js"
+import { showConfig, showConfigJson } from "./show.js"
 import { runInteractive } from "./interactive.js"
 import { runPrint } from "@missingstudio/eva-print"
 import {
@@ -117,7 +117,9 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
     case "showConfig": {
       const settled = yield* resolveConfig(invocation.overlays, world)
       report(settled, world)
-      world.out(showConfig(settled))
+      // The findings stay on the error stream in both modes, so `--json`
+      // leaves one object on standard output and nothing else.
+      world.out(invocation.json === true ? showConfigJson(settled) : showConfig(settled))
       return 0
     }
 
@@ -191,10 +193,10 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
      */
     case "serve": {
       /**
-       * Refused before anything boots, so a bind that needs a token opens no
-       * port. `eva.web` owns the rule — what counts as local, and why stage
-       * 9b changes it — and this owns the exit code, because a surface row
-       * cannot fail: `start` has `never` in its error channel.
+       * Refused before anything boots, so a bind nobody can authenticate
+       * opens no port. `eva.web` owns the rule — what counts as local — and
+       * this owns the exit code, because a surface row cannot fail: `start`
+       * has `never` in its error channel.
        */
       const refused = refusal(invocation.host)
       if (refused !== undefined) {
@@ -219,11 +221,13 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
      *
      * `--web` runs the page beside it, in this process and against this
      * Session — which is what lets a request asked in the terminal be
-     * answered in the browser. The build is rebuilt exactly as `serve` rebuilds
-     * it, because the raw `eva.web` entry has no writer, no bind, and no
+     * answered in the browser. The build is rebuilt as `serve` rebuilds it,
+     * because the raw `eva.web` entry has no writer, no bind, and no
      * `eva.api` wire: a page started from it would bind on the defaults, say
-     * nothing, and answer no call. The bind is refused before anything boots,
-     * for the reason it is refused there.
+     * nothing, and answer no call. One thing differs: what the page says goes
+     * to the terminal's notice area, because this door draws over standard
+     * output. The bind is refused before anything boots, for the reason it is
+     * refused there.
      */
     case "interactive": {
       const refused = refusal(invocation.host)
@@ -236,7 +240,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
       return yield* door(
         world,
         invocation.overlays,
-        page ? serving(build, invocation, world.out) : build,
+        page ? besideTerminal(build, invocation) : build,
         (started) =>
           Effect.map(
             Effect.exit(withSignals(runInteractive(started, page ? [WEB_DOOR] : []))),
@@ -290,7 +294,13 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
               write: world.out,
             }),
           )
-          world.out(`\n${printed.costLine}\n`)
+          /**
+           * Cost is commentary and the answer is the artifact, so the two
+           * leave on different streams: `eva -p "x" | cat` emits the answer
+           * alone. It speaks in the one voice, because on a terminal it lands
+           * under the answer and a reader tells them apart by the prefix.
+           */
+          world.err(`\n${speak({ what: printed.costLine })}\n`)
           return exitOf(printed.claim, world)
         }),
       )

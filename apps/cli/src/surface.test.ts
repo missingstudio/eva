@@ -291,7 +291,7 @@ describe("the rows a door starts", () => {
     refuse: (known) => new Error(`no eva.web surface: ${known.join(", ")}`),
   }
 
-  it("starts the row the flag named beside the one it chose", async () => {
+  it("starts the row the flag named before the one it chose", async () => {
     const started: string[] = []
     const outcome = await withKernel(
       [noting("eva.tui", started), noting("eva.web", started)],
@@ -299,9 +299,52 @@ describe("the rows a door starts", () => {
     )
 
     // The interactive row is what the door returns, because it is the row
-    // whose end is the run's end.
+    // whose end is the run's end. It starts last, because the row beside it
+    // has something to tell the person sitting at it.
     expect(outcome).toStrictEqual(Exit.succeed("eva.tui"))
-    expect(started).toEqual(["eva.tui", "eva.web"])
+    expect(started).toEqual(["eva.web", "eva.tui"])
+  })
+
+  /**
+   * What that order buys, which is ticket 008: the page binds and says where,
+   * and the terminal reads it as it starts. The other way round the line is
+   * said to a screen a full-screen renderer is about to take.
+   */
+  it("lets the row it chose read what the row beside it said", async () => {
+    const said: string[] = []
+    const shown: string[] = []
+    const frontend = (id: string): Frontend => ({
+      id,
+      ask: () => Effect.succeed({ kind: "cancelled" }),
+      done: Effect.void,
+    })
+
+    const outcome = await withKernel(
+      [
+        row({
+          id: "eva.tui",
+          interactive: true,
+          start: () =>
+            Effect.sync(() => {
+              shown.push(...said)
+              return frontend("eva.tui")
+            }),
+        }),
+        row({
+          id: "eva.web",
+          interactive: true,
+          start: () =>
+            Effect.sync(() => {
+              said.push("http://127.0.0.1:7777")
+              return frontend("eva.web")
+            }),
+        }),
+      ],
+      (given) => runDoor(given, TERMINAL, [PAGE]),
+    )
+
+    expect(outcome).toStrictEqual(Exit.succeed("eva.tui"))
+    expect(shown).toEqual(["http://127.0.0.1:7777"])
   })
 
   // With no terminal in the build the page is the first interactive row, and

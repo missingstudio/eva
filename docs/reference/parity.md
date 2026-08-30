@@ -13,12 +13,18 @@ and section 5 says the rules a change to it holds.
 
 ## 1. The four doors
 
-| Door         | How it is started | What it is                                |
-| ------------ | ----------------- | ----------------------------------------- |
-| **Terminal** | `eva`             | `eva.tui`, drawing through `packages/tui` |
-| **Pipe**     | `eva -p`          | `eva.print` — one answer, then exit       |
-| **Page**     | `eva --web`       | `apps/web` over `eva.web`                 |
-| **Wire**     | `eva serve --web` | `eva.api`, which any program can curl     |
+| Door         | How it is started                   | What it is                                |
+| ------------ | ----------------------------------- | ----------------------------------------- |
+| **Terminal** | `eva`                               | `eva.tui`, drawing through `packages/tui` |
+| **Pipe**     | `eva -p`                            | `eva.print` — one answer, then exit       |
+| **Page**     | `eva --web`, beside the terminal    | `apps/web` over `eva.web`                 |
+| **Wire**     | `eva serve --web`, with no terminal | `eva.api`, which any program can curl     |
+
+The page has two spellings and they are not the same run. `eva --web` runs the
+page beside the terminal, in one process and against one Session, so a request
+asked in the terminal is answerable in the browser. `eva serve --web` serves
+the page and its API with no terminal, which is what a person runs when the
+browser, or a program with a socket, is the only door they want.
 
 One contract stands behind the four: the ten methods of `SessionAPI`
 ([../../packages/core/src/session-api.ts](../../packages/core/src/session-api.ts)).
