@@ -533,6 +533,38 @@ describe("a slash command", () => {
     expect(result.submitted).toEqual([])
   })
 
+  /**
+   * A command may write to the record: `/mode` records the mode it named, and
+   * the status line reads the mode off the record. So a command that ran is
+   * followed by a fold, and the screen carries the new fact before the next
+   * Run rather than after it.
+   */
+  it("reads the record again after a command ran, so what it recorded shows", async () => {
+    let record: ((payload: Payload) => Effect.Effect<void>) | undefined
+    const rows: readonly CommandInfo[] = [
+      {
+        id: "mode",
+        description: "names the permission mode this Session runs under",
+        run: (ctx) =>
+          Effect.gen(function* () {
+            if (record !== undefined) yield* record({ kind: "mode", mode: "read-only" })
+            ctx.write("mode: read-only\n")
+          }),
+      },
+    ]
+
+    const shown = await withSurface(rows, async (fake, spy) => {
+      record = spy.publish
+      fake.press("/mode read-only")
+      await settle()
+      return fake.last()?.session ?? []
+    })
+
+    expect(shown.flatMap((message) => message.blocks)).toContainEqual(
+      expect.objectContaining({ type: "mode", mode: "read-only" }),
+    )
+  })
+
   it("hands the rest of the line over as one argument", async () => {
     const seen: (string | undefined)[] = []
     const rows: readonly CommandInfo[] = [

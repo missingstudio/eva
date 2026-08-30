@@ -65,7 +65,9 @@ describe("the stream renderer", () => {
 
     const out = written.join("")
     expect(out).toContain("hello")
-    expect(out).toContain("ready · 10 in / 4 out · cost unreported · model")
+    // The spend the record does not carry draws no figure, and the mode is
+    // absent because this record holds none.
+    expect(out).toContain("ready · 10 in / 4 out · — · model")
     expect(out).toContain("› half typed")
   })
 

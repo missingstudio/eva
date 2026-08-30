@@ -14,8 +14,12 @@ import {
   SEPARATOR,
   SPINNER,
   statusLeft,
+  statusLine,
+  statusMode,
+  statusRight,
   toLines,
   workLine,
+  NO_FIGURE,
 } from "./frame.js"
 
 // The app knows the transcript only through Frame, so the test does too.
@@ -174,6 +178,76 @@ describe("toLines", () => {
       ["agent", "answer"],
       ["system", "took 1.2s"],
     ])
+  })
+})
+
+/**
+ * The four facts the line carries, and where each is read from. It is what a
+ * person looks at to answer "can this thing edit my files right now", so
+ * nothing on it is counted here and nothing absent is drawn as a figure.
+ */
+describe("the status line", () => {
+  const mode = (name: string): Message["blocks"][number] => ({
+    type: "mode",
+    mode: name,
+    reason: "a person named it",
+  })
+
+  const spent = (cost: string, over: Partial<Frame> = {}): Frame => ({
+    ...EMPTY,
+    ...over,
+    status: { ...EMPTY.status, model: "anthropic/one", cost, mode: "ready" },
+  })
+
+  it("says the mode the record last recorded", () => {
+    expect(statusMode(frameOf([message("agent", [mode("supervised")])]))).toBe("supervised")
+  })
+
+  // A mode is a fact with a position, so the last one written is the one in
+  // force — and the line moves with it, before the next tool call asks.
+  it("takes the last mode on the record, not the first", () => {
+    const record = frameOf([
+      message("agent", [mode("supervised")]),
+      message("human", [text("go on")]),
+      message("agent", [mode("read-only")]),
+    ])
+    expect(statusMode(record)).toBe("read-only")
+    expect(statusRight(record)).toContain("read-only")
+  })
+
+  // The page keeps the same rule: a mandate nobody wrote down is not the
+  // default mode, it is a mandate this surface cannot read.
+  it("says nothing about a mode the record does not carry", () => {
+    expect(statusMode(EMPTY)).toBe("")
+    expect(statusRight(EMPTY)).not.toContain("mode")
+  })
+
+  it("says a spend the record reported", () => {
+    expect(statusRight(spent("$0.0400"))).toContain("$0.0400")
+  })
+
+  // Absent is not zero. A Session nobody priced, and one that has not run,
+  // both have no figure — and neither is $0.00.
+  it.each(["", "cost unreported"])("draws no figure for a spend of %j", (cost) => {
+    expect(statusRight(spent(cost))).toContain(NO_FIGURE)
+    expect(statusRight(spent(cost))).not.toContain("$")
+  })
+
+  /**
+   * The whole line, in the shape a person reads: what the pipe is doing on
+   * the left, and the mode, the spend and the model on the right.
+   */
+  it("carries the model, the mode, the spend, and what the pipe is doing", () => {
+    const line = statusLine(spent("$0.0400", { session: [message("agent", [mode("supervised")])] }))
+    expect(line).toBe(`ready${SEPARATOR}supervised${SEPARATOR}$0.0400${SEPARATOR}anthropic/one`)
+  })
+
+  // The client runtime says the pipe is gone and the left half is where the
+  // surface puts it, so the line answers it without a command.
+  it("says the pipe is gone where it says what it is doing", () => {
+    expect(statusLeft({ ...EMPTY, status: { ...EMPTY.status, mode: "disconnected" } })).toBe(
+      "disconnected",
+    )
   })
 })
 

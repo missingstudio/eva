@@ -59,3 +59,25 @@ export const showConfig = (settled: ResolvedConfig): string => {
 
   return `${lines.join("\n")}\n`
 }
+
+/**
+ * The same answer, for a machine. Nothing is cut to a column, because this is
+ * the output that goes whole into a bug report: the config as it resolved,
+ * the source that last set each key, the plugin list a run would load, and
+ * where it read from.
+ */
+export const showConfigJson = (settled: ResolvedConfig): string =>
+  `${JSON.stringify(
+    {
+      config: settled.config.raw,
+      origins: settled.config.origin,
+      plugins: settled.plugins,
+      location: {
+        directory: settled.location.directory,
+        trusted: settled.location.trusted,
+        ignored: settled.location.ignored,
+      },
+    },
+    undefined,
+    2,
+  )}\n`

@@ -135,6 +135,31 @@ export const serving = (build: Build, bind: WebBind, write: (text: string) => vo
 }
 
 /**
+ * This build with the page beside the terminal.
+ *
+ * The two halves of one port are wired as `serving` wires them, and what the
+ * page says goes to the terminal's notice area instead of standard output: a
+ * full-screen renderer takes the screen the bind line would land on, so the
+ * one line that says where the page is would be drawn over. The rows beside
+ * the terminal start first, so the line is there to read when it starts.
+ *
+ * The terminal is rebuilt to read those lines, and only the row this app made
+ * is: a build carrying somebody else's terminal keeps the one it has, because
+ * nothing else has been told how to show them.
+ */
+export const besideTerminal = (build: Build, bind: WebBind): Build => {
+  const said: string[] = []
+  const rebuilt = serving(build, bind, (text) => void said.push(text.trimEnd()))
+  return buildOf(
+    rebuilt.all.map((plugin) =>
+      plugin === tui
+        ? makeTui({ renderer: RENDERER, version: VERSION, notices: () => said })
+        : plugin,
+    ),
+  )
+}
+
+/**
  * This build, with the terminal pointed at a runtime another process serves.
  *
  * Two things change and nothing else does. A line runs where the Domains are,

@@ -1,7 +1,21 @@
-import { boot } from "@missingstudio/eva-boot"
+import { boot, buildOf } from "@missingstudio/eva-boot"
+import { define } from "@missingstudio/eva-sdk"
+import { TUI_SURFACE } from "@missingstudio/eva-tui-surface"
+import { WEB_SURFACE } from "@missingstudio/eva-web"
 import { Effect, Exit, Scope } from "effect"
 import { describe, expect, it } from "vitest"
-import { ALL, BUILD, BUILT_IN, BUILT_IN_IDS, byID, uncarriedOf } from "./plugins.js"
+import {
+  ALL,
+  api,
+  besideTerminal,
+  BUILD,
+  BUILT_IN,
+  BUILT_IN_IDS,
+  byID,
+  tui,
+  uncarriedOf,
+  web,
+} from "./plugins.js"
 
 /**
  * The built-in table is what differs per artifact, so what it decides is
@@ -89,5 +103,46 @@ describe("what the report says and what the run loaded", () => {
 
   it("name exactly the ids this build has no implementation for", async () => {
     expect(await booted()).toEqual(["acme.nobody", "acme.also-nobody"])
+  })
+})
+
+/**
+ * `eva --web` runs the page beside the terminal, and the terminal draws over
+ * the stream the page would have said its address on. So this door rebuilds
+ * both halves: the page writes into a place the terminal reads, and the
+ * terminal is the row that knows how to show it.
+ */
+describe("the build eva --web runs", () => {
+  const ONE_PORT = { port: 7777 }
+
+  it("rebuilds the two halves of one port, as eva serve --web does", () => {
+    const built = besideTerminal(buildOf([...BUILT_IN]), ONE_PORT)
+    const ids = built.all.map((plugin) => plugin.id)
+
+    expect(ids).toContain(WEB_SURFACE)
+    expect(ids).toContain("eva.api")
+    expect(built.all.find((one) => one.id === WEB_SURFACE)).not.toBe(web)
+    expect(built.all.find((one) => one.id === "eva.api")).not.toBe(api)
+  })
+
+  // The row this app made is rebuilt, because it is the row that takes what
+  // the page said. Everything else in the table is left where it stands.
+  it("rebuilds the terminal this app made, and nothing else", () => {
+    const built = besideTerminal(buildOf([...BUILT_IN]), ONE_PORT)
+
+    expect(built.all.find((one) => one.id === TUI_SURFACE)).not.toBe(tui)
+    for (const plugin of BUILT_IN) {
+      if (plugin === tui || plugin === web || plugin === api) continue
+      expect(built.all).toContain(plugin)
+    }
+  })
+
+  // A build carrying somebody else's terminal keeps it: nothing else has
+  // been told how to show what another row said.
+  it("leaves a terminal this app did not make alone", () => {
+    const stranger = define({ id: TUI_SURFACE, effect: Effect.fn(TUI_SURFACE)(function* () {}) })
+    const built = besideTerminal(buildOf([...BUILT_IN.filter((one) => one !== tui), stranger]), {})
+
+    expect(built.all).toContain(stranger)
   })
 })

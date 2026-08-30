@@ -224,7 +224,8 @@ export interface CredentialRef {
   readonly id: string
   readonly mode: CredentialMode
   // An oauth credential that has expired and cannot renew. A turn under it
-  // fails with `auth_failed`, and `eva auth status` says which one.
+  // fails with `auth_failed`, and the integration domain reports it as not
+  // connected.
   readonly expired?: boolean
 }
 

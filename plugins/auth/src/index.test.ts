@@ -107,8 +107,8 @@ describe("the configured mode alone decides", () => {
     expect(found).toBe("sk-vllm")
   })
 
-  // `eva auth status` reads `store.list`, so a provider the mapping names is
-  // seen there too.
+  // The integration rows read `store.list`, so a provider the mapping names
+  // is seen there too.
   it("lists a run-time-named provider the keys mapping carries", async () => {
     const found = await Effect.runPromise(
       Effect.gen(function* () {
@@ -145,9 +145,9 @@ describe("the configured mode alone decides", () => {
 
 /**
  * The effect body, over the same boot a run uses. The four lines that build
- * `keys` from the declared `env` mapping, and the integration projection
- * `eva auth status` reads, run only inside the effect — a bug there used to
- * fail far from home, in a conformance suite about a different plugin.
+ * `keys` from the declared `env` mapping, and the integration projection a
+ * surface reads, run only inside the effect — a bug there used to fail far
+ * from home, in a conformance suite about a different plugin.
  */
 describe("the effect body over a real kernel", () => {
   // `eva.auth` reads the process environment, so the variable is exported
@@ -197,7 +197,7 @@ describe("the effect body over a real kernel", () => {
     expect(found).toBeUndefined()
   })
 
-  // The integration domain is the one source `eva auth status` reads.
+  // The integration domain is the one source a surface reads.
   it("projects a connected integration row for the run-time-named provider", async () => {
     const rows = await withVllmKey(() =>
       withPlugin(

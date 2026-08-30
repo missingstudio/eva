@@ -114,9 +114,11 @@ export const locally =
  * all of them.
  *
  * One Client, one scope, one wait. Every row starts against the same Client,
- * so two rows watch one Session rather than one each; the run ends when the
- * row that holds the person ends, because a page holds nobody to end it; and
- * the scope is what lets the rows beside it go.
+ * so two rows watch one Session rather than one each; the rows beside start
+ * before the one that holds the person, so what they have to say is there to
+ * be shown; the run ends when the row that holds the person ends, because a
+ * page holds nobody to end it; and the scope is what lets the rows beside
+ * it go.
  *
  * Where that Client comes from is the door's, because it is the one thing an
  * attached run does differently: the rows, the scope and the wait are the
@@ -134,11 +136,14 @@ export const runSurface = Effect.fn("cli.runSurface")(function* (
   const live: Frontend[] = []
   const reached = yield* open(scope, () => live)
   const client = reached.client
-  const frontend = yield* Effect.provideService(chosen.start(client), Scope.Scope, scope)
-  live.push(frontend)
+  // The rows beside start first, because one of them has something to tell the
+  // person at the chosen row — where `eva --web` bound the page — and the
+  // chosen row is the one that takes the screen it would have been said on.
   for (const row of beside) {
     live.push(yield* Effect.provideService(row.start(client), Scope.Scope, scope))
   }
+  const frontend = yield* Effect.provideService(chosen.start(client), Scope.Scope, scope)
+  live.push(frontend)
   // After the rows are live, because what this runs is how Eva reaches them.
   if (reached.reaching !== undefined) yield* Effect.forkIn(reached.reaching, scope)
   yield* Effect.ensuring(frontend.done, Scope.close(scope, Exit.void))

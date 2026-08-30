@@ -124,7 +124,8 @@ export const auth = define({
 
     /**
      * The integration domain projects how each provider would authenticate
-     * and whether that way is live, so `eva auth status` reads one source.
+     * and whether that way is live, so a surface that asks whether a key is
+     * there reads one source.
      *
      * An `api_key` row carries the variable it reads, from the merged map: a
      * provider named in config has a variable no static table holds, and a

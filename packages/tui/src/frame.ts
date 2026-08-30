@@ -122,11 +122,40 @@ export const bannerRows = (frame: Frame): readonly BannerRow[] => {
   return rows.map(([label, value]) => ({ label: label.padEnd(width), value }))
 }
 
-// While a Run is open the spinner has the left of the status line, because
-// it is the only thing there that changes.
+// A spend nobody reported is not zero, so the line says there is no figure
+// rather than showing one. A figure carries the currency, and that is what
+// tells a reported spend from an absent one.
+export const NO_FIGURE = "—"
+const spendText = (cost: string): string => (cost.includes("$") ? cost : NO_FIGURE)
+
+/**
+ * Which mode this Session runs under, read off the record and nowhere else.
+ *
+ * The last mode Block is the one in force, because a mode is a fact with a
+ * position on the record and every change writes another one. So the line
+ * moves as soon as `/mode` is recorded, which is before the next tool call
+ * asks under it. A record that holds none says nothing here: this line never
+ * guesses a mandate it cannot read, which is the rule the page keeps for the
+ * same fact.
+ */
+export const statusMode = (frame: Frame): string => {
+  const blocks = blockFold(frame.session).flatMap((turn) => turn.blocks)
+  return blocks.findLast((block) => block.kind === "mode")?.mode ?? ""
+}
+
+/**
+ * What the line says, and where each half of it comes from.
+ *
+ * Four facts and no others: which model, which mode, what this Session has
+ * spent, and whether the pipe is up. The left half is what changes while a
+ * Run is open — the spinner, and otherwise the state the client runtime is
+ * in, which is where a dropped pipe is said. The right half is the rest,
+ * each read from where it is decided rather than counted here: the mode off
+ * the record, and the model, the tokens and the spend off the fold.
+ */
 export const statusLeft = (frame: Frame): string => workLine(frame)?.text ?? frame.status.mode
 export const statusRight = (frame: Frame): string =>
-  joined([frame.status.tokens, frame.status.cost, frame.status.model])
+  joined([statusMode(frame), frame.status.tokens, spendText(frame.status.cost), frame.status.model])
 
 export const statusLine = (frame: Frame): string => joined([statusLeft(frame), statusRight(frame)])
 export const promptLine = (frame: Frame): string =>

@@ -97,8 +97,12 @@ export interface SurfaceDeps {
   // every Frame rather than as something the renderer was built with, which
   // is what lets a theme be chosen while the surface runs.
   readonly theme?: ThemeColors
-  // What went wrong on the way here — a theme that named no row, say. The
-  // surface shows them where the person is looking, until the first fold.
+  /**
+   * What the person has to read before the first fold: what went wrong on the
+   * way here — a theme that named no row, say — and what a row beside this one
+   * has to say, such as where `eva --web` bound the page. The surface shows
+   * them where the person is looking, until the first fold.
+   */
   readonly notices?: readonly string[]
   /**
    * How each provider would authenticate, and whether it is live. Read when
@@ -524,6 +528,10 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
     const outcome = yield* dispatch(yield* deps.commands, line, (parsed) => ({
       api: deps.client.api,
       session: state.session,
+      // Where a command that opens a Session opens it: this terminal's own
+      // directory. An attached terminal names none, because the work is on
+      // the machine the runtime is on.
+      ...(local === undefined ? {} : { location: local }),
       ...(parsed.argument === undefined ? {} : { argument: parsed.argument }),
       write: (text: string) => on({ kind: "said", text }),
       select: (next: SessionID) => on({ kind: "selected", session: next }),
@@ -685,7 +693,17 @@ export const makeSurface = Effect.fn("eva.tui.start")(function* (deps: SurfaceDe
       handle: Effect.fn("eva.tui.line")(function* (line: string) {
         const before = state.session
         const ran = yield* runCommand(line)
-        return { ran, moved: state.session !== before }
+        const moved = state.session !== before
+        /**
+         * A command that ran may have written to the record — `/mode` records
+         * the mode it named — and the status line reads the mode off the
+         * record. So the fold is read again rather than the screen keeping a
+         * fact that has changed until the next Run closes. A command that
+         * moved the Session is refolded by the fold that follows it, so it is
+         * not refolded twice.
+         */
+        if (ran && !moved) yield* refresh(true)
+        return { ran, moved }
       }),
       /**
        * A steer rides the Run that is open and returns at once, so it opens

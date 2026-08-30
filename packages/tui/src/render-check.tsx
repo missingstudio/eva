@@ -82,9 +82,11 @@ const CASES: readonly Case[] = [
     name: "the status line",
     frame: {
       ...EMPTY,
+      // The mode is read off the record, so the record is what carries one.
+      session: [{ author: "agent", blocks: [{ type: "mode", mode: "supervised" }] }],
       status: { model: "a-model", tokens: "10 in / 4 out", cost: "$0.0012", mode: "ready" },
     },
-    present: ["ready", "10 in / 4 out", "$0.0012", "a-model"],
+    present: ["ready", "supervised", "10 in / 4 out", "$0.0012", "a-model"],
   },
   {
     name: "the typed line",
