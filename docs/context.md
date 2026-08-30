@@ -222,6 +222,15 @@ then it records which fold rule wrote it — a cache that cannot say that is a
 listing that goes quietly wrong the first time the rule moves.
 _Avoid_: Metadata, summary, title (a title is one field of a Header)
 
+**Attention**:
+What a Session wants from a person, folded from its own Trace: `asking`,
+`blocked`, `moving`, `done`, or `idle`. It is derived and never a field, and it
+is one fold rather than a renderer's own rule, so a rail reading one Session
+and a view reading twenty order by the same answer. A blocked Attention carries
+only what the record carries — the words the Run gave, and the Error Class when
+something classified one.
+_Avoid_: Status, state (Client state is the pipe's), priority, urgency
+
 **Run**:
 One execution of a Unit against a Session, from the intent that opens it to the
 Claim that closes it. A Session resumed twice has several Runs.
@@ -499,6 +508,14 @@ qualified, because the bare word is a stage 13 domain.
 _Avoid_: Signal unqualified, Event (an Event is committed and numbered),
 update, message
 
+**Refusal**:
+What the far side said about a write it read and would not make. It is a
+decision and not a gap, so asking again never changes it — which is why a
+Surface says one where the person is looking rather than retrying it. One
+Surface holds one at a time, until the person says the next thing.
+_Avoid_: Error (a Refusal is answered, not failed), rejection, denial (a gate
+denies a tool call; a Refusal answers a write)
+
 **Prompt**:
 What a person asks Eva, and what a Harness is handed to answer it. It is the one
 shape that crosses the harness seam.
@@ -664,11 +681,19 @@ for names no key, and is said to the person rather than held.
 _Avoid_: shortcut, hotkey, keybinding (one word hiding the row/spelling split)
 
 **Note**:
-A line a Surface said of its own — command output, a notice, a question Eva
+A line a Surface said of its own — command output, a Notice, a question Eva
 asked. The record cannot rebuild one, so a Note never enters the fold, and it
 lasts until the conversation moves on: a Run opens, or the Surface follows
 another Session.
 _Avoid_: Message (that is the transcript's), system message, log line
+
+**Notice**:
+A Note about the Surface itself rather than about the conversation: where the
+page bound, or that the pipe is down. It has a region of its own — drawn
+whichever route or screen is up, and empty when there is nothing to say — and
+it lasts as long as the fact it reports rather than until the conversation
+moves on.
+_Avoid_: Banner, toast, alert, status (a Notice is words, never a state)
 
 **Surface**:
 A plugin that ships an interface a person or a program drives Eva through — the

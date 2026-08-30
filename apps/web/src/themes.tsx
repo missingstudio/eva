@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@missingstudio/ui/components/select"
-import { useEffect, useState } from "react"
+import { holding, useHeld } from "./held.js"
 
 /**
  * Eva's theme rows, on the page.
@@ -87,8 +87,7 @@ export const paint = (theme: ThemeInfo, root: HTMLElement): void => {
  * choice, and two copies of it would be a control that says one thing while
  * the page shows another.
  */
-let held: ThemeInfo = THEMES[0] as ThemeInfo
-const readers = new Set<(theme: ThemeInfo) => void>()
+const held = holding(THEMES[0] as ThemeInfo)
 
 // A row, by the name a person types or picks. Nothing for a name that is not
 // a row here, which is said rather than guessed at.
@@ -96,22 +95,11 @@ export const themeFor = (id: string | undefined): ThemeInfo | undefined =>
   THEMES.find((one) => one.id === id)
 
 export const choose = (theme: ThemeInfo): void => {
-  held = theme
   paint(theme, document.documentElement)
-  for (const wake of readers) wake(theme)
+  held.tell(theme)
 }
 
-export const useTheme = (): ThemeInfo => {
-  const [shown, setShown] = useState(held)
-
-  useEffect(() => {
-    readers.add(setShown)
-    setShown(held)
-    return () => void readers.delete(setShown)
-  }, [])
-
-  return shown
-}
+export const useTheme = (): ThemeInfo => useHeld(held)
 
 /**
  * `/theme`, answered on this page rather than where the Domains are.
