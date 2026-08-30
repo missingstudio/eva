@@ -486,6 +486,26 @@ through a Transport that also says whether the pipe is there, so the runtime
 never learns which side of a socket it is on.
 _Avoid_: Connection, channel, protocol (a protocol is what a Transport speaks)
 
+**Call**:
+One row of a wire: the method, the path it is asked on, and the two shapes
+that cross it — what the caller carries, and what it is answered with. A row is
+one agreement, held once, so the half that answers and the half that asks read
+one thing rather than each picking its own half out of a bag. What a row does
+not carry is what the two halves really do differ about: what the answering
+side reaches for, and whether the asking side reads, writes, or writes and
+reads a value back.
+_Avoid_: Endpoint, route (a route is one half's answer to a Call), method,
+handler
+
+**Codec**:
+One shape, both ways: the writer that spells it onto a wire and the reader that
+judges what arrived. They are one value because a wire that held them apart
+held no agreement. A reader answers nothing for what it cannot read, which is
+never a partly applied write — a shape half understood is worse than a call
+that says it was not understood.
+_Avoid_: Serializer, schema (a schema is `packages/schema`'s, and it validates
+records), parser, DTO
+
 **Transport health**:
 The one fact the client runtime reads about its Transport: `ready` or
 `disconnected`. It is about the pipe, never about the runtime — catching up
@@ -694,6 +714,26 @@ whichever route or screen is up, and empty when there is nothing to say — and
 it lasts as long as the fact it reports rather than until the conversation
 moves on.
 _Avoid_: Banner, toast, alert, status (a Notice is words, never a state)
+
+**Held**:
+One answer a Surface keeps for the whole of itself, and everything drawing it.
+A Surface draws one fact in more than one place — the last Refusal is under the
+composer and beside the control that was pressed — so it holds one answer and
+tells every reader at once. Two copies of one fact are a control that says one
+thing while the screen shows another. Where the answer comes from is the Held's
+too: a channel is opened once and never closed, and a call is in flight once
+however many readers ask at once.
+_Avoid_: Store, state, cache, atom, signal (a Run signal is what an open Run
+says)
+
+**Palette**:
+The panel over every Command a build carries, and the completion that follows
+the line into it. It offers rows and decides nothing: a row taken becomes the
+line a person would have typed, and that line goes out through the Console's
+own fold — so a row taken while a Run is open waits its turn, as a typed line
+does.
+_Avoid_: Menu, launcher, autocomplete (completion is one of its two doors, not
+another thing)
 
 **Surface**:
 A plugin that ships an interface a person or a program drives Eva through — the
