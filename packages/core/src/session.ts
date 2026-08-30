@@ -19,6 +19,16 @@ import type { ModelRef, Spec } from "./spec.js"
 import { executeToolGroup, refuseCall, type ToolGroupDeps, type ToolResult } from "./tool.js"
 
 /**
+ * The environment variable a provider reads its key from.
+ *
+ * `eva.auth` builds its own map from this rule and holds the map, because
+ * which providers there are is known when a run starts and not when this is
+ * written. A refusal here names the spelling that rule gives, so a person is
+ * told a variable to export rather than that something is missing.
+ */
+export const apiKeyVariable = (provider: string): string => `${provider.toUpperCase()}_API_KEY`
+
+/**
  * A whole Run, opened and closed in one act.
  *
  * Some Runs take no Provider Turn: the refusal a Harness reports before its
@@ -277,7 +287,7 @@ export const submit = Effect.fn("core.submit")(function* (deps: RunDeps, input: 
   if (!resolution.provider.available()) {
     return yield* close({
       result: "failed",
-      summary: `provider ${resolution.provider.id} has no usable credential`,
+      summary: `provider ${resolution.provider.id} has no usable credential; export ${apiKeyVariable(resolution.provider.id)}, or name an endpoint that needs none in config`,
       errorClass: "auth_failed",
     })
   }

@@ -1,5 +1,6 @@
 import { homedir } from "node:os"
 import {
+  apiKeyVariable,
   CredentialError,
   type Credential,
   type CredentialMode,
@@ -18,10 +19,14 @@ const OPTIONS = declare({ authStore: "string", env: "mapping" })
 
 export * from "./store.js"
 
-// One environment variable per provider, read only under `api_key` mode.
+/**
+ * One environment variable per provider, read only under `api_key` mode. The
+ * spelling is `eva-core`'s rule rather than a second table, so the refusal a
+ * Run reports and the variable this store reads cannot drift apart.
+ */
 export const ENV_KEYS: Readonly<Record<string, string>> = {
-  anthropic: "ANTHROPIC_API_KEY",
-  openai: "OPENAI_API_KEY",
+  anthropic: apiKeyVariable("anthropic"),
+  openai: apiKeyVariable("openai"),
 }
 
 /**
@@ -117,19 +122,28 @@ export const auth = define({
 
     yield* ctx.slot.credentialStore.provide(ctx.id, store)
 
-    // The integration domain projects how each provider would authenticate
-    // and whether that way is live, so `eva auth status` reads one source.
+    /**
+     * The integration domain projects how each provider would authenticate
+     * and whether that way is live, so `eva auth status` reads one source.
+     *
+     * An `api_key` row carries the variable it reads, from the merged map: a
+     * provider named in config has a variable no static table holds, and a
+     * surface that told a person to export the wrong one would be worse than
+     * one that said nothing.
+     */
     const connected = yield* store.list
     yield* ctx.integration.transform((draft) => {
       const ids = new Set([...Object.keys(keys), ...OAUTH_PROVIDERS])
       for (const id of ids) {
         const chosen = mode(id)
         const ref = connected.find((one) => one.id === id)
+        const variable = keys[id]
         draft.set({
           id: `${id}.${chosen}`,
           provider: id,
           mode: chosen,
           connected: ref !== undefined && ref.expired !== true,
+          ...(chosen === "api_key" && variable !== undefined ? { variable } : {}),
         })
       }
     })

@@ -7,12 +7,19 @@ import {
   type Method,
 } from "@missingstudio/eva-client-runtime"
 import { sessionID, type Payload, type SessionID } from "@missingstudio/eva-schema"
-import type { CommandInfo, Frontend, KeymapInfo, PickRow, Running } from "@missingstudio/eva-sdk"
+import type {
+  CommandInfo,
+  Frontend,
+  IntegrationInfo,
+  KeymapInfo,
+  PickRow,
+  Running,
+} from "@missingstudio/eva-sdk"
 import type { Frame, KeyPress, Renderer, ThemeColors } from "@missingstudio/eva-tui-core"
 import { Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 import { ARMED, ASKING, DISCONNECTED, SYNCHRONIZING } from "./console.js"
-import { makeSurface, TICK } from "./surface.js"
+import { makeSurface, TICK, type Where } from "./surface.js"
 
 // What a Run closes with. The surface reads the Claim off it; the record
 // keeps it.
@@ -175,6 +182,10 @@ const fakeApi = Effect.fn("test.api")(function* (racing = false): Effect.fn.Retu
 interface SurfaceOver {
   readonly keymap?: readonly KeymapInfo[]
   readonly notices?: readonly string[]
+  // How each provider would authenticate, as the auth plugin projects it.
+  readonly integrations?: readonly IntegrationInfo[]
+  // Where the work happens. An attached terminal names a runtime instead.
+  readonly where?: Where
   readonly theme?: ThemeColors
   // What the renderer under this surface can draw. A test that takes one
   // away is a pipe, where the same surface offers a command less.
@@ -208,8 +219,11 @@ const withSurface = <A>(
           renderer: fake.renderer,
           commands: Effect.succeed(commands),
           keymap: Effect.succeed(over.keymap ?? KEYMAP),
-          where: { kind: "directory", path: "/somewhere" },
+          where: over.where ?? { kind: "directory", path: "/somewhere" },
           version: "0.0.0",
+          ...(over.integrations === undefined
+            ? {}
+            : { integrations: Effect.succeed(over.integrations) }),
           ...(over.notices === undefined ? {} : { notices: over.notices }),
           ...(over.theme === undefined ? {} : { theme: over.theme }),
           ...(over.settle === undefined ? {} : { settle: over.settle }),
@@ -1256,6 +1270,63 @@ describe("a closed Run", () => {
     })
 
     expect(drawn?.session).toContainEqual(expect.objectContaining({ author: "human" }))
+  })
+})
+
+/**
+ * The key a Run needs, asked for before a prompt is spent. `MEMORY_MODEL`
+ * names the `fake` provider, so a row for `fake` is the row this Session
+ * would run against.
+ */
+describe("the credential preflight", () => {
+  const row = (over: Partial<IntegrationInfo> = {}): IntegrationInfo => ({
+    id: "fake.api_key",
+    provider: "fake",
+    mode: "api_key",
+    connected: false,
+    variable: "FAKE_API_KEY",
+    ...over,
+  })
+
+  const started = (over: SurfaceOver): Promise<string> =>
+    withSurface(
+      [],
+      async (fake) => {
+        await settle()
+        return fake.written()
+      },
+      over,
+    )
+
+  it("names the variable to export, and the way out that needs none", async () => {
+    const written = await started({ integrations: [row()] })
+
+    expect(written).toContain("no key for fake")
+    expect(written).toContain("export FAKE_API_KEY")
+    expect(written).toContain("Ollama")
+  })
+
+  it("says nothing when the provider is connected", async () => {
+    const written = await started({ integrations: [row({ connected: true })] })
+    expect(written).not.toContain("no key for")
+  })
+
+  // A compatible endpoint needs no key, so it projects no row and there is
+  // nothing to warn about. A warning here would be noise on every run.
+  it("says nothing about a provider that projects no row", async () => {
+    const written = await started({ integrations: [row({ provider: "anthropic" })] })
+    expect(written).not.toContain("no key for")
+  })
+
+  // The credentials that decide a Run are the serving process's, and this
+  // process's say nothing about them.
+  it("says nothing at an attached terminal", async () => {
+    const written = await started({
+      integrations: [row()],
+      where: { kind: "runtime", origin: "http://127.0.0.1:7777" },
+    })
+
+    expect(written).not.toContain("no key for")
   })
 })
 

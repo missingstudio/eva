@@ -29,11 +29,14 @@ export const isLocal = (host: string): boolean => {
   return LOOPBACK.has(address) || (isIPv4(address) && address.startsWith("127."))
 }
 
-const BIND_REFUSED = "refused: a non-local bind needs a token, and tokens arrive at 9b"
+// The refusal, as a person reads it. It says what the rule is and what to do
+// instead. It names no stage and no token plan: a roadmap is ours, and a
+// person at a refused bind can act on neither.
+const BIND_REFUSED = `a page on a non-local address is not authenticated, so it is refused; bind ${DEFAULT_HOST} instead`
 
 /**
- * Why this bind is refused, or nothing when it is local. A remote page needs a
- * token and stage 9b issues one, so a non-local bind is refused rather than
+ * Why this bind is refused, or nothing when it is local. A remote page has no
+ * way to authenticate a visitor, so a non-local bind is refused rather than
  * served unauthenticated. The posture opens no door either: `hosted` is a
  * tenancy and not a token.
  *

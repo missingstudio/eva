@@ -9,7 +9,7 @@ import { Effect, Exit, Scope } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
 import { runAttach } from "./attach.js"
 import { attaching, BUILD, serving } from "./plugins.js"
-import { report } from "./report.js"
+import { report, speak } from "./report.js"
 import { showConfig } from "./show.js"
 import { runInteractive } from "./interactive.js"
 import { runPrint } from "@missingstudio/eva-print"
@@ -71,7 +71,9 @@ const door = <A>(
  */
 const exitOf = (claim: Claim, world: World): number => {
   if (claim.result === "done") return 0
-  world.err(`${claim.summary}${claim.errorClass === undefined ? "" : ` (${claim.errorClass})`}\n`)
+  world.err(
+    `${speak({ what: `${claim.summary}${claim.errorClass === undefined ? "" : ` (${claim.errorClass})`}` })}\n`,
+  )
   return 1
 }
 
@@ -196,7 +198,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
        */
       const refused = refusal(invocation.host)
       if (refused !== undefined) {
-        world.err(`${refused}\n`)
+        world.err(`${speak({ what: refused })}\n`)
         return 1
       }
 
@@ -226,7 +228,7 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
     case "interactive": {
       const refused = refusal(invocation.host)
       if (refused !== undefined) {
-        world.err(`${refused}\n`)
+        world.err(`${speak({ what: refused })}\n`)
         return 1
       }
 

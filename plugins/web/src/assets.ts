@@ -1,5 +1,5 @@
 import { existsSync, statSync } from "node:fs"
-import { extname, resolve, sep } from "node:path"
+import { basename, extname, resolve, sep } from "node:path"
 
 /**
  * The media types the build emits, and no others. A type nothing serves is a
@@ -28,12 +28,30 @@ const isFile = (path: string): boolean => existsSync(path) && statSync(path).isF
 export const hasPage = (root: string): boolean => isFile(resolve(root, "index.html"))
 
 /**
- * A build that has not run, said plainly and with the command that fixes it.
+ * Whether this process runs from the source tree. A compiled binary is its own
+ * executable; from source the executable is the runtime that reads the tree.
+ */
+export const fromSource = (executable: string): boolean =>
+  RUNTIMES.includes(basename(executable, extname(executable)))
+
+// The executables a source run has. Anything else is a build somebody
+// installed, which carries no workspace and no build tool.
+const RUNTIMES: readonly string[] = ["bun", "node"]
+
+/**
+ * A build that has not run, said plainly and with the step that fixes it.
  * `eva.web` serves assets it did not build, so an empty tree is a step
  * nobody took — and a surface that answers every request with 404 reads as
  * broken rather than unbuilt.
+ *
+ * The build command is named only to a person who has it. Somebody who
+ * installed a binary has no workspace to run it in, so they are told what
+ * this build carries instead of a command that cannot work.
  */
-export const unbuilt = (root: string): string => `no built page at ${root}; run \`vp run -r build\``
+export const unbuilt = (root: string, executable: string = process.execPath): string =>
+  fromSource(executable)
+    ? `no built page at ${root}; run \`vp run -r build\``
+    : `no built page at ${root}; this build carries no page, so use the terminal`
 
 // The request path, with the query and the fragment off it. A path that is
 // not valid percent-encoding is not a path this tree holds.

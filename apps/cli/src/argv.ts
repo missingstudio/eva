@@ -4,6 +4,7 @@ import type { Overlays } from "@missingstudio/eva-kernel"
 import { nearest } from "@missingstudio/eva-sdk"
 import { DEFAULT_HOST, DEFAULT_PORT } from "@missingstudio/eva-web"
 import { Command, CommanderError } from "commander"
+import { PREFIX, speak } from "./report.js"
 import { VERSION } from "./version.js"
 import type { World } from "./world.js"
 
@@ -125,8 +126,8 @@ const reportStray = (stray: readonly string[], world: World): void => {
     const meant = nearest(word, COMMANDS)
     world.err(
       meant === undefined
-        ? `eva: nothing reads the argument "${word}", a prompt goes after --print\n`
-        : `eva: no command ${word}, did you mean ${meant}?\n`,
+        ? `${speak({ what: `nothing reads the argument "${word}"`, next: "a prompt goes after --print" })}\n`
+        : `${speak({ what: `no command ${word}, did you mean ${meant}?` })}\n`,
     )
   }
 }
@@ -150,7 +151,7 @@ const inputOf = (
     try {
       return readFileSync(resolve(world.cwd, path), "utf8")
     } catch {
-      return command.error(`eva run cannot read ${path}`)
+      return command.error(`\`eva run\` cannot read ${path}`)
     }
   }
 
@@ -165,7 +166,10 @@ const inputOf = (
 
   if (routes.length > 1) {
     command.error(
-      `eva run takes one input; it got ${routes.map((route) => route.name).join(" and ")}`,
+      speak({
+        what: "`eva run` takes one input",
+        why: `it got ${routes.map((route) => route.name).join(" and ")}`,
+      }),
     )
   }
   return routes[0]?.read() ?? ""
@@ -187,7 +191,9 @@ const portOf = (value: string | undefined, command: Command, where: string): num
   const port = Number(value)
   return Number.isInteger(port) && port >= 0 && port <= 65535
     ? port
-    : command.error(`${where} takes a port from 0 to 65535; it got ${value}`)
+    : command.error(
+        speak({ what: `\`${where}\` takes a port from 0 to 65535`, why: `it got ${value}` }),
+      )
 }
 
 // The schemes a runtime is reachable at. `eva.web` binds a socket, so an
@@ -211,7 +217,11 @@ const runtimeAt = (value: string, command: Command): string => {
   }
   return read === undefined || !REACHABLE.includes(read.protocol)
     ? command.error(
-        `eva attach takes the address a runtime serves, like http://${DEFAULT_HOST}:${DEFAULT_PORT}; it got ${value}`,
+        speak({
+          what: "`eva attach` takes the address a runtime serves",
+          why: `it got ${value}`,
+          next: `an address reads like http://${DEFAULT_HOST}:${DEFAULT_PORT}`,
+        }),
       )
     : read.origin
 }
@@ -230,7 +240,12 @@ const pageOf = (
   const port = portOf(options.port, command, "eva")
   if (options.web !== true) {
     if (options.host !== undefined || port !== undefined) {
-      command.error("eva binds --host and --port with --web; on its own it serves no page")
+      command.error(
+        speak({
+          what: "`eva` binds --host and --port with --web",
+          why: "on its own it serves no page",
+        }),
+      )
     }
     return {}
   }
@@ -266,7 +281,17 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
     .configureOutput({
       writeOut: world.out,
       writeErr: world.err,
-      outputError: (text, write) => write(text),
+      /**
+       * Every parse error, in the one voice. Commander words its own with an
+       * `error:` marker and appends its suggestions on lines of their own;
+       * both reach a person as one message under one prefix.
+       */
+      outputError: (text, write) =>
+        write(
+          text.startsWith(PREFIX)
+            ? text
+            : `${speak({ what: text.replace(/^error: /, "").trimEnd() })}\n`,
+        ),
     })
     .showSuggestionAfterError()
     .allowExcessArguments()
@@ -290,7 +315,12 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
     // A page has nobody to hold it open here: `--print` answers once and
     // exits, and a flag that is passed over reads as a flag that was honoured.
     if (options.print !== undefined && options.web === true) {
-      command.error("eva --print answers once and exits; eva serve --web is the page on its own")
+      command.error(
+        speak({
+          what: "`eva --print` answers once and exits",
+          next: "`eva serve --web` is the page on its own",
+        }),
+      )
     }
     record(
       options.print === undefined
@@ -345,7 +375,7 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
       const options: ServeOptions = command.optsWithGlobals()
       // `--acp` is the next answer to "serve what", so a posture is named
       // rather than defaulted: a default would start a surface nobody chose.
-      if (options.web !== true) command.error("eva serve takes a posture: --web")
+      if (options.web !== true) command.error(speak({ what: "`eva serve` takes a posture: --web" }))
       const port = portOf(options.port, command, "eva serve")
       record({
         kind: "serve",
@@ -418,7 +448,7 @@ const program = (world: World, record: (invocation: Invocation) => void): Comman
       } catch {
         // `command.error` throws a CommanderError, which `parseArgv` turns
         // into an answered 1 — the route every parse error takes.
-        return command.error(`eva policy check cannot read ${path}`)
+        return command.error(`\`eva policy check\` cannot read ${path}`)
       }
       record({ kind: "policyCheck", source, path })
     })

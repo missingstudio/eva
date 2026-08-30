@@ -206,6 +206,10 @@ export interface IntegrationInfo {
   provider: string
   mode: "api_key" | "oauth"
   connected: boolean
+  // The environment variable an `api_key` row reads its key from. A surface
+  // names it, so a person is told what to export and not only that nothing
+  // is connected. Absent on an oauth row, which reads no variable.
+  variable?: string
 }
 
 // A release date on a model id. A response names the model it really ran,

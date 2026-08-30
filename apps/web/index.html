@@ -4,6 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Eva</title>
+    <meta
+      name="description"
+      content="Watch an Eva Session, say what is next, and see what it cost."
+    />
+    <!--
+      The mark is vendored once, in the ui package, and both sites already
+      serve that one directory. This page has no static directory of its own,
+      so it names the file and the build emits it.
+    -->
+    <link rel="icon" type="image/svg+xml" href="../../packages/ui/public/favicon.svg" />
     <!--
       The skin follows the OS. It is a class rather than a media query because
       the ui package's `dark` variant and every `dark:` utility in the imported
