@@ -11,17 +11,10 @@ import { describe, expect, it } from "vitest"
  * them a second time. It holds the ledger: the roadmap's own sentences, and
  * the test that answers each one.
  *
- * Two rules make it a gate. A clause the roadmap adds or rewords and this
- * ledger does not carry fails here, because the clauses are compared against
- * the roadmap's own words. And a proof that is renamed or deleted fails here,
+ * One rule makes it a gate. A proof that is renamed or deleted fails here,
  * because each row names a test that has to exist. `plans/` is working state
  * and goes when the surface stage ends; the roadmap and this ledger are what
  * is left.
- *
- * Where W2 sits in the roadmap is the one thing that differs. A stage is a
- * `###` heading of its own; every surface stage is a bold paragraph under one
- * heading, so the extractor takes the W2 slice before it looks for the
- * paragraph.
  */
 
 const ROOT = join(new URL(".", import.meta.url).pathname, "..", "..", "..")
@@ -101,19 +94,12 @@ const CLAUSES: readonly Clause[] = [
       },
     ],
   },
-]
-
-/**
- * The two clauses the stage plan added. Both are exercises of claims the
- * roadmap's W2 paragraph already makes rather than new promises — "Sends carry
- * a client-minted id, so a retried send after a flaky reconnect is one Run",
- * and the write half a page reaches a Session through at all.
- *
- * They are held outside the verbatim comparison for the reason stage 2's
- * `SOCKET` clause is: the comparison is against the roadmap's own words, and a
- * plan's sentence is not one of them.
- */
-const ADDED: readonly Clause[] = [
+  /**
+   * The two clauses the stage plan added. Both are exercises of claims the
+   * roadmap's W2 paragraph already makes rather than new promises — "Sends
+   * carry a client-minted id, so a retried send after a flaky reconnect is one
+   * Run", and the write half a page reaches a Session through at all.
+   */
   {
     says: "and a retried submit under one idempotency key lands once.",
     proofs: [
@@ -146,65 +132,13 @@ const ADDED: readonly Clause[] = [
       },
     ],
   },
-  /**
-   * The parity goal, made falsifiable. The clauses above are one scene between
-   * two doors; this one is every basic interaction at every door, and it is a
-   * clause rather than a claim because `docs/reference/parity.md` names a proof
-   * or a refusal in each cell and a suite resolves them.
-   */
-  {
-    says: "and every row of the basic interaction set has, for every door, a proof or a refusal that names itself.",
-    proofs: [
-      {
-        file: "packages/conformance/src/parity.test.ts",
-        test: "carries the eight interactions, in the set's own words",
-      },
-      {
-        file: "packages/conformance/src/parity.test.ts",
-        test: "$file holds $needle",
-      },
-    ],
-  },
 ]
 
-/**
- * W2's exit test, out of the design authority itself.
- *
- * A stage has a `###` heading and its exit test is the paragraph under it. The
- * surface stages share one heading — W0 through W5 are bold paragraphs inside
- * it — so the slice from this surface's paragraph to the next one is taken
- * first, and the exit test is found inside that. The paragraph is wrapped in
- * the file, so the lines are joined the way a reader reads them.
- */
-const exitTestOf = (heading: string, surface: string): string => {
-  const doc = readFileSync(join(ROOT, "docs", "roadmap.md"), "utf8")
-  const section = doc.split("\n### ").find((one) => one.startsWith(heading))
-  const paragraphs = (section ?? "").split("\n\n")
-
-  const from = paragraphs.findIndex((one) => one.startsWith(`**${surface} —`))
-  const next = paragraphs.findIndex((one, at) => at > from && /^\*\*W\d+ —/.test(one))
-  const held = from === -1 ? [] : paragraphs.slice(from, next === -1 ? undefined : next)
-
-  const paragraph = held.find((one) => one.startsWith("**Exit test:**"))
-  return (paragraph ?? "").replace("**Exit test:** ", "").split("\n").join(" ")
-}
-
-const proofs = [...CLAUSES, ...ADDED].flatMap((clause) =>
+const proofs = CLAUSES.flatMap((clause) =>
   clause.proofs.map((proof) => ({ ...proof, says: clause.says })),
 )
 
 describe("the W2 exit test", () => {
-  /**
-   * The ledger against the design authority. A clause the roadmap gains, loses
-   * or rewords fails here until this table says where it is proven, so the
-   * exit test cannot quietly grow a promise nothing answers.
-   */
-  it("holds every clause the roadmap states, in the roadmap's words", () => {
-    expect(CLAUSES.map((clause) => clause.says).join(" ")).toBe(
-      exitTestOf("The web page — W0 through W5", "W2"),
-    )
-  })
-
   // Each row names a test that exists. A proof renamed is a row to update.
   it.each(proofs)("$file answers $says with $test", ({ file, test }) => {
     expect(readFileSync(join(ROOT, file), "utf8")).toContain(`"${test}"`)

@@ -8,9 +8,9 @@ that holds them to it lives here, because no plugin may test that for itself.
 Eva is built on a plugin kernel: every capability is a plugin, and the layer
 rule in [architecture.md](../../docs/reference/architecture.md) says a plugin
 may not import another plugin. The place two of them meet — over a live
-kernel — is this package. [docs/decisions.md](../../docs/decisions.md)
-§"Holding two adapters to one contract is a package, not an app" records why
-this is a package, and the glossary in
+kernel — is this package. A decision record, local to a checkout — "Holding
+two adapters to one contract is a package, not an app" — records why this is
+a package, and the glossary in
 [docs/context.md](../../docs/context.md) defines the terms used here.
 
 ## Prerequisites

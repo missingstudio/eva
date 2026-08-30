@@ -8,7 +8,9 @@ It repeats nothing. [reference/toolchain.md](reference/toolchain.md) owns the
 build, the test runner, and CI's jobs. [../AGENTS.md](../AGENTS.md) owns the
 commit format and the branch names. [roadmap.md](roadmap.md) owns what each
 stage is and the exit test it can fail, and [plan.md](plan.md) owns the order
-the stages land in. [../plans](../plans) holds one ticket per plan.
+the stages land in. The tickets for the stage being built are working state
+and are not committed; [../AGENTS.md](../AGENTS.md) says where an agent writes
+one.
 
 ## Set up once
 
@@ -276,6 +278,7 @@ of them tracks it.
 | W1 — The wire and the page | done  | nothing                                                                |
 | 2 — Tools and the loop     | done  | nothing                                                                |
 | W2 — The page that prompts | done  | four parity cells name what is absent rather than a proof or a refusal |
+| UX — the baseline          | open  | the obligations the base layer has not adopted yet                     |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
@@ -298,7 +301,7 @@ W1's four paths — `packages/session-view`, the read half of `plugins/api`,
 in dependency order. The stage exits on the deterministic gate in `verify`:
 every clause of the roadmap's exit test is proven with no model in the room,
 and `packages/conformance/src/stage-2-exit.test.ts` is the ledger that says
-where each one is proven and fails when a clause or a proof moves.
+where each one is proven and fails when a proof moves.
 
 The **hook failure rule** is in the kernel: a boundary declares whether its
 hooks decide or observe, a deciding hook that throws denies the call it was
@@ -389,13 +392,11 @@ request is named by a tool call id, which repeats across Runs
 steer, stop, and a model picker — and `eva --web` runs the web row beside the
 terminal row in one process, so two doors race one gate. `create`, the Catalog's
 rows, and a command line all cross the wire, and the contract suite runs the
-ten methods over the socket. The stage exits on two deterministic gates in
+ten methods over the socket. The stage exits on the deterministic gate in
 `verify`. `packages/conformance/src/w2-exit.test.ts` is the ledger for the
 roadmap's exit test: it says where each clause is proven, and it fails when a
-clause or a proof moves. `packages/conformance/src/parity.test.ts` is the ledger
-for the parity goal: it reads the matrix in
-[reference/parity.md](reference/parity.md) and fails when a cell's proof is
-renamed or deleted.
+proof moves. [reference/parity.md](reference/parity.md) is the ledger for the
+parity goal, and it is written by hand.
 
 That matrix does not come out full, and it says so rather than rounding up.
 Four of its thirty-two cells name what is absent instead of a proof or a
@@ -411,3 +412,10 @@ with `/sessions` and opens the row it takes, `--model` is paired with `--print`,
 and what a Provider reported crosses the wire and folds back on the far side.
 The estimate stays behind: it is priced from a Catalog, and the far side holds
 none.
+
+**UX — the baseline.** Open. [ux-dx.md](ux-dx.md) designs how the base layer
+becomes good to use — the interaction model every door shares, the terminal
+and the page in detail, and the refactoring underneath. [plan.md](plan.md)
+holds the gate: until the base layer meets that standard, the next unit of
+work is one of its obligations rather than a stage from the waves. One landed
+already: the plugin walkthrough matches the tree and ends at registration.

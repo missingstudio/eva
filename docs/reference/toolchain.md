@@ -49,9 +49,9 @@ decisions rather than housekeeping.
 "catalog:"`, never a number, so a bump happens in one place and cannot half-land.
 
 **`effect` is pinned exactly, with no range.** v4 is a release candidate:
-`4.0.0-rc.109` is the current `rc` tag and `latest` on npm is still v3. OpenCode
-runs `4.0.0-beta.83` with a patch, which is a fair signal of how much the line
-still moves.
+`4.0.0-rc.109` is the current `rc` tag and `latest` on npm is still v3. One
+surveyed harness runs `4.0.0-beta.83` with a patch, which is a fair signal of
+how much the line still moves.
 
 **`@types/node` is pinned to the 22 line, not the newest.** `engines` accepts
 Node 22.13 as the oldest runtime — the release where `node:sqlite` stopped
@@ -262,8 +262,8 @@ when a test can hold the guarantee instead, write the test.
 
 `build` is the one step where CI and the desk part. `bun run build` is `vp run -r
 build`, and `apps/cli` holds the only `build` script in the tree, so CI packs the
-binary and nothing else. The desk's `vp run -r pack` packs all thirty-two
-packages. Nothing in CI does — `rehearse` compiles the binary and does not pack
+binary and nothing else. The desk's `vp run -r pack` packs every workspace
+package. Nothing in CI does — `rehearse` compiles the binary and does not pack
 the workspace either.
 
 `rehearse` is the one job that is not about the tree, and

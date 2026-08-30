@@ -9,7 +9,9 @@ not there.
 - **[`docs/context.md`](../context.md)** — the glossary. It is this repo's
   `CONTEXT.md` under its own name, and it is the single source of truth for
   what every term means.
-- **`docs/adr/`** — the decision records. Read the ones that touch the area you
+- **`docs/adr/`** — where a decision record is written. It is working state
+  and a clone does not carry it, so it is somewhere to write rather than
+  somewhere to send a reader. Read the ones you hold that touch the area you
   are about to work in.
 
 **Do not create `CONTEXT.md` at the repository root, and do not create a
@@ -44,9 +46,11 @@ become two different facts. A per-package `CONTEXT.md` would let `Session`,
 └── plugins/            everything that registers into an extension point
 ```
 
-`docs/adr/` is gitignored, like `plans/`. A decision that must survive belongs
-in a document that is committed — [roadmap.md](../roadmap.md) for what a stage
-must prove, [context.md](../context.md) for what a word means.
+`docs/adr/` is working state and is not committed, so a record there survives
+only in the checkout that wrote it. A decision that must survive belongs in a
+document that is committed — [roadmap.md](../roadmap.md) for what a stage must
+prove, [context.md](../context.md) for what a word means — and no committed
+document may point a reader at `docs/adr/` for it.
 
 ## Use the glossary's vocabulary
 
@@ -71,7 +75,7 @@ real gap, and `/domain-modeling` should close it.
 
 ## Flag conflicts with a decision record
 
-If output contradicts an existing record in `docs/adr/`, surface it rather than
+If output contradicts a decision record this checkout holds, surface it rather than
 silently overriding:
 
 > _Contradicts the record on event-sourced orders, but worth reopening

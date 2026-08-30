@@ -75,6 +75,12 @@ stage waits for; the log holds what is done; the join is the answer — and
 nothing in this document takes an edit when a stage lands, because the log
 takes it alone.
 
+One gate stands before every rule below: **the base layer's UX/DX
+obligations outrank new stages.** [ux-dx.md](ux-dx.md) is the standard they
+are held to. Until the base layer meets it, the next unit of work is one of
+those obligations rather than a stage from the waves. A factory nobody can
+use does not earn a next stage.
+
 Two standing rules order the unblocked set:
 
 - **The spine outranks the lanes.** An unblocked spine stage blocks more than
@@ -217,21 +223,3 @@ service business, and the only genuinely new directories are one package, one
 plugin pair, and three apps.** Everything else is an extension of something
 stage 0 or W0 already built. That is what "every interface is a plugin over
 one Session API" costs when it is true.
-
-## The plans in flight
-
-The order above says what is next. `plans/` says how, for the stage that is
-actually being built: a README with the stage's shape, then numbered tickets
-with a priority, an effort, and a dependency. A stage gets its directory when
-it is next, not when it is designed — decomposing a stage four waves out is
-planning against a tree four stages of change away.
-
-`plans/` is gitignored, so which directories a checkout holds is working
-state this document never lists — the execution log in
-[development.md](development.md) says which stage is being built and what is
-left of it. A deleted plan has no history to come back from, and what a
-finished stage's plans concluded survives only where it was written to count:
-an exit test in [roadmap.md](roadmap.md), a word in [context.md](context.md),
-a path here. That is the rule the directory is for: **a plan is working
-state, and anything that must outlive the work goes somewhere committed
-before the work ends.**

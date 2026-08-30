@@ -9,7 +9,7 @@ is where `@missingstudio/eva-kernel`'s machinery and the SDK's tables meet:
 the kernel builds a Domain, this package says which Domains Eva has. The
 glossary in [docs/context.md](../../docs/context.md) defines the terms,
 [architecture.md](../../docs/reference/architecture.md) holds the layer rule,
-and [docs/decisions.md](../../docs/decisions.md) records why the assembly is
+and a decision record, local to a checkout, records why the assembly is
 a package rather than a file in an app — a second app would have copied it.
 
 ## Prerequisites

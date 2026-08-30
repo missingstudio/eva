@@ -66,8 +66,8 @@ An update the schema does not define lands in `unknown` and is preserved,
 never dropped. The codec refuses every schema version but its own, so a
 version is a fact of the wire and of nothing else. And a Cost is never
 computed from tokens times a rate — `estimateTicks` prices the counters the
-trace already holds, and an Estimate never merges into `costTicks`;
-[docs/decisions.md](../../docs/decisions.md) records why.
+trace already holds, and an Estimate never merges into `costTicks`; a
+decision record, local to a checkout, records why.
 
 ## The fixtures
 

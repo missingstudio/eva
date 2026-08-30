@@ -147,8 +147,8 @@ another fold from the new position, so what arrives is one more repaint. While
 no Run is open there is nothing to synchronize, so `ready` follows
 `disconnected` directly and nothing is folded at anyone.
 
-Why each of those is the answer rather than another one is in
-[decisions.md](../../docs/decisions.md).
+Why each of those is the answer rather than another one is in a decision
+record, local to a checkout.
 
 ### The composer loop
 

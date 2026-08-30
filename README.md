@@ -12,7 +12,7 @@
   <a href="https://github.com/missingstudio/eva/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/missingstudio/eva/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/missingstudio/eva/actions/workflows/security.yml"><img alt="Security" src="https://github.com/missingstudio/eva/actions/workflows/security.yml/badge.svg"></a>
   <a href="https://github.com/missingstudio/eva/actions/workflows/audit.yml"><img alt="Audit" src="https://github.com/missingstudio/eva/actions/workflows/audit.yml/badge.svg"></a>
-  <a href="https://bun.sh/"><img alt="Bun 1.3" src="https://img.shields.io/badge/Bun-1.3-black?logo=bun&logoColor=white"></a>
+  <a href="https://bun.sh/"><img alt="Bun 1.4" src="https://img.shields.io/badge/Bun-1.4-black?logo=bun&logoColor=white"></a>
   <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue"></a>
 </p>
 
@@ -48,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/missingstudio/eva/main/scripts/inst
 # npm — a prebuilt binary for your platform, no runtime needed
 npm i -g @missingstudio/eva
 
-# From source, with Bun 1.3 or newer
+# From source, with Bun 1.4 or newer
 git clone git@github.com:missingstudio/eva.git && cd eva && bun install && bun run eva
 ```
 
@@ -75,16 +75,19 @@ gateway — is named in config instead, and its models join `/model`:
 
 ### Use it
 
-| Command                 | What it does                                              |
-| ----------------------- | --------------------------------------------------------- |
-| `eva`                   | Open the interactive surface                              |
-| `eva -p "<prompt>"`     | Answer once, print to stdout, exit                        |
-| `eva run <name> [file]` | Run a Workflow: one input in, the last Run's text out     |
-| `eva serve --web`       | Serve the page that watches a Session, at a loopback bind |
-| `eva trust`             | Read this directory's `.eva`, and record the grant        |
-| `eva untrust`           | Drop the grant for this directory                         |
-| `eva config show`       | Print the resolved config, and where each key came from   |
-| `eva --version`         | What you have                                             |
+| Command                 | What it does                                               |
+| ----------------------- | ---------------------------------------------------------- |
+| `eva`                   | Open the interactive surface                               |
+| `eva --web`             | The same terminal, with the page served beside it          |
+| `eva -p "<prompt>"`     | Answer once, print to stdout, exit                         |
+| `eva run <name> [file]` | Run a Workflow: one input in, the last Run's text out      |
+| `eva serve --web`       | Headless: serve the page and the API, at a loopback bind   |
+| `eva attach <url>`      | Drive a runtime another process serves, from this terminal |
+| `eva trust`             | Read this directory's `.eva`, and record the grant         |
+| `eva untrust`           | Drop the grant for this directory                          |
+| `eva config show`       | Print the resolved config, and where each key came from    |
+| `eva policy check`      | Validate a tool-policy rule set, for CI                    |
+| `eva --version`         | What you have                                              |
 
 A **Workflow** is a declared list of Steps — one Instruction and one model
 request each — where the file owns the control flow and the model fills the
@@ -103,7 +106,8 @@ One route at a time — two at once is refused with both named.
 [eva-workflow](plugins/workflow/README.md) is the whole surface.
 
 In the chat, type `/` for the local commands: `/help`, `/model`, `/cost`,
-`/clear`, and `/sessions`. They never reach a model, so they cost nothing. `eva -p` and
+`/clear`, `/sessions`, `/mode`, `/undo`, and `/theme`. They never reach a
+model, so they cost nothing. `eva -p` and
 `eva run` exit non-zero when the answer fails, which makes them safe in a
 pipeline.
 
@@ -125,6 +129,8 @@ every resolved key and where it came from.
 | ----------------------------------------------------------------- | --------------------------------------------- |
 | [docs/README.md](docs/README.md)                                  | The map — start here                          |
 | [docs/context.md](docs/context.md)                                | The glossary. One concept, one name           |
+| [docs/architecture.md](docs/architecture.md)                      | The shape of the whole system                 |
+| [docs/ux-dx.md](docs/ux-dx.md)                                    | How the base layer becomes good to use        |
 | [reference/architecture.md](docs/reference/architecture.md)       | The plugin model, the kernel, every interface |
 | [reference/writing-plugins.md](docs/reference/writing-plugins.md) | Author a plugin                               |
 | [reference/command-line.md](docs/reference/command-line.md)       | Every command and flag                        |

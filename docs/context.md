@@ -205,16 +205,6 @@ _Avoid_: Dry run (that is the act that produces one), patch, plan
 
 ## Execution and continuity
 
-Four systems Eva touches use `turn` for two different things, so Eva does not
-use the bare word at all.
-
-| System                | The whole prompt-to-stop arc | One model request and its tools |
-| --------------------- | ---------------------------- | ------------------------------- |
-| Agent Client Protocol | "prompt turn"                | not named                       |
-| DeepSeek Harness      | **turn**                     | **step**                        |
-| OpenCode              | Session Drain                | **Provider Turn**               |
-| Eva's Go tree         | **Run**                      | **Turn**                        |
-
 **Run**, **Step**, and **Provider Turn** below are the three unambiguous words
 that replace it.
 
@@ -235,9 +225,9 @@ _Avoid_: Metadata, summary, title (a title is one field of a Header)
 **Run**:
 One execution of a Unit against a Session, from the intent that opens it to the
 Claim that closes it. A Session resumed twice has several Runs.
-_Avoid_: Turn, invocation, execution, Session Drain (OpenCode's near-match —
-theirs is process-local with no durable identity), prompt turn (the protocol's
-word for it)
+_Avoid_: Turn, invocation, execution, Session Drain (a surveyed harness's
+near-match — theirs is process-local with no durable identity), prompt turn
+(the protocol's word for it)
 
 **Answer**:
 What a Harness produced, as a fold over the Trace: the Claim the Run that
@@ -387,10 +377,10 @@ _Avoid_: Offset, pointer, checkpoint
 
 **Harness**:
 Something that fills the harness domain: it takes a Prompt and drives it to a
-Stop Reason behind the Agent Client Protocol. Eva's native loop, Claude Code,
-Codex, OpenCode, and DeepSeek Harness all are — and so is the stage 1 Workflow,
-which has no agency at all. Every one is a plugin, and Eva's own holds no
-privileged position.
+Stop Reason behind the Agent Client Protocol. Eva's native Loop is one, every
+foreign harness Eva drives is one — and so is the stage 1 Workflow, which has
+no agency at all. Every one is a plugin, and Eva's own holds no privileged
+position.
 _Avoid_: Orchestrator, engine, backend
 
 **Prompting**:
@@ -410,8 +400,7 @@ command line), DAG, chain, script, recipe
 
 **Step**:
 One model request plus the tool executions its response causes; a Run holds zero
-or more. A Workflow's Step causes none, and a Repair is a Step. DeepSeek
-Harness's word, and precise.
+or more. A Workflow's Step causes none, and a Repair is a Step.
 _Avoid_: Turn unqualified, stage, task, job
 
 **Loop**:
@@ -746,28 +735,33 @@ is allowed.
 | Memory, Playbook                                    | Stage 6    |
 | Profile, Subagent, Branch, Rewind                   | Stage 7    |
 | Suite, Score, Gate                                  | Stage 8    |
-| Task, Job, Queue, Worker, Lease                     | Stage 9a   |
-| Mandate, Tenant, Attestation                        | Stage 9b   |
+| Task, Job, Queue, Worker, Lease, Daemon             | Stage 9a   |
+| Control plane, Fleet, Mandate, Tenant, Attestation  | Stage 9b   |
 | Adapter, Race, Conformance                          | Stage 9c   |
 | Skill, MCP                                          | Stage 9d   |
 | Merge queue, Review routing                         | Stage 10   |
+| Device grant, Relay                                 | M0 · M5    |
+| Signal, Sense                                       | Stage 13   |
 
 Two of these are worth naming early, because a system Eva drives already has
 them and we will want the same word:
 
-- **System Context** and **Context Source** — OpenCode's vocabulary for what
-  conditions a Provider Turn, and how one typed fact enters it.
+- **System Context** and **Context Source** — one surveyed harness's
+  vocabulary for what conditions a Provider Turn, and how one typed fact
+  enters it.
 - **Shadowing** — most-specific-wins name resolution, where a scoped
   contribution replaces its same-named global twin for one scope alone.
 
 ## Retired
 
-**Turn** (unqualified): It means the whole arc in the Agent Client Protocol and
-in DeepSeek Harness, and one provider exchange in OpenCode and in Eva's Go tree.
-Use Run, Step, or Provider Turn.
+**Turn** (unqualified): It means the whole arc in the Agent Client Protocol
+and in one surveyed harness, and one provider exchange in another and in Eva's
+Go tree. Use Run, Step, or Provider Turn.
 
 **Orchestrator**: It named two things that already have names — the Harness,
-which owns a tool-calling loop, and the Scheduler, which admits work to workers.
+which owns a tool-calling loop, and the Scheduler, which admits work to
+workers. The layer the field calls an orchestrator or a hub — the thing every
+daemon enrolls with — is the Control plane, stage 9b's word.
 
 **Service key**: Replaced by Slot. A Slot is late-bound and replaceable; a
 service key is fixed at build time.

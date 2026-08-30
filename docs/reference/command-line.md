@@ -50,6 +50,7 @@ eva --print <prompt>                answer once and exit
 eva --web                           run the page beside the terminal
 eva run <name> [file]               run a workflow: one input in, the last Run's text out
 eva serve --web                     serve the page that watches a Session
+eva attach <url>                    drive a runtime another process serves, from this terminal
 eva trust                           read this directory's .eva, and record the grant
 eva untrust                         drop the grant for this directory
 eva config show                     print the resolved config, and where each key came from

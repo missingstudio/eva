@@ -1990,9 +1990,7 @@ empty regions in one table are the whole argument for going plugin-first.
 - Architecture: [reference/architecture.md](reference/architecture.md)
 - Writing a plugin: [reference/writing-plugins.md](reference/writing-plugins.md)
 - Toolchain and CI: [reference/toolchain.md](reference/toolchain.md)
-- Decision records: `docs/adr/` — gitignored, local to a checkout
 - Product: [product.md](product.md)
-- Plans in flight: [../plans](../plans), for the stage being built
 - Where each stage stands: the execution log in [development.md](development.md)
 - Field evidence for Phase V — twenty-five harnesses read for what they did
   about interfaces, and in what order — lives in the survey directory beside

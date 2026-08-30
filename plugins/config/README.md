@@ -11,7 +11,7 @@ Eva is built on a plugin kernel: every capability is a plugin. The CLI loads
 this one last among the domain writers, because replay order is precedence and
 the person's config should win over the defaults a base plugin seeded. The
 glossary in [docs/context.md](../../docs/context.md) defines **Declaration**
-and **Finding**, and [docs/decisions.md](../../docs/decisions.md) records the
+and **Finding**, and a decision record, local to a checkout, records the
 layering and the trust grant — both of those belong to the kernel, not here.
 
 ## Prerequisites

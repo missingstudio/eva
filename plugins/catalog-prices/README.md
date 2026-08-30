@@ -10,7 +10,7 @@ Eva is built on a plugin kernel: every capability is a plugin. The glossary in
 is what a vendor publishes, a Cost is what a Provider says a request cost, and
 an Estimate is what a Run's counters come to at a Price. Only a Cost is
 written to the Trace — nothing this plugin produces reaches a record.
-[docs/decisions.md](../../docs/decisions.md) records why.
+A decision record, local to a checkout, records why.
 
 ## Prerequisites
 
