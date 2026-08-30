@@ -192,9 +192,10 @@ export default defineConfig({
       ),
       // apps/cli has no import rule on purpose: an app is the composition
       // root, and composing is the one job that needs every layer at once.
-      // The two sites are the exception. They compose nothing, and they must
-      // never pull the kernel into a browser bundle, so they may reach one
-      // package and no other. Generated reference arrives as MDX.
+      // The other three apps are the exception. They compose nothing, and they
+      // must never pull the kernel or boot into a browser bundle, so each
+      // reaches the packages its own surface needs and no other. The sites'
+      // generated reference arrives as MDX.
       layer(
         ["packages/ui/**"],
         ["@missingstudio/ui"],
@@ -213,6 +214,25 @@ export default defineConfig({
         ["apps/www/**", "apps/docs/**"],
         ["@missingstudio/ui", "@missingstudio/machine"],
         "a site imports ui and machine only — reference arrives as MDX",
+      ),
+      // The page is a client, not a composition root. It draws the contracts,
+      // holds the client runtime's handle, folds the record through the
+      // session view, and reaches the server through the client half of the
+      // two plugins that serve it. The kernel, boot, and a plugin's server
+      // half stay out of the browser bundle.
+      layer(
+        ["apps/web/**"],
+        [
+          "@missingstudio/eva-schema",
+          "@missingstudio/eva-core",
+          "@missingstudio/eva-sdk",
+          "@missingstudio/eva-client-runtime",
+          "@missingstudio/eva-session-view",
+          "@missingstudio/eva-api/client",
+          "@missingstudio/eva-web/client",
+          "@missingstudio/ui",
+        ],
+        "the web app imports the contracts, the client runtime, the session view, the two client halves, and ui",
       ),
       {
         files: ["apps/web/**", "apps/www/**", "apps/docs/**"],

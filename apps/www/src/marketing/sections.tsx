@@ -203,7 +203,7 @@ export function Hero() {
     <header className="border-graphite border-b">
       <div className="max-w-page relative mx-auto px-6 pt-20 pb-16 sm:pt-28">
         {/*
-          The tagline is one string in the ui package. The site never
+          The tagline is one string in the machine package. The site never
           restates it in its own words, so the headline splits that string
           rather than spelling the words out again.
 

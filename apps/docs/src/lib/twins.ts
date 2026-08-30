@@ -103,7 +103,7 @@ export const notFoundPath = "/404.html"
  * because `vercel.json` rewrites it onto the twin, not because it is written
  * a second time.
  *
- * The slugs are a parameter because they live in the ui package, which this
+ * The slugs are a parameter because they live in the machine package, which this
  * module may not import. `machine.test.ts` folds this same list, so the order
  * is checked rather than read out of the config's source.
  */
