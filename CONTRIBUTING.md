@@ -172,6 +172,14 @@ in it, a same-id `set` later in it wins, and the first interactive surface
 takes the interactive branch. Read the comments above the table before you
 choose a position.
 
+Six ids are the exception to "every capability is a plugin", and they matter
+when a plugin of yours would replace one. `eva.web`, `eva.api` and `eva.tui`
+are rebuilt by this app with one run's bind, writer and renderer.
+`eva.approval`, `eva.tool.policy` and `eva.catalog.models` have code the app
+calls whether or not the plugin loaded. `REQUIRED` in
+`apps/cli/src/plugins.ts` names all six and says what each one is for, and a
+test beside it keeps that list true.
+
 Now prove it:
 
 ```bash

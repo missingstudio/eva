@@ -396,7 +396,8 @@ ten methods over the socket. The stage exits on the deterministic gate in
 `verify`. `packages/conformance/src/w2-exit.test.ts` is the ledger for the
 roadmap's exit test: it says where each clause is proven, and it fails when a
 proof moves. [reference/parity.md](reference/parity.md) is the ledger for the
-parity goal, and it is written by hand.
+parity goal, and `packages/conformance/src/parity.test.ts` fails when one of
+its proofs moves in the same way.
 
 That matrix does not come out full, and it says so rather than rounding up.
 Four of the eight chat rows' thirty-two cells name what is absent instead of a
