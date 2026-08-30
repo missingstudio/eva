@@ -67,7 +67,7 @@ Domain by `eva.config`, and merge onto the colors a same-id row already had.
 
 It applies nothing at load: the `eva.tui` surface reads the Domain when it
 starts. It does not decide the palette the rich renderer falls back to —
-`DEFAULT_PALETTE` lives in `@missingstudio/eva-tui`, and
+`DEFAULT_PALETTE` lives in `@missingstudio/eva-tui-renderer`, and
 [packages/conformance/src/tui.test.ts](../../packages/conformance/src/tui.test.ts)
 holds the default theme to it, because a plugin does not import a plugin.
 
