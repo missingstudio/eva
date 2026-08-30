@@ -4,8 +4,8 @@ Eva has four doors, and one contract behind all of them. This page says what
 each door can do, and names the test that proves it. A cell that names neither
 a proof nor a refusal is a defect, and it is written here as one.
 
-The matrix holds thirty-two cells: twenty-seven are proven, one is a refusal
-that names itself, and four are neither. The four are the work this page
+The matrix holds forty-eight cells: thirty-one are proven, one is a refusal
+that names itself, and sixteen are neither. The sixteen are the work this page
 exists to find, and section 3 says what is absent in each.
 
 This page is written by hand. Every citation on it names a test in the tree,
@@ -50,6 +50,19 @@ Each cell reads one of three ways:
 | 6. Switch the model, choosing from what the Catalog knows                                                  | proven   | proven  | proven | proven |
 | 7. See what the Session spent                                                                              | proven   | proven  | proven | proven |
 | 8. Survive a dropped pipe: say so, catch up by Cursor, never duplicate                                     | proven   | none    | proven | proven |
+| 9. Run a Workflow, and read its one answer                                                                 | proven   | none    | none   | none   |
+| 10. Read the resolved config, and where each key came from                                                 | proven   | none    | none   | none   |
+| 11. Grant this directory trust, and drop the grant                                                         | proven   | none    | none   | none   |
+| 12. Check a rule set, and name the fault in a malformed one                                                | proven   | none    | none   | none   |
+
+Rows 1 to 8 are the chat. Rows 9 to 12 are the rest of a first hour, and they
+arrive with four proofs and twelve gaps: that ratio is the finding. The four
+are verbs of the command line — `eva run`, `eva config show`, `eva trust` and
+`eva policy check` — so the Terminal column grades the command line a person
+types beside the surface. `eva.tui` holds a command row for none of them, and
+each Terminal cell says so. No cell in the four is refused, because no door
+declares a refusal for any of them. A declared refusal costs less than an
+implementation, and it tells a person what this product does not do.
 
 ## 3. Where each cell is proven
 
@@ -165,6 +178,74 @@ drop is one Run, because the key is minted once:
 `plugins/api/src/routes.test.ts` › "answers the same key twice and opens one
 Run".
 
+### 9. Run a Workflow, and read its one answer
+
+| Door     | Verdict | Where it is proven                                                                                                                                                                                                                                                                                   | What is not covered                                                                                                                     |
+| -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Terminal | proven  | `apps/cli/src/main.test.ts` › "runs the named row and the last Run's text reaches the output exactly once" · `apps/cli/src/main.test.ts` › "writes one answer for a three-Step Workflow, not three" · `apps/cli/src/main.test.ts` › "runs the .eva workflow by its file name, over the --input file" | The surface. `eva run` is its own invocation, and `eva.tui` holds no command row that starts a Workflow.                                |
+| Pipe     | none    | —                                                                                                                                                                                                                                                                                                    | The selection. `eva -p` hands `runPrint` a Prompt and names no harness, so the default harness answers every line.                      |
+| Page     | none    | —                                                                                                                                                                                                                                                                                                    | The whole row. The composer submits a Prompt, and neither `apps/web` nor `packages/client-runtime` names a harness.                     |
+| Wire     | none    | `plugins/api/src/wire.test.ts` › "reads back a $kind as it was written"                                                                                                                                                                                                                              | The Run. A `SubmitInput` carries a harness name and the wire reads it back, and no test opens a Run under a named harness at this door. |
+
+A Workflow is a harness row. `eva.workflow` registers one per document under
+the `workflows` key, which `.eva/workflows/*.yaml` fills through the kernel's
+resource discovery, so a door that names a harness on a submit starts one. What
+the Workflow does once it runs is held a layer down:
+`packages/conformance/src/workflow-validator.test.ts` › "repairs exactly once,
+and both Verdicts reach the record", and
+`packages/conformance/src/workflow-prompt.test.ts` › "fills a Step's
+Instruction from the row eva.prompt projected".
+
+### 10. Read the resolved config, and where each key came from
+
+| Door     | Verdict | Where it is proven                                                                                                                                                                                                                                                          | What is not covered                                                                             |
+| -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Terminal | proven  | `apps/cli/src/main.test.ts` › "prints the model and the file each key came from" · `apps/cli/src/main.test.ts` › "names the command line, not the file, when a flag set the model" · `apps/cli/src/main.test.ts` › "answers even when the config names a plugin nobody has" | The surface. `eva config show` is its own verb, and `eva.tui` draws no config.                  |
+| Pipe     | none    | —                                                                                                                                                                                                                                                                           | The resolved config. `eva -p` says what the config sweep found and prints no key and no origin. |
+| Page     | none    | —                                                                                                                                                                                                                                                                           | The whole row. `apps/web` draws no config, and no route answers one.                            |
+| Wire     | none    | —                                                                                                                                                                                                                                                                           | The whole row. `SessionAPI` has ten methods and not one of them reads config.                   |
+
+Every door that boots a kernel does say what the sweep found: `door` in
+`apps/cli/src/index.ts` reports each Finding before the door does its own work,
+and `apps/cli/src/report.ts` owns the wording. The Findings are proven where
+they are made — `plugins/config/src/index.test.ts` › "names a key that reached
+nothing" — and what a person reads at the command line is
+`apps/cli/src/main.test.ts` › "names a key nothing reads against the file that
+set it".
+
+### 11. Grant this directory trust, and drop the grant
+
+| Door     | Verdict | Where it is proven                                                                                                                                                                                                                      | What is not covered                                                                                                                                                                |
+| -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terminal | proven  | `apps/cli/src/main.test.ts` › "records the directory beside the person's own config" · `apps/cli/src/main.test.ts` › "drops the grant again" · `apps/cli/src/main.test.ts` › "says nothing was written when there was no grant to drop" | The surface. `eva trust` answers before any config is read, and `eva.tui` holds no command row for it.                                                                             |
+| Pipe     | none    | —                                                                                                                                                                                                                                       | The grant. `eva -p` reads it and gives none.                                                                                                                                       |
+| Page     | none    | —                                                                                                                                                                                                                                       | The whole row. The grant is a file beside the person's own config, and a browser writes none.                                                                                      |
+| Wire     | none    | —                                                                                                                                                                                                                                       | The whole row, and the refusal for it. A grant taken over a socket widens what the serving process reads, so this is the cell where a declared refusal is worth more than a route. |
+
+The read half is a layer down and is proven there:
+`packages/kernel/src/resolution.test.ts` › "does not read a project directory
+without a grant, and says which", and
+`packages/kernel/src/resolution.test.ts` › "reads the project directory once
+the grant is there". What a person is told at the command line while the grant
+is missing is `apps/cli/src/main.test.ts` › "says which project file it did not
+read, and how to allow it".
+
+### 12. Check a rule set, and name the fault in a malformed one
+
+| Door     | Verdict | Where it is proven                                                                                                                                                                                                                                                                                                                                       | What is not covered                                                                                                           |
+| -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Terminal | proven  | `apps/cli/src/main.test.ts` › "exits nonzero on a malformed rule set, and names the fault" · `apps/cli/src/main.test.ts` › "names every fault, so a person fixes the file once" · `apps/cli/src/main.test.ts` › "counts the rules of a rule set it reads whole, and exits 0" · `apps/cli/src/main.test.ts` › "exits nonzero on a rule no call can reach" | The surface. `eva policy check` reads the rule set alone — no kernel, no Session — and `eva.tui` holds no command row for it. |
+| Pipe     | none    | —                                                                                                                                                                                                                                                                                                                                                        | The check. `eva -p` runs the gate and reads no rule set before it.                                                            |
+| Page     | none    | —                                                                                                                                                                                                                                                                                                                                                        | The whole row. `apps/web` reads no rule set, and no route answers one.                                                        |
+| Wire     | none    | —                                                                                                                                                                                                                                                                                                                                                        | The whole row. A rule set is a file of the serving process, and nothing on the wire asks it what its rules are.               |
+
+The gate the rule set feeds stands in front of the tools rather than in front
+of a surface, so it runs at every door:
+`packages/conformance/src/tool-policy.test.ts` › "refuses rm -rf /, and the
+command never reaches the Sandbox". The command and the gate read one file
+through one reader, so CI and a Run cannot disagree about what a malformed rule
+set is.
+
 ## 4. Two commands, reachable rather than re-implemented
 
 `/mode` and `/undo` are command rows, and they are not in the set above. A
@@ -191,7 +272,7 @@ filter at call time.
 
 No suite reads this page. A change to it holds five rules:
 
-1. The matrix carries the eight interactions, in the set's own words.
+1. The matrix carries the twelve interactions, in the set's own words.
 2. Every interaction has a section, and every section covers the four doors.
 3. A section's verdict is the verdict the matrix shows.
 4. A cell that reads `proven` or `refused` names at least one citation.

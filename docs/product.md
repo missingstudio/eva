@@ -44,9 +44,12 @@ A small kernel loads plugins, and every capability is one: the model
 providers, the tools, the harnesses, the trace stores, the permission gate,
 the surfaces, the themes. Anything you do not like, you replace — and the
 thing you replace it with sits in the same seam the original did, with no
-special case anywhere. The model layer is provider-agnostic the same way: an
-API key, a subscription login where a vendor permits one, or any compatible
-endpoint you name in config.
+special case anywhere. You replace it in this tree today: the Build is a
+closed import table, so a plugin is added or swapped in a checkout rather than
+installed, and distribution of a plugin from outside is a stage of its own.
+The model layer is provider-agnostic the same way: an API key, a subscription
+login where a vendor permits one, or any compatible endpoint you name in
+config.
 
 This is also how Eva grows without growing its core. A new surface, a new
 harness, a new check, a new store is a plugin in a seam that already exists.

@@ -33,8 +33,11 @@ a CLI and as a service you reach from anywhere; those are the same program.
 > **Eva is early.** Today it answers a prompt at a terminal and runs a declared
 > Workflow, on a plugin kernel: a small core loads plugins, and every capability
 > — the model, the surface, the trace, the themes, the Workflow itself — is one.
-> No agent yet, and nothing verifies work beyond the shape of it. Where this
-> goes next is the [roadmap](docs/roadmap.md).
+> Every one of them is in this repository. The Build is a closed import table,
+> no package here is published, and loading a plugin from outside the tree
+> arrives at the extension-distribution stage. No agent yet, and nothing
+> verifies work beyond the shape of it. Where this goes next is the
+> [roadmap](docs/roadmap.md).
 
 ### Install
 
@@ -146,10 +149,9 @@ every resolved key and where it came from.
 bun install && bun run verify
 ```
 
-That is exactly what CI checks on every change. Read [AGENTS.md](AGENTS.md)
-for the commit and branch rules, and
-[docs/development.md](docs/development.md) for the loop one change goes
-through, before you open a pull request.
+That is exactly what CI checks on every change.
+[CONTRIBUTING.md](CONTRIBUTING.md) is the rest of the short path: a green
+`verify`, a plugin of your own, and the two lines that load it.
 
 ---
 

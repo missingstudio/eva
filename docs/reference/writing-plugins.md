@@ -2,9 +2,11 @@
 
 Everything in Eva except the kernel is a plugin. This is how you write one.
 
-Read [architecture.md](architecture.md) first — it defines the four extension
-points a plugin registers into (domain, slot, hook, broadcast) and the contract
-it implements. This page is the walkthrough.
+This page is the walkthrough, and it stands alone: work through it and a
+plugin of your own loads. [architecture.md](architecture.md) defines the four
+extension points a plugin registers into — domain, slot, hook, broadcast — and
+the contract it implements. Read it when a section here raises the question,
+not before.
 
 ## 1. The smallest one
 
@@ -211,22 +213,36 @@ A test file sits beside the source it tests: the globs are
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "publishConfig": {
-    "exports": { ".": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" } }
+  "exports": {
+    ".": "./src/index.ts"
   },
-  "scripts": { "pack": "vp pack" },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "scripts": {
+    "pack": "vp pack"
+  },
   "dependencies": {
-    "@missingstudio/eva-sdk": "workspace:*",
     "@missingstudio/eva-core": "workspace:*",
+    "@missingstudio/eva-sdk": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@missingstudio/eva-testkit": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   }
 }
 ```
+
+The formatter reads a manifest too, and it is one key per line. A manifest
+written compact is a `bun run verify` that fails on the format check before it
+has run a test.
 
 `plugins/my-plugin/tsconfig.json` — every package states its environment, and a
 plugin runs on Node:
@@ -234,7 +250,9 @@ plugin runs on Node:
 ```json
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "types": ["node"] },
+  "compilerOptions": {
+    "types": ["node"]
+  },
   "include": ["src"]
 }
 ```
@@ -254,6 +272,13 @@ The `dist` names are not arbitrary. tsdown writes `dist/index.mjs`,
 `dist/index.d.mts`, and `dist/index.mjs.map`; a `./dist/index.js` entry copied
 from another repo points at nothing.
 
+No package in this repository is published. Every one of them is
+`"private": true`, and the release ships the compiled binary alone —
+[ci-cd.md](ci-cd.md) §5. The `publishConfig` above is the shape every
+manifest keeps for the day one of them does ship, and `bun run verify` runs
+`vp pack` in every package that carries one, so the `dist` files those entries
+name are the files that are built.
+
 After the package exists, run `bun install` so the workspace links it. Until
 then every import of it fails with TS2307, in every file at once.
 
@@ -262,8 +287,20 @@ then every import of it fails with TS2307, in every file at once.
 A plugin loads only if a composition root carries it. The Build is closed:
 there is no discovery, no directory scan, no entry-point convention — a bare
 kernel has nothing to scan. In this repository the one Build is the import
-table in `apps/cli/src/plugins.ts`, and registering a plugin is two lines
-there:
+table in `apps/cli/src/plugins.ts`.
+
+The root has to be able to import the package before it can name it. The
+workspace links in isolation, so add the entry to the dependencies of
+`apps/cli/package.json` and run `bun install` again:
+
+```json
+"@missingstudio/eva-hello": "workspace:*",
+```
+
+Skip that and the import below fails with `Cannot find module`, however
+correct both files are.
+
+Then the table itself, which is two lines:
 
 ```ts
 import { hello } from "@missingstudio/eva-hello"

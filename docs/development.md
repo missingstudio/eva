@@ -269,16 +269,16 @@ Factory and surface stages both belong here, and this table is the only place
 in `docs/` that says done — every other document describes the work, and none
 of them tracks it.
 
-| Stage                      | State | What is left                                                           |
-| -------------------------- | ----- | ---------------------------------------------------------------------- |
-| 0 — Wire                   | done  | nothing                                                                |
-| 1 — Workflow               | done  | nothing                                                                |
-| C0 — Console               | done  | nothing                                                                |
-| W0 — Client runtime        | done  | nothing                                                                |
-| W1 — The wire and the page | done  | nothing                                                                |
-| 2 — Tools and the loop     | done  | nothing                                                                |
-| W2 — The page that prompts | done  | four parity cells name what is absent rather than a proof or a refusal |
-| UX — the baseline          | open  | the obligations the base layer has not adopted yet                     |
+| Stage                      | State | What is left                                                                     |
+| -------------------------- | ----- | -------------------------------------------------------------------------------- |
+| 0 — Wire                   | done  | nothing                                                                          |
+| 1 — Workflow               | done  | nothing                                                                          |
+| C0 — Console               | done  | nothing                                                                          |
+| W0 — Client runtime        | done  | nothing                                                                          |
+| W1 — The wire and the page | done  | nothing                                                                          |
+| 2 — Tools and the loop     | done  | nothing                                                                          |
+| W2 — The page that prompts | done  | four cells of the chat rows name what is absent rather than a proof or a refusal |
+| UX — the baseline          | open  | the obligations the base layer has not adopted yet                               |
 
 **Stage 0 — Wire.** Done. The kernel, the SDK, the event schema, the trace, one
 provider, and the terminal all ship, and `verify` runs the three exit tests.
@@ -399,9 +399,10 @@ proof moves. [reference/parity.md](reference/parity.md) is the ledger for the
 parity goal, and it is written by hand.
 
 That matrix does not come out full, and it says so rather than rounding up.
-Four of its thirty-two cells name what is absent instead of a proof or a
-refusal: the pipe lists no Session, it queues no line and steers none, and it
-cannot say a connection dropped; and the wire holds no queue behind an open Run.
+Four of the eight chat rows' thirty-two cells name what is absent instead of a
+proof or a refusal: the pipe lists no Session, it queues no line and steers
+none, and it cannot say a connection dropped; and the wire holds no queue
+behind an open Run.
 The pipe's three are refusals nobody has written down — it answers once and
 exits, and its connection is the process — and the wire's one waits on what a
 second `submit` during an open Run is to do. `eva attach <url>` follows the exit
@@ -417,5 +418,7 @@ none.
 becomes good to use — the interaction model every door shares, the terminal
 and the page in detail, and the refactoring underneath. [plan.md](plan.md)
 holds the gate: until the base layer meets that standard, the next unit of
-work is one of its obligations rather than a stage from the waves. One landed
-already: the plugin walkthrough matches the tree and ends at registration.
+work is one of its obligations rather than a stage from the waves. Some have
+landed: the plugin walkthrough matches the tree and ends at registration, and
+the parity matrix grades a first hour's four verbs — a Workflow, the config,
+the trust grant, and a rule set — beside the chat.

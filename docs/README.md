@@ -3,7 +3,8 @@
 Eva is an open-source, autonomous software factory. It is plugin-first: a
 small kernel loads plugins, and every capability is a plugin — the model, the
 tools, the harness, the session store, the sandbox, the agent loop, and every
-user interface.
+user interface. Every plugin is in this repository, and distribution of one
+from outside it arrives at its own stage.
 
 Eva ships its own native harness as a plugin. It also drives the harnesses
 you already pay for as plugins, behind one contract, with one trace, one
@@ -44,6 +45,7 @@ Then, as you need them:
 
 | You want to                  | Read                                                            |
 | ---------------------------- | --------------------------------------------------------------- |
+| Make a first change          | [../CONTRIBUTING.md](../CONTRIBUTING.md)                        |
 | Know what to build next      | [plan.md](plan.md)                                              |
 | Find where a plugin goes     | [plan.md](plan.md)                                              |
 | Make a change here           | [development.md](development.md)                                |
