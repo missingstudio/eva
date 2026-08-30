@@ -9,7 +9,7 @@ import { refusal } from "@missingstudio/eva-web"
 import { Effect, Exit, Logger, LogLevel, References, Scope, Tracer } from "effect"
 import { parseArgv, showHelp } from "./argv.js"
 import { runAttach } from "./attach.js"
-import { attaching, besideTerminal, BUILD, serving } from "./plugins.js"
+import { attaching, besideTerminal, BUILD, serving, type WebBind } from "./plugins.js"
 import { report, speak } from "./report.js"
 import { showConfig, showConfigJson } from "./show.js"
 import { runInteractive } from "./interactive.js"
@@ -64,6 +64,60 @@ const door = <A>(
     const started = yield* startFrom(scope, settled, build, world.err)
     return yield* Effect.ensuring(body(started, settled, scope), Scope.close(scope, Exit.void))
   })
+
+/**
+ * A door that runs a Surface: the bind it asked for, the build it needs, the
+ * run it opens, and the help it offers on the way out.
+ *
+ * Three doors answered a Surface and each spelled the same four steps — refuse
+ * the bind, rebuild the table, open the door, word the exit — and two of them
+ * spelled the refusal word for word. A fourth Surface door is now a row rather
+ * than a fourth copy.
+ *
+ * The build is a call and not a value, so nothing is assembled for a run whose
+ * bind is refused: a bind nobody can authenticate opens no port and builds no
+ * table either.
+ */
+interface SurfaceDoor {
+  /**
+   * The bind this run asked for, when it binds one. A door that binds nothing
+   * names none — an attached run opens no port, and the bind that was refused,
+   * or not, is the serving process's and was decided when it bound.
+   */
+  readonly bind?: WebBind
+  readonly build: () => Build
+  readonly run: (started: Started) => Effect.Effect<unknown, unknown>
+  // A door that offers the help passes it; the one that does not passes
+  // nothing.
+  readonly help?: () => void
+}
+
+/**
+ * The door, opened. The bind is refused before anything boots — `eva.web` owns
+ * what counts as local and this owns the exit code, because a surface row
+ * cannot fail: `start` has `never` in its error channel.
+ *
+ * How the run ends is `closed`'s: an interrupt is how a person stops a
+ * surface, so it exits 0 and says nothing, and a failure is this build having
+ * no such surface, which the door names.
+ */
+const openSurface = (
+  world: World,
+  overlays: Overlays,
+  one: SurfaceDoor,
+): Effect.Effect<number, ConfigError> => {
+  const refused = one.bind === undefined ? undefined : refusal(one.bind.host)
+  if (refused !== undefined) {
+    world.err(`${speak({ what: refused })}\n`)
+    return Effect.succeed(1)
+  }
+
+  return door(world, overlays, one.build(), (started) =>
+    Effect.map(Effect.exit(withSignals(one.run(started))), (outcome) =>
+      closed(outcome, world.err, one.help),
+    ),
+  )
+}
 
 /**
  * What a Run that answered exits with. A Claim that failed says why on the
@@ -204,18 +258,6 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
      */
     case "serve": {
       /**
-       * Refused before anything boots, so a bind nobody can authenticate
-       * opens no port. `eva.web` owns the rule — what counts as local — and
-       * this owns the exit code, because a surface row cannot fail: `start`
-       * has `never` in its error channel.
-       */
-      const refused = refusal(invocation.host)
-      if (refused !== undefined) {
-        world.err(`${speak({ what: refused })}\n`)
-        return 1
-      }
-
-      /**
        * The page's own words, in this app's voice. `eva.web` owns what is
        * said — where it bound, a bind it refused, a page nobody built — and
        * `speak` owns the shape every line this app says to a person is read
@@ -227,15 +269,11 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
        */
       const spoken = (text: string): void => world.out(`${speak({ what: text.trimEnd() })}\n`)
 
-      return yield* door(
-        world,
-        invocation.overlays,
-        serving(build, invocation, spoken),
-        (started) =>
-          Effect.map(Effect.exit(withSignals(runServe(started))), (outcome) =>
-            closed(outcome, world.err),
-          ),
-      )
+      return yield* openSurface(world, invocation.overlays, {
+        bind: invocation,
+        build: () => serving(build, invocation, spoken),
+        run: runServe,
+      })
     }
 
     /**
@@ -253,23 +291,16 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
      * refused there.
      */
     case "interactive": {
-      const refused = refusal(invocation.host)
-      if (refused !== undefined) {
-        world.err(`${speak({ what: refused })}\n`)
-        return 1
-      }
-
       const page = invocation.web === true
-      return yield* door(
-        world,
-        invocation.overlays,
-        page ? besideTerminal(build, invocation) : build,
-        (started) =>
-          Effect.map(
-            Effect.exit(withSignals(runInteractive(started, page ? [WEB_DOOR] : []))),
-            (outcome) => closed(outcome, world.err, () => showHelp(world)),
-          ),
-      )
+      return yield* openSurface(world, invocation.overlays, {
+        // Whether the page runs or not. A run with no `--web` carries no host
+        // — the parser refuses `--host` without it — so this is the bind the
+        // page asked for, or the default, which is local and refuses nothing.
+        bind: invocation,
+        build: () => (page ? besideTerminal(build, invocation) : build),
+        run: (started) => runInteractive(started, page ? [WEB_DOOR] : []),
+        help: () => showHelp(world),
+      })
     }
 
     /**
@@ -288,16 +319,11 @@ export const main = Effect.fn("cli.main")(function* (world: World, build: Build 
      */
     case "attach": {
       const wire = yield* httpTransport({ origin: invocation.url })
-      return yield* door(
-        world,
-        invocation.overlays,
-        attaching(build, invocation.url, wire.command),
-        (started) =>
-          Effect.map(
-            Effect.exit(withSignals(runAttach(started, wire, invocation.url))),
-            (outcome) => closed(outcome, world.err, () => showHelp(world)),
-          ),
-      )
+      return yield* openSurface(world, invocation.overlays, {
+        build: () => attaching(build, invocation.url, wire.command),
+        run: (started) => runAttach(started, wire, invocation.url),
+        help: () => showHelp(world),
+      })
     }
 
     /**
