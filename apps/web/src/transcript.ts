@@ -5,6 +5,7 @@ import { blocksOf } from "@missingstudio/eva-session-view"
 import { Effect, Fiber, Stream, SubscriptionRef } from "effect"
 import { useEffect, useState } from "react"
 import { client } from "./eva.js"
+import { told, useHeld, whileDrawn } from "./held.js"
 import type { Folded, Reading } from "./session.js"
 import { useSessions } from "./sessions.js"
 import type { Pipe } from "./shell.js"
@@ -67,29 +68,16 @@ export const follow = (
 ): Effect.Effect<void> => one.follow(session, (signal, running) => each(readingOf(signal, running)))
 
 /**
- * Runs one read over the Client for as long as the component is drawn, and
- * gives back what stops it. A read outlives a page that navigated away, so it
- * is interrupted rather than left writing into a component nobody draws, and a
- * Client that settles after the page has gone is dropped.
- *
- * A plain function and not a hook, so each caller keeps its own `useEffect`
- * and its own dependencies.
+ * Runs one read over the Client for as long as the component is drawn.
+ * `whileDrawn` owns what a read that outlived its reader does; what is here
+ * is the one thing a read over a Client adds — the fiber it runs on, and the
+ * interrupt that lets it go.
  */
-const whileDrawn = (over: (one: Client) => Effect.Effect<unknown>): (() => void) => {
-  let drawing = true
-  let stop: (() => void) | undefined
-
-  void client().then((one) => {
-    if (!drawing) return
+const overClient = (over: (one: Client) => Effect.Effect<unknown>): (() => void) =>
+  whileDrawn(client, (one) => {
     const running = Effect.runFork(over(one))
-    stop = () => void Effect.runFork(Fiber.interrupt(running))
+    return () => void Effect.runFork(Fiber.interrupt(running))
   })
-
-  return () => {
-    drawing = false
-    stop?.()
-  }
-}
 
 /**
  * One Session, read and then followed. What the page holds is the committed
@@ -108,7 +96,7 @@ export const useTranscript = (session: SessionID): Reading => {
 
   // Nothing is caught here. A refused Cursor and a pipe that went are both
   // answered inside the follow, by folding fresh.
-  useEffect(() => whileDrawn((one) => follow(one, session, setReading)), [session])
+  useEffect(() => overClient((one) => follow(one, session, setReading)), [session])
 
   return reading
 }
@@ -118,23 +106,20 @@ export const useTranscript = (session: SessionID): Reading => {
  * the pipe onto the three values a surface acts on, and this page acts on the
  * one thing it can: it says so.
  *
- * The frame reads it, once, for both routes. Nothing about the pipe is
- * remembered here: what a surface says is what the runtime is saying now, and
- * a page that kept a memory of its own would say it after it stopped being
- * true.
+ * One read for the whole page, which is what the frame's claim needs: both
+ * routes say the same thing about the pipe because both read one answer.
+ * Nothing about the pipe is remembered here either — what is held is what the
+ * runtime is saying now, and a page that kept a memory of its own would say
+ * it after it stopped being true.
  */
-export const usePipe = (): Pipe => {
-  const [pipe, setPipe] = useState<Pipe>({ at: "ready" })
-
-  useEffect(
-    () =>
-      whileDrawn((one) =>
-        Stream.runForEach(SubscriptionRef.changes(one.state), (at) =>
-          Effect.sync(() => setPipe({ at })),
-        ),
+const pipe = told<Pipe>({ at: "ready" }, (tell) => {
+  void client().then((one) =>
+    Effect.runFork(
+      Stream.runForEach(SubscriptionRef.changes(one.state), (at) =>
+        Effect.sync(() => tell({ at })),
       ),
-    [],
+    ),
   )
+})
 
-  return pipe
-}
+export const usePipe = (): Pipe => useHeld(pipe)

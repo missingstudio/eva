@@ -2,8 +2,8 @@ import { watchAsking } from "@missingstudio/eva-api/client"
 import type { FrontendRequest } from "@missingstudio/eva-sdk"
 import type { Asking } from "@missingstudio/eva-session-view"
 import { Effect } from "effect"
-import { useEffect, useState } from "react"
 import { client } from "./eva.js"
+import { told, useHeld } from "./held.js"
 import { sent } from "./refusals.js"
 
 /**
@@ -25,20 +25,25 @@ import { sent } from "./refusals.js"
 // `request` where the contract says `id`, because that is what it is the id
 // of — the one translation on this channel, and it is the drawing's. The kind
 // travels with it, because it is what a line typed in answer is read by.
-const asked = (one: FrontendRequest): Asking => ({
+const blockOf = (one: FrontendRequest): Asking => ({
   kind: one.kind,
   request: one.id,
   question: one.question,
 })
 
-// The questions that stand, for as long as the page is drawn.
-export const useAsking = (): readonly Asking[] => {
-  const [asking, setAsking] = useState<readonly Asking[]>([])
+/**
+ * The questions that stand, held for the whole page.
+ *
+ * A question is not a fact of the Session the route names — the channel
+ * carries every one that stands, whichever Session asked — so the channel is
+ * the page's and not a route's. Reopening it on every navigation would be a
+ * page that stops listening each time a reader opens another Session.
+ */
+const standing = told<readonly Asking[]>([], (tell) => {
+  watchAsking((asking) => tell(asking.map(blockOf)))
+})
 
-  useEffect(() => watchAsking((standing) => setAsking(standing.map(asked))), [])
-
-  return asking
-}
+export const useAsking = (): readonly Asking[] => useHeld(standing)
 
 /**
  * How the page answers one request. The id is the tool call's, which the
