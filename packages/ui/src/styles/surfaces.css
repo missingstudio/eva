@@ -257,11 +257,12 @@
 
   /*
      An image sits on the page with no edge of its own, so a dark capture on
-     the void merges. A hairline of bone at 8%, inset by 1px so it never
-     grows the box, gives it a boundary without giving it a frame.
+     the void merges. A hairline of the ink at 8%, inset by 1px so it never
+     grows the box, gives it a boundary without giving it a frame — and it
+     reads the ink so it flips with the scheme.
   */
   .image-edge {
-    outline: 1px solid rgb(229 229 230 / 8%);
+    outline: 1px solid color-mix(in srgb, var(--color-bone) 8%, transparent);
     outline-offset: -1px;
   }
 }

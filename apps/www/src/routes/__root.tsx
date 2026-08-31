@@ -16,9 +16,9 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      // The browser chrome takes the page's own ground. The system is dark
-      // only, so one value is the whole answer.
-      { name: "theme-color", content: "#08090a" },
+      // The browser chrome takes the page's own ground. This surface pins
+      // the dark scheme, so one value is the whole answer.
+      { name: "theme-color", content: "#0d0b09" },
       { property: "og:image", content: ogImage },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },

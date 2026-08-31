@@ -13,11 +13,11 @@ export const DEFAULT_PALETTE: Palette = {
   // A person's words are bold, and the accent is the bar beside them. The
   // words themselves stay the reading colour. The values are docs/design.md's
   // terminal contract: bone, fog, ember, and teal for tool output.
-  human: "#e5e5e6",
-  agent: "#e5e5e6",
-  thought: "#8a8f98",
+  human: "#e9e5de",
+  agent: "#e9e5de",
+  thought: "#988d7d",
   tool: "#02b8cc",
-  muted: "#8a8f98",
+  muted: "#988d7d",
   accent: "#ee6018",
 }
 

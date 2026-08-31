@@ -26,8 +26,8 @@ export const THEMES: readonly ThemeInfo[] = [
     id: "default",
     name: "Default",
     colors: {
-      foreground: "#e5e5e6",
-      muted: "#8a8f98",
+      foreground: "#e9e5de",
+      muted: "#988d7d",
       accent: "#ee6018",
       warning: "#02b8cc",
     },

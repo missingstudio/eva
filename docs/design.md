@@ -4,28 +4,30 @@ name: Eva
 description: >-
   Eva is an open-source, autonomous software factory whose product is a terminal program.
   Every surface it owns — the terminal, the product app, the marketing site,
-  the documentation — is one dark instrument panel: a near-black canvas, a
-  sans that carries prose and a mono that carries machine output, and one
-  ember signal doing all the chromatic work.
+  the documentation — is one warm instrument panel: a near-black canvas by
+  default with a paper twin that fills the same roles, a sans that carries
+  prose and a mono that carries machine output, and one ember signal doing
+  all the chromatic work.
 colors:
-  void: "#08090a"
-  carbon: "#0f1011"
-  obsidian: "#161718"
-  graphite: "#23252a"
-  smoke: "#383b3f"
-  ash: "#62666d"
-  fog: "#8a8f98"
-  mist: "#d0d6e0"
-  bone: "#e5e5e6"
+  void: "#0d0b09"
+  carbon: "#14110e"
+  obsidian: "#1c1815"
+  graphite: "#2b2620"
+  smoke: "#453d33"
+  ash: "#6e6558"
+  fog: "#988d7d"
+  mist: "#d9d2c7"
+  bone: "#e9e5de"
   paper: "#ffffff"
 
   primary: "#ee6018"
+  primary-ink: "#0d0b09"
   teal: "#02b8cc"
   green: "#27a644"
   red: "#eb5757"
 
-  terminal-fg: "#e5e5e6"
-  terminal-muted: "#8a8f98"
+  terminal-fg: "#e9e5de"
+  terminal-muted: "#988d7d"
   terminal-accent: "#ee6018"
   terminal-warning: "#02b8cc"
 typography:
@@ -137,7 +139,7 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.primary}"
-    textColor: "{colors.void}"
+    textColor: "{colors.primary-ink}"
     typography: "{typography.button}"
     rounded: "{rounded.md}"
     padding: "{spacing.8} {spacing.16}"
@@ -333,21 +335,29 @@ components:
 Eva is an open-source, autonomous software factory. It runs coding work end to
 end, from a spec a machine can check to evidence that it was done. The design
 brief is the line the product prints in its own banner — **evidence, not
-claims** — and the surface is the instrument that prints it: a near-black
-panel, quiet neutrals, and one ember signal spent only where something is
-actually happening.
+claims** — and the surface is the instrument that prints it: a warm
+near-black panel, quiet neutrals, and one ember signal spent only where
+something is actually happening.
 
 **Key characteristics:**
 
-- **Dark only.** There is no light scheme, no theme toggle, no scheme cookie.
-- **Near-black, not black.** The canvas is `{colors.void}` `#08090a`. Pure
+- **Two schemes, one canon.** The dark scheme is canonical: the front matter
+  above carries it, and a surface that says nothing gets it. A light scheme
+  refills the same ten roles — raised is still lighter than the ground, the
+  floor ink is still the floor — so a component built on the ladder flips
+  without a scheme branch of its own. A surface pins one scheme or offers
+  the choice; a component never decides.
+- **Near-black, not black.** The canvas is `{colors.void}` `#0d0b09`. Pure
   `#000000` reaches 21:1 against white, and that much contrast haloes on OLED
-  and smears text in motion. `#08090a` gives up 1.1 points of contrast and
+  and smears text in motion. `#0d0b09` gives up 1.4 points of contrast and
   buys back a surface a reader can hold for an hour.
+- **Warm on purpose.** The neutrals carry a faint ember cast — the panel
+  sits with the accent rather than against it — held at a chroma low enough
+  that a full screen of it still reads neutral.
 - **Two faces, one rule.** Geist carries prose and UI; Geist Mono carries
   anything a machine produced — code, transcripts, labels, metadata. They are
   one family, so their metrics agree.
-- **Ink is `{colors.bone}` `#e5e5e6`, not white.** Paper white is reserved for
+- **Ink is `{colors.bone}` `#e9e5de`, not white.** Paper white is reserved for
   the hero and inline emphasis. Full-strength white as the default ink is the
   same halation problem as a pure black ground, from the other side.
 - **One chromatic signal**, `{colors.primary}` `#ee6018`, plus three states
@@ -361,56 +371,62 @@ actually happening.
 ## Colors
 
 Ten neutrals, one accent, three states, and the four names the terminal
-contract reads. Every ratio below is measured, not estimated.
+contract reads. Every ratio below is measured, not estimated — in both
+schemes.
 
 ### Why these neutrals
 
 This ladder was measured against the alternatives and kept because it is the
 only one with a genuinely distinct step at every job — two grounds, two
-borders and four inks — and because its neutrals carry a faint blue cast that
-keeps a large dark field from reading brown.
+borders and four inks. Its neutrals carry a faint ember cast on purpose: the
+panel sits with the accent rather than against it. The risk a warm dark
+field runs — reading muddy at size — is held off by keeping the cast's
+chroma low and by measuring every step, which is the same discipline the
+cool ladder it replaced was held to.
 
 ### Surfaces
 
-- **Void** (`{colors.void}` — `#08090a`): the page, the nav, the footer.
-- **Carbon** (`{colors.carbon}` — `#0f1011`): the raised surface — cards, the
+- **Void** (`{colors.void}` — `#0d0b09`): the page, the nav, the footer.
+- **Carbon** (`{colors.carbon}` — `#14110e`): the raised surface — cards, the
   transcript panel, code blocks, the announcement strip.
-- **Obsidian** (`{colors.obsidian}` — `#161718`): the elevated surface —
+- **Obsidian** (`{colors.obsidian}` — `#1c1815`): the elevated surface —
   popovers, menus, secondary buttons, inline code, avatars.
 
 ### Lines
 
-- **Graphite** (`{colors.graphite}` — `#23252a`): the hairline, at 1.30:1 on
+- **Graphite** (`{colors.graphite}` — `#2b2620`): the hairline, at 1.31:1 on
   void. Separation between two static surfaces, and never the thing that
   identifies a control.
-- **Smoke** (`{colors.smoke}` — `#383b3f`): the same edge under hover or
-  focus, at 1.77:1.
-- **Ash** (`{colors.ash}` — `#62666d`): the control boundary, at **3.45:1** —
+- **Smoke** (`{colors.smoke}` — `#453d33`): the same edge under hover or
+  focus, at 1.84:1.
+- **Ash** (`{colors.ash}` — `#6e6558`): the control boundary, at **3.43:1** —
   the only line in the ladder that clears the 3:1 SC 1.4.11 asks of a non-text
-  edge. As text it **fails at 3.45:1**, so ash marks an inactive tab or a
+  edge. As text it **fails at 3.43:1**, so ash marks an inactive tab or a
   disabled label and nothing that has to be read.
 
 ### Text
 
-- **Bone** (`{colors.bone}` — `#e5e5e6`): the default ink, at **15.83:1** on
-  void, 15.13:1 on carbon, 14.26:1 on obsidian.
-- **Mist** (`{colors.mist}` — `#d0d6e0`): bright secondary — navigation links,
-  dense UI rows, inline code, the hero lede — at **13.64:1**.
-- **Fog** (`{colors.fog}` — `#8a8f98`): secondary prose, captions, eyebrows
-  and metadata, at **6.13:1** on void and 5.52:1 on obsidian. **Fog is the
+- **Bone** (`{colors.bone}` — `#e9e5de`): the default ink, at **15.65:1** on
+  void, 14.99:1 on carbon, 14.05:1 on obsidian.
+- **Mist** (`{colors.mist}` — `#d9d2c7`): bright secondary — navigation links,
+  dense UI rows, inline code, the hero lede — at **13.09:1**.
+- **Fog** (`{colors.fog}` — `#988d7d`): secondary prose, captions, eyebrows
+  and metadata, at **6.03:1** on void and 5.41:1 on obsidian. **Fog is the
   text floor.** Nothing quieter may carry text.
 - **Paper** (`{colors.paper}` — `#ffffff`): the hero headline and inline
-  emphasis only, at 19.93:1. It is a highlight, not a default.
+  emphasis only, at 19.65:1. It is a highlight, not a default.
 
 ### The accent
 
-- **Ember** (`{colors.primary}` — `#ee6018`): the signal orange, taken over
-  the `#da5c2c` alternative on the measurement — **6.00:1** against void where
-  that one reaches 5.27:1, and the same 6.00:1 for the ink sitting on the
-  fill.
-- **The ink on an ember fill is `{colors.void}`.** Bone on ember measures
-  **2.64:1** and fails outright; void measures 6.00:1. Every dark interface we
-  measured puts a light ink on its orange, and every one of them is wrong.
+- **Ember** (`{colors.primary}` — `#ee6018`): the signal orange, at
+  **5.91:1** against void — above the 4.5:1 AA asks of it as text, and well
+  above the 3:1 it needs as the focus ring.
+- **The ink on an ember fill is `{colors.primary-ink}`, never the ladder's.**
+  Bone on ember measures **2.65:1** and fails outright; the fill ink is its
+  own token because it does not follow the scheme flip — near-black on the
+  dark scheme's ember, white on the light scheme's darker one. Every dark
+  interface we measured puts a light ink on its orange, and every one of
+  them is wrong.
 - Ember fills the primary CTA, draws the 2 px editorial case mark, colours the
   shipping stage tag and the transcript's turn marker, and paints the focus
   ring. **Nothing else.** Scattered onto ordinary text, icons or borders it
@@ -421,23 +437,60 @@ keeps a large dark field from reading brown.
 These report what a machine did, and only that. They never decorate chrome.
 
 - **Teal** (`{colors.teal}` — `#02b8cc`): running, in progress, and the
-  log-bar histogram — at **8.29:1**, the most legible data colour of the
+  log-bar histogram — at **8.17:1**, the most legible data colour of the
   candidates measured.
 - **Green** (`{colors.green}` — `#27a644`): a passing check, a clean diff, at
-  **6.29:1**.
+  **6.20:1**.
 - **Red** (`{colors.red}` — `#eb5757`): a failing check, a destructive action,
-  at **5.73:1**.
+  at **5.64:1**.
 
 Status colour never carries meaning alone; the text names the state and a
 symbol confirms it.
+
+### The light scheme
+
+The same ten jobs, refilled. The ground is a warm paper rather than an
+inverted grey, raised surfaces still step **lighter** than the ground — so
+elevation reads the same way in both schemes — and the floor ink is still
+the floor. Chromatic signals deepen rather than swap: the light ember and
+the light states are darker cuts of the same hues, because a colour legible
+on a near-black ground is not legible on paper.
+
+| Role          | Dark (canonical) | Light     | Light verdict                         |
+| ------------- | ---------------- | --------- | ------------------------------------- |
+| `void`        | `#0d0b09`        | `#f7f4ef` | The page                              |
+| `carbon`      | `#14110e`        | `#fcfaf7` | The raised surface                    |
+| `obsidian`    | `#1c1815`        | `#ffffff` | The elevated surface                  |
+| `graphite`    | `#2b2620`        | `#e8e2d8` | Hairline, 1.17:1                      |
+| `smoke`       | `#453d33`        | `#d6cec1` | Hover edge, 1.42:1                    |
+| `ash`         | `#6e6558`        | `#8b8172` | Control boundary, 3.49:1 — never text |
+| `fog`         | `#988d7d`        | `#6d6353` | The text floor, 5.38:1                |
+| `mist`        | `#d9d2c7`        | `#514a3f` | Bright secondary, 7.97:1              |
+| `bone`        | `#e9e5de`        | `#272119` | The default ink, 14.52:1              |
+| `paper`       | `#ffffff`        | `#100d0a` | Emphasis only, 17.66:1                |
+| `primary`     | `#ee6018`        | `#bc4708` | The accent, 4.73:1                    |
+| `primary-ink` | `#0d0b09`        | `#ffffff` | The CTA ink, 5.19:1 on its fill       |
+| `teal`        | `#02b8cc`        | `#087280` | Running, 5.13:1                       |
+| `green`       | `#27a644`        | `#1a7a33` | Passed, 4.94:1                        |
+| `red`         | `#eb5757`        | `#c03434` | Failed, 5.06:1                        |
+
+Light ratios are measured on the light void; the full grid is in the table
+below. Two rules keep the flip honest:
+
+- **A component never carries a scheme branch.** It reads the ladder, and
+  the scheme class on the root refills the ladder. A `dark:` utility in
+  component code is a defect.
+- **A surface pins a scheme or offers the choice, at its root, once.** The
+  terminal stays dark; the marketing site pins dark; a reading surface may
+  offer both.
 
 ### Terminal contract
 
 The renderer contract names four colours, and a theme fills every one and no
 more. They are the same values the rest of the system uses:
 
-- `{colors.terminal-fg}` `#e5e5e6` — a person's words and the agent's words.
-- `{colors.terminal-muted}` `#8a8f98` — reasoning and anything secondary.
+- `{colors.terminal-fg}` `#e9e5de` — a person's words and the agent's words.
+- `{colors.terminal-muted}` `#988d7d` — reasoning and anything secondary.
 - `{colors.terminal-accent}` `#ee6018` — the bar beside a person's turn.
 - `{colors.terminal-warning}` `#02b8cc` — tool output. The contract's key is
   named `warning` for historical reasons; the colour is teal, because tool
@@ -445,21 +498,40 @@ more. They are the same values the rest of the system uses:
 
 ### Measured contrast
 
-| Ink                  | on void | on carbon | on obsidian | Verdict                      |
-| -------------------- | ------- | --------- | ----------- | ---------------------------- |
-| `paper` `#ffffff`    | 19.93   | 19.05     | 17.95       | Emphasis only                |
-| `bone` `#e5e5e6`     | 15.83   | 15.13     | 14.26       | The default ink              |
-| `mist` `#d0d6e0`     | 13.64   | 13.04     | 12.29       | Bright secondary             |
-| `fog` `#8a8f98`      | 6.13    | 5.86      | 5.52        | The text floor               |
-| `ash` `#62666d`      | 3.45    | 3.30      | 3.11        | **Never text.** Borders only |
-| `smoke` `#383b3f`    | 1.77    | 1.69      | 1.59        | Line                         |
-| `graphite` `#23252a` | 1.30    | 1.24      | 1.17        | Hairline                     |
-| `primary` `#ee6018`  | 6.00    | 5.73      | —           | The accent                   |
-| `teal` `#02b8cc`     | 8.29    | 7.92      | —           | Running, log bars            |
-| `green` `#27a644`    | 6.29    | 6.01      | —           | Passed                       |
-| `red` `#eb5757`      | 5.73    | 5.47      | —           | Failed                       |
-| `void` on ember      | 6.00    | —         | —           | The CTA ink                  |
-| `bone` on ember      | 2.64    | —         | —           | **A defect. Never.**         |
+The dark scheme:
+
+| Ink                    | on void | on carbon | on obsidian | Verdict                      |
+| ---------------------- | ------- | --------- | ----------- | ---------------------------- |
+| `paper` `#ffffff`      | 19.65   | 18.81     | 17.63       | Emphasis only                |
+| `bone` `#e9e5de`       | 15.65   | 14.99     | 14.05       | The default ink              |
+| `mist` `#d9d2c7`       | 13.09   | 12.54     | 11.75       | Bright secondary             |
+| `fog` `#988d7d`        | 6.03    | 5.77      | 5.41        | The text floor               |
+| `ash` `#6e6558`        | 3.43    | 3.28      | 3.08        | **Never text.** Borders only |
+| `smoke` `#453d33`      | 1.84    | 1.76      | 1.65        | Line                         |
+| `graphite` `#2b2620`   | 1.31    | 1.25      | 1.18        | Hairline                     |
+| `primary` `#ee6018`    | 5.91    | 5.66      | —           | The accent                   |
+| `teal` `#02b8cc`       | 8.17    | 7.82      | —           | Running, log bars            |
+| `green` `#27a644`      | 6.20    | 5.93      | —           | Passed                       |
+| `red` `#eb5757`        | 5.64    | 5.40      | —           | Failed                       |
+| `primary-ink` on ember | 5.91    | —         | —           | The CTA ink                  |
+| `bone` on ember        | 2.65    | —         | —           | **A defect. Never.**         |
+
+The light scheme, on its own three grounds:
+
+| Ink                    | on void | on carbon | on obsidian | Verdict                      |
+| ---------------------- | ------- | --------- | ----------- | ---------------------------- |
+| `paper` `#100d0a`      | 17.66   | 18.59     | 19.37       | Emphasis only                |
+| `bone` `#272119`       | 14.52   | 15.29     | 15.94       | The default ink              |
+| `mist` `#514a3f`       | 7.97    | 8.39      | 8.75        | Bright secondary             |
+| `fog` `#6d6353`        | 5.38    | 5.66      | 5.90        | The text floor               |
+| `ash` `#8b8172`        | 3.49    | 3.68      | 3.83        | **Never text.** Borders only |
+| `smoke` `#d6cec1`      | 1.42    | 1.50      | 1.56        | Line                         |
+| `graphite` `#e8e2d8`   | 1.17    | 1.24      | 1.29        | Hairline                     |
+| `primary` `#bc4708`    | 4.73    | 4.99      | 5.19        | The accent                   |
+| `teal` `#087280`       | 5.13    | 5.41      | 5.63        | Running, log bars            |
+| `green` `#1a7a33`      | 4.94    | 5.20      | 5.42        | Passed                       |
+| `red` `#c03434`        | 5.06    | 5.33      | 5.55        | Failed                       |
+| `primary-ink` on ember | 5.19    | —         | —           | The CTA ink                  |
 
 ## Typography
 
@@ -588,10 +660,12 @@ Nothing between the steps, and nothing outside them. A one-off such as
 | 2     | `{colors.obsidian}` | Tonal step plus hairline.                       | Popovers, menus, secondary buttons. |
 | —     | Focus               | 2 px `{colors.primary}` outline, 2 px offset.   | Every focusable element.            |
 
-Elevation is a tonal step and a hairline. The one exception is an element that
-genuinely detaches from the page — a popover or a menu over content — which
-may carry `rgba(8, 9, 10, 0.6) 0 4px 32px`. A card never casts, and no shadow
-is ever used to make a flat surface look raised.
+Elevation is a tonal step and a hairline, and the step runs **lighter as it
+rises in both schemes**, so raised means one thing everywhere. The one
+exception is an element that genuinely detaches from the page — a popover or
+a menu over content — which may carry `rgba(13, 11, 9, 0.6) 0 4px 32px`. A
+card never casts, and no shadow is ever used to make a flat surface look
+raised.
 
 ## Shapes
 
@@ -760,7 +834,9 @@ ship: high contrast, and monochrome for terminals without colour.
 - Keep `{colors.fog}` as the floor for anything meant to be read.
 - Use `{colors.ash}` for a control's edge and an inactive label — never for
   text a reader has to take in.
-- Put `{colors.void}` ink on an ember fill. Bone measures 2.64:1 there.
+- Put `{colors.primary-ink}` on an ember fill, in both schemes. Bone measures
+  2.65:1 there and the ladder inks flip with the ground, so the fill ink is
+  its own token.
 - Spend `{colors.primary}` on the CTA, the case mark, the shipping tag, the
   turn marker and the focus ring, and nowhere else.
 - Report a machine outcome with a glyph, a word, and then the colour.
@@ -778,12 +854,16 @@ ship: high contrast, and monochrome for terminals without colour.
   aesthetic gets wrong, and this system does not repeat it.
 - Don't use pure `#000000` as a ground or pure `#ffffff` as the default ink.
 - Don't set text in `{colors.ash}`, or in anything below `{colors.fog}`.
-- Don't put a light ink on the ember fill.
+- Don't put a ladder ink on the ember fill; the fill ink is `primary-ink`.
 - Don't scatter `{colors.primary}` onto ordinary text, icons or borders.
 - Don't use `{colors.teal}`, `{colors.green}` or `{colors.red}` for chrome, or
   as a filled status badge.
 - Don't introduce a second accent to rank two kinds of importance.
-- Don't add a light-theme section, a scheme toggle, or an alternate ground.
+- Don't write a scheme branch in a component — no `dark:` utility, no
+  per-scheme value outside the two ladder blocks. The root's scheme class is
+  the only place the flip happens.
+- Don't invent a third scheme, or remap single tokens per surface; a surface
+  pins dark, pins light, or offers the two.
 - Don't put a shadow under a card, or use one to fake elevation anywhere
   except a genuinely detached overlay.
 - Don't put a gradient anywhere.

@@ -15,8 +15,8 @@ export const THEMES: readonly ThemeInfo[] = [
       // docs/design.md's terminal contract: bone, fog, ember — and teal
       // under the contract's `warning` key, because tool output is machine
       // data rather than an alarm.
-      foreground: "#e5e5e6",
-      muted: "#8a8f98",
+      foreground: "#e9e5de",
+      muted: "#988d7d",
       accent: "#ee6018",
       warning: "#02b8cc",
     },

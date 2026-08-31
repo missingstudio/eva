@@ -11,8 +11,9 @@
    own neutral scale, its own font, and its own `dark` variant, and importing
    it would replace the brand rather than bridge to it.
 
-   Import it after tokens.css. The system is dark only, so every mapping below
-   is a single value — there is no scheme to switch.
+   Import it after tokens.css. Every mapping below is a var() onto the
+   ladder, and the ladder flips by scheme class, so one mapping serves both
+   schemes — there is nothing here to switch.
 
    The one distinction worth keeping: the tokens split the graphite hairline
    between two static surfaces from the ash boundary that says "this is a
@@ -55,10 +56,11 @@
   --color-muted: var(--color-obsidian);
   --color-muted-foreground: var(--color-fog);
 
-  /* Ember carries primary. Its ink is void: bone on ember measures 2.64:1
-     and fails, void measures 6.00:1. */
+  /* Ember carries primary. Its ink is ember-ink, which does not follow the
+     ladder: near-black on the dark ember, white on the light one. Bone on
+     the dark ember measures 2.65:1 and fails. */
   --color-primary: var(--color-ember);
-  --color-primary-foreground: var(--color-void);
+  --color-primary-foreground: var(--color-ember-ink);
 
   /* Secondary is a filled quiet control, which is the elevated surface. */
   --color-secondary: var(--color-obsidian);
@@ -83,7 +85,7 @@
   --color-sidebar-accent: var(--color-obsidian);
   --color-sidebar-accent-foreground: var(--color-bone);
   --color-sidebar-primary: var(--color-ember);
-  --color-sidebar-primary-foreground: var(--color-void);
+  --color-sidebar-primary-foreground: var(--color-ember-ink);
   --color-sidebar-ring: var(--color-ember);
 }
 

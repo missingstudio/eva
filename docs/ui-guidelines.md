@@ -50,16 +50,16 @@ cost of conforming instead — or resolved in favour of the house rule.
 
 ## 1. Context and goals
 
-| Item                 | Value                                                             |
-| -------------------- | ----------------------------------------------------------------- |
-| Product              | Eva, an open-source autonomous software factory                   |
-| Publisher            | missing studio                                                    |
-| Surfaces             | `evafactory.co` (marketing), `docs.evafactory.co` (documentation) |
-| Stack                | TanStack Start, Tailwind v4, shared `@missingstudio/ui`           |
-| Documentation layer  | Fumadocs 16, notebook layout                                      |
-| Audience             | Developers and technical teams                                    |
-| Accessibility target | WCAG 2.2 AA                                                       |
-| Style                | Structured, tokenized, content-first, dark only                   |
+| Item                 | Value                                                                  |
+| -------------------- | ---------------------------------------------------------------------- |
+| Product              | Eva, an open-source autonomous software factory                        |
+| Publisher            | missing studio                                                         |
+| Surfaces             | `evafactory.co` (marketing), `docs.evafactory.co` (documentation)      |
+| Stack                | TanStack Start, Tailwind v4, shared `@missingstudio/ui`                |
+| Documentation layer  | Fumadocs 16, notebook layout                                           |
+| Audience             | Developers and technical teams                                         |
+| Accessibility target | WCAG 2.2 AA                                                            |
+| Style                | Structured, tokenized, content-first, dark canonical with a light twin |
 
 Goals, in priority order:
 
@@ -131,11 +131,11 @@ must report **0 errors and 0 warnings**. Three rules of the format shape what
 the front matter can hold, and all three are followed rather than worked
 around:
 
-| Rule of the format         | What it means here                                                                                                                                                         |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Every colour is bound      | A colour no component references is an orphan. Ours are the ten neutrals — `void` through `paper` — plus `primary` and the three states, and each is bound to a component. |
-| One scheme                 | The format has no scheme dimension, and the system is dark only, so the front matter carries the whole palette. There is no second scheme anywhere.                        |
-| Eight component sub-tokens | Only `backgroundColor`, `textColor`, `typography`, `rounded`, `padding`, `size`, `height`, `width` exist. Borders, gradients and motion are prose, not component tokens.   |
+| Rule of the format         | What it means here                                                                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every colour is bound      | A colour no component references is an orphan. Ours are the ten neutrals — `void` through `paper` — plus `primary` and the three states, and each is bound to a component.                        |
+| One scheme                 | The format has no scheme dimension, so the front matter carries the canonical dark palette. The light twins live in prose (design.md's light table) and in tokens.css, never in the front matter. |
+| Eight component sub-tokens | Only `backgroundColor`, `textColor`, `typography`, `rounded`, `padding`, `size`, `height`, `width` exist. Borders, gradients and motion are prose, not component tokens.                          |
 
 A warning is a defect. Do not add a token the format cannot carry and then
 explain the warning away; either express it within these three rules or keep
@@ -149,13 +149,13 @@ an alternative is named it is named as a value, because a value can be
 re-measured and a preference cannot.
 
 **The ground.** A pure `#000000` canvas reaches 21:1 against white — enough
-contrast to halo on OLED and smear text in motion. **Resolution:** `#08090a`,
-at 19.93:1 against paper and 15.83:1 against the default ink. It gives up
+contrast to halo on OLED and smear text in motion. **Resolution:** `#0d0b09`,
+at 19.65:1 against paper and 15.65:1 against the default ink. It gives up
 about a point of contrast and buys back a surface a reader can hold for an
 hour.
 
 **The default ink.** A maximum-contrast white ink is the same halation problem
-from the other side. **Resolution:** bone `#e5e5e6` at 15.83:1 is the default;
+from the other side. **Resolution:** bone `#e9e5de` at 15.65:1 is the default;
 paper `#ffffff` is reserved for the hero headline and inline emphasis.
 
 **The faces.** Setting everything in a monospaced face measurably slows
@@ -164,17 +164,22 @@ continuous reading — which is most of what the documentation surface is.
 are one family, so the metrics agree, and both are on the house-rules allowed
 list where Berkeley Mono and Inter are not.
 
-**The accent.** A `#da5c2c` ember measures 5.27:1 on the ground; `#ee6018`
-measures **6.00:1**. **Resolution:** `#ee6018`, kept under the name ember.
+**The accent.** `#ee6018` measures **5.91:1** on the dark ground, above both
+the 4.5:1 it needs as text and the 3:1 it needs as the focus ring. On the
+light ground it fails as text, so the light scheme deepens it to `#bc4708`
+at 4.73:1. **Resolution:** one accent per scheme, both under the name ember.
 
-**The CTA ink.** A light ink on an orange fill is the common choice, and it
-fails: bone on ember measures **2.64:1**. **Resolution:** the ink on an ember
-fill is void, at 6.00:1.
+**The CTA ink.** A ladder ink on the ember fill fails twice: bone on the dark
+ember measures **2.65:1**, and a ladder ink flips with the scheme while the
+fill's needs do not. **Resolution:** the fill ink is its own token,
+`primary-ink` — near-black `#0d0b09` on the dark ember at 5.91:1, white on
+the light ember at 5.19:1.
 
-**The neutral ladder.** A ladder earns its place by holding a distinct step at
-every job — three grounds, three lines, four inks — and by carrying a faint
-blue cast, which keeps a large dark field from reading brown. **Resolution:**
-the ten neutrals in [design.md](design.md), taken whole and unchanged.
+**The neutral ladder.** A ladder earns its place by holding a distinct step
+at every job — three grounds, three lines, four inks. The cast is a faint
+ember warmth, chosen so the panel sits with the accent, and held at a chroma
+low enough that a full field still reads neutral. **Resolution:** the ten
+neutrals in [design.md](design.md), taken whole per scheme.
 
 **The radius.** A 2px radius everywhere reads as an unfinished rectangle on a
 36px control. **Resolution:** the range — 2px for small nested shapes, 6px for
@@ -187,32 +192,37 @@ tighter discipline: -0.011em at reading sizes, -0.022em at display sizes.
 
 ### 2.3 Color
 
-The system is dark only. There is no light scheme, no theme control, no
-scheme cookie, and no component may carry a `dark:` branch of its own — the
-`dark` class is pinned on every root element solely so the shadcn components'
-existing variants stay live.
+The system carries two schemes over one ladder. Dark is canonical: the bare
+tokens hold its values, and a root that says nothing gets it. A root carrying
+`.light` refills every token with its light twin, and `.dark` re-asserts the
+canon so a dark island can sit inside a light page. No component may carry a
+`dark:` branch of its own — the scheme class on the root is the only place
+the flip happens, and the class also keeps the shadcn components' existing
+variants live. A surface pins one scheme or offers the choice; a component
+never decides.
 
 One color has three names: the semantic name used in this file, the token
 name used in design.md, and the CSS custom property that ships. They are
 listed side by side because that is the only way the three stay welded
 together.
 
-| Semantic token         | design.md token | CSS property       | Value     |
-| ---------------------- | --------------- | ------------------ | --------- |
-| `color.surface.base`   | `void`          | `--color-void`     | `#08090a` |
-| `color.surface.raised` | `carbon`        | `--color-carbon`   | `#0f1011` |
-| `color.surface.high`   | `obsidian`      | `--color-obsidian` | `#161718` |
-| `color.border.default` | `graphite`      | `--color-graphite` | `#23252a` |
-| `color.border.strong`  | `smoke`         | `--color-smoke`    | `#383b3f` |
-| `color.border.control` | `ash`           | `--color-ash`      | `#62666d` |
-| `color.text.tertiary`  | `fog`           | `--color-fog`      | `#8a8f98` |
-| `color.text.secondary` | `mist`          | `--color-mist`     | `#d0d6e0` |
-| `color.text.primary`   | `bone`          | `--color-bone`     | `#e5e5e6` |
-| `color.text.emphasis`  | `paper`         | `--color-paper`    | `#ffffff` |
-| `color.accent`         | `primary`       | `--color-ember`    | `#ee6018` |
-| `color.state.running`  | `teal`          | `--color-teal`     | `#02b8cc` |
-| `color.state.ok`       | `green`         | `--color-green`    | `#27a644` |
-| `color.state.fail`     | `red`           | `--color-red`      | `#eb5757` |
+| Semantic token         | design.md token | CSS property        | Dark      | Light     |
+| ---------------------- | --------------- | ------------------- | --------- | --------- |
+| `color.surface.base`   | `void`          | `--color-void`      | `#0d0b09` | `#f7f4ef` |
+| `color.surface.raised` | `carbon`        | `--color-carbon`    | `#14110e` | `#fcfaf7` |
+| `color.surface.high`   | `obsidian`      | `--color-obsidian`  | `#1c1815` | `#ffffff` |
+| `color.border.default` | `graphite`      | `--color-graphite`  | `#2b2620` | `#e8e2d8` |
+| `color.border.strong`  | `smoke`         | `--color-smoke`     | `#453d33` | `#d6cec1` |
+| `color.border.control` | `ash`           | `--color-ash`       | `#6e6558` | `#8b8172` |
+| `color.text.tertiary`  | `fog`           | `--color-fog`       | `#988d7d` | `#6d6353` |
+| `color.text.secondary` | `mist`          | `--color-mist`      | `#d9d2c7` | `#514a3f` |
+| `color.text.primary`   | `bone`          | `--color-bone`      | `#e9e5de` | `#272119` |
+| `color.text.emphasis`  | `paper`         | `--color-paper`     | `#ffffff` | `#100d0a` |
+| `color.accent`         | `primary`       | `--color-ember`     | `#ee6018` | `#bc4708` |
+| `color.accent.ink`     | `primary-ink`   | `--color-ember-ink` | `#0d0b09` | `#ffffff` |
+| `color.state.running`  | `teal`          | `--color-teal`      | `#02b8cc` | `#087280` |
+| `color.state.ok`       | `green`         | `--color-green`     | `#27a644` | `#1a7a33` |
+| `color.state.fail`     | `red`           | `--color-red`       | `#eb5757` | `#c03434` |
 
 The custom properties live in Tailwind's `@theme`, so each answers as a
 utility: `bg-void`, `bg-carbon`, `bg-obsidian`, `border-graphite`,
@@ -222,32 +232,35 @@ The shadcn bridge in `shadcn.css` maps shadcn's own names
 the same properties, so a registry component and a hand-built one read one
 palette.
 
-Measured contrast, sRGB:
+Measured contrast, sRGB, the dark scheme (the light grid is in design.md's
+light table; both are held by the same discipline):
 
 | Ink                     | On void  | On carbon | On obsidian | Verdict                      |
 | ----------------------- | -------- | --------- | ----------- | ---------------------------- |
-| `paper`                 | 19.93    | 19.05     | 17.95       | Emphasis only                |
-| `bone`                  | 15.83    | 15.13     | 14.26       | The default ink              |
-| `mist`                  | 13.64    | 13.04     | 12.29       | Bright secondary             |
-| `fog`                   | 6.13     | 5.86      | 5.52        | The text floor               |
-| `ash`                   | **3.45** | 3.30      | 3.11        | **Never text.** Borders only |
-| `smoke`                 | 1.77     | 1.69      | 1.59        | Line                         |
-| `graphite`              | 1.30     | 1.24      | 1.17        | Hairline                     |
-| `ember`                 | 6.00     | 5.73      | —           | The accent                   |
-| `teal`                  | 8.29     | 7.92      | —           | Running, log bars            |
-| `green`                 | 6.29     | 6.01      | —           | Passed                       |
-| `red`                   | 5.73     | 5.47      | —           | Failed                       |
-| `void` on an ember fill | 6.00     | —         | —           | The CTA ink                  |
-| `bone` on an ember fill | **2.64** | —         | —           | **Fails; never do this**     |
+| `paper`                 | 19.65    | 18.81     | 17.63       | Emphasis only                |
+| `bone`                  | 15.65    | 14.99     | 14.05       | The default ink              |
+| `mist`                  | 13.09    | 12.54     | 11.75       | Bright secondary             |
+| `fog`                   | 6.03     | 5.77      | 5.41        | The text floor               |
+| `ash`                   | **3.43** | 3.28      | 3.08        | **Never text.** Borders only |
+| `smoke`                 | 1.84     | 1.76      | 1.65        | Line                         |
+| `graphite`              | 1.31     | 1.25      | 1.18        | Hairline                     |
+| `ember`                 | 5.91     | 5.66      | —           | The accent                   |
+| `teal`                  | 8.17     | 7.82      | —           | Running, log bars            |
+| `green`                 | 6.20     | 5.93      | —           | Passed                       |
+| `red`                   | 5.64     | 5.40      | —           | Failed                       |
+| `primary-ink` on ember  | 5.91     | —         | —           | The CTA ink                  |
+| `bone` on an ember fill | **2.65** | —         | —           | **Fails; never do this**     |
 
 Binding consequences:
 
 - **Fog is the text floor.** No token may be added below it.
-- **Ash is never text.** At 3.45:1 it fails AA at every body size. It is the
+- **Ash is never text.** At 3.43:1 it fails AA at every body size. It is the
   control boundary and the inactive-tab label, and nothing else.
 - **Bone is the default ink, not paper.** Paper is the hero headline and
   inline emphasis.
-- **The ink on ember is void.** Bone on ember measures 2.64:1 and fails.
+- **The ink on ember is `primary-ink`, in both schemes.** Bone on ember
+  measures 2.65:1 and fails, and every ladder ink flips with the scheme
+  while the fill's needs do not.
 - **Ember is spent, not spread.** The primary CTA fill, the editorial card's
   2px left border, the shipping stage tag, the terminal turn marker, and the
   focus ring. Ordinary text, icons and borders never take it.
@@ -255,10 +268,10 @@ Binding consequences:
   bars, green is passed, red is failed. No button, border, link or label takes
   one, and there is no filled status badge — the glyph and the word carry the
   state, and the colour confirms it.
-- **A hairline is not a control boundary.** Graphite measures 1.30:1 on void —
+- **A hairline is not a control boundary.** Graphite measures 1.31:1 on void —
   correct for separating two static surfaces, and a fail under SC 1.4.11 for
   anything that needs an edge to be recognised as a control. An input's edge
-  is ash, at 3.45:1.
+  is ash, at 3.43:1.
 
 The boundary rule in one line: **a card may use a hairline, an input may not.**
 A card is identified by its content; an input is identified by its edge.
@@ -279,7 +292,7 @@ role instead, or read the one that names what this element is.
 
 Shadows do not carry depth. Depth is a hairline and a tonal step — void to
 carbon to obsidian. The one shadow the system carries,
-`rgba(8, 9, 10, 0.6) 0 4px 32px`, belongs to an element that genuinely
+`rgba(13, 11, 9, 0.6) 0 4px 32px`, belongs to an element that genuinely
 detaches from the page — a popover or a menu over content. A card never casts,
 and no shadow is ever used to make a flat surface look raised.
 
@@ -535,8 +548,8 @@ One focus treatment, both surfaces, every component:
   defect. There are no exceptions.
 - The 2px offset must not be clipped. An ancestor with `overflow: hidden` and
   a focusable descendant at its edge is a defect.
-- The ring measures 6.00:1 against the void, above the 3:1 that SC 1.4.11
-  requires.
+- The ring measures 5.91:1 against the dark void and 4.73:1 against the
+  light one, above the 3:1 that SC 1.4.11 requires in both schemes.
 
 It is authored once, in
 [packages/ui/src/styles/tokens.css](../packages/ui/src/styles/tokens.css),
@@ -570,7 +583,7 @@ does not ask for. Centre by eye and keep the nudge.
 and below 2px the inner shape stays square.
 
 **An image carries its own edge.** A dark capture on the void merges into it.
-Give it a 1px outline offset by `-1px` — white at 8% — which draws inside the
+Give it a 1px outline offset by `-1px` — the ink at 8% — which draws inside the
 box and never grows it. This is an outline, not a shadow, and it is the only
 edge an image gets.
 
@@ -798,8 +811,9 @@ heading when no observer runs.
 - A deep page tree must scroll inside the sidebar, not the page.
 - A heading longer than the TOC column must wrap to two lines, then clamp.
 - With one heading on a page the TOC must not render.
-- There is no theme control. The system is dark only, and a control that
-  offers a choice that does not exist is a defect.
+- A theme control appears only on a surface that ships both schemes, and it
+  offers exactly the two. A control that offers a choice that does not exist
+  is a defect.
 
 ### 3.7 Code block and command snippet — shared
 
@@ -1153,10 +1167,12 @@ Each of these is a defect, not a preference.
 
 - Any gradient: linear, radial or mesh, on a background or on text.
 - The purple and blue "AI gradient" aesthetic.
-- A light surface anywhere, pure `#000000` as a ground, or pure `#ffffff` as
-  the default ink.
-- Text below `fog`, or any text in `ash`; it measures 3.45:1.
-- Bone text on an ember fill; it measures 2.64:1.
+- A ground off the ladder, pure `#000000` as a ground, or maximum-contrast
+  emphasis ink as the default ink.
+- A scheme branch in component code; the root's scheme class owns the flip.
+- Text below `fog`, or any text in `ash`; it measures 3.43:1.
+- A ladder ink on an ember fill; bone there measures 2.65:1, and the fill
+  ink is `primary-ink`.
 - Ember on ordinary text, icons or borders — it belongs to the CTA fill, the
   case mark, the shipping stage tag, log bars and the focus ring.
 - `teal`, `green` or `red` on anything that is not a machine outcome.
@@ -1215,7 +1231,8 @@ Each of these is a defect, not a preference.
 - A mobile menu as a dropdown instead of a full overlay.
 - The `disabled` attribute where the reader needs to find the control.
 - A control that resizes when its own label changes.
-- A theme control of any kind. There is no theme to choose.
+- A theme control on a surface that pins one scheme. The control belongs
+  only where both schemes ship.
 - A target below 24×24 CSS pixels, or a hover-only affordance.
 - A circular spinner where a skeleton belongs, or `window.alert()` for an error.
 - A dead link pointing at `#`.

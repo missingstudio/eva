@@ -2,19 +2,21 @@
    "Evidence, not claims" — Eva's design system entry point.
 
    The phrase is the product's, printed in its own banner, and the surface is
-   the instrument that prints it: a near-black panel, quiet neutrals, and one
-   ember signal spent only where something is actually happening.
+   the instrument that prints it: a warm near-black panel, quiet neutrals, and
+   one ember signal spent only where something is actually happening.
 
    Two decisions here are measurements rather than taste, and both are argued
    in docs/design.md:
 
-     - The ground is #08090a, not #000000. Pure black reaches 21:1 against
+     - The ground is #0d0b09, not #000000. Pure black reaches 21:1 against
        white, which haloes on OLED and smears text in motion.
      - Prose is a sans and machine output is a mono. A monospaced face slows
        continuous reading, and the documentation is continuous reading.
 
-   The system is dark only. There is no light scheme, no theme toggle, and no
-   scheme cookie; a light surface breaks the system, so none can be expressed.
+   The ladder names ten jobs and carries two schemes over them. Dark is
+   canonical: the bare tokens hold its values. A root carrying `.light`
+   refills every job with its measured light twin; a component never carries
+   a scheme branch of its own.
 
    This file owns two things: the tokens, and the base layer. Everything else
    is one file per concern.
@@ -61,9 +63,10 @@
 
 /*
    The dark variant answers to the `dark` class rather than to the OS setting.
-   The system is dark only, so every app pins `class="dark"` on its root
-   element — the class is what keeps the components' `dark:` utilities live,
-   and the OS preference must not be able to take them away.
+   The scheme is the root's explicit choice — a surface pins `class="dark"`
+   or `class="light"`, or offers the two — and the OS preference must not be
+   able to take the choice away. The class also keeps the shadcn components'
+   `dark:` utilities live on a dark root.
 */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -91,23 +94,32 @@
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /*
-     The palette, from docs/design.md. Ten neutrals on Linear's ladder — three
-     grounds, three lines, four inks — then the accent and the three states
-     that only ever report a machine outcome. Every measured pairing is in
-     design.md's contrast table.
+     The palette, from docs/design.md. The ladder names ten jobs — three
+     grounds, three lines, four inks — and each scheme fills the same jobs:
+     the values here are the dark scheme, which is canonical, and the .light
+     block below refills every one. The cast is warm on purpose: the panel
+     sits with the ember rather than against it. Every measured pairing, both
+     schemes, is in design.md's contrast tables.
   */
-  --color-void: #08090a;
-  --color-carbon: #0f1011;
-  --color-obsidian: #161718;
-  --color-graphite: #23252a;
-  --color-smoke: #383b3f;
-  --color-ash: #62666d;
-  --color-fog: #8a8f98;
-  --color-mist: #d0d6e0;
-  --color-bone: #e5e5e6;
+  --color-void: #0d0b09;
+  --color-carbon: #14110e;
+  --color-obsidian: #1c1815;
+  --color-graphite: #2b2620;
+  --color-smoke: #453d33;
+  --color-ash: #6e6558;
+  --color-fog: #988d7d;
+  --color-mist: #d9d2c7;
+  --color-bone: #e9e5de;
   --color-paper: #ffffff;
 
+  /*
+     The ink on an ember fill is its own token because it does not follow the
+     ladder: it is near-black on the dark scheme's ember and white on the
+     light scheme's darker one. A fill ink written as `text-void` would flip
+     with the ground and land at 2.65:1 — the one defect design.md names.
+  */
   --color-ember: #ee6018;
+  --color-ember-ink: #0d0b09;
   --color-teal: #02b8cc;
   --color-green: #27a644;
   --color-red: #eb5757;
@@ -165,6 +177,61 @@
   --container-page: 75rem;
   --container-measure: 42.5rem;
   --container-hero: 48rem;
+}
+
+/* ---------------------------------------------------------------------------
+   The two schemes. Dark is canonical: @theme above carries its values, and a
+   surface that says nothing gets it. A root with `.light` refills the same
+   ten jobs — raised is still lighter than the ground, the floor ink is still
+   the floor — and every component built on the ladder flips without a
+   `dark:` branch of its own. The `.dark` block re-asserts the canon so a
+   dark island can sit inside a light page.
+
+   Unlayered on purpose: Tailwind emits the theme variables in a layer, and
+   an unlayered rule is what may override them.
+--------------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-void: #0d0b09;
+  --color-carbon: #14110e;
+  --color-obsidian: #1c1815;
+  --color-graphite: #2b2620;
+  --color-smoke: #453d33;
+  --color-ash: #6e6558;
+  --color-fog: #988d7d;
+  --color-mist: #d9d2c7;
+  --color-bone: #e9e5de;
+  --color-paper: #ffffff;
+  --color-ember: #ee6018;
+  --color-ember-ink: #0d0b09;
+  --color-teal: #02b8cc;
+  --color-green: #27a644;
+  --color-red: #eb5757;
+}
+
+.light {
+  color-scheme: light;
+
+  --color-void: #f7f4ef;
+  --color-carbon: #fcfaf7;
+  --color-obsidian: #ffffff;
+  --color-graphite: #e8e2d8;
+  --color-smoke: #d6cec1;
+  --color-ash: #8b8172;
+  --color-fog: #6d6353;
+  --color-mist: #514a3f;
+  --color-bone: #272119;
+  --color-paper: #100d0a;
+  --color-ember: #bc4708;
+  --color-ember-ink: #ffffff;
+  --color-teal: #087280;
+  --color-green: #1a7a33;
+  --color-red: #c03434;
 }
 
 :root {

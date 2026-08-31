@@ -30,69 +30,69 @@
    tint of ember, and a bubble a step off the canvas.
 
    Five light values were drawn by eye and fail WCAG AA when measured, so the
-   measured ones ship instead: accent #c24a09 rather than #dd530e, code
+   measured ones ship instead: accent #bc4708 rather than #dd530e, code
    #9d4a0b rather than #b4550d, the three states one step darker, and ink-3
-   #686b71.
+   #6d6353.
 
    ink-3 is the fifth and the ticket's table does not carry it. The ticket
    corrected the mock's #8f9297 to #6e7177 and measured it on canvas and on
    surface, where it passes. It is also drawn on inset — every hovered sidebar
    row, the active row, the wrote strip — and inset is the darkest of the three
-   light grounds, where #6e7177 reads 4.25:1 and fails. The floor is measured
-   against the darkest ground it lands on, so it moves one step down: #686b71
-   reads 4.64:1 on inset, 4.97:1 on canvas and 5.34:1 on surface.
+   light grounds, where #6e7177 reads 4.01:1 and fails. The floor is measured
+   against the darkest ground it lands on, so it moves one step down: #6d6353
+   reads 4.83:1 on inset, 5.38:1 on canvas and 5.90:1 on surface.
 
    contrast.test.ts holds all of it, so nobody restores a value by eye.
 */
 :root {
   color-scheme: light;
 
-  --page: #eef0ef;
-  --canvas: #f6f7f6;
+  --page: #efeae2;
+  --canvas: #f7f4ef;
   --surface: #ffffff;
-  --inset: #efefed;
-  --border: #e4e4e0;
-  --border-strong: #d6d6d1;
-  --ink: #1b1c1e;
-  --ink-2: #55575c;
-  --ink-3: #686b71;
-  --accent: #c24a09;
+  --inset: #ede8df;
+  --border: #e5dfd4;
+  --border-strong: #d2cabb;
+  --ink: #272119;
+  --ink-2: #57503f;
+  --ink-3: #6d6353;
+  --accent: #bc4708;
   --accent-ink: #ffffff;
   --code: #9d4a0b;
-  --code-bg: #f1efec;
+  --code-bg: #f0ebe2;
   --ok: #1a7a33;
   --err: #c03434;
-  --run: #0a7c8c;
-  --bubble: #ececea;
+  --run: #087280;
+  --bubble: #f0ece4;
 
   /*
      The light skin may shadow exactly two things: the composer card and a
      genuinely detached overlay. The dark skin carries no shadow anywhere —
      depth there is a tonal step and a hairline.
   */
-  --shadow: 0 1px 2px rgb(27 28 30 / 0.05), 0 8px 24px rgb(27 28 30 / 0.06);
+  --shadow: 0 1px 2px rgb(39 33 25 / 0.05), 0 8px 24px rgb(39 33 25 / 0.06);
 }
 
 .dark {
   color-scheme: dark;
 
-  --page: #08090a;
-  --canvas: #0c0d0e;
-  --surface: #0f1011;
-  --inset: #161718;
-  --border: #23252a;
-  --border-strong: #383b3f;
-  --ink: #e5e5e6;
-  --ink-2: #b8bdc5;
-  --ink-3: #8a8f98;
+  --page: #0d0b09;
+  --canvas: #110e0b;
+  --surface: #14110e;
+  --inset: #1c1815;
+  --border: #2b2620;
+  --border-strong: #453d33;
+  --ink: #e9e5de;
+  --ink-2: #c2b9ac;
+  --ink-3: #988d7d;
   --accent: #ee6018;
-  --accent-ink: #08090a;
+  --accent-ink: #0d0b09;
   --code: #ee9a63;
-  --code-bg: #161718;
+  --code-bg: #1c1815;
   --ok: #27a644;
   --err: #eb5757;
   --run: #02b8cc;
-  --bubble: #1c1d1f;
+  --bubble: #211d18;
   --shadow: none;
 }
 
